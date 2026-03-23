@@ -229,7 +229,7 @@ struct RendererResources {
 
 struct ViewportTexture {
     texture: wgpu::Texture,
-    size: (u32, u32),
+    allocated_size: (u32, u32),
 }
 
 struct ViewportRenderer {
@@ -287,17 +287,24 @@ impl ViewportRenderer {
             self.resources = Some(Self::create_resources(device));
         }
 
-        let needs_resize = self
-            .viewport
-            .as_ref()
-            .is_none_or(|viewport| viewport.size != (width, height));
+        let needs_resize = self.viewport.as_ref().is_none_or(|viewport| {
+            let (allocated_width, allocated_height) = viewport.allocated_size;
+
+            width > allocated_width
+                || height > allocated_height
+                || width.saturating_mul(2) < allocated_width
+                || height.saturating_mul(2) < allocated_height
+        });
 
         if needs_resize {
+            let allocated_width = bucketed_extent(width);
+            let allocated_height = bucketed_extent(height);
+
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("EmbeddedViewportTexture"),
                 size: wgpu::Extent3d {
-                    width,
-                    height,
+                    width: allocated_width,
+                    height: allocated_height,
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
@@ -314,14 +321,16 @@ impl ViewportRenderer {
 
             self.viewport = Some(ViewportTexture {
                 texture,
-                size: (width, height),
+                allocated_size: (allocated_width, allocated_height),
             });
 
             app.set_viewport_image(imported_image);
             app.set_status_text(slint::format!(
-                "{}x{} native wgpu texture inside Slint layout",
+                "Viewport {}x{} (allocated {}x{})",
                 width,
-                height
+                height,
+                allocated_width,
+                allocated_height
             ));
         }
 
@@ -459,6 +468,11 @@ fn uniforms_bytes(width: u32, height: u32, time: f32) -> [u8; 16] {
     }
 
     bytes
+}
+
+fn bucketed_extent(requested: u32) -> u32 {
+    const BUCKET: u32 = 128;
+    requested.max(1).div_ceil(BUCKET) * BUCKET
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
