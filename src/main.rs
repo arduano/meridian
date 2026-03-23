@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::env;
 use std::error::Error;
 use std::num::NonZeroU64;
 use std::rc::Rc;
@@ -237,19 +238,28 @@ struct ViewportRenderer {
     resources: Option<RendererResources>,
     viewport: Option<ViewportTexture>,
     start: Instant,
+    enabled: bool,
 }
 
 impl ViewportRenderer {
-    fn new(app: slint::Weak<App>) -> Self {
+    fn new(app: slint::Weak<App>, enabled: bool) -> Self {
         Self {
             app,
             resources: None,
             viewport: None,
             start: Instant::now(),
+            enabled,
         }
     }
 
     fn handle(&mut self, state: slint::RenderingState, graphics_api: &slint::GraphicsAPI<'_>) {
+        if !self.enabled {
+            if let Some(app) = self.app.upgrade() {
+                app.set_status_text("Accelerated viewport disabled via POC_DISABLE_WGPU=1".into());
+            }
+            return;
+        }
+
         match (state, graphics_api) {
             (slint::RenderingState::RenderingSetup, slint::GraphicsAPI::WGPU28 { device, .. }) => {
                 if self.resources.is_none() {
@@ -463,9 +473,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         .select()?;
 
     let app = App::new()?;
-    app.set_status_text("Initializing shared wgpu device and viewport texture".into());
+    let viewport_enabled = !matches!(
+        env::var("POC_DISABLE_WGPU").as_deref(),
+        Ok("1" | "true" | "yes")
+    );
+    if viewport_enabled {
+        app.set_status_text("Initializing shared wgpu device and viewport texture".into());
+    } else {
+        app.set_status_text("Accelerated viewport disabled via POC_DISABLE_WGPU=1".into());
+    }
 
-    let renderer = Rc::new(RefCell::new(ViewportRenderer::new(app.as_weak())));
+    let renderer = Rc::new(RefCell::new(ViewportRenderer::new(
+        app.as_weak(),
+        viewport_enabled,
+    )));
     let renderer_for_notifier = Rc::clone(&renderer);
 
     app.window()

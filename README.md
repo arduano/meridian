@@ -48,6 +48,12 @@ Run:
 nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
 ```
 
+Run without the accelerated viewport (A/B resize test):
+
+```bash
+POC_DISABLE_WGPU=1 nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+```
+
 ## What was attempted on this host
 
 Attempted directly on this host:
