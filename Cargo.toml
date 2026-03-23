@@ -4,4 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-slint = { version = "~1.15", features = ["unstable-wgpu-28"] }
+slint = { version = "~1.15", features = [
+  "unstable-wgpu-28",
+  "backend-winit-x11",
+  "backend-winit-wayland",
+  "renderer-femtovg",
+  "renderer-skia",
+  "renderer-software",
+] }

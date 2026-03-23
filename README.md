@@ -54,6 +54,25 @@ Run without the accelerated viewport (A/B resize test):
 POC_DISABLE_WGPU=1 nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
 ```
 
+Backend comparison commands (still with `POC_DISABLE_WGPU=1`):
+
+```bash
+# Default backend/renderer choice
+POC_DISABLE_WGPU=1 nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+
+# Winit + FemtoVG
+POC_DISABLE_WGPU=1 SLINT_BACKEND=winit-femtovg nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+
+# Winit + software renderer
+POC_DISABLE_WGPU=1 SLINT_BACKEND=winit-software nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+
+# Winit + Skia renderer
+POC_DISABLE_WGPU=1 SLINT_BACKEND=winit-skia nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+
+# If Qt is installed and available
+POC_DISABLE_WGPU=1 SLINT_BACKEND=Qt nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+```
+
 ## What was attempted on this host
 
 Attempted directly on this host:

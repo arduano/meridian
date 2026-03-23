@@ -468,46 +468,56 @@ fn uniforms_bytes(width: u32, height: u32, time: f32) -> [u8; 16] {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    slint::BackendSelector::new()
-        .require_wgpu_28(slint::wgpu_28::WGPUConfiguration::default())
-        .select()?;
-
-    let app = App::new()?;
     let viewport_enabled = !matches!(
         env::var("POC_DISABLE_WGPU").as_deref(),
         Ok("1" | "true" | "yes")
     );
+
+    let backend_selector = slint::BackendSelector::new();
+    if viewport_enabled {
+        backend_selector
+            .require_wgpu_28(slint::wgpu_28::WGPUConfiguration::default())
+            .select()?;
+    } else {
+        backend_selector.select()?;
+    }
+
+    let app = App::new()?;
     if viewport_enabled {
         app.set_status_text("Initializing shared wgpu device and viewport texture".into());
     } else {
         app.set_status_text("Accelerated viewport disabled via POC_DISABLE_WGPU=1".into());
     }
 
-    let renderer = Rc::new(RefCell::new(ViewportRenderer::new(
-        app.as_weak(),
-        viewport_enabled,
-    )));
-    let renderer_for_notifier = Rc::clone(&renderer);
+    if viewport_enabled {
+        let renderer = Rc::new(RefCell::new(ViewportRenderer::new(
+            app.as_weak(),
+            viewport_enabled,
+        )));
+        let renderer_for_notifier = Rc::clone(&renderer);
 
-    app.window()
-        .set_rendering_notifier(move |state, graphics_api| {
-            renderer_for_notifier
-                .borrow_mut()
-                .handle(state, graphics_api);
-        })?;
+        app.window()
+            .set_rendering_notifier(move |state, graphics_api| {
+                renderer_for_notifier
+                    .borrow_mut()
+                    .handle(state, graphics_api);
+            })?;
 
-    let animation_timer = slint::Timer::default();
-    let app_for_timer = app.as_weak();
-    animation_timer.start(
-        slint::TimerMode::Repeated,
-        Duration::from_millis(16),
-        move || {
-            if let Some(app) = app_for_timer.upgrade() {
-                app.window().request_redraw();
-            }
-        },
-    );
+        let animation_timer = slint::Timer::default();
+        let app_for_timer = app.as_weak();
+        animation_timer.start(
+            slint::TimerMode::Repeated,
+            Duration::from_millis(16),
+            move || {
+                if let Some(app) = app_for_timer.upgrade() {
+                    app.window().request_redraw();
+                }
+            },
+        );
 
-    app.run()?;
+        app.run()?;
+    } else {
+        app.run()?;
+    }
     Ok(())
 }
