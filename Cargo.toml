@@ -1,0 +1,7 @@
+[package]
+name = "slint-wgpu-embedded-view-poc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+slint = { version = "~1.15", features = ["unstable-wgpu-28"] }
