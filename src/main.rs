@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::error::Error;
 use std::num::NonZeroU64;
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use slint::wgpu_28::wgpu;
 use wgpu::util::DeviceExt;
@@ -229,7 +229,7 @@ struct RendererResources {
 
 struct ViewportTexture {
     texture: wgpu::Texture,
-    allocated_size: (u32, u32),
+    size: (u32, u32),
 }
 
 struct ViewportRenderer {
@@ -262,11 +262,7 @@ impl ViewportRenderer {
             ) => {
                 self.render(device, queue);
             }
-            (slint::RenderingState::AfterRendering, _) => {
-                if let Some(app) = self.app.upgrade() {
-                    app.window().request_redraw();
-                }
-            }
+            (slint::RenderingState::AfterRendering, _) => {}
             (slint::RenderingState::RenderingTeardown, _) => {
                 self.viewport = None;
                 self.resources = None;
@@ -287,24 +283,17 @@ impl ViewportRenderer {
             self.resources = Some(Self::create_resources(device));
         }
 
-        let needs_resize = self.viewport.as_ref().is_none_or(|viewport| {
-            let (allocated_width, allocated_height) = viewport.allocated_size;
-
-            width > allocated_width
-                || height > allocated_height
-                || width.saturating_mul(2) < allocated_width
-                || height.saturating_mul(2) < allocated_height
-        });
+        let needs_resize = self
+            .viewport
+            .as_ref()
+            .is_none_or(|viewport| viewport.size != (width, height));
 
         if needs_resize {
-            let allocated_width = bucketed_extent(width);
-            let allocated_height = bucketed_extent(height);
-
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("EmbeddedViewportTexture"),
                 size: wgpu::Extent3d {
-                    width: allocated_width,
-                    height: allocated_height,
+                    width,
+                    height,
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
@@ -321,16 +310,14 @@ impl ViewportRenderer {
 
             self.viewport = Some(ViewportTexture {
                 texture,
-                allocated_size: (allocated_width, allocated_height),
+                size: (width, height),
             });
 
             app.set_viewport_image(imported_image);
             app.set_status_text(slint::format!(
-                "Viewport {}x{} (allocated {}x{})",
+                "{}x{} native wgpu texture inside Slint layout",
                 width,
-                height,
-                allocated_width,
-                allocated_height
+                height
             ));
         }
 
@@ -470,11 +457,6 @@ fn uniforms_bytes(width: u32, height: u32, time: f32) -> [u8; 16] {
     bytes
 }
 
-fn bucketed_extent(requested: u32) -> u32 {
-    const BUCKET: u32 = 128;
-    requested.max(1).div_ceil(BUCKET) * BUCKET
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
     slint::BackendSelector::new()
         .require_wgpu_28(slint::wgpu_28::WGPUConfiguration::default())
@@ -492,6 +474,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .borrow_mut()
                 .handle(state, graphics_api);
         })?;
+
+    let animation_timer = slint::Timer::default();
+    let app_for_timer = app.as_weak();
+    animation_timer.start(
+        slint::TimerMode::Repeated,
+        Duration::from_millis(16),
+        move || {
+            if let Some(app) = app_for_timer.upgrade() {
+                app.window().request_redraw();
+            }
+        },
+    );
 
     app.run()?;
     Ok(())
