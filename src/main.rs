@@ -307,6 +307,7 @@ slint::slint! {
         in-out property <int> exposure: 65;
         in-out property <int> speed: 4;
         in-out property <bool> bloom: true;
+        in-out property <int> selected-demo: 0;
         out property <int> viewport-px-width: viewport-box.width / 1px;
         out property <int> viewport-px-height: viewport-box.height / 1px;
         private property <string> mode-label: mode-index == 0 ? "Orbit" : mode-index == 1 ? "Pan" : "Inspect";
@@ -316,6 +317,7 @@ slint::slint! {
         callback bump-speed(int);
         callback toggle-bloom();
         callback reset-all();
+        callback select-demo(int);
 
         set-mode(mode) => {
             if (mode < 0) {
@@ -355,6 +357,15 @@ slint::slint! {
             root.exposure = 65;
             root.speed = 4;
             root.bloom = true;
+        }
+        select-demo(index) => {
+            if (index < 0) {
+                root.selected-demo = 0;
+            } else if (index > 7) {
+                root.selected-demo = 7;
+            } else {
+                root.selected-demo = index;
+            }
         }
 
         title: "Slint style gallery + embedded wgpu viewport";
@@ -403,12 +414,35 @@ slint::slint! {
                         }
                     }
 
-                    HorizontalLayout {
-                        spacing: 12px;
+                    Rectangle {
+                        border-radius: 16px;
+                        background: #121821;
+                        border-width: 1px;
+                        border-color: #2a3645;
 
                         VerticalLayout {
+                            padding: 12px;
                             spacing: 12px;
+
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Chip { label: "Brutalist"; active: root.selected-demo == 0; fill: #1a2230; active-fill: #ff5e00; stroke: #334155; ink: root.selected-demo == 0 ? white : #c8d4e0; pressed => { root.select-demo(0); } }
+                                Chip { label: "Terminal"; active: root.selected-demo == 1; fill: #1a2230; active-fill: #49ff8d; stroke: #334155; ink: root.selected-demo == 1 ? #08140c : #c8d4e0; pressed => { root.select-demo(1); } }
+                                Chip { label: "Cute"; active: root.selected-demo == 2; fill: #1a2230; active-fill: #ff6ea8; stroke: #334155; ink: root.selected-demo == 2 ? white : #c8d4e0; pressed => { root.select-demo(2); } }
+                                Chip { label: "Spaceship"; active: root.selected-demo == 3; fill: #1a2230; active-fill: #78c8ff; stroke: #334155; ink: root.selected-demo == 3 ? #08131c : #c8d4e0; pressed => { root.select-demo(3); } }
+                                Chip { label: "Luxury"; active: root.selected-demo == 4; fill: #1a2230; active-fill: #9d6a28; stroke: #334155; ink: root.selected-demo == 4 ? white : #c8d4e0; pressed => { root.select-demo(4); } }
+                                Chip { label: "Minimal"; active: root.selected-demo == 5; fill: #1a2230; active-fill: #0d6efd; stroke: #334155; ink: root.selected-demo == 5 ? white : #c8d4e0; pressed => { root.select-demo(5); } }
+                                Chip { label: "Inspector"; active: root.selected-demo == 6; fill: #1a2230; active-fill: #f3f4f6; stroke: #334155; ink: root.selected-demo == 6 ? #101828 : #c8d4e0; pressed => { root.select-demo(6); } }
+                                Chip { label: "Arcade"; active: root.selected-demo == 7; fill: #1a2230; active-fill: #ff5fa2; stroke: #334155; ink: root.selected-demo == 7 ? #2a0a18 : #c8d4e0; pressed => { root.select-demo(7); } }
+                            }
+
+                            Text {
+                                text: "One style at a time. Same state, same controls — less layout fighting.";
+                                color: #9fb0c3;
+                            }
+
                             ThemeCard {
+                                visible: root.selected-demo == 0;
                                 theme-name: "Brutalist console";
                                 subtitle: "Chunky blocks, warning-strip energy, almost industrial.";
                                 mode-label: root.mode-label;
@@ -434,6 +468,7 @@ slint::slint! {
                             }
 
                             ThemeCard {
+                                visible: root.selected-demo == 1;
                                 theme-name: "Retro terminal";
                                 subtitle: "Monochrome ops panel with phosphor-screen vibes.";
                                 mode-label: root.mode-label;
@@ -459,6 +494,7 @@ slint::slint! {
                             }
 
                             ThemeCard {
+                                visible: root.selected-demo == 2;
                                 theme-name: "Soft cute dashboard";
                                 subtitle: "Rounded toy-like control sheet, friendly and light.";
                                 mode-label: root.mode-label;
@@ -480,11 +516,9 @@ slint::slint! {
                                 toggle-bloom() => { root.toggle-bloom(); }
                                 reset-all() => { root.reset-all(); }
                             }
-                        }
 
-                        VerticalLayout {
-                            spacing: 12px;
                             ThemeCard {
+                                visible: root.selected-demo == 3;
                                 theme-name: "Glassy spaceship";
                                 subtitle: "Thin chrome lines, dark gradients, cockpit feel.";
                                 mode-label: root.mode-label;
@@ -508,6 +542,7 @@ slint::slint! {
                             }
 
                             ThemeCard {
+                                visible: root.selected-demo == 4;
                                 theme-name: "Editorial luxury";
                                 subtitle: "Cream surfaces, gold accent, expensive control room.";
                                 mode-label: root.mode-label;
@@ -531,6 +566,7 @@ slint::slint! {
                             }
 
                             ThemeCard {
+                                visible: root.selected-demo == 5;
                                 theme-name: "Minimal analytical";
                                 subtitle: "White-space heavy, almost pro data-tool or Figma plugin.";
                                 mode-label: root.mode-label;
@@ -553,242 +589,110 @@ slint::slint! {
                                 toggle-bloom() => { root.toggle-bloom(); }
                                 reset-all() => { root.reset-all(); }
                             }
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 12px;
-
-                        Rectangle {
-                            horizontal-stretch: 1;
-                            min-height: 294px;
-                            border-radius: 26px;
-                            background: #e8ebf1;
-                            border-width: 1px;
-                            border-color: #ccd2dc;
 
                             Rectangle {
-                                x: 8px;
-                                y: 10px;
-                                width: parent.width;
-                                height: parent.height;
+                                visible: root.selected-demo == 6;
+                                min-height: 294px;
                                 border-radius: 26px;
-                                background: #c8d0dc55;
-                            }
-
-                            Rectangle {
-                                x: 0;
-                                y: 0;
-                                width: parent.width;
-                                height: parent.height;
-                                border-radius: 26px;
-                                background: #f7f8fb;
+                                background: #e8ebf1;
                                 border-width: 1px;
-                                border-color: #d7dde6;
-
-                                VerticalLayout {
-                                    padding: 14px;
-                                    spacing: 12px;
-
-                                    HorizontalLayout {
-                                        spacing: 8px;
-                                        Chip { label: "Overview"; active: true; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: white; }
-                                        Chip { label: "Viewport"; active: false; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: #364152; }
-                                        Chip { label: "Lighting"; active: false; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: #364152; }
-                                        Rectangle { horizontal-stretch: 1; }
-                                        Text { text: "shadcn-ish panel"; color: #667085; font-size: 13px; }
-                                    }
-
-                                    Rectangle {
-                                        border-radius: 18px;
-                                        background: white;
-                                        border-width: 1px;
-                                        border-color: #e3e8ef;
-
-                                        VerticalLayout {
-                                            padding: 16px;
-                                            spacing: 12px;
-
-                                            Text { text: "Quiet modern inspector"; color: #101828; font-size: 24px; font-weight: 800; }
-                                            Text { text: "More like a real product shell: tabs, softer elevation, restrained outlines, and cleaner spacing."; color: #667085; wrap: word-wrap; }
-
-                                            HorizontalLayout {
-                                                spacing: 10px;
-                                                Rectangle {
-                                                    horizontal-stretch: 1;
-                                                    border-radius: 14px;
-                                                    background: #f8fafc;
-                                                    border-width: 1px;
-                                                    border-color: #e4e7ec;
-                                                    VerticalLayout {
-                                                        padding: 12px;
-                                                        spacing: 8px;
-                                                        Text { text: "Camera mode"; color: #475467; }
-                                                        HorizontalLayout {
-                                                            spacing: 6px;
-                                                            Chip { label: "Orbit"; active: root.mode-label == "Orbit"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Orbit" ? white : #111827; pressed => { root.set-mode(0); } }
-                                                            Chip { label: "Pan"; active: root.mode-label == "Pan"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Pan" ? white : #111827; pressed => { root.set-mode(1); } }
-                                                            Chip { label: "Inspect"; active: root.mode-label == "Inspect"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Inspect" ? white : #111827; pressed => { root.set-mode(2); } }
+                                border-color: #ccd2dc;
+                                Rectangle { x: 8px; y: 10px; width: parent.width; height: parent.height; border-radius: 26px; background: #c8d0dc55; }
+                                Rectangle {
+                                    x: 0; y: 0; width: parent.width; height: parent.height; border-radius: 26px; background: #f7f8fb; border-width: 1px; border-color: #d7dde6;
+                                    VerticalLayout {
+                                        padding: 14px; spacing: 12px;
+                                        HorizontalLayout {
+                                            spacing: 8px;
+                                            Chip { label: "Overview"; active: true; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: white; }
+                                            Chip { label: "Viewport"; active: false; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: #364152; }
+                                            Chip { label: "Lighting"; active: false; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: #364152; }
+                                            Rectangle { horizontal-stretch: 1; }
+                                            Text { text: "shadcn-ish panel"; color: #667085; font-size: 13px; }
+                                        }
+                                        Rectangle {
+                                            border-radius: 18px; background: white; border-width: 1px; border-color: #e3e8ef;
+                                            VerticalLayout {
+                                                padding: 16px; spacing: 12px;
+                                                Text { text: "Quiet modern inspector"; color: #101828; font-size: 24px; font-weight: 800; }
+                                                Text { text: "More like a real product shell: tabs, softer elevation, restrained outlines, and cleaner spacing."; color: #667085; wrap: word-wrap; }
+                                                HorizontalLayout {
+                                                    spacing: 10px;
+                                                    Rectangle {
+                                                        horizontal-stretch: 1; border-radius: 14px; background: #f8fafc; border-width: 1px; border-color: #e4e7ec;
+                                                        VerticalLayout {
+                                                            padding: 12px; spacing: 8px;
+                                                            Text { text: "Camera mode"; color: #475467; }
+                                                            HorizontalLayout {
+                                                                spacing: 6px;
+                                                                Chip { label: "Orbit"; active: root.mode-label == "Orbit"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Orbit" ? white : #111827; pressed => { root.set-mode(0); } }
+                                                                Chip { label: "Pan"; active: root.mode-label == "Pan"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Pan" ? white : #111827; pressed => { root.set-mode(1); } }
+                                                                Chip { label: "Inspect"; active: root.mode-label == "Inspect"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Inspect" ? white : #111827; pressed => { root.set-mode(2); } }
+                                                            }
+                                                        }
+                                                    }
+                                                    Rectangle {
+                                                        width: 142px; border-radius: 14px; background: #111827; border-width: 1px; border-color: #1f2937;
+                                                        VerticalLayout {
+                                                            padding: 12px; spacing: 6px;
+                                                            Text { text: "Bloom"; color: #98a2b3; }
+                                                            Chip { label: root.bloom ? "Enabled" : "Disabled"; active: root.bloom; fill: #1f2937; active-fill: #22c55e; stroke: #344054; ink: root.bloom ? #04130a : white; pressed => { root.toggle-bloom(); } }
                                                         }
                                                     }
                                                 }
-
-                                                Rectangle {
-                                                    width: 142px;
-                                                    border-radius: 14px;
-                                                    background: #111827;
-                                                    border-width: 1px;
-                                                    border-color: #1f2937;
-                                                    VerticalLayout {
-                                                        padding: 12px;
-                                                        spacing: 6px;
-                                                        Text { text: "Bloom"; color: #98a2b3; }
-                                                        Chip { label: root.bloom ? "Enabled" : "Disabled"; active: root.bloom; fill: #1f2937; active-fill: #22c55e; stroke: #344054; ink: root.bloom ? #04130a : white; pressed => { root.toggle-bloom(); } }
-                                                    }
-                                                }
-                                            }
-
-                                            HorizontalLayout {
-                                                spacing: 10px;
-                                                Rectangle {
-                                                    horizontal-stretch: 1;
-                                                    border-radius: 14px;
-                                                    background: #f8fafc;
-                                                    border-width: 1px;
-                                                    border-color: #e4e7ec;
-                                                    HorizontalLayout {
-                                                        padding: 12px;
-                                                        spacing: 8px;
-                                                        Text { text: "Exposure"; color: #475467; }
-                                                        Rectangle { horizontal-stretch: 1; }
-                                                        MicroButton { label: "−"; fill: white; stroke: #d0d5dd; ink: #111827; pressed => { root.bump-exposure(-5); } }
-                                                        Text { text: root.exposure + "%"; color: #111827; font-weight: 700; }
-                                                        MicroButton { label: "+"; fill: #111827; stroke: #111827; ink: white; pressed => { root.bump-exposure(5); } }
-                                                    }
-                                                }
-
-                                                Rectangle {
-                                                    horizontal-stretch: 1;
-                                                    border-radius: 14px;
-                                                    background: #f8fafc;
-                                                    border-width: 1px;
-                                                    border-color: #e4e7ec;
-                                                    HorizontalLayout {
-                                                        padding: 12px;
-                                                        spacing: 8px;
-                                                        Text { text: "Speed"; color: #475467; }
-                                                        Rectangle { horizontal-stretch: 1; }
-                                                        MicroButton { label: "−"; fill: white; stroke: #d0d5dd; ink: #111827; pressed => { root.bump-speed(-1); } }
-                                                        Text { text: root.speed + "x"; color: #111827; font-weight: 700; }
-                                                        MicroButton { label: "+"; fill: #111827; stroke: #111827; ink: white; pressed => { root.bump-speed(1); } }
-                                                    }
+                                                HorizontalLayout {
+                                                    spacing: 10px;
+                                                    Rectangle { horizontal-stretch: 1; border-radius: 14px; background: #f8fafc; border-width: 1px; border-color: #e4e7ec; HorizontalLayout { padding: 12px; spacing: 8px; Text { text: "Exposure"; color: #475467; } Rectangle { horizontal-stretch: 1; } MicroButton { label: "−"; fill: white; stroke: #d0d5dd; ink: #111827; pressed => { root.bump-exposure(-5); } } Text { text: root.exposure + "%"; color: #111827; font-weight: 700; } MicroButton { label: "+"; fill: #111827; stroke: #111827; ink: white; pressed => { root.bump-exposure(5); } } } }
+                                                    Rectangle { horizontal-stretch: 1; border-radius: 14px; background: #f8fafc; border-width: 1px; border-color: #e4e7ec; HorizontalLayout { padding: 12px; spacing: 8px; Text { text: "Speed"; color: #475467; } Rectangle { horizontal-stretch: 1; } MicroButton { label: "−"; fill: white; stroke: #d0d5dd; ink: #111827; pressed => { root.bump-speed(-1); } } Text { text: root.speed + "x"; color: #111827; font-weight: 700; } MicroButton { label: "+"; fill: #111827; stroke: #111827; ink: white; pressed => { root.bump-speed(1); } } } }
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-
-                        Rectangle {
-                            horizontal-stretch: 1;
-                            min-height: 294px;
-                            border-radius: 32px;
-                            background: #1b1227;
-                            border-width: 1px;
-                            border-color: #4b2f6b;
-                            clip: true;
 
                             Rectangle {
-                                x: 16px;
-                                y: 14px;
-                                width: parent.width - 32px;
-                                height: parent.height - 28px;
-                                border-radius: 26px;
-                                background: #2a173dcc;
+                                visible: root.selected-demo == 7;
+                                min-height: 294px;
+                                border-radius: 32px;
+                                background: #1b1227;
                                 border-width: 1px;
-                                border-color: #7d49b8;
-                            }
-
-                            VerticalLayout {
-                                padding: 16px;
-                                spacing: 12px;
-
-                                HorizontalLayout {
-                                    spacing: 8px;
-                                    Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #ff5fa2; }
-                                    Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #7cf4ff; }
-                                    Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #ffe66d; }
-                                    Rectangle { horizontal-stretch: 1; }
-                                    Text { text: "expressive neon toy"; color: #d6bef8; font-size: 13px; }
-                                }
-
-                                Rectangle {
-                                    border-radius: 26px;
-                                    background: #241235;
-                                    border-width: 2px;
-                                    border-color: #ff5fa2;
-
-                                    VerticalLayout {
-                                        padding: 16px;
-                                        spacing: 12px;
-
-                                        Text { text: "Playful arcade rig"; color: white; font-size: 26px; font-weight: 800; }
-                                        Text { text: "Same state, but now it feels like a toy instrument panel. Big pills, saturated accents, and deliberately loud framing."; color: #d9c8f6; wrap: word-wrap; }
-
-                                        HorizontalLayout {
-                                            spacing: 10px;
-                                            Chip { label: "Orbit"; active: root.mode-label == "Orbit"; fill: #35194d; active-fill: #7cf4ff; stroke: #7cf4ff; ink: root.mode-label == "Orbit" ? #07131b : white; pressed => { root.set-mode(0); } }
-                                            Chip { label: "Pan"; active: root.mode-label == "Pan"; fill: #35194d; active-fill: #ffe66d; stroke: #ffe66d; ink: root.mode-label == "Pan" ? #241f06 : white; pressed => { root.set-mode(1); } }
-                                            Chip { label: "Inspect"; active: root.mode-label == "Inspect"; fill: #35194d; active-fill: #ff5fa2; stroke: #ff5fa2; ink: root.mode-label == "Inspect" ? #2a0a18 : white; pressed => { root.set-mode(2); } }
-                                        }
-
-                                        HorizontalLayout {
-                                            spacing: 10px;
-                                            Rectangle {
-                                                horizontal-stretch: 1;
-                                                border-radius: 18px;
-                                                background: #311845;
-                                                border-width: 1px;
-                                                border-color: #7d49b8;
-                                                VerticalLayout {
-                                                    padding: 12px;
-                                                    spacing: 8px;
-                                                    Text { text: "Exposure"; color: #f8d0ff; font-weight: 700; }
-                                                    HorizontalLayout {
-                                                        spacing: 8px;
-                                                        MicroButton { label: "−"; fill: #4d2672; stroke: #a56ae9; ink: white; pressed => { root.bump-exposure(-5); } }
-                                                        Rectangle { horizontal-stretch: 1; border-radius: 12px; background: #180c24; border-width: 1px; border-color: #6f3dad; Text { text: root.exposure + "%"; color: white; horizontal-alignment: center; vertical-alignment: center; font-weight: 800; } }
-                                                        MicroButton { label: "+"; fill: #ff5fa2; stroke: #ff5fa2; ink: #300b1d; pressed => { root.bump-exposure(5); } }
-                                                    }
-                                                }
+                                border-color: #4b2f6b;
+                                clip: true;
+                                Rectangle { x: 16px; y: 14px; width: parent.width - 32px; height: parent.height - 28px; border-radius: 26px; background: #2a173dcc; border-width: 1px; border-color: #7d49b8; }
+                                VerticalLayout {
+                                    padding: 16px; spacing: 12px;
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #ff5fa2; }
+                                        Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #7cf4ff; }
+                                        Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #ffe66d; }
+                                        Rectangle { horizontal-stretch: 1; }
+                                        Text { text: "expressive neon toy"; color: #d6bef8; font-size: 13px; }
+                                    }
+                                    Rectangle {
+                                        border-radius: 26px; background: #241235; border-width: 2px; border-color: #ff5fa2;
+                                        VerticalLayout {
+                                            padding: 16px; spacing: 12px;
+                                            Text { text: "Playful arcade rig"; color: white; font-size: 26px; font-weight: 800; }
+                                            Text { text: "Same state, but now it feels like a toy instrument panel. Big pills, saturated accents, and deliberately loud framing."; color: #d9c8f6; wrap: word-wrap; }
+                                            HorizontalLayout {
+                                                spacing: 10px;
+                                                Chip { label: "Orbit"; active: root.mode-label == "Orbit"; fill: #35194d; active-fill: #7cf4ff; stroke: #7cf4ff; ink: root.mode-label == "Orbit" ? #07131b : white; pressed => { root.set-mode(0); } }
+                                                Chip { label: "Pan"; active: root.mode-label == "Pan"; fill: #35194d; active-fill: #ffe66d; stroke: #ffe66d; ink: root.mode-label == "Pan" ? #241f06 : white; pressed => { root.set-mode(1); } }
+                                                Chip { label: "Inspect"; active: root.mode-label == "Inspect"; fill: #35194d; active-fill: #ff5fa2; stroke: #ff5fa2; ink: root.mode-label == "Inspect" ? #2a0a18 : white; pressed => { root.set-mode(2); } }
                                             }
-
-                                            Rectangle {
-                                                horizontal-stretch: 1;
-                                                border-radius: 18px;
-                                                background: #311845;
-                                                border-width: 1px;
-                                                border-color: #7d49b8;
-                                                VerticalLayout {
-                                                    padding: 12px;
-                                                    spacing: 8px;
-                                                    Text { text: "Speed"; color: #c8fbff; font-weight: 700; }
-                                                    HorizontalLayout {
-                                                        spacing: 8px;
-                                                        MicroButton { label: "−"; fill: #4d2672; stroke: #a56ae9; ink: white; pressed => { root.bump-speed(-1); } }
-                                                        Rectangle { horizontal-stretch: 1; border-radius: 12px; background: #180c24; border-width: 1px; border-color: #6f3dad; Text { text: root.speed + "x"; color: white; horizontal-alignment: center; vertical-alignment: center; font-weight: 800; } }
-                                                        MicroButton { label: "+"; fill: #7cf4ff; stroke: #7cf4ff; ink: #04151b; pressed => { root.bump-speed(1); } }
-                                                    }
-                                                }
+                                            HorizontalLayout {
+                                                spacing: 10px;
+                                                Rectangle { horizontal-stretch: 1; border-radius: 18px; background: #311845; border-width: 1px; border-color: #7d49b8; VerticalLayout { padding: 12px; spacing: 8px; Text { text: "Exposure"; color: #f8d0ff; font-weight: 700; } HorizontalLayout { spacing: 8px; MicroButton { label: "−"; fill: #4d2672; stroke: #a56ae9; ink: white; pressed => { root.bump-exposure(-5); } } Rectangle { horizontal-stretch: 1; border-radius: 12px; background: #180c24; border-width: 1px; border-color: #6f3dad; Text { text: root.exposure + "%"; color: white; horizontal-alignment: center; vertical-alignment: center; font-weight: 800; } } MicroButton { label: "+"; fill: #ff5fa2; stroke: #ff5fa2; ink: #300b1d; pressed => { root.bump-exposure(5); } } } } }
+                                                Rectangle { horizontal-stretch: 1; border-radius: 18px; background: #311845; border-width: 1px; border-color: #7d49b8; VerticalLayout { padding: 12px; spacing: 8px; Text { text: "Speed"; color: #c8fbff; font-weight: 700; } HorizontalLayout { spacing: 8px; MicroButton { label: "−"; fill: #4d2672; stroke: #a56ae9; ink: white; pressed => { root.bump-speed(-1); } } Rectangle { horizontal-stretch: 1; border-radius: 12px; background: #180c24; border-width: 1px; border-color: #6f3dad; Text { text: root.speed + "x"; color: white; horizontal-alignment: center; vertical-alignment: center; font-weight: 800; } } MicroButton { label: "+"; fill: #7cf4ff; stroke: #7cf4ff; ink: #04151b; pressed => { root.bump-speed(1); } } } } }
                                             }
-                                        }
-
-                                        HorizontalLayout {
-                                            spacing: 10px;
-                                            Chip { label: root.bloom ? "Bloom ON" : "Bloom OFF"; active: root.bloom; fill: #35194d; active-fill: #ffe66d; stroke: #ffe66d; ink: root.bloom ? #241f06 : white; pressed => { root.toggle-bloom(); } }
-                                            Rectangle { horizontal-stretch: 1; }
-                                            MicroButton { label: "RESET"; min-width: 102px; fill: #ff5fa2; stroke: #ff5fa2; ink: #300b1d; pressed => { root.reset-all(); } }
+                                            HorizontalLayout {
+                                                spacing: 10px;
+                                                Chip { label: root.bloom ? "Bloom ON" : "Bloom OFF"; active: root.bloom; fill: #35194d; active-fill: #ffe66d; stroke: #ffe66d; ink: root.bloom ? #241f06 : white; pressed => { root.toggle-bloom(); } }
+                                                Rectangle { horizontal-stretch: 1; }
+                                                MicroButton { label: "RESET"; min-width: 102px; fill: #ff5fa2; stroke: #ff5fa2; ink: #300b1d; pressed => { root.reset-all(); } }
+                                            }
                                         }
                                     }
                                 }
