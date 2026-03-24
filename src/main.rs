@@ -59,161 +59,583 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
 "#;
 
 slint::slint! {
-    export component App inherits Window {
-        in-out property <image> viewport-image;
-        in-out property <string> status-text: "Waiting for the wgpu renderer";
-        out property <int> viewport-px-width: viewport-box.width / 1px;
-        out property <int> viewport-px-height: viewport-box.height / 1px;
+    component MicroButton inherits Rectangle {
+        in property <string> label;
+        in property <color> fill: #2a3440;
+        in property <color> stroke: #4d6177;
+        in property <color> ink: white;
+        callback pressed;
 
-        title: "Slint + wgpu embedded viewport";
-        preferred-width: 1100px;
-        preferred-height: 720px;
-        background: rgb(16, 20, 25);
+        min-width: 34px;
+        min-height: 30px;
+        border-radius: 6px;
+        background: touch.pressed ? stroke : fill;
+        border-width: 1px;
+        border-color: stroke;
+
+        Text {
+            text: parent.label;
+            color: parent.ink;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            font-weight: 700;
+        }
+
+        touch := TouchArea {
+            clicked => { root.pressed(); }
+        }
+    }
+
+    component Chip inherits Rectangle {
+        in property <string> label;
+        in property <bool> active;
+        in property <color> fill;
+        in property <color> active-fill;
+        in property <color> stroke;
+        in property <color> ink;
+        callback pressed;
+
+        min-width: 74px;
+        min-height: 28px;
+        border-radius: 999px;
+        background: active ? active-fill : fill;
+        border-width: 1px;
+        border-color: stroke;
+
+        Text {
+            text: parent.label;
+            color: parent.ink;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            font-weight: active ? 700 : 500;
+            font-size: 13px;
+        }
+
+        touch := TouchArea {
+            clicked => { root.pressed(); }
+        }
+    }
+
+    component ThemeCard inherits Rectangle {
+        in property <string> theme-name;
+        in property <string> subtitle;
+        in property <string> mode-label;
+        in property <int> exposure;
+        in property <int> speed;
+        in property <bool> bloom;
+        in property <color> shell;
+        in property <color> shell-2;
+        in property <color> stroke;
+        in property <color> accent;
+        in property <color> accent-2;
+        in property <color> ink;
+        in property <color> muted;
+        in property <int> radius: 14;
+        in property <int> title-size: 22;
+        in property <int> body-size: 13;
+        in property <bool> heavy-border: false;
+        in property <bool> all-caps: false;
+        in property <bool> skinny: false;
+        callback set-mode(int);
+        callback bump-exposure(int);
+        callback bump-speed(int);
+        callback toggle-bloom();
+        callback reset-all();
+
+        border-radius: radius * 1px;
+        background: shell;
+        border-width: heavy-border ? 3px : 1px;
+        border-color: stroke;
+        clip: true;
+        min-height: 262px;
+
+        Rectangle {
+            height: 8px;
+            width: parent.width;
+            background: accent;
+        }
 
         VerticalLayout {
-            padding: 18px;
-            spacing: 14px;
+            padding: skinny ? 10px : 14px;
+            spacing: skinny ? 8px : 10px;
 
             Rectangle {
-                border-radius: 10px;
-                background: rgb(23, 32, 43);
+                background: shell-2;
+                border-radius: (radius - 4) * 1px;
                 border-width: 1px;
-                border-color: rgb(47, 70, 93);
-                height: 98px;
+                border-color: stroke;
+                height: 56px;
 
                 VerticalLayout {
-                    padding: 14px;
-                    spacing: 6px;
+                    padding: 10px;
+                    spacing: 2px;
 
                     Text {
-                        text: "Embedded accelerated viewport";
-                        font-size: 24px;
-                        font-weight: 700;
-                        color: rgb(242, 246, 251);
+                        text: theme-name;
+                        color: ink;
+                        font-size: title-size * 1px;
+                        font-weight: 800;
                     }
 
                     Text {
-                        text: "The right-hand rectangle is a native Rust wgpu texture composed inside the Slint scene.";
-                        color: rgb(185, 198, 214);
-                        wrap: word-wrap;
+                        text: subtitle;
+                        color: muted;
+                        font-size: body-size * 1px;
+                    }
+                }
+            }
+
+            Rectangle {
+                background: shell-2;
+                border-radius: (radius - 4) * 1px;
+                border-width: 1px;
+                border-color: stroke;
+
+                VerticalLayout {
+                    padding: 10px;
+                    spacing: 8px;
+
+                    HorizontalLayout {
+                        alignment: start;
+                        Text { text: all-caps ? "CAMERA MODE" : "Camera mode"; color: muted; font-size: body-size * 1px; }
+                        Rectangle { horizontal-stretch: 1; }
+                        Text { text: mode-label; color: accent; font-weight: 700; font-size: body-size * 1px; }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Chip { label: "Orbit"; active: mode-label == "Orbit"; fill: shell; active-fill: accent; stroke: stroke; ink: mode-label == "Orbit" ? shell : ink; pressed => { root.set-mode(0); } }
+                        Chip { label: "Pan"; active: mode-label == "Pan"; fill: shell; active-fill: accent-2; stroke: stroke; ink: mode-label == "Pan" ? shell : ink; pressed => { root.set-mode(1); } }
+                        Chip { label: "Inspect"; active: mode-label == "Inspect"; fill: shell; active-fill: ink; stroke: stroke; ink: mode-label == "Inspect" ? shell : ink; pressed => { root.set-mode(2); } }
                     }
                 }
             }
 
             HorizontalLayout {
-                spacing: 14px;
+                spacing: 8px;
 
                 Rectangle {
-                    width: 280px;
-                    border-radius: 10px;
-                    background: rgb(24, 33, 43);
+                    horizontal-stretch: 1;
+                    background: shell-2;
+                    border-radius: (radius - 4) * 1px;
                     border-width: 1px;
-                    border-color: rgb(45, 64, 85);
+                    border-color: stroke;
 
                     VerticalLayout {
-                        padding: 14px;
-                        spacing: 10px;
-
-                        Text {
-                            text: "Surrounding UI";
-                            font-size: 20px;
-                            font-weight: 600;
-                            color: rgb(242, 246, 251);
-                        }
-
-                        Text {
-                            text: "This panel exists to prove the viewport is embedded in normal layout, not a separate native child window.";
-                            color: rgb(185, 198, 214);
-                            wrap: word-wrap;
-                        }
-
-                        Rectangle {
-                            height: 74px;
-                            border-radius: 8px;
-                            background: rgb(14, 22, 32);
-                            border-width: 1px;
-                            border-color: rgb(41, 66, 93);
-
-                            VerticalLayout {
-                                padding: 10px;
-                                spacing: 4px;
-
-                                Text {
-                                    text: "Render path";
-                                    color: rgb(142, 184, 223);
-                                    font-weight: 600;
-                                }
-
-                                Text {
-                                    text: "Slint layout -> imported wgpu texture -> composited in-window";
-                                    color: rgb(216, 228, 241);
-                                    wrap: word-wrap;
-                                }
+                        padding: 10px;
+                        spacing: 6px;
+                        Text { text: all-caps ? "EXPOSURE" : "Exposure"; color: muted; font-size: body-size * 1px; }
+                        HorizontalLayout {
+                            spacing: 6px;
+                            MicroButton { label: "−"; fill: shell; stroke: stroke; ink: ink; pressed => { root.bump-exposure(-5); } }
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                border-radius: 8px;
+                                background: shell;
+                                border-width: 1px;
+                                border-color: stroke;
+                                Text { text: exposure + "%"; color: ink; horizontal-alignment: center; vertical-alignment: center; font-weight: 700; }
                             }
-                        }
-
-                        Rectangle {
-                            height: 74px;
-                            border-radius: 8px;
-                            background: rgb(14, 22, 32);
-                            border-width: 1px;
-                            border-color: rgb(83, 57, 36);
-
-                            VerticalLayout {
-                                padding: 10px;
-                                spacing: 4px;
-
-                                Text {
-                                    text: "What to expect";
-                                    color: rgb(255, 191, 135);
-                                    font-weight: 600;
-                                }
-
-                                Text {
-                                    text: "A moving procedural shader once rendering starts and the host can open a desktop window.";
-                                    color: rgb(244, 226, 213);
-                                    wrap: word-wrap;
-                                }
-                            }
+                            MicroButton { label: "+"; fill: shell; stroke: stroke; ink: ink; pressed => { root.bump-exposure(5); } }
                         }
                     }
                 }
 
-                viewport-box := Rectangle {
+                Rectangle {
                     horizontal-stretch: 1;
-                    vertical-stretch: 1;
-                    min-width: 320px;
-                    min-height: 240px;
-                    border-radius: 12px;
-                    border-width: 2px;
-                    border-color: rgb(78, 116, 150);
-                    background: rgb(9, 18, 27);
-                    clip: true;
+                    background: shell-2;
+                    border-radius: (radius - 4) * 1px;
+                    border-width: 1px;
+                    border-color: stroke;
 
-                    Image {
-                        x: 0;
-                        y: 0;
-                        width: parent.width;
-                        height: parent.height;
-                        source: root.viewport-image;
-                        image-fit: fill;
+                    VerticalLayout {
+                        padding: 10px;
+                        spacing: 6px;
+                        Text { text: all-caps ? "SPEED" : "Speed"; color: muted; font-size: body-size * 1px; }
+                        HorizontalLayout {
+                            spacing: 6px;
+                            MicroButton { label: "−"; fill: shell; stroke: stroke; ink: ink; pressed => { root.bump-speed(-1); } }
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                border-radius: 8px;
+                                background: shell;
+                                border-width: 1px;
+                                border-color: stroke;
+                                Text { text: speed + "x"; color: ink; horizontal-alignment: center; vertical-alignment: center; font-weight: 700; }
+                            }
+                            MicroButton { label: "+"; fill: shell; stroke: stroke; ink: ink; pressed => { root.bump-speed(1); } }
+                        }
                     }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+
+                Rectangle {
+                    horizontal-stretch: 1;
+                    background: shell-2;
+                    border-radius: (radius - 4) * 1px;
+                    border-width: 1px;
+                    border-color: stroke;
+
+                    HorizontalLayout {
+                        padding: 10px;
+                        spacing: 8px;
+                        Text { text: all-caps ? "BLOOM" : "Bloom"; color: muted; font-size: body-size * 1px; }
+                        Rectangle { horizontal-stretch: 1; }
+                        Chip { label: bloom ? "On" : "Off"; active: bloom; fill: shell; active-fill: accent; stroke: stroke; ink: bloom ? shell : ink; pressed => { root.toggle-bloom(); } }
+                    }
+                }
+
+                MicroButton {
+                    label: all-caps ? "RESET" : "Reset";
+                    min-width: 86px;
+                    fill: accent;
+                    stroke: accent;
+                    ink: shell;
+                    pressed => { root.reset-all(); }
+                }
+            }
+        }
+    }
+
+    export component App inherits Window {
+        in-out property <image> viewport-image;
+        in-out property <string> status-text: "Waiting for the wgpu renderer";
+        in-out property <int> mode-index: 0;
+        in-out property <int> exposure: 65;
+        in-out property <int> speed: 4;
+        in-out property <bool> bloom: true;
+        out property <int> viewport-px-width: viewport-box.width / 1px;
+        out property <int> viewport-px-height: viewport-box.height / 1px;
+        private property <string> mode-label: mode-index == 0 ? "Orbit" : mode-index == 1 ? "Pan" : "Inspect";
+
+        callback set-mode(int);
+        callback bump-exposure(int);
+        callback bump-speed(int);
+        callback toggle-bloom();
+        callback reset-all();
+
+        set-mode(mode) => {
+            if (mode < 0) {
+                root.mode-index = 0;
+            } else if (mode > 2) {
+                root.mode-index = 2;
+            } else {
+                root.mode-index = mode;
+            }
+        }
+
+        bump-exposure(delta) => {
+            let next = root.exposure + delta;
+            if (next < 0) {
+                root.exposure = 0;
+            } else if (next > 100) {
+                root.exposure = 100;
+            } else {
+                root.exposure = next;
+            }
+        }
+
+        bump-speed(delta) => {
+            let next = root.speed + delta;
+            if (next < 1) {
+                root.speed = 1;
+            } else if (next > 9) {
+                root.speed = 9;
+            } else {
+                root.speed = next;
+            }
+        }
+
+        toggle-bloom() => { root.bloom = !root.bloom; }
+        reset-all() => {
+            root.mode-index = 0;
+            root.exposure = 65;
+            root.speed = 4;
+            root.bloom = true;
+        }
+
+        title: "Slint style gallery + embedded wgpu viewport";
+        preferred-width: 1640px;
+        preferred-height: 980px;
+        background: #0d1014;
+
+        HorizontalLayout {
+            padding: 16px;
+            spacing: 16px;
+
+            Rectangle {
+                width: 980px;
+                border-radius: 18px;
+                background: #11161c;
+                border-width: 1px;
+                border-color: #283240;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 12px;
 
                     Rectangle {
-                        x: 14px;
-                        y: 14px;
-                        border-radius: 8px;
-                        background: rgb(11, 22, 33);
+                        height: 94px;
+                        border-radius: 14px;
+                        background: #151d25;
                         border-width: 1px;
-                        border-color: rgb(54, 80, 106);
-                        width: status.preferred-width + 20px;
-                        height: status.preferred-height + 12px;
+                        border-color: #2b3949;
 
-                        status := Text {
-                            x: 10px;
-                            y: 6px;
+                        VerticalLayout {
+                            padding: 14px;
+                            spacing: 6px;
+
+                            Text {
+                                text: "Same control form, radically different Slint treatments";
+                                color: #eef4fb;
+                                font-size: 27px;
+                                font-weight: 800;
+                            }
+
+                            Text {
+                                text: "Every panel below is the same viewport-control form bound to shared state. The point is not color-swapping — it is proving how far you can push shape, density, hierarchy, and mood while staying in vanilla Slint.";
+                                color: #9fb0c3;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        VerticalLayout {
+                            spacing: 12px;
+                            ThemeCard {
+                                theme-name: "Brutalist console";
+                                subtitle: "Chunky blocks, warning-strip energy, almost industrial.";
+                                mode-label: root.mode-label;
+                                exposure: root.exposure;
+                                speed: root.speed;
+                                bloom: root.bloom;
+                                shell: #f2eadf;
+                                shell-2: #fff7ee;
+                                stroke: #1e1e1e;
+                                accent: #ff5e00;
+                                accent-2: #ffd200;
+                                ink: #111111;
+                                muted: #594b42;
+                                radius: 4;
+                                title-size: 24;
+                                heavy-border: true;
+                                all-caps: true;
+                                set-mode(mode) => { root.set-mode(mode); }
+                                bump-exposure(delta) => { root.bump-exposure(delta); }
+                                bump-speed(delta) => { root.bump-speed(delta); }
+                                toggle-bloom() => { root.toggle-bloom(); }
+                                reset-all() => { root.reset-all(); }
+                            }
+
+                            ThemeCard {
+                                theme-name: "Retro terminal";
+                                subtitle: "Monochrome ops panel with phosphor-screen vibes.";
+                                mode-label: root.mode-label;
+                                exposure: root.exposure;
+                                speed: root.speed;
+                                bloom: root.bloom;
+                                shell: #08140c;
+                                shell-2: #0b1d12;
+                                stroke: #1f8f47;
+                                accent: #49ff8d;
+                                accent-2: #b0ff6d;
+                                ink: #c5ffd8;
+                                muted: #71bf8a;
+                                radius: 8;
+                                title-size: 22;
+                                all-caps: true;
+                                skinny: true;
+                                set-mode(mode) => { root.set-mode(mode); }
+                                bump-exposure(delta) => { root.bump-exposure(delta); }
+                                bump-speed(delta) => { root.bump-speed(delta); }
+                                toggle-bloom() => { root.toggle-bloom(); }
+                                reset-all() => { root.reset-all(); }
+                            }
+
+                            ThemeCard {
+                                theme-name: "Soft cute dashboard";
+                                subtitle: "Rounded toy-like control sheet, friendly and light.";
+                                mode-label: root.mode-label;
+                                exposure: root.exposure;
+                                speed: root.speed;
+                                bloom: root.bloom;
+                                shell: #ffe8f1;
+                                shell-2: #fff5f9;
+                                stroke: #f5a7c6;
+                                accent: #ff6ea8;
+                                accent-2: #8dceff;
+                                ink: #50283c;
+                                muted: #8f5d74;
+                                radius: 28;
+                                title-size: 22;
+                                set-mode(mode) => { root.set-mode(mode); }
+                                bump-exposure(delta) => { root.bump-exposure(delta); }
+                                bump-speed(delta) => { root.bump-speed(delta); }
+                                toggle-bloom() => { root.toggle-bloom(); }
+                                reset-all() => { root.reset-all(); }
+                            }
+                        }
+
+                        VerticalLayout {
+                            spacing: 12px;
+                            ThemeCard {
+                                theme-name: "Glassy spaceship";
+                                subtitle: "Thin chrome lines, dark gradients, cockpit feel.";
+                                mode-label: root.mode-label;
+                                exposure: root.exposure;
+                                speed: root.speed;
+                                bloom: root.bloom;
+                                shell: #121827;
+                                shell-2: #182131;
+                                stroke: #425574;
+                                accent: #78c8ff;
+                                accent-2: #ae8bff;
+                                ink: #eef6ff;
+                                muted: #a5bdd5;
+                                radius: 20;
+                                title-size: 23;
+                                set-mode(mode) => { root.set-mode(mode); }
+                                bump-exposure(delta) => { root.bump-exposure(delta); }
+                                bump-speed(delta) => { root.bump-speed(delta); }
+                                toggle-bloom() => { root.toggle-bloom(); }
+                                reset-all() => { root.reset-all(); }
+                            }
+
+                            ThemeCard {
+                                theme-name: "Editorial luxury";
+                                subtitle: "Cream surfaces, gold accent, expensive control room.";
+                                mode-label: root.mode-label;
+                                exposure: root.exposure;
+                                speed: root.speed;
+                                bloom: root.bloom;
+                                shell: #f7f1e7;
+                                shell-2: #fcf8f0;
+                                stroke: #cbb48f;
+                                accent: #9d6a28;
+                                accent-2: #3f2d18;
+                                ink: rgb(35, 24, 14);
+                                muted: #76624b;
+                                radius: 18;
+                                title-size: 24;
+                                set-mode(mode) => { root.set-mode(mode); }
+                                bump-exposure(delta) => { root.bump-exposure(delta); }
+                                bump-speed(delta) => { root.bump-speed(delta); }
+                                toggle-bloom() => { root.toggle-bloom(); }
+                                reset-all() => { root.reset-all(); }
+                            }
+
+                            ThemeCard {
+                                theme-name: "Minimal analytical";
+                                subtitle: "White-space heavy, almost pro data-tool or Figma plugin.";
+                                mode-label: root.mode-label;
+                                exposure: root.exposure;
+                                speed: root.speed;
+                                bloom: root.bloom;
+                                shell: #eef2f6;
+                                shell-2: white;
+                                stroke: #cad4de;
+                                accent: #0d6efd;
+                                accent-2: #111827;
+                                ink: #0d1520;
+                                muted: #66778a;
+                                radius: 12;
+                                title-size: 22;
+                                skinny: true;
+                                set-mode(mode) => { root.set-mode(mode); }
+                                bump-exposure(delta) => { root.bump-exposure(delta); }
+                                bump-speed(delta) => { root.bump-speed(delta); }
+                                toggle-bloom() => { root.toggle-bloom(); }
+                                reset-all() => { root.reset-all(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            viewport-box := Rectangle {
+                horizontal-stretch: 1;
+                vertical-stretch: 1;
+                min-width: 420px;
+                border-radius: 22px;
+                background: #0c1117;
+                border-width: 1px;
+                border-color: #2a3440;
+                clip: true;
+
+                Image {
+                    x: 0;
+                    y: 0;
+                    width: parent.width;
+                    height: parent.height;
+                    source: root.viewport-image;
+                    image-fit: fill;
+                }
+
+                Rectangle {
+                    x: 18px;
+                    y: 18px;
+                    width: parent.width - 36px;
+                    height: 118px;
+                    border-radius: 16px;
+                    background: #101823cc;
+                    border-width: 1px;
+                    border-color: #35506bcc;
+
+                    VerticalLayout {
+                        padding: 14px;
+                        spacing: 8px;
+
+                        Text {
+                            text: "Live viewport / shared control state";
+                            color: #eff6ff;
+                            font-size: 22px;
+                            font-weight: 800;
+                        }
+
+                        Text {
                             text: root.status-text;
-                            color: rgb(242, 246, 251);
+                            color: #b7c9dc;
+                            wrap: word-wrap;
+                        }
+
+                        Text {
+                            text: "Mode: " + root.mode-label + "    Exposure: " + root.exposure + "%    Speed: " + root.speed + "x    Bloom: " + (root.bloom ? "On" : "Off");
+                            color: #7fd0ff;
+                            font-weight: 700;
+                        }
+                    }
+                }
+
+                Rectangle {
+                    x: 18px;
+                    y: parent.height - 118px;
+                    width: parent.width - 36px;
+                    height: 100px;
+                    border-radius: 16px;
+                    background: #0f1720cc;
+                    border-width: 1px;
+                    border-color: #2b3949cc;
+
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 6px;
+
+                        Text {
+                            text: "Why this demo is useful";
+                            color: #eef4fb;
+                            font-weight: 800;
+                        }
+
+                        Text {
+                            text: "If Slint can carry this many visual personalities around the same interaction model, it is probably stylistically flexible enough for a real app shell around the embedded Rust `wgpu` view.";
+                            color: #a7bbcf;
+                            wrap: word-wrap;
                         }
                     }
                 }
