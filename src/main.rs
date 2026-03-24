@@ -437,265 +437,277 @@ slint::slint! {
                             }
 
                             Text {
-                                text: "One style at a time. Same state, same controls — less layout fighting.";
+                                text: "One style at a time. Same state, same controls — now in an actual fixed demo viewport.";
                                 color: #9fb0c3;
                             }
 
-                            ThemeCard {
-                                visible: root.selected-demo == 0;
-                                theme-name: "Brutalist console";
-                                subtitle: "Chunky blocks, warning-strip energy, almost industrial.";
-                                mode-label: root.mode-label;
-                                exposure: root.exposure;
-                                speed: root.speed;
-                                bloom: root.bloom;
-                                shell: #f2eadf;
-                                shell-2: #fff7ee;
-                                stroke: #1e1e1e;
-                                accent: #ff5e00;
-                                accent-2: #ffd200;
-                                ink: #111111;
-                                muted: #594b42;
-                                radius: 4;
-                                title-size: 24;
-                                heavy-border: true;
-                                all-caps: true;
-                                set-mode(mode) => { root.set-mode(mode); }
-                                bump-exposure(delta) => { root.bump-exposure(delta); }
-                                bump-speed(delta) => { root.bump-speed(delta); }
-                                toggle-bloom() => { root.toggle-bloom(); }
-                                reset-all() => { root.reset-all(); }
-                            }
-
-                            ThemeCard {
-                                visible: root.selected-demo == 1;
-                                theme-name: "Retro terminal";
-                                subtitle: "Monochrome ops panel with phosphor-screen vibes.";
-                                mode-label: root.mode-label;
-                                exposure: root.exposure;
-                                speed: root.speed;
-                                bloom: root.bloom;
-                                shell: #08140c;
-                                shell-2: #0b1d12;
-                                stroke: #1f8f47;
-                                accent: #49ff8d;
-                                accent-2: #b0ff6d;
-                                ink: #c5ffd8;
-                                muted: #71bf8a;
-                                radius: 8;
-                                title-size: 22;
-                                all-caps: true;
-                                skinny: true;
-                                set-mode(mode) => { root.set-mode(mode); }
-                                bump-exposure(delta) => { root.bump-exposure(delta); }
-                                bump-speed(delta) => { root.bump-speed(delta); }
-                                toggle-bloom() => { root.toggle-bloom(); }
-                                reset-all() => { root.reset-all(); }
-                            }
-
-                            ThemeCard {
-                                visible: root.selected-demo == 2;
-                                theme-name: "Soft cute dashboard";
-                                subtitle: "Rounded toy-like control sheet, friendly and light.";
-                                mode-label: root.mode-label;
-                                exposure: root.exposure;
-                                speed: root.speed;
-                                bloom: root.bloom;
-                                shell: #ffe8f1;
-                                shell-2: #fff5f9;
-                                stroke: #f5a7c6;
-                                accent: #ff6ea8;
-                                accent-2: #8dceff;
-                                ink: #50283c;
-                                muted: #8f5d74;
-                                radius: 28;
-                                title-size: 22;
-                                set-mode(mode) => { root.set-mode(mode); }
-                                bump-exposure(delta) => { root.bump-exposure(delta); }
-                                bump-speed(delta) => { root.bump-speed(delta); }
-                                toggle-bloom() => { root.toggle-bloom(); }
-                                reset-all() => { root.reset-all(); }
-                            }
-
-                            ThemeCard {
-                                visible: root.selected-demo == 3;
-                                theme-name: "Glassy spaceship";
-                                subtitle: "Thin chrome lines, dark gradients, cockpit feel.";
-                                mode-label: root.mode-label;
-                                exposure: root.exposure;
-                                speed: root.speed;
-                                bloom: root.bloom;
-                                shell: #121827;
-                                shell-2: #182131;
-                                stroke: #425574;
-                                accent: #78c8ff;
-                                accent-2: #ae8bff;
-                                ink: #eef6ff;
-                                muted: #a5bdd5;
-                                radius: 20;
-                                title-size: 23;
-                                set-mode(mode) => { root.set-mode(mode); }
-                                bump-exposure(delta) => { root.bump-exposure(delta); }
-                                bump-speed(delta) => { root.bump-speed(delta); }
-                                toggle-bloom() => { root.toggle-bloom(); }
-                                reset-all() => { root.reset-all(); }
-                            }
-
-                            ThemeCard {
-                                visible: root.selected-demo == 4;
-                                theme-name: "Editorial luxury";
-                                subtitle: "Cream surfaces, gold accent, expensive control room.";
-                                mode-label: root.mode-label;
-                                exposure: root.exposure;
-                                speed: root.speed;
-                                bloom: root.bloom;
-                                shell: #f7f1e7;
-                                shell-2: #fcf8f0;
-                                stroke: #cbb48f;
-                                accent: #9d6a28;
-                                accent-2: #3f2d18;
-                                ink: rgb(35, 24, 14);
-                                muted: #76624b;
-                                radius: 18;
-                                title-size: 24;
-                                set-mode(mode) => { root.set-mode(mode); }
-                                bump-exposure(delta) => { root.bump-exposure(delta); }
-                                bump-speed(delta) => { root.bump-speed(delta); }
-                                toggle-bloom() => { root.toggle-bloom(); }
-                                reset-all() => { root.reset-all(); }
-                            }
-
-                            ThemeCard {
-                                visible: root.selected-demo == 5;
-                                height: self.visible ? parent.height : 0px;
-                                width: parent.width;
-                                theme-name: "Minimal analytical";
-                                subtitle: "White-space heavy, almost pro data-tool or Figma plugin.";
-                                mode-label: root.mode-label;
-                                exposure: root.exposure;
-                                speed: root.speed;
-                                bloom: root.bloom;
-                                shell: #eef2f6;
-                                shell-2: white;
-                                stroke: #cad4de;
-                                accent: #0d6efd;
-                                accent-2: #111827;
-                                ink: #0d1520;
-                                muted: #66778a;
-                                radius: 12;
-                                title-size: 22;
-                                skinny: true;
-                                set-mode(mode) => { root.set-mode(mode); }
-                                bump-exposure(delta) => { root.bump-exposure(delta); }
-                                bump-speed(delta) => { root.bump-speed(delta); }
-                                toggle-bloom() => { root.toggle-bloom(); }
-                                reset-all() => { root.reset-all(); }
-                            }
-
-                            Rectangle {
-                                visible: root.selected-demo == 6;
-                                height: self.visible ? parent.height : 0px;
-                                width: parent.width;
-                                border-radius: 26px;
-                                background: #e8ebf1;
+                            demo-slot := Rectangle {
+                                vertical-stretch: 1;
+                                min-height: 620px;
+                                border-radius: 18px;
+                                background: #0f151d;
                                 border-width: 1px;
-                                border-color: #ccd2dc;
-                                Rectangle { x: 8px; y: 10px; width: parent.width; height: parent.height; border-radius: 26px; background: #c8d0dc55; }
+                                border-color: #273241;
+                                clip: true;
+
+                                ThemeCard {
+                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    visible: root.selected-demo == 0;
+                                    theme-name: "Brutalist console";
+                                    subtitle: "Chunky blocks, warning-strip energy, almost industrial.";
+                                    mode-label: root.mode-label;
+                                    exposure: root.exposure;
+                                    speed: root.speed;
+                                    bloom: root.bloom;
+                                    shell: #f2eadf;
+                                    shell-2: #fff7ee;
+                                    stroke: #1e1e1e;
+                                    accent: #ff5e00;
+                                    accent-2: #ffd200;
+                                    ink: #111111;
+                                    muted: #594b42;
+                                    radius: 4;
+                                    title-size: 24;
+                                    heavy-border: true;
+                                    all-caps: true;
+                                    set-mode(mode) => { root.set-mode(mode); }
+                                    bump-exposure(delta) => { root.bump-exposure(delta); }
+                                    bump-speed(delta) => { root.bump-speed(delta); }
+                                    toggle-bloom() => { root.toggle-bloom(); }
+                                    reset-all() => { root.reset-all(); }
+                                }
+
+                                ThemeCard {
+                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    visible: root.selected-demo == 1;
+                                    theme-name: "Retro terminal";
+                                    subtitle: "Monochrome ops panel with phosphor-screen vibes.";
+                                    mode-label: root.mode-label;
+                                    exposure: root.exposure;
+                                    speed: root.speed;
+                                    bloom: root.bloom;
+                                    shell: #08140c;
+                                    shell-2: #0b1d12;
+                                    stroke: #1f8f47;
+                                    accent: #49ff8d;
+                                    accent-2: #b0ff6d;
+                                    ink: #c5ffd8;
+                                    muted: #71bf8a;
+                                    radius: 8;
+                                    title-size: 22;
+                                    all-caps: true;
+                                    skinny: true;
+                                    set-mode(mode) => { root.set-mode(mode); }
+                                    bump-exposure(delta) => { root.bump-exposure(delta); }
+                                    bump-speed(delta) => { root.bump-speed(delta); }
+                                    toggle-bloom() => { root.toggle-bloom(); }
+                                    reset-all() => { root.reset-all(); }
+                                }
+
+                                ThemeCard {
+                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    visible: root.selected-demo == 2;
+                                    theme-name: "Soft cute dashboard";
+                                    subtitle: "Rounded toy-like control sheet, friendly and light.";
+                                    mode-label: root.mode-label;
+                                    exposure: root.exposure;
+                                    speed: root.speed;
+                                    bloom: root.bloom;
+                                    shell: #ffe8f1;
+                                    shell-2: #fff5f9;
+                                    stroke: #f5a7c6;
+                                    accent: #ff6ea8;
+                                    accent-2: #8dceff;
+                                    ink: #50283c;
+                                    muted: #8f5d74;
+                                    radius: 28;
+                                    title-size: 22;
+                                    set-mode(mode) => { root.set-mode(mode); }
+                                    bump-exposure(delta) => { root.bump-exposure(delta); }
+                                    bump-speed(delta) => { root.bump-speed(delta); }
+                                    toggle-bloom() => { root.toggle-bloom(); }
+                                    reset-all() => { root.reset-all(); }
+                                }
+
+                                ThemeCard {
+                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    visible: root.selected-demo == 3;
+                                    theme-name: "Glassy spaceship";
+                                    subtitle: "Thin chrome lines, dark gradients, cockpit feel.";
+                                    mode-label: root.mode-label;
+                                    exposure: root.exposure;
+                                    speed: root.speed;
+                                    bloom: root.bloom;
+                                    shell: #121827;
+                                    shell-2: #182131;
+                                    stroke: #425574;
+                                    accent: #78c8ff;
+                                    accent-2: #ae8bff;
+                                    ink: #eef6ff;
+                                    muted: #a5bdd5;
+                                    radius: 20;
+                                    title-size: 23;
+                                    set-mode(mode) => { root.set-mode(mode); }
+                                    bump-exposure(delta) => { root.bump-exposure(delta); }
+                                    bump-speed(delta) => { root.bump-speed(delta); }
+                                    toggle-bloom() => { root.toggle-bloom(); }
+                                    reset-all() => { root.reset-all(); }
+                                }
+
+                                ThemeCard {
+                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    visible: root.selected-demo == 4;
+                                    theme-name: "Editorial luxury";
+                                    subtitle: "Cream surfaces, gold accent, expensive control room.";
+                                    mode-label: root.mode-label;
+                                    exposure: root.exposure;
+                                    speed: root.speed;
+                                    bloom: root.bloom;
+                                    shell: #f7f1e7;
+                                    shell-2: #fcf8f0;
+                                    stroke: #cbb48f;
+                                    accent: #9d6a28;
+                                    accent-2: #3f2d18;
+                                    ink: rgb(35, 24, 14);
+                                    muted: #76624b;
+                                    radius: 18;
+                                    title-size: 24;
+                                    set-mode(mode) => { root.set-mode(mode); }
+                                    bump-exposure(delta) => { root.bump-exposure(delta); }
+                                    bump-speed(delta) => { root.bump-speed(delta); }
+                                    toggle-bloom() => { root.toggle-bloom(); }
+                                    reset-all() => { root.reset-all(); }
+                                }
+
+                                ThemeCard {
+                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    visible: root.selected-demo == 5;
+                                    theme-name: "Minimal analytical";
+                                    subtitle: "White-space heavy, almost pro data-tool or Figma plugin.";
+                                    mode-label: root.mode-label;
+                                    exposure: root.exposure;
+                                    speed: root.speed;
+                                    bloom: root.bloom;
+                                    shell: #eef2f6;
+                                    shell-2: white;
+                                    stroke: #cad4de;
+                                    accent: #0d6efd;
+                                    accent-2: #111827;
+                                    ink: #0d1520;
+                                    muted: #66778a;
+                                    radius: 12;
+                                    title-size: 22;
+                                    skinny: true;
+                                    set-mode(mode) => { root.set-mode(mode); }
+                                    bump-exposure(delta) => { root.bump-exposure(delta); }
+                                    bump-speed(delta) => { root.bump-speed(delta); }
+                                    toggle-bloom() => { root.toggle-bloom(); }
+                                    reset-all() => { root.reset-all(); }
+                                }
+
                                 Rectangle {
-                                    x: 0; y: 0; width: parent.width; height: parent.height; border-radius: 26px; background: #f7f8fb; border-width: 1px; border-color: #d7dde6;
-                                    VerticalLayout {
-                                        padding: 14px; spacing: 12px;
-                                        HorizontalLayout {
-                                            spacing: 8px;
-                                            Chip { label: "Overview"; active: true; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: white; }
-                                            Chip { label: "Viewport"; active: false; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: #364152; }
-                                            Chip { label: "Lighting"; active: false; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: #364152; }
-                                            Rectangle { horizontal-stretch: 1; }
-                                            Text { text: "shadcn-ish panel"; color: #667085; font-size: 13px; }
-                                        }
-                                        Rectangle {
-                                            border-radius: 18px; background: white; border-width: 1px; border-color: #e3e8ef;
-                                            VerticalLayout {
-                                                padding: 16px; spacing: 12px;
-                                                Text { text: "Quiet modern inspector"; color: #101828; font-size: 24px; font-weight: 800; }
-                                                Text { text: "More like a real product shell: tabs, softer elevation, restrained outlines, and cleaner spacing."; color: #667085; wrap: word-wrap; }
-                                                HorizontalLayout {
-                                                    spacing: 10px;
-                                                    Rectangle {
-                                                        horizontal-stretch: 1; border-radius: 14px; background: #f8fafc; border-width: 1px; border-color: #e4e7ec;
-                                                        VerticalLayout {
-                                                            padding: 12px; spacing: 8px;
-                                                            Text { text: "Camera mode"; color: #475467; }
-                                                            HorizontalLayout {
-                                                                spacing: 6px;
-                                                                Chip { label: "Orbit"; active: root.mode-label == "Orbit"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Orbit" ? white : #111827; pressed => { root.set-mode(0); } }
-                                                                Chip { label: "Pan"; active: root.mode-label == "Pan"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Pan" ? white : #111827; pressed => { root.set-mode(1); } }
-                                                                Chip { label: "Inspect"; active: root.mode-label == "Inspect"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Inspect" ? white : #111827; pressed => { root.set-mode(2); } }
+                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    visible: root.selected-demo == 6;
+                                    border-radius: 26px;
+                                    background: #e8ebf1;
+                                    border-width: 1px;
+                                    border-color: #ccd2dc;
+                                    Rectangle { x: 8px; y: 10px; width: parent.width; height: parent.height; border-radius: 26px; background: #c8d0dc55; }
+                                    Rectangle {
+                                        x: 0; y: 0; width: parent.width; height: parent.height; border-radius: 26px; background: #f7f8fb; border-width: 1px; border-color: #d7dde6;
+                                        VerticalLayout {
+                                            padding: 14px; spacing: 12px;
+                                            HorizontalLayout {
+                                                spacing: 8px;
+                                                Chip { label: "Overview"; active: true; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: white; }
+                                                Chip { label: "Viewport"; active: false; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: #364152; }
+                                                Chip { label: "Lighting"; active: false; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: #364152; }
+                                                Rectangle { horizontal-stretch: 1; }
+                                                Text { text: "shadcn-ish panel"; color: #667085; font-size: 13px; }
+                                            }
+                                            Rectangle {
+                                                border-radius: 18px; background: white; border-width: 1px; border-color: #e3e8ef;
+                                                VerticalLayout {
+                                                    padding: 16px; spacing: 12px;
+                                                    Text { text: "Quiet modern inspector"; color: #101828; font-size: 24px; font-weight: 800; }
+                                                    Text { text: "More like a real product shell: tabs, softer elevation, restrained outlines, and cleaner spacing."; color: #667085; wrap: word-wrap; }
+                                                    HorizontalLayout {
+                                                        spacing: 10px;
+                                                        Rectangle {
+                                                            horizontal-stretch: 1; border-radius: 14px; background: #f8fafc; border-width: 1px; border-color: #e4e7ec;
+                                                            VerticalLayout {
+                                                                padding: 12px; spacing: 8px;
+                                                                Text { text: "Camera mode"; color: #475467; }
+                                                                HorizontalLayout {
+                                                                    spacing: 6px;
+                                                                    Chip { label: "Orbit"; active: root.mode-label == "Orbit"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Orbit" ? white : #111827; pressed => { root.set-mode(0); } }
+                                                                    Chip { label: "Pan"; active: root.mode-label == "Pan"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Pan" ? white : #111827; pressed => { root.set-mode(1); } }
+                                                                    Chip { label: "Inspect"; active: root.mode-label == "Inspect"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Inspect" ? white : #111827; pressed => { root.set-mode(2); } }
+                                                                }
+                                                            }
+                                                        }
+                                                        Rectangle {
+                                                            width: 142px; border-radius: 14px; background: #111827; border-width: 1px; border-color: #1f2937;
+                                                            VerticalLayout {
+                                                                padding: 12px; spacing: 6px;
+                                                                Text { text: "Bloom"; color: #98a2b3; }
+                                                                Chip { label: root.bloom ? "Enabled" : "Disabled"; active: root.bloom; fill: #1f2937; active-fill: #22c55e; stroke: #344054; ink: root.bloom ? #04130a : white; pressed => { root.toggle-bloom(); } }
                                                             }
                                                         }
                                                     }
-                                                    Rectangle {
-                                                        width: 142px; border-radius: 14px; background: #111827; border-width: 1px; border-color: #1f2937;
-                                                        VerticalLayout {
-                                                            padding: 12px; spacing: 6px;
-                                                            Text { text: "Bloom"; color: #98a2b3; }
-                                                            Chip { label: root.bloom ? "Enabled" : "Disabled"; active: root.bloom; fill: #1f2937; active-fill: #22c55e; stroke: #344054; ink: root.bloom ? #04130a : white; pressed => { root.toggle-bloom(); } }
-                                                        }
+                                                    HorizontalLayout {
+                                                        spacing: 10px;
+                                                        Rectangle { horizontal-stretch: 1; border-radius: 14px; background: #f8fafc; border-width: 1px; border-color: #e4e7ec; HorizontalLayout { padding: 12px; spacing: 8px; Text { text: "Exposure"; color: #475467; } Rectangle { horizontal-stretch: 1; } MicroButton { label: "−"; fill: white; stroke: #d0d5dd; ink: #111827; pressed => { root.bump-exposure(-5); } } Text { text: root.exposure + "%"; color: #111827; font-weight: 700; } MicroButton { label: "+"; fill: #111827; stroke: #111827; ink: white; pressed => { root.bump-exposure(5); } } } }
+                                                        Rectangle { horizontal-stretch: 1; border-radius: 14px; background: #f8fafc; border-width: 1px; border-color: #e4e7ec; HorizontalLayout { padding: 12px; spacing: 8px; Text { text: "Speed"; color: #475467; } Rectangle { horizontal-stretch: 1; } MicroButton { label: "−"; fill: white; stroke: #d0d5dd; ink: #111827; pressed => { root.bump-speed(-1); } } Text { text: root.speed + "x"; color: #111827; font-weight: 700; } MicroButton { label: "+"; fill: #111827; stroke: #111827; ink: white; pressed => { root.bump-speed(1); } } } }
                                                     }
-                                                }
-                                                HorizontalLayout {
-                                                    spacing: 10px;
-                                                    Rectangle { horizontal-stretch: 1; border-radius: 14px; background: #f8fafc; border-width: 1px; border-color: #e4e7ec; HorizontalLayout { padding: 12px; spacing: 8px; Text { text: "Exposure"; color: #475467; } Rectangle { horizontal-stretch: 1; } MicroButton { label: "−"; fill: white; stroke: #d0d5dd; ink: #111827; pressed => { root.bump-exposure(-5); } } Text { text: root.exposure + "%"; color: #111827; font-weight: 700; } MicroButton { label: "+"; fill: #111827; stroke: #111827; ink: white; pressed => { root.bump-exposure(5); } } } }
-                                                    Rectangle { horizontal-stretch: 1; border-radius: 14px; background: #f8fafc; border-width: 1px; border-color: #e4e7ec; HorizontalLayout { padding: 12px; spacing: 8px; Text { text: "Speed"; color: #475467; } Rectangle { horizontal-stretch: 1; } MicroButton { label: "−"; fill: white; stroke: #d0d5dd; ink: #111827; pressed => { root.bump-speed(-1); } } Text { text: root.speed + "x"; color: #111827; font-weight: 700; } MicroButton { label: "+"; fill: #111827; stroke: #111827; ink: white; pressed => { root.bump-speed(1); } } } }
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            Rectangle {
-                                visible: root.selected-demo == 7;
-                                height: self.visible ? parent.height : 0px;
-                                width: parent.width;
-                                border-radius: 32px;
-                                background: #1b1227;
-                                border-width: 1px;
-                                border-color: #4b2f6b;
-                                clip: true;
-                                Rectangle { x: 16px; y: 14px; width: parent.width - 32px; height: parent.height - 28px; border-radius: 26px; background: #2a173dcc; border-width: 1px; border-color: #7d49b8; }
-                                VerticalLayout {
-                                    padding: 16px; spacing: 12px;
-                                    HorizontalLayout {
-                                        spacing: 8px;
-                                        Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #ff5fa2; }
-                                        Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #7cf4ff; }
-                                        Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #ffe66d; }
-                                        Rectangle { horizontal-stretch: 1; }
-                                        Text { text: "expressive neon toy"; color: #d6bef8; font-size: 13px; }
-                                    }
-                                    Rectangle {
-                                        border-radius: 26px; background: #241235; border-width: 2px; border-color: #ff5fa2;
-                                        VerticalLayout {
-                                            padding: 16px; spacing: 12px;
-                                            Text { text: "Playful arcade rig"; color: white; font-size: 26px; font-weight: 800; }
-                                            Text { text: "Same state, but now it feels like a toy instrument panel. Big pills, saturated accents, and deliberately loud framing."; color: #d9c8f6; wrap: word-wrap; }
-                                            HorizontalLayout {
-                                                spacing: 10px;
-                                                Chip { label: "Orbit"; active: root.mode-label == "Orbit"; fill: #35194d; active-fill: #7cf4ff; stroke: #7cf4ff; ink: root.mode-label == "Orbit" ? #07131b : white; pressed => { root.set-mode(0); } }
-                                                Chip { label: "Pan"; active: root.mode-label == "Pan"; fill: #35194d; active-fill: #ffe66d; stroke: #ffe66d; ink: root.mode-label == "Pan" ? #241f06 : white; pressed => { root.set-mode(1); } }
-                                                Chip { label: "Inspect"; active: root.mode-label == "Inspect"; fill: #35194d; active-fill: #ff5fa2; stroke: #ff5fa2; ink: root.mode-label == "Inspect" ? #2a0a18 : white; pressed => { root.set-mode(2); } }
-                                            }
-                                            HorizontalLayout {
-                                                spacing: 10px;
-                                                Rectangle { horizontal-stretch: 1; border-radius: 18px; background: #311845; border-width: 1px; border-color: #7d49b8; VerticalLayout { padding: 12px; spacing: 8px; Text { text: "Exposure"; color: #f8d0ff; font-weight: 700; } HorizontalLayout { spacing: 8px; MicroButton { label: "−"; fill: #4d2672; stroke: #a56ae9; ink: white; pressed => { root.bump-exposure(-5); } } Rectangle { horizontal-stretch: 1; border-radius: 12px; background: #180c24; border-width: 1px; border-color: #6f3dad; Text { text: root.exposure + "%"; color: white; horizontal-alignment: center; vertical-alignment: center; font-weight: 800; } } MicroButton { label: "+"; fill: #ff5fa2; stroke: #ff5fa2; ink: #300b1d; pressed => { root.bump-exposure(5); } } } } }
-                                                Rectangle { horizontal-stretch: 1; border-radius: 18px; background: #311845; border-width: 1px; border-color: #7d49b8; VerticalLayout { padding: 12px; spacing: 8px; Text { text: "Speed"; color: #c8fbff; font-weight: 700; } HorizontalLayout { spacing: 8px; MicroButton { label: "−"; fill: #4d2672; stroke: #a56ae9; ink: white; pressed => { root.bump-speed(-1); } } Rectangle { horizontal-stretch: 1; border-radius: 12px; background: #180c24; border-width: 1px; border-color: #6f3dad; Text { text: root.speed + "x"; color: white; horizontal-alignment: center; vertical-alignment: center; font-weight: 800; } } MicroButton { label: "+"; fill: #7cf4ff; stroke: #7cf4ff; ink: #04151b; pressed => { root.bump-speed(1); } } } } }
-                                            }
-                                            HorizontalLayout {
-                                                spacing: 10px;
-                                                Chip { label: root.bloom ? "Bloom ON" : "Bloom OFF"; active: root.bloom; fill: #35194d; active-fill: #ffe66d; stroke: #ffe66d; ink: root.bloom ? #241f06 : white; pressed => { root.toggle-bloom(); } }
-                                                Rectangle { horizontal-stretch: 1; }
-                                                MicroButton { label: "RESET"; min-width: 102px; fill: #ff5fa2; stroke: #ff5fa2; ink: #300b1d; pressed => { root.reset-all(); } }
+                                Rectangle {
+                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    visible: root.selected-demo == 7;
+                                    border-radius: 32px;
+                                    background: #1b1227;
+                                    border-width: 1px;
+                                    border-color: #4b2f6b;
+                                    clip: true;
+                                    Rectangle { x: 16px; y: 14px; width: parent.width - 32px; height: parent.height - 28px; border-radius: 26px; background: #2a173dcc; border-width: 1px; border-color: #7d49b8; }
+                                    VerticalLayout {
+                                        padding: 16px; spacing: 12px;
+                                        HorizontalLayout {
+                                            spacing: 8px;
+                                            Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #ff5fa2; }
+                                            Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #7cf4ff; }
+                                            Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #ffe66d; }
+                                            Rectangle { horizontal-stretch: 1; }
+                                            Text { text: "expressive neon toy"; color: #d6bef8; font-size: 13px; }
+                                        }
+                                        Rectangle {
+                                            border-radius: 26px; background: #241235; border-width: 2px; border-color: #ff5fa2;
+                                            VerticalLayout {
+                                                padding: 16px; spacing: 12px;
+                                                Text { text: "Playful arcade rig"; color: white; font-size: 26px; font-weight: 800; }
+                                                Text { text: "Same state, but now it feels like a toy instrument panel. Big pills, saturated accents, and deliberately loud framing."; color: #d9c8f6; wrap: word-wrap; }
+                                                HorizontalLayout {
+                                                    spacing: 10px;
+                                                    Chip { label: "Orbit"; active: root.mode-label == "Orbit"; fill: #35194d; active-fill: #7cf4ff; stroke: #7cf4ff; ink: root.mode-label == "Orbit" ? #07131b : white; pressed => { root.set-mode(0); } }
+                                                    Chip { label: "Pan"; active: root.mode-label == "Pan"; fill: #35194d; active-fill: #ffe66d; stroke: #ffe66d; ink: root.mode-label == "Pan" ? #241f06 : white; pressed => { root.set-mode(1); } }
+                                                    Chip { label: "Inspect"; active: root.mode-label == "Inspect"; fill: #35194d; active-fill: #ff5fa2; stroke: #ff5fa2; ink: root.mode-label == "Inspect" ? #2a0a18 : white; pressed => { root.set-mode(2); } }
+                                                }
+                                                HorizontalLayout {
+                                                    spacing: 10px;
+                                                    Rectangle { horizontal-stretch: 1; border-radius: 18px; background: #311845; border-width: 1px; border-color: #7d49b8; VerticalLayout { padding: 12px; spacing: 8px; Text { text: "Exposure"; color: #f8d0ff; font-weight: 700; } HorizontalLayout { spacing: 8px; MicroButton { label: "−"; fill: #4d2672; stroke: #a56ae9; ink: white; pressed => { root.bump-exposure(-5); } } Rectangle { horizontal-stretch: 1; border-radius: 12px; background: #180c24; border-width: 1px; border-color: #6f3dad; Text { text: root.exposure + "%"; color: white; horizontal-alignment: center; vertical-alignment: center; font-weight: 800; } } MicroButton { label: "+"; fill: #ff5fa2; stroke: #ff5fa2; ink: #300b1d; pressed => { root.bump-exposure(5); } } } } }
+                                                    Rectangle { horizontal-stretch: 1; border-radius: 18px; background: #311845; border-width: 1px; border-color: #7d49b8; VerticalLayout { padding: 12px; spacing: 8px; Text { text: "Speed"; color: #c8fbff; font-weight: 700; } HorizontalLayout { spacing: 8px; MicroButton { label: "−"; fill: #4d2672; stroke: #a56ae9; ink: white; pressed => { root.bump-speed(-1); } } Rectangle { horizontal-stretch: 1; border-radius: 12px; background: #180c24; border-width: 1px; border-color: #6f3dad; Text { text: root.speed + "x"; color: white; horizontal-alignment: center; vertical-alignment: center; font-weight: 800; } } MicroButton { label: "+"; fill: #7cf4ff; stroke: #7cf4ff; ink: #04151b; pressed => { root.bump-speed(1); } } } } }
+                                                }
+                                                HorizontalLayout {
+                                                    spacing: 10px;
+                                                    Chip { label: root.bloom ? "Bloom ON" : "Bloom OFF"; active: root.bloom; fill: #35194d; active-fill: #ffe66d; stroke: #ffe66d; ink: root.bloom ? #241f06 : white; pressed => { root.toggle-bloom(); } }
+                                                    Rectangle { horizontal-stretch: 1; }
+                                                    MicroButton { label: "RESET"; min-width: 102px; fill: #ff5fa2; stroke: #ff5fa2; ink: #300b1d; pressed => { root.reset-all(); } }
+                                                }
                                             }
                                         }
                                     }
