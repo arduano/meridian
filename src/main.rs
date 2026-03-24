@@ -359,7 +359,7 @@ slint::slint! {
 
         title: "Slint style gallery + embedded wgpu viewport";
         preferred-width: 1640px;
-        preferred-height: 980px;
+        preferred-height: 1320px;
         background: #0d1014;
 
         HorizontalLayout {
@@ -396,7 +396,7 @@ slint::slint! {
                             }
 
                             Text {
-                                text: "Every panel below is the same viewport-control form bound to shared state. The point is not color-swapping — it is proving how far you can push shape, density, hierarchy, and mood while staying in vanilla Slint.";
+                                text: "Every panel below is the same viewport-control form bound to shared state. The point is not color-swapping — it is proving how far you can push shape, density, hierarchy, framing, and fake-elevation while staying in vanilla Slint.";
                                 color: #9fb0c3;
                                 wrap: word-wrap;
                             }
@@ -552,6 +552,246 @@ slint::slint! {
                                 bump-speed(delta) => { root.bump-speed(delta); }
                                 toggle-bloom() => { root.toggle-bloom(); }
                                 reset-all() => { root.reset-all(); }
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            min-height: 294px;
+                            border-radius: 26px;
+                            background: #e8ebf1;
+                            border-width: 1px;
+                            border-color: #ccd2dc;
+
+                            Rectangle {
+                                x: 8px;
+                                y: 10px;
+                                width: parent.width;
+                                height: parent.height;
+                                border-radius: 26px;
+                                background: #c8d0dc55;
+                            }
+
+                            Rectangle {
+                                x: 0;
+                                y: 0;
+                                width: parent.width;
+                                height: parent.height;
+                                border-radius: 26px;
+                                background: #f7f8fb;
+                                border-width: 1px;
+                                border-color: #d7dde6;
+
+                                VerticalLayout {
+                                    padding: 14px;
+                                    spacing: 12px;
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        Chip { label: "Overview"; active: true; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: white; }
+                                        Chip { label: "Viewport"; active: false; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: #364152; }
+                                        Chip { label: "Lighting"; active: false; fill: #f4f6fa; active-fill: #101828; stroke: #d5dbe5; ink: #364152; }
+                                        Rectangle { horizontal-stretch: 1; }
+                                        Text { text: "shadcn-ish panel"; color: #667085; font-size: 13px; }
+                                    }
+
+                                    Rectangle {
+                                        border-radius: 18px;
+                                        background: white;
+                                        border-width: 1px;
+                                        border-color: #e3e8ef;
+
+                                        VerticalLayout {
+                                            padding: 16px;
+                                            spacing: 12px;
+
+                                            Text { text: "Quiet modern inspector"; color: #101828; font-size: 24px; font-weight: 800; }
+                                            Text { text: "More like a real product shell: tabs, softer elevation, restrained outlines, and cleaner spacing."; color: #667085; wrap: word-wrap; }
+
+                                            HorizontalLayout {
+                                                spacing: 10px;
+                                                Rectangle {
+                                                    horizontal-stretch: 1;
+                                                    border-radius: 14px;
+                                                    background: #f8fafc;
+                                                    border-width: 1px;
+                                                    border-color: #e4e7ec;
+                                                    VerticalLayout {
+                                                        padding: 12px;
+                                                        spacing: 8px;
+                                                        Text { text: "Camera mode"; color: #475467; }
+                                                        HorizontalLayout {
+                                                            spacing: 6px;
+                                                            Chip { label: "Orbit"; active: root.mode-label == "Orbit"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Orbit" ? white : #111827; pressed => { root.set-mode(0); } }
+                                                            Chip { label: "Pan"; active: root.mode-label == "Pan"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Pan" ? white : #111827; pressed => { root.set-mode(1); } }
+                                                            Chip { label: "Inspect"; active: root.mode-label == "Inspect"; fill: white; active-fill: #111827; stroke: #d0d5dd; ink: root.mode-label == "Inspect" ? white : #111827; pressed => { root.set-mode(2); } }
+                                                        }
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    width: 142px;
+                                                    border-radius: 14px;
+                                                    background: #111827;
+                                                    border-width: 1px;
+                                                    border-color: #1f2937;
+                                                    VerticalLayout {
+                                                        padding: 12px;
+                                                        spacing: 6px;
+                                                        Text { text: "Bloom"; color: #98a2b3; }
+                                                        Chip { label: root.bloom ? "Enabled" : "Disabled"; active: root.bloom; fill: #1f2937; active-fill: #22c55e; stroke: #344054; ink: root.bloom ? #04130a : white; pressed => { root.toggle-bloom(); } }
+                                                    }
+                                                }
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: 10px;
+                                                Rectangle {
+                                                    horizontal-stretch: 1;
+                                                    border-radius: 14px;
+                                                    background: #f8fafc;
+                                                    border-width: 1px;
+                                                    border-color: #e4e7ec;
+                                                    HorizontalLayout {
+                                                        padding: 12px;
+                                                        spacing: 8px;
+                                                        Text { text: "Exposure"; color: #475467; }
+                                                        Rectangle { horizontal-stretch: 1; }
+                                                        MicroButton { label: "−"; fill: white; stroke: #d0d5dd; ink: #111827; pressed => { root.bump-exposure(-5); } }
+                                                        Text { text: root.exposure + "%"; color: #111827; font-weight: 700; }
+                                                        MicroButton { label: "+"; fill: #111827; stroke: #111827; ink: white; pressed => { root.bump-exposure(5); } }
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    horizontal-stretch: 1;
+                                                    border-radius: 14px;
+                                                    background: #f8fafc;
+                                                    border-width: 1px;
+                                                    border-color: #e4e7ec;
+                                                    HorizontalLayout {
+                                                        padding: 12px;
+                                                        spacing: 8px;
+                                                        Text { text: "Speed"; color: #475467; }
+                                                        Rectangle { horizontal-stretch: 1; }
+                                                        MicroButton { label: "−"; fill: white; stroke: #d0d5dd; ink: #111827; pressed => { root.bump-speed(-1); } }
+                                                        Text { text: root.speed + "x"; color: #111827; font-weight: 700; }
+                                                        MicroButton { label: "+"; fill: #111827; stroke: #111827; ink: white; pressed => { root.bump-speed(1); } }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            min-height: 294px;
+                            border-radius: 32px;
+                            background: #1b1227;
+                            border-width: 1px;
+                            border-color: #4b2f6b;
+                            clip: true;
+
+                            Rectangle {
+                                x: 16px;
+                                y: 14px;
+                                width: parent.width - 32px;
+                                height: parent.height - 28px;
+                                border-radius: 26px;
+                                background: #2a173dcc;
+                                border-width: 1px;
+                                border-color: #7d49b8;
+                            }
+
+                            VerticalLayout {
+                                padding: 16px;
+                                spacing: 12px;
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #ff5fa2; }
+                                    Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #7cf4ff; }
+                                    Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #ffe66d; }
+                                    Rectangle { horizontal-stretch: 1; }
+                                    Text { text: "expressive neon toy"; color: #d6bef8; font-size: 13px; }
+                                }
+
+                                Rectangle {
+                                    border-radius: 26px;
+                                    background: #241235;
+                                    border-width: 2px;
+                                    border-color: #ff5fa2;
+
+                                    VerticalLayout {
+                                        padding: 16px;
+                                        spacing: 12px;
+
+                                        Text { text: "Playful arcade rig"; color: white; font-size: 26px; font-weight: 800; }
+                                        Text { text: "Same state, but now it feels like a toy instrument panel. Big pills, saturated accents, and deliberately loud framing."; color: #d9c8f6; wrap: word-wrap; }
+
+                                        HorizontalLayout {
+                                            spacing: 10px;
+                                            Chip { label: "Orbit"; active: root.mode-label == "Orbit"; fill: #35194d; active-fill: #7cf4ff; stroke: #7cf4ff; ink: root.mode-label == "Orbit" ? #07131b : white; pressed => { root.set-mode(0); } }
+                                            Chip { label: "Pan"; active: root.mode-label == "Pan"; fill: #35194d; active-fill: #ffe66d; stroke: #ffe66d; ink: root.mode-label == "Pan" ? #241f06 : white; pressed => { root.set-mode(1); } }
+                                            Chip { label: "Inspect"; active: root.mode-label == "Inspect"; fill: #35194d; active-fill: #ff5fa2; stroke: #ff5fa2; ink: root.mode-label == "Inspect" ? #2a0a18 : white; pressed => { root.set-mode(2); } }
+                                        }
+
+                                        HorizontalLayout {
+                                            spacing: 10px;
+                                            Rectangle {
+                                                horizontal-stretch: 1;
+                                                border-radius: 18px;
+                                                background: #311845;
+                                                border-width: 1px;
+                                                border-color: #7d49b8;
+                                                VerticalLayout {
+                                                    padding: 12px;
+                                                    spacing: 8px;
+                                                    Text { text: "Exposure"; color: #f8d0ff; font-weight: 700; }
+                                                    HorizontalLayout {
+                                                        spacing: 8px;
+                                                        MicroButton { label: "−"; fill: #4d2672; stroke: #a56ae9; ink: white; pressed => { root.bump-exposure(-5); } }
+                                                        Rectangle { horizontal-stretch: 1; border-radius: 12px; background: #180c24; border-width: 1px; border-color: #6f3dad; Text { text: root.exposure + "%"; color: white; horizontal-alignment: center; vertical-alignment: center; font-weight: 800; } }
+                                                        MicroButton { label: "+"; fill: #ff5fa2; stroke: #ff5fa2; ink: #300b1d; pressed => { root.bump-exposure(5); } }
+                                                    }
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                horizontal-stretch: 1;
+                                                border-radius: 18px;
+                                                background: #311845;
+                                                border-width: 1px;
+                                                border-color: #7d49b8;
+                                                VerticalLayout {
+                                                    padding: 12px;
+                                                    spacing: 8px;
+                                                    Text { text: "Speed"; color: #c8fbff; font-weight: 700; }
+                                                    HorizontalLayout {
+                                                        spacing: 8px;
+                                                        MicroButton { label: "−"; fill: #4d2672; stroke: #a56ae9; ink: white; pressed => { root.bump-speed(-1); } }
+                                                        Rectangle { horizontal-stretch: 1; border-radius: 12px; background: #180c24; border-width: 1px; border-color: #6f3dad; Text { text: root.speed + "x"; color: white; horizontal-alignment: center; vertical-alignment: center; font-weight: 800; } }
+                                                        MicroButton { label: "+"; fill: #7cf4ff; stroke: #7cf4ff; ink: #04151b; pressed => { root.bump-speed(1); } }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        HorizontalLayout {
+                                            spacing: 10px;
+                                            Chip { label: root.bloom ? "Bloom ON" : "Bloom OFF"; active: root.bloom; fill: #35194d; active-fill: #ffe66d; stroke: #ffe66d; ink: root.bloom ? #241f06 : white; pressed => { root.toggle-bloom(); } }
+                                            Rectangle { horizontal-stretch: 1; }
+                                            MicroButton { label: "RESET"; min-width: 102px; fill: #ff5fa2; stroke: #ff5fa2; ink: #300b1d; pressed => { root.reset-all(); } }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
