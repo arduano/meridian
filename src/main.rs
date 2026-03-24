@@ -450,8 +450,15 @@ slint::slint! {
                                 border-color: #273241;
                                 clip: true;
 
+                                Rectangle {
+                                    x: (parent.width - 760px) / 2;
+                                    y: 18px;
+                                    width: min(parent.width - 36px, 760px);
+                                    height: parent.height - 36px;
+                                    clip: false;
+
                                 ThemeCard {
-                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    x: 0; y: 0; width: parent.width;
                                     visible: root.selected-demo == 0;
                                     theme-name: "Brutalist console";
                                     subtitle: "Chunky blocks, warning-strip energy, almost industrial.";
@@ -478,7 +485,7 @@ slint::slint! {
                                 }
 
                                 ThemeCard {
-                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    x: 0; y: 0; width: parent.width;
                                     visible: root.selected-demo == 1;
                                     theme-name: "Retro terminal";
                                     subtitle: "Monochrome ops panel with phosphor-screen vibes.";
@@ -505,7 +512,7 @@ slint::slint! {
                                 }
 
                                 ThemeCard {
-                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    x: 0; y: 0; width: parent.width;
                                     visible: root.selected-demo == 2;
                                     theme-name: "Soft cute dashboard";
                                     subtitle: "Rounded toy-like control sheet, friendly and light.";
@@ -530,7 +537,7 @@ slint::slint! {
                                 }
 
                                 ThemeCard {
-                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    x: 0; y: 0; width: parent.width;
                                     visible: root.selected-demo == 3;
                                     theme-name: "Glassy spaceship";
                                     subtitle: "Thin chrome lines, dark gradients, cockpit feel.";
@@ -555,7 +562,7 @@ slint::slint! {
                                 }
 
                                 ThemeCard {
-                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    x: 0; y: 0; width: parent.width;
                                     visible: root.selected-demo == 4;
                                     theme-name: "Editorial luxury";
                                     subtitle: "Cream surfaces, gold accent, expensive control room.";
@@ -580,7 +587,7 @@ slint::slint! {
                                 }
 
                                 ThemeCard {
-                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    x: 0; y: 0; width: parent.width;
                                     visible: root.selected-demo == 5;
                                     theme-name: "Minimal analytical";
                                     subtitle: "White-space heavy, almost pro data-tool or Figma plugin.";
@@ -606,7 +613,7 @@ slint::slint! {
                                 }
 
                                 Rectangle {
-                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    x: 0; y: 0; width: parent.width;
                                     visible: root.selected-demo == 6;
                                     border-radius: 26px;
                                     background: #e8ebf1;
@@ -667,7 +674,7 @@ slint::slint! {
                                 }
 
                                 Rectangle {
-                                    x: 0; y: 0; width: parent.width; height: parent.height;
+                                    x: 0; y: 0; width: parent.width;
                                     visible: root.selected-demo == 7;
                                     border-radius: 32px;
                                     background: #1b1227;
@@ -711,6 +718,7 @@ slint::slint! {
                                             }
                                         }
                                     }
+                                }
                                 }
                             }
                         }
