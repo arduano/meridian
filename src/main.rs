@@ -164,6 +164,7 @@ slint::slint! {
                 border-radius: (radius - 4) * 1px;
                 border-width: 1px;
                 border-color: stroke;
+                vertical-stretch: 0;
                 height: 56px;
 
                 VerticalLayout {
@@ -296,6 +297,11 @@ slint::slint! {
                     ink: shell;
                     pressed => { root.reset-all(); }
                 }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                background: #00000000;
             }
         }
     }
