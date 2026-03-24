@@ -567,6 +567,8 @@ slint::slint! {
 
                             ThemeCard {
                                 visible: root.selected-demo == 5;
+                                height: self.visible ? parent.height : 0px;
+                                width: parent.width;
                                 theme-name: "Minimal analytical";
                                 subtitle: "White-space heavy, almost pro data-tool or Figma plugin.";
                                 mode-label: root.mode-label;
@@ -592,7 +594,8 @@ slint::slint! {
 
                             Rectangle {
                                 visible: root.selected-demo == 6;
-                                min-height: 294px;
+                                height: self.visible ? parent.height : 0px;
+                                width: parent.width;
                                 border-radius: 26px;
                                 background: #e8ebf1;
                                 border-width: 1px;
@@ -653,7 +656,8 @@ slint::slint! {
 
                             Rectangle {
                                 visible: root.selected-demo == 7;
-                                min-height: 294px;
+                                height: self.visible ? parent.height : 0px;
+                                width: parent.width;
                                 border-radius: 32px;
                                 background: #1b1227;
                                 border-width: 1px;
