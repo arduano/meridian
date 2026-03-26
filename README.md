@@ -1,6 +1,6 @@
-# slint-wgpu-embedded-view-poc
+# meridian
 
-Small production-style proof of concept for embedding a native Rust `wgpu` render target inside a bounded Slint layout region.
+Seed repository for the new Rust rewrite direction: starting from the Slint + embedded `wgpu` proof of concept that will become a new Zenith-inspired application.
 
 ## Architecture
 
@@ -16,7 +16,7 @@ This is accelerated texture compositing inside the Slint window, not an HTML/Web
 
 ## Current status
 
-The source code in [src/main.rs](/home/arduano/programming/slint-wgpu-embedded-view-poc/src/main.rs) is written against Slint's public `unstable-wgpu-28` integration API as documented by Slint. It demonstrates:
+The source code in [src/main.rs](/home/arduano/programming/meridian/src/main.rs) is written against Slint's public `unstable-wgpu-28` integration API as documented by Slint. It demonstrates:
 
 - surrounding Slint UI
 - a bordered embedded viewport rectangle
@@ -36,6 +36,8 @@ A `shell.nix` is included to supply the expected native Linux development librar
 
 ## Commands
 
+If you use `direnv`, run `direnv allow` once in this repo. The included [`.envrc`](/home/arduano/programming/meridian/.envrc) loads the existing [`shell.nix`](/home/arduano/programming/meridian/shell.nix) environment and prepends `/run/current-system/sw/bin` so the host Rust toolchain remains preferred.
+
 Build/check (recommended on this host):
 
 ```bash
@@ -51,26 +53,26 @@ nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
 Run without the accelerated viewport (A/B resize test):
 
 ```bash
-POC_DISABLE_WGPU=1 nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+MERIDIAN_DISABLE_WGPU=1 nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
 ```
 
-Backend comparison commands (still with `POC_DISABLE_WGPU=1`):
+Backend comparison commands (still with `MERIDIAN_DISABLE_WGPU=1`):
 
 ```bash
 # Default backend/renderer choice
-POC_DISABLE_WGPU=1 nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+MERIDIAN_DISABLE_WGPU=1 nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
 
 # Winit + FemtoVG
-POC_DISABLE_WGPU=1 SLINT_BACKEND=winit-femtovg nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+MERIDIAN_DISABLE_WGPU=1 SLINT_BACKEND=winit-femtovg nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
 
 # Winit + software renderer
-POC_DISABLE_WGPU=1 SLINT_BACKEND=winit-software nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+MERIDIAN_DISABLE_WGPU=1 SLINT_BACKEND=winit-software nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
 
 # Winit + Skia renderer
-POC_DISABLE_WGPU=1 SLINT_BACKEND=winit-skia nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+MERIDIAN_DISABLE_WGPU=1 SLINT_BACKEND=winit-skia nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
 
 # If Qt is installed and available
-POC_DISABLE_WGPU=1 SLINT_BACKEND=Qt nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+MERIDIAN_DISABLE_WGPU=1 SLINT_BACKEND=Qt nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
 ```
 
 ## What was attempted on this host
@@ -107,4 +109,4 @@ So the current blocker is no longer compilation — it is the lack of a real des
 
 ## Headless and NAS notes
 
-See [NOTES.md](/home/arduano/programming/slint-wgpu-embedded-view-poc/NOTES.md) for expected runtime blockers on headless NAS, Intel Arc, remote SSH, Wayland/X11, and display-server availability.
+See [NOTES.md](/home/arduano/programming/meridian/NOTES.md) for expected runtime blockers on headless NAS, Intel Arc, remote SSH, Wayland/X11, and display-server availability.
