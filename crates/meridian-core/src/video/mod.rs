@@ -9,7 +9,7 @@ use std::{
 use crate::{
     CoreHandle, MeridianError,
     protocol::{CoreCommand, CoreEvent, VideoRenderConfig, VideoRenderEvent},
-    render::pfa::wgpu::HeadlessRenderSession,
+    render::headless::HeadlessRenderSession,
 };
 
 pub use ffmpeg::spawn_ffmpeg;
@@ -92,7 +92,7 @@ fn render_video_inner(
         config.height,
         &config.ffmpeg_args,
     )?;
-    let mut session = HeadlessRenderSession::new(config.width, config.height)?;
+    let mut session = HeadlessRenderSession::new(&frame0.layout, config.width, config.height)?;
 
     on_event(VideoRenderEvent::RenderStarted {
         midi: config.midi_path.clone(),
@@ -122,7 +122,7 @@ fn render_video_inner(
         let current_time = frame_index as f64 / config.fps;
         core.request(CoreCommand::SetTime { time: current_time })?;
         let frame = core.render_frame(Some(config.width), Some(config.height))?;
-        session.render(&frame.scene);
+        session.render(&frame.layout, &frame.scene);
         let rgba = session.readback_rgba()?;
         ffmpeg_stdin.write_all(&rgba)?;
 

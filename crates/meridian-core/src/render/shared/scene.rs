@@ -1,7 +1,7 @@
 use crate::midi::MIDI_KEY_COUNT;
 
 use super::{LAYER_COUNT, SceneLayer, SceneQuad};
-use crate::render::pfa::NoteInstance;
+use crate::render::{miditrail::MiditrailScene, pfa::NoteInstance};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct KeyActivity {
@@ -14,6 +14,7 @@ pub struct KeyActivity {
 pub struct ProjectedScene {
     layers: [Vec<SceneQuad>; LAYER_COUNT],
     note_layers: [Vec<NoteInstance>; 2],
+    miditrail: Option<MiditrailScene>,
     note_key_x: [[f32; 2]; MIDI_KEY_COUNT],
     note_params: [f32; 4],
     key_activity: [KeyActivity; MIDI_KEY_COUNT],
@@ -29,6 +30,7 @@ impl Default for ProjectedScene {
         Self {
             layers: std::array::from_fn(|_| Vec::new()),
             note_layers: std::array::from_fn(|_| Vec::new()),
+            miditrail: None,
             note_key_x: [[0.0; 2]; MIDI_KEY_COUNT],
             note_params: [0.0; 4],
             key_activity: [KeyActivity::default(); MIDI_KEY_COUNT],
@@ -48,6 +50,9 @@ impl ProjectedScene {
         }
         for layer in &mut self.note_layers {
             layer.clear();
+        }
+        if let Some(miditrail) = &mut self.miditrail {
+            miditrail.clear();
         }
         self.key_activity.fill(KeyActivity::default());
         self.notes_black_first = false;
@@ -71,6 +76,14 @@ impl ProjectedScene {
             SceneLayer::BlackNotes => &self.note_layers[1],
             _ => &[],
         }
+    }
+
+    pub fn miditrail(&self) -> Option<&MiditrailScene> {
+        self.miditrail.as_ref()
+    }
+
+    pub(crate) fn take_miditrail(&mut self) -> Option<MiditrailScene> {
+        self.miditrail.take()
     }
 
     pub fn note_key_x(&self) -> &[[f32; 2]; MIDI_KEY_COUNT] {
@@ -111,12 +124,23 @@ impl ProjectedScene {
         self.key_activity[key] = activity;
     }
 
+    pub(crate) fn set_miditrail(&mut self, miditrail: MiditrailScene) {
+        self.miditrail = Some(miditrail);
+    }
+
     pub fn total_quads(&self) -> usize {
-        self.layers.iter().map(Vec::len).sum::<usize>()
-            + self.note_layers.iter().map(Vec::len).sum::<usize>()
+        let base = self.layers.iter().map(Vec::len).sum::<usize>()
+            + self.note_layers.iter().map(Vec::len).sum::<usize>();
+        match &self.miditrail {
+            Some(_) => self.note_quads + self.keyboard_quads,
+            None => base,
+        }
     }
 
     pub fn total_vertices(&self) -> usize {
-        self.total_quads() * 6
+        match &self.miditrail {
+            Some(miditrail) => miditrail.total_vertices(),
+            None => self.total_quads() * 6,
+        }
     }
 }

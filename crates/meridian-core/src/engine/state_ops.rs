@@ -4,7 +4,7 @@ use crate::{
     error::MeridianError,
     midi::backend::MIDIFileBase,
     protocol::{CoreErrorCode, CoreEvent, FrameStats, RenderedFrame, StateSnapshot},
-    render::{SceneConfig, pfa::wgpu::save_scene_headless, project_scene},
+    render::{SceneConfig, headless::save_scene_headless, project_scene},
 };
 
 use super::{
@@ -17,13 +17,13 @@ impl CoreState {
         let Some(midi) = self.midi.as_mut() else {
             return Ok(());
         };
-        let SceneConfig::TwoD(scene) = &self.layout.scene else {
-            return Ok(());
+        let colors = match &self.layout.scene {
+            SceneConfig::TwoD(scene) => scene
+                .notes
+                .palette()
+                .build_color_table(midi.track_count())?,
+            SceneConfig::ThreeD(scene) => scene.palette().build_color_table(midi.track_count())?,
         };
-        let colors = scene
-            .notes
-            .palette()
-            .build_color_table(midi.track_count())?;
         midi.apply_default_track_colors(colors);
         Ok(())
     }
@@ -151,12 +151,6 @@ impl CoreState {
                 "first_key must be <= last_key",
             ));
         }
-        if matches!(self.layout.scene, SceneConfig::ThreeD(_)) {
-            return Err(error_event(
-                CoreErrorCode::InvalidLayout,
-                "3d scene config is reserved but not implemented yet",
-            ));
-        }
         Ok(())
     }
 
@@ -171,6 +165,7 @@ impl CoreState {
             Ok(frame) => match save_scene_headless(
                 frame.layout.viewport_width,
                 frame.layout.viewport_height,
+                &frame.layout,
                 &frame.scene,
                 format,
                 &output,

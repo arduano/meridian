@@ -81,8 +81,71 @@ pub struct TwoDSceneConfig {
     pub keyboard: KeyboardProjectorConfig,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct ThreeDSceneConfig {}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MiditrailAuraImage {
+    Ring,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MiditrailSceneConfig {
+    #[serde(default = "default_miditrail_same_width_notes")]
+    pub same_width_notes: bool,
+    #[serde(default = "default_miditrail_fov")]
+    pub fov: f32,
+    #[serde(default = "default_miditrail_view_height")]
+    pub view_height: f32,
+    #[serde(default = "default_miditrail_view_offset")]
+    pub view_offset: f32,
+    #[serde(default)]
+    pub view_pan: f32,
+    #[serde(default = "default_miditrail_cam_ang")]
+    pub cam_ang: f32,
+    #[serde(default)]
+    pub cam_rot: f32,
+    #[serde(default)]
+    pub cam_spin: f32,
+    #[serde(default = "default_miditrail_viewdist")]
+    pub viewdist: f32,
+    #[serde(default = "default_miditrail_viewback")]
+    pub viewback: f32,
+    #[serde(default)]
+    pub vertical_notes: bool,
+    #[serde(default = "default_miditrail_note_down_speed")]
+    pub note_down_speed: f32,
+    #[serde(default = "default_miditrail_note_up_speed")]
+    pub note_up_speed: f32,
+    #[serde(default)]
+    pub box_notes: bool,
+    #[serde(default)]
+    pub light_shade: bool,
+    #[serde(default = "default_miditrail_show_keyboard")]
+    pub show_keyboard: bool,
+    #[serde(default = "default_miditrail_tilt_keys")]
+    pub tilt_keys: bool,
+    #[serde(default)]
+    pub eat_notes: bool,
+    #[serde(default = "default_miditrail_aura_strength")]
+    pub aura_strength: f32,
+    #[serde(default = "default_miditrail_aura_enabled")]
+    pub aura_enabled: bool,
+    #[serde(default)]
+    pub notes_change_size: bool,
+    #[serde(default = "default_miditrail_notes_change_tint")]
+    pub notes_change_tint: bool,
+    #[serde(default)]
+    pub use_vel: bool,
+    #[serde(default)]
+    pub palette: NotePaletteConfig,
+    #[serde(default)]
+    pub aura_image: MiditrailAuraImage,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "projector", rename_all = "snake_case")]
+pub enum ThreeDSceneConfig {
+    Miditrail(MiditrailSceneConfig),
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "scene_type", rename_all = "snake_case")]
@@ -218,6 +281,50 @@ impl Default for PfaTopColor {
     }
 }
 
+impl Default for MiditrailAuraImage {
+    fn default() -> Self {
+        Self::Ring
+    }
+}
+
+impl Default for MiditrailSceneConfig {
+    fn default() -> Self {
+        Self {
+            same_width_notes: default_miditrail_same_width_notes(),
+            fov: default_miditrail_fov(),
+            view_height: default_miditrail_view_height(),
+            view_offset: default_miditrail_view_offset(),
+            view_pan: 0.0,
+            cam_ang: default_miditrail_cam_ang(),
+            cam_rot: 0.0,
+            cam_spin: 0.0,
+            viewdist: default_miditrail_viewdist(),
+            viewback: default_miditrail_viewback(),
+            vertical_notes: false,
+            note_down_speed: default_miditrail_note_down_speed(),
+            note_up_speed: default_miditrail_note_up_speed(),
+            box_notes: false,
+            light_shade: false,
+            show_keyboard: default_miditrail_show_keyboard(),
+            tilt_keys: default_miditrail_tilt_keys(),
+            eat_notes: false,
+            aura_strength: default_miditrail_aura_strength(),
+            aura_enabled: default_miditrail_aura_enabled(),
+            notes_change_size: false,
+            notes_change_tint: default_miditrail_notes_change_tint(),
+            use_vel: false,
+            palette: NotePaletteConfig::default(),
+            aura_image: MiditrailAuraImage::default(),
+        }
+    }
+}
+
+impl Default for ThreeDSceneConfig {
+    fn default() -> Self {
+        Self::Miditrail(MiditrailSceneConfig::default())
+    }
+}
+
 impl PfaTopColor {
     pub fn preset_bar_rgb(self) -> Option<[f32; 3]> {
         match self {
@@ -277,10 +384,74 @@ impl NoteProjectorConfig {
     }
 }
 
+impl ThreeDSceneConfig {
+    pub fn palette(&self) -> &NotePaletteConfig {
+        match self {
+            Self::Miditrail(config) => &config.palette,
+        }
+    }
+}
+
 const fn default_border_width() -> f32 {
     1.0
 }
 
 const fn default_top_bar_rgb() -> [f32; 3] {
     [0.585, 0.0392, 0.0249]
+}
+
+const fn default_miditrail_same_width_notes() -> bool {
+    true
+}
+
+const fn default_miditrail_fov() -> f32 {
+    std::f32::consts::PI / 3.0
+}
+
+const fn default_miditrail_view_height() -> f32 {
+    0.5
+}
+
+const fn default_miditrail_view_offset() -> f32 {
+    0.4
+}
+
+const fn default_miditrail_cam_ang() -> f32 {
+    0.56
+}
+
+const fn default_miditrail_viewdist() -> f32 {
+    14.0
+}
+
+const fn default_miditrail_viewback() -> f32 {
+    0.2
+}
+
+const fn default_miditrail_note_down_speed() -> f32 {
+    0.6
+}
+
+const fn default_miditrail_note_up_speed() -> f32 {
+    0.2
+}
+
+const fn default_miditrail_show_keyboard() -> bool {
+    true
+}
+
+const fn default_miditrail_tilt_keys() -> bool {
+    true
+}
+
+const fn default_miditrail_aura_strength() -> f32 {
+    2.0
+}
+
+const fn default_miditrail_aura_enabled() -> bool {
+    true
+}
+
+const fn default_miditrail_notes_change_tint() -> bool {
+    true
 }

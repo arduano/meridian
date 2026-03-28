@@ -1,6 +1,6 @@
 use meridian_core::render::{
     KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
-    PfaTopColor, SceneConfig, ZenithPaletteSpec,
+    PfaTopColor, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
 };
 
 use super::view::InspectorRow;
@@ -27,9 +27,37 @@ pub fn rows_for_scene(scene: &SceneConfig) -> Vec<InspectorRow> {
             rows.extend(note_rows(&config.notes));
             rows.extend(keyboard_rows(&config.keyboard));
         }
-        SceneConfig::ThreeD(_) => {
+        SceneConfig::ThreeD(ThreeDSceneConfig::Miditrail(config)) => {
             rows.push(row("Scene", "Scene Type", "3D"));
-            rows.push(row("Scene", "Status", "Reserved for future implementation"));
+            rows.push(row("Scene", "Projector", "miditrail"));
+            rows.push(row(
+                "Camera",
+                "FOV",
+                format!("{:.2}", config.fov.to_degrees()),
+            ));
+            rows.push(row(
+                "Camera",
+                "View Height",
+                format!("{:.2}", config.view_height),
+            ));
+            rows.push(row(
+                "Camera",
+                "View Offset",
+                format!("{:.2}", config.view_offset),
+            ));
+            rows.push(row(
+                "Camera",
+                "View Dist",
+                format!("{:.2}", config.viewdist),
+            ));
+            rows.push(row(
+                "Scene",
+                "Same Width Notes",
+                yes_no(config.same_width_notes),
+            ));
+            rows.push(row("Scene", "Box Notes", yes_no(config.box_notes)));
+            rows.push(row("Scene", "Show Keyboard", yes_no(config.show_keyboard)));
+            rows.push(row("Scene", "Palette", palette_name(&config.palette)));
         }
     }
     rows
