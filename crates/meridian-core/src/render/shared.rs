@@ -5,12 +5,12 @@ use crate::midi::MIDI_KEY_COUNT;
 use super::pfa::NoteInstance;
 
 pub(crate) const LAYER_COUNT: usize = 7;
-pub(crate) const NOTE_DEPTH_STEP: f32 = 1.0 / 16_777_216.0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, clap::ValueEnum, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RendererKind {
     Basic,
+    Flat,
     Pfa,
 }
 
@@ -151,7 +151,8 @@ impl ProjectedScene {
     }
 
     pub fn total_quads(&self) -> usize {
-        self.layers.iter().map(Vec::len).sum::<usize>() + self.note_quads
+        self.layers.iter().map(Vec::len).sum::<usize>()
+            + self.note_layers.iter().map(Vec::len).sum::<usize>()
     }
 
     pub fn total_vertices(&self) -> usize {
@@ -184,34 +185,10 @@ pub(crate) fn quad(positions: [[f32; 2]; 4], colors: [[f32; 4]; 4]) -> SceneQuad
     }
 }
 
-pub(crate) fn quad_with_depth(
-    positions: [[f32; 2]; 4],
-    colors: [[f32; 4]; 4],
-    depth: f32,
-) -> SceneQuad {
-    SceneQuad {
-        positions,
-        colors,
-        depth,
-        _padding: [0.0; 3],
-    }
-}
-
-pub(crate) fn vertical_gradient_quad_with_depth(
-    x1: f32,
-    y1: f32,
-    x2: f32,
-    y2: f32,
-    c_bl: [f32; 4],
-    c_br: [f32; 4],
-    c_tr: [f32; 4],
-    c_tl: [f32; 4],
-    depth: f32,
-) -> SceneQuad {
-    quad_with_depth(
+pub(crate) fn solid_quad(x1: f32, y1: f32, x2: f32, y2: f32, color: [f32; 4]) -> SceneQuad {
+    quad(
         [[x1, y1], [x2, y1], [x2, y2], [x1, y2]],
-        [c_bl, c_br, c_tr, c_tl],
-        depth,
+        [color, color, color, color],
     )
 }
 

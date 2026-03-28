@@ -2,7 +2,10 @@ pub mod wgpu;
 
 use rayon::prelude::*;
 
-use crate::midi::{MIDI_KEY_COUNT, views::MIDIFileViewsUnion};
+use crate::midi::{
+    MIDI_KEY_COUNT, MIDINoteColumnView, MIDINoteViews, ram::view::InRamCurrentNoteViews,
+    views::MIDIFileViewsUnion,
+};
 
 use super::{
     SceneLayout, SceneProjector,
@@ -299,10 +302,88 @@ impl PfaProjector {
             params.padding_x,
             params.padding_y,
         );
-        let results: Vec<KeyNoteProjection> = (first_note..last_note.min(MIDI_KEY_COUNT))
+        match views {
+            MIDIFileViewsUnion::InRam(views) => {
+                self.project_note_pass_in_ram(
+                    scene,
+                    views,
+                    params,
+                    arrays,
+                    first_note,
+                    last_note,
+                    only_black,
+                    key_colors,
+                    key_pressed,
+                    layer,
+                );
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn project_note_pass_in_ram(
+        &self,
+        scene: &mut ProjectedScene,
+        views: &InRamCurrentNoteViews<'_>,
+        params: &PfaLayoutParams,
+        arrays: &KeyPositionArrays,
+        first_note: usize,
+        last_note: usize,
+        only_black: bool,
+        key_colors: &mut [KeyColorPair; MIDI_KEY_COUNT],
+        key_pressed: &mut [bool; MIDI_KEY_COUNT],
+        layer: SceneLayer,
+    ) {
+        let key_end = last_note.min(MIDI_KEY_COUNT);
+        let results: Vec<KeyNoteProjection> = (first_note..key_end)
             .into_par_iter()
-            .filter(|&k| only_black == is_black_key(k as u8))
-            .map(|k| self.project_key_notes(views, params, k))
+            .filter(|&key| only_black == is_black_key(key as u8))
+            .map(|key| {
+                let is_black = is_black_key(key as u8);
+                let column = views.get_column(key);
+                let iter = column.iterate_displaced_notes();
+                let mut notes = Vec::with_capacity(iter.len());
+                let mut projected_key_color = KeyColorPair::default();
+                let mut projected_key_pressed = false;
+
+                for note in iter {
+                    let end = note.start + note.len;
+                    if end <= 0.0 || note.start >= params.view_range {
+                        continue;
+                    }
+
+                    let packed_color = note.color.to_rgba_packed(255);
+                    if note.start <= 0.0 && end > 0.0 {
+                        let rgba = note.color.to_rgba(1.0);
+                        if is_black && self.black_notes_above {
+                            projected_key_color = KeyColorPair {
+                                left: rgba,
+                                right: rgba,
+                            };
+                        } else {
+                            projected_key_color.left = alpha_blend(rgba, projected_key_color.left);
+                            projected_key_color.right =
+                                alpha_blend(rgba, projected_key_color.right);
+                        }
+                        projected_key_pressed = true;
+                    }
+
+                    notes.push(NoteInstance {
+                        key: key as u32,
+                        start: note.start.max(0.0),
+                        end: end.min(params.view_range),
+                        color: packed_color,
+                        _padding: [0; 3],
+                    });
+                }
+
+                KeyNoteProjection {
+                    key,
+                    notes,
+                    key_color: projected_key_color,
+                    key_pressed: projected_key_pressed,
+                }
+            })
             .collect();
 
         for result in results {
@@ -312,68 +393,10 @@ impl PfaProjector {
                 arrays.x1[result.key] + arrays.width[result.key],
             );
             scene.visible_notes += result.notes.len();
-            scene.note_quads += result.notes.len() * 2;
+            scene.note_quads += result.notes.len();
             key_colors[result.key] = result.key_color;
             key_pressed[result.key] = result.key_pressed;
             scene.extend_note_layer(layer, result.notes);
-        }
-    }
-
-    fn project_key_notes(
-        &self,
-        views: &MIDIFileViewsUnion<'_>,
-        params: &PfaLayoutParams,
-        key: usize,
-    ) -> KeyNoteProjection {
-        let is_black = is_black_key(key as u8);
-        let column = views.get_column(key);
-        let iter = column.iterate_displaced_notes();
-        let mut projected_notes = Vec::with_capacity(iter.len());
-        let mut projected_key_color = KeyColorPair::default();
-        let mut projected_key_pressed = false;
-
-        for note in iter {
-            let end = note.start + note.len;
-            if end <= 0.0 || note.start >= params.view_range {
-                continue;
-            }
-
-            let packed_color = note.color.to_rgba_packed(255);
-            if note.start <= 0.0 && end > 0.0 {
-                let rgba = note.color.to_rgba(1.0);
-                if is_black && self.black_notes_above {
-                    projected_key_color = KeyColorPair {
-                        left: rgba,
-                        right: rgba,
-                    };
-                } else {
-                    projected_key_color.left = alpha_blend(rgba, projected_key_color.left);
-                    projected_key_color.right = alpha_blend(rgba, projected_key_color.right);
-                }
-                projected_key_pressed = true;
-            }
-
-            projected_notes.push(NoteInstance {
-                key: key as u32,
-                start: note.start.max(0.0),
-                end: end.min(params.view_range),
-                color: packed_color,
-                _padding: [0; 3],
-            });
-        }
-
-        // Wasabi-style depth masking depends on drawing topmost notes first.
-        projected_notes.sort_unstable_by(|a, b| {
-            b.start
-                .total_cmp(&a.start)
-                .then_with(|| b.end.total_cmp(&a.end))
-        });
-
-        KeyNoteProjection {
-            key,
-            notes: projected_notes,
-            key_color: projected_key_color,
-            key_pressed: projected_key_pressed,
         }
     }
 

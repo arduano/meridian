@@ -1,9 +1,11 @@
+pub mod flat;
 pub mod pfa;
 pub mod shared;
 
 pub use shared::{ProjectedScene, RendererKind, SceneLayer, SceneLayout, SceneQuad};
 
 use crate::midi::{MIDI_KEY_COUNT, backend::MIDIFileUnion, views::MIDIFileViewsUnion};
+use flat::FlatProjector;
 use pfa::PfaProjector;
 use shared::{is_black_key, mix, shade, vertical_gradient_quad};
 
@@ -42,6 +44,7 @@ pub fn project_scene_views_into(
     scene.clear();
     match layout.renderer {
         RendererKind::Basic => BasicProjector.project_into(views, layout, scene),
+        RendererKind::Flat => FlatProjector.project_into(views, layout, scene),
         RendererKind::Pfa => PfaProjector::default().project_into(views, layout, scene),
     }
 }

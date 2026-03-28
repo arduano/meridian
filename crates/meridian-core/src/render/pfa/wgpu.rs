@@ -536,13 +536,29 @@ impl PrimitiveSceneRenderer {
             ) || has_color;
         }
 
-        for layer in [
-            SceneLayer::Background,
-            SceneLayer::KeyboardDecor,
-            SceneLayer::WhiteKeys,
-            SceneLayer::BlackKeys,
-            SceneLayer::Overlay,
-        ] {
+        let flat_layers = if scene.notes_black_first {
+            [
+                SceneLayer::Background,
+                SceneLayer::BlackNotes,
+                SceneLayer::WhiteNotes,
+                SceneLayer::KeyboardDecor,
+                SceneLayer::WhiteKeys,
+                SceneLayer::BlackKeys,
+                SceneLayer::Overlay,
+            ]
+        } else {
+            [
+                SceneLayer::Background,
+                SceneLayer::WhiteNotes,
+                SceneLayer::BlackNotes,
+                SceneLayer::KeyboardDecor,
+                SceneLayer::WhiteKeys,
+                SceneLayer::BlackKeys,
+                SceneLayer::Overlay,
+            ]
+        };
+
+        for layer in flat_layers {
             has_color = self.submit_quad_chunks(
                 device,
                 queue,
