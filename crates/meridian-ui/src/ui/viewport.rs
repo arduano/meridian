@@ -1,4 +1,9 @@
-use std::{cell::RefCell, rc::Rc, time::Instant};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use meridian_core::{
     CoreHandle,
@@ -7,7 +12,10 @@ use meridian_core::{
 };
 use slint::wgpu_28::wgpu;
 
-use super::{state::apply_rendered_frame_to_app, view::App};
+use super::{
+    state::{UiFrameUpdate, apply_frame_update_to_app},
+    view::App,
+};
 
 struct ViewportTexture {
     texture: wgpu::Texture,
@@ -17,7 +25,9 @@ struct ViewportTexture {
 pub(super) struct ViewportRenderer {
     app: slint::Weak<App>,
     core: CoreHandle,
-    shared_state: Rc<RefCell<Option<StateSnapshot>>>,
+    shared_state: Arc<Mutex<Option<StateSnapshot>>>,
+    pending_viewport_image: Rc<RefCell<Option<slint::Image>>>,
+    viewport_size: Rc<RefCell<(u32, u32)>>,
     renderer: Option<PrimitiveSceneRenderer>,
     viewport: Option<ViewportTexture>,
     enabled: bool,
@@ -29,13 +39,17 @@ impl ViewportRenderer {
     pub(super) fn new(
         app: slint::Weak<App>,
         core: CoreHandle,
-        shared_state: Rc<RefCell<Option<StateSnapshot>>>,
+        shared_state: Arc<Mutex<Option<StateSnapshot>>>,
+        pending_viewport_image: Rc<RefCell<Option<slint::Image>>>,
+        viewport_size: Rc<RefCell<(u32, u32)>>,
         enabled: bool,
     ) -> Self {
         Self {
             app,
             core,
             shared_state,
+            pending_viewport_image,
+            viewport_size,
             renderer: None,
             viewport: None,
             enabled,
@@ -50,11 +64,6 @@ impl ViewportRenderer {
         graphics_api: &slint::GraphicsAPI<'_>,
     ) {
         if !self.enabled {
-            if let Some(app) = self.app.upgrade() {
-                app.set_status_text(
-                    "Accelerated viewport disabled via MERIDIAN_DISABLE_WGPU=1".into(),
-                );
-            }
             return;
         }
 
@@ -77,11 +86,7 @@ impl ViewportRenderer {
     }
 
     fn render(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let Some(app) = self.app.upgrade() else {
-            return;
-        };
-        let width = app.get_viewport_px_width().max(1.0) as u32;
-        let height = app.get_viewport_px_height().max(1.0) as u32;
+        let (width, height) = *self.viewport_size.borrow();
 
         if self
             .viewport
@@ -109,7 +114,7 @@ impl ViewportRenderer {
                 texture,
                 size: (width, height),
             });
-            app.set_viewport_image(imported_image);
+            *self.pending_viewport_image.borrow_mut() = Some(imported_image);
         }
 
         let Some(renderer) = self.renderer.as_mut() else {
@@ -119,11 +124,10 @@ impl ViewportRenderer {
             return;
         };
         let Ok(frame) = self.core.render_frame(Some(width), Some(height)) else {
-            app.set_status_text("Core render request failed".into());
             return;
         };
-        apply_rendered_frame_to_app(&app, &self.shared_state, &frame);
 
+        let mut fps_text = String::new();
         let now = Instant::now();
         if let Some(previous) = self.last_frame_at {
             let delta = now.duration_since(previous).as_secs_f32();
@@ -134,10 +138,22 @@ impl ViewportRenderer {
                 } else {
                     self.fps_smoothed * 0.88 + fps * 0.12
                 };
-                app.set_fps_text(format!("{:.1}", self.fps_smoothed).into());
+                fps_text = format!("{:.1}", self.fps_smoothed);
             }
         }
         self.last_frame_at = Some(now);
         renderer.render(device, queue, &viewport.texture, &frame.scene);
+
+        let shared_state = Arc::clone(&self.shared_state);
+        let update = UiFrameUpdate {
+            state: frame.state.clone(),
+            visible_notes: frame.stats.visible_notes,
+            active_keys: frame.stats.active_keys,
+            fps_text,
+        };
+        let app_weak = self.app.clone();
+        let _ = app_weak.upgrade_in_event_loop(move |app| {
+            apply_frame_update_to_app(&app, &shared_state, &update);
+        });
     }
 }

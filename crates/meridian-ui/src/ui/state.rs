@@ -1,12 +1,18 @@
-use std::{cell::RefCell, env, path::PathBuf, rc::Rc};
-
-use meridian_core::{
-    RenderedFrame,
-    protocol::{CoreEvent, StateSnapshot},
-    render::RendererKind,
+use std::{
+    env,
+    path::PathBuf,
+    sync::{Arc, Mutex},
 };
 
-use super::view::App;
+use meridian_core::{
+    protocol::{CoreEvent, StateSnapshot},
+    render::{
+        KeyboardHeightSpec, KeyboardProjectorConfig, NoteProjectorConfig, RendererKind, SceneConfig,
+    },
+};
+use slint::{ModelRc, VecModel};
+
+use super::{inspector::rows_for_scene, view::App};
 
 #[derive(Debug, Clone)]
 pub struct UiOptions {
@@ -38,7 +44,7 @@ impl Default for UiOptions {
 
 pub fn apply_events_to_app(
     app: &App,
-    shared_state: &Rc<RefCell<Option<StateSnapshot>>>,
+    shared_state: &Arc<Mutex<Option<StateSnapshot>>>,
     events: &[CoreEvent],
 ) {
     for event in events {
@@ -46,20 +52,29 @@ pub fn apply_events_to_app(
     }
 }
 
-pub fn apply_rendered_frame_to_app(
+#[derive(Clone)]
+pub struct UiFrameUpdate {
+    pub state: StateSnapshot,
+    pub visible_notes: usize,
+    pub active_keys: usize,
+    pub fps_text: String,
+}
+
+pub fn apply_frame_update_to_app(
     app: &App,
-    shared_state: &Rc<RefCell<Option<StateSnapshot>>>,
-    frame: &RenderedFrame,
+    shared_state: &Arc<Mutex<Option<StateSnapshot>>>,
+    update: &UiFrameUpdate,
 ) {
-    apply_state_to_app(app, shared_state, &frame.state);
-    app.set_visible_note_count_text(frame.stats.visible_notes.to_string().into());
-    app.set_active_keys_text(frame.stats.active_keys.to_string().into());
-    app.set_status_text(status_text(&frame.state).into());
+    apply_state_to_app(app, shared_state, &update.state);
+    app.set_visible_note_count_text(update.visible_notes.to_string().into());
+    app.set_active_keys_text(update.active_keys.to_string().into());
+    app.set_fps_text(update.fps_text.clone().into());
+    app.set_status_text(status_text(&update.state).into());
 }
 
 fn apply_event_to_app(
     app: &App,
-    shared_state: &Rc<RefCell<Option<StateSnapshot>>>,
+    shared_state: &Arc<Mutex<Option<StateSnapshot>>>,
     event: &CoreEvent,
 ) {
     match event {
@@ -88,10 +103,10 @@ fn apply_event_to_app(
 
 fn apply_state_to_app(
     app: &App,
-    shared_state: &Rc<RefCell<Option<StateSnapshot>>>,
+    shared_state: &Arc<Mutex<Option<StateSnapshot>>>,
     state: &StateSnapshot,
 ) {
-    *shared_state.borrow_mut() = Some(state.clone());
+    *shared_state.lock().expect("shared UI state mutex poisoned") = Some(state.clone());
     app.set_midi_path_text(
         state
             .midi_path
@@ -104,6 +119,14 @@ fn apply_state_to_app(
     app.set_length_text(format!("{:.3} s", state.midi_length).into());
     app.set_note_count_text(state.total_notes.to_string().into());
     app.set_view_range_text(format!("{:.1} s", state.view_range).into());
+    app.set_current_time_seconds(state.current_time as f32);
+    app.set_midi_length_seconds(state.midi_length.max(0.001) as f32);
+    app.set_scene_summary_text(scene_summary(&state.scene).into());
+    app.set_current_renderer_text(renderer_summary(&state.scene).into());
+    app.set_viewport_text(format!("{} x {}", state.viewport_width, state.viewport_height).into());
+    app.set_inspector_items(ModelRc::from(std::rc::Rc::new(VecModel::from(
+        rows_for_scene(&state.scene),
+    ))));
     app.set_play_label(if state.playing {
         "Pause".into()
     } else {
@@ -119,5 +142,49 @@ fn status_text(state: &StateSnapshot) -> String {
         )
     } else {
         "Launch with `meridian-ui --midi <file.mid>` to render a MIDI".into()
+    }
+}
+
+fn scene_summary(scene: &SceneConfig) -> String {
+    match scene {
+        SceneConfig::TwoD(scene) => format!(
+            "2D / {} notes / {} keyboard / {}",
+            note_name(&scene.notes),
+            keyboard_name(&scene.keyboard),
+            height_name(&scene.keyboard_height),
+        ),
+        SceneConfig::ThreeD(_) => "3D / reserved".into(),
+    }
+}
+
+fn note_name(config: &NoteProjectorConfig) -> &'static str {
+    match config {
+        NoteProjectorConfig::Flat(_) => "Flat",
+        NoteProjectorConfig::Pfa(_) => "PFA",
+    }
+}
+
+fn keyboard_name(config: &KeyboardProjectorConfig) -> &'static str {
+    match config {
+        KeyboardProjectorConfig::Flat(_) => "Flat",
+        KeyboardProjectorConfig::Pfa(_) => "PFA",
+    }
+}
+
+fn height_name(config: &KeyboardHeightSpec) -> &'static str {
+    match config {
+        KeyboardHeightSpec::ScreenPercent { .. } => "screen %",
+        KeyboardHeightSpec::AspectRatio { .. } => "aspect",
+    }
+}
+
+fn renderer_summary(scene: &SceneConfig) -> &'static str {
+    match scene {
+        SceneConfig::TwoD(scene) => match (&scene.notes, &scene.keyboard) {
+            (NoteProjectorConfig::Pfa(_), KeyboardProjectorConfig::Pfa(_)) => "pfa",
+            (NoteProjectorConfig::Flat(_), KeyboardProjectorConfig::Flat(_)) => "flat",
+            _ => "mixed",
+        },
+        SceneConfig::ThreeD(_) => "3d",
     }
 }

@@ -1,19 +1,25 @@
 slint::slint! {
+    export struct InspectorRow {
+        section: string,
+        label: string,
+        value: string,
+    }
+
     component ActionButton inherits Rectangle {
         in property <string> label;
         in property <bool> active: false;
         callback pressed;
 
-        min-width: 70px;
-        min-height: 30px;
-        border-radius: 7px;
+        min-width: 72px;
+        min-height: 32px;
+        border-radius: 8px;
         border-width: 1px;
-        border-color: active ? #77a7ff : #44576d;
-        background: touch.pressed ? #2a3b52 : active ? #405980 : #1a2331;
+        border-color: active ? #7fb1ff : #415777;
+        background: touch.pressed ? #2a3d58 : active ? #48658f : #162334;
 
         Text {
             text: parent.label;
-            color: active ? #f4f7ff : #d2def2;
+            color: active ? #f4f8ff : #d4e0f4;
             horizontal-alignment: center;
             vertical-alignment: center;
             font-family: "monospace";
@@ -24,34 +30,165 @@ slint::slint! {
         touch := TouchArea { clicked => { root.pressed(); } }
     }
 
-    component StatLine inherits Rectangle {
+    component IconButton inherits Rectangle {
+        in property <string> glyph;
+        in property <bool> active: false;
+        callback pressed;
+
+        min-width: 38px;
+        min-height: 38px;
+        border-radius: 10px;
+        border-width: 1px;
+        border-color: active ? #7fb1ff : #415777;
+        background: touch.pressed ? #2a3d58 : active ? #48658f : #162334;
+
+        Text {
+            text: root.glyph;
+            color: active ? #f4f8ff : #d4e0f4;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            font-family: "monospace";
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        touch := TouchArea { clicked => { root.pressed(); } }
+    }
+
+    component StatTile inherits Rectangle {
         in property <string> label;
         in property <string> value;
 
-        min-height: 48px;
-        border-radius: 10px;
+        border-radius: 12px;
         border-width: 1px;
-        border-color: #32455d;
-        background: #172334;
+        border-color: #2e4763;
+        background: #152130;
+        min-height: 62px;
 
         VerticalLayout {
-            padding: 8px;
-            spacing: 2px;
+            padding: 10px;
+            spacing: 3px;
 
             Text {
-                text: label;
-                color: #89a0bf;
+                text: root.label;
+                color: #86a2c7;
                 font-family: "monospace";
-                font-size: 11px;
+                font-size: 10px;
             }
 
             Text {
-                text: value;
-                color: #edf4ff;
+                text: root.value;
+                color: #edf5ff;
                 font-family: "monospace";
-                font-size: 13px;
+                font-size: 14px;
                 font-weight: 700;
                 overflow: elide;
+            }
+        }
+    }
+
+    component InspectorLine inherits Rectangle {
+        in property <string> section;
+        in property <string> label;
+        in property <string> value;
+
+        min-height: 46px;
+        border-radius: 10px;
+        border-width: 1px;
+        border-color: #294058;
+        background: #111c29;
+
+        HorizontalLayout {
+            padding: 10px;
+            spacing: 8px;
+
+            Rectangle {
+                width: 66px;
+                border-radius: 999px;
+                background: #1f3145;
+                border-width: 1px;
+                border-color: #35516f;
+
+                Text {
+                    text: root.section;
+                    color: #9fc0ea;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    font-family: "monospace";
+                    font-size: 10px;
+                }
+            }
+
+            VerticalLayout {
+                spacing: 2px;
+                Text {
+                    text: root.label;
+                    color: #dbe8fa;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                Text {
+                    text: root.value;
+                    color: #86a2c7;
+                    font-family: "monospace";
+                    font-size: 11px;
+                    overflow: elide;
+                }
+            }
+        }
+    }
+
+    component TimeScrubber inherits Rectangle {
+        in property <float> value: 0;
+        in property <float> maximum: 1;
+        callback scrubbed(float);
+
+        private property <float> clamped-value: value < 0 ? 0 : value > maximum ? maximum : value;
+        private property <float> fill-ratio: maximum <= 0 ? 0 : clamped-value / maximum;
+
+        min-height: 36px;
+        border-radius: 12px;
+        border-width: 1px;
+        border-color: #324f70;
+        background: #101927;
+
+        Rectangle {
+            x: 8px;
+            y: parent.height / 2 - 4px;
+            width: parent.width - 16px;
+            height: 8px;
+            border-radius: 999px;
+            background: #1d2c40;
+        }
+
+        Rectangle {
+            x: 8px;
+            y: parent.height / 2 - 4px;
+            width: (parent.width - 16px) * root.fill-ratio;
+            height: 8px;
+            border-radius: 999px;
+            background: #4dc1ff;
+        }
+
+        Rectangle {
+            x: 8px + (parent.width - 16px) * root.fill-ratio - 7px;
+            y: parent.height / 2 - 9px;
+            width: 14px;
+            height: 18px;
+            border-radius: 999px;
+            background: #edf6ff;
+            border-width: 1px;
+            border-color: #173a56;
+        }
+
+        touch := TouchArea {
+            moved => {
+                if (self.pressed) {
+                    root.scrubbed(maximum * max(0, min(1, (self.mouse-x - 8px) / max(1px, parent.width - 16px))));
+                }
+            }
+            clicked => {
+                root.scrubbed(maximum * max(0, min(1, (self.mouse-x - 8px) / max(1px, parent.width - 16px))));
             }
         }
     }
@@ -68,6 +205,12 @@ slint::slint! {
         in-out property <string> view-range-text: "8.0 s";
         in-out property <string> play-label: "Play";
         in-out property <string> fps-text: "--";
+        in-out property <string> scene-summary-text: "2D / PFA notes / PFA keyboard";
+        in-out property <string> viewport-text: "1280 x 720";
+        in-out property <string> current-renderer-text: "pfa";
+        in-out property <float> current-time-seconds: 0;
+        in-out property <float> midi-length-seconds: 1;
+        in-out property <[InspectorRow]> inspector-items;
 
         out property <float> viewport-px-width: viewport-box.width / 1px;
         out property <float> viewport-px-height: viewport-box.height / 1px;
@@ -75,198 +218,267 @@ slint::slint! {
         callback step-time(float);
         callback zoom(float);
         callback toggle-play();
+        callback seek-time(float);
+        callback select-renderer(string);
 
         title: "Meridian";
-        preferred-width: 1480px;
-        preferred-height: 920px;
-        background: rgb(11, 18, 32);
+        preferred-width: 1540px;
+        preferred-height: 940px;
+        background: rgb(8, 14, 24);
 
-        HorizontalLayout {
+        VerticalLayout {
             padding: 14px;
-            spacing: 12px;
+            spacing: 10px;
 
             Rectangle {
-                width: 296px;
-                border-radius: 18px;
+                border-radius: 16px;
                 border-width: 1px;
-                border-color: #26354d;
-                background: #121b29;
+                border-color: #263b56;
+                background: #111b29;
+                min-height: 76px;
+                max-height: 76px;
 
-                VerticalLayout {
+                HorizontalLayout {
                     padding: 12px;
                     spacing: 10px;
 
-                    Text {
-                        text: "MERIDIAN // BLUE CRT";
-                        color: rgb(238, 245, 255);
-                        font-family: "monospace";
-                        font-size: 18px;
-                        font-weight: 700;
-                    }
-
-                    Text {
-                        text: "Retro workstation shell with a native note viewport embedded into the main panel.";
-                        color: #8ca3c5;
-                        font-size: 12px;
-                        wrap: word-wrap;
-                    }
-
-                    Rectangle { height: 1px; background: #223147; }
-
-                    StatLine { label: "MIDI"; value: root.midi-path-text; }
-                    StatLine { label: "TIME"; value: root.time-text; }
-                    StatLine { label: "LENGTH"; value: root.length-text; }
-                    StatLine { label: "FPS"; value: root.fps-text; }
-                    StatLine { label: "VISIBLE"; value: root.visible-note-count-text; }
-                    StatLine { label: "ACTIVE KEYS"; value: root.active-keys-text; }
-                    StatLine { label: "TOTAL NOTES"; value: root.note-count-text; }
-                    StatLine { label: "VIEW RANGE"; value: root.view-range-text; }
-
-                    Rectangle {
-                        border-radius: 14px;
-                        border-width: 1px;
-                        border-color: #314760;
-                        background: #172130;
-
-                        VerticalLayout {
-                            padding: 10px;
-                            spacing: 8px;
-
-                            Text {
-                                text: "TRANSPORT";
-                                color: #87a7d6;
-                                font-family: "monospace";
-                                font-size: 12px;
-                            }
-
-                            HorizontalLayout {
-                                spacing: 6px;
-                                ActionButton { label: "-5s"; pressed => { root.step-time(-5.0); } }
-                                ActionButton { label: "-1s"; pressed => { root.step-time(-1.0); } }
-                                ActionButton { label: "+1s"; pressed => { root.step-time(1.0); } }
-                                ActionButton { label: "+5s"; pressed => { root.step-time(5.0); } }
-                            }
-
-                            HorizontalLayout {
-                                spacing: 6px;
-                                ActionButton { label: root.play-label; active: root.play-label == "Pause"; pressed => { root.toggle-play(); } }
-                                ActionButton { label: "Zoom-"; pressed => { root.zoom(-1.0); } }
-                                ActionButton { label: "Zoom+"; pressed => { root.zoom(1.0); } }
-                            }
+                    VerticalLayout {
+                        width: 170px;
+                        spacing: 2px;
+                        Text {
+                            text: "Meridian";
+                            color: #f0f6ff;
+                            font-size: 18px;
+                            font-weight: 700;
+                        }
+                        Text {
+                            text: root.midi-path-text;
+                            color: #89aad1;
+                            font-size: 11px;
+                            overflow: elide;
                         }
                     }
 
-                    Rectangle {
-                        border-radius: 14px;
-                        border-width: 1px;
-                        border-color: #2d4360;
-                        background: #15202f;
+                    IconButton { glyph: root.play-label == "Pause" ? "||" : ">"; active: root.play-label == "Pause"; pressed => { root.toggle-play(); } }
+                    IconButton { glyph: "-"; pressed => { root.zoom(-1.0); } }
 
-                        VerticalLayout {
-                            padding: 10px;
-                            spacing: 4px;
-
-                            Text {
-                                text: "STATUS";
-                                color: #87a7d6;
-                                font-family: "monospace";
-                                font-size: 12px;
-                            }
-
-                            Text {
-                                text: root.status-text;
-                                color: rgb(217, 232, 255);
-                                font-family: "monospace";
-                                font-size: 12px;
-                                wrap: word-wrap;
-                            }
-                        }
+                    TimeScrubber {
+                        horizontal-stretch: 1;
+                        min-width: 320px;
+                        value: root.current-time-seconds;
+                        maximum: root.midi-length-seconds;
+                        scrubbed(value) => { root.seek-time(value); }
                     }
 
-                    Rectangle {
-                        vertical-stretch: 1;
-                        border-radius: 14px;
-                        background: #101926;
-                        border-width: 1px;
-                        border-color: #203046;
+                    IconButton { glyph: "+"; pressed => { root.zoom(1.0); } }
+
+                    VerticalLayout {
+                        width: 58px;
+                        spacing: 2px;
+                        Text {
+                            text: "VIEW";
+                            color: #86a2c7;
+                            font-family: "monospace";
+                            font-size: 9px;
+                            horizontal-alignment: right;
+                        }
+                        Text {
+                            text: root.view-range-text;
+                            color: #edf5ff;
+                            font-family: "monospace";
+                            font-size: 14px;
+                            font-weight: 700;
+                            horizontal-alignment: right;
+                        }
                     }
                 }
             }
 
-            Rectangle {
-                border-radius: 18px;
-                border-width: 1px;
-                border-color: #26354d;
-                background: #101826;
-                horizontal-stretch: 1;
-                vertical-stretch: 1;
+            HorizontalLayout {
+                spacing: 10px;
 
-                VerticalLayout {
-                    padding: 10px;
-                    spacing: 8px;
+                Rectangle {
+                    border-radius: 18px;
+                    border-width: 1px;
+                    border-color: #28415d;
+                    background: #0e1725;
+                    horizontal-stretch: 1;
+                    vertical-stretch: 1;
 
-                    Rectangle {
-                        border-radius: 12px;
-                        border-width: 1px;
-                        border-color: #31455f;
-                        background: #162131;
+                    VerticalLayout {
+                        padding: 10px;
+                        spacing: 8px;
 
-                        HorizontalLayout {
-                            padding: 10px;
-                            spacing: 8px;
+                        Rectangle {
+                            border-radius: 12px;
+                            border-width: 1px;
+                            border-color: #314c6d;
+                            background: #132032;
+                            min-height: 50px;
 
-                            Text {
-                                text: "Viewport";
-                                color: #f1f6ff;
-                                font-size: 16px;
-                                font-weight: 700;
+                            HorizontalLayout {
+                                padding: 10px;
+                                spacing: 8px;
+                                Text {
+                                    text: "Viewport";
+                                    color: #eff5ff;
+                                    font-size: 16px;
+                                    font-weight: 700;
+                                }
+                                Rectangle { horizontal-stretch: 1; background: #00000000; }
+                                StatTile { label: "FPS"; value: root.fps-text; }
+                                StatTile { label: "SIZE"; value: root.viewport-text; }
                             }
+                        }
 
-                            Rectangle { horizontal-stretch: 1; background: #00000000; }
+                        viewport-box := Rectangle {
+                            border-radius: 16px;
+                            border-width: 1px;
+                            border-color: #35516f;
+                            background: #08111c;
+                            horizontal-stretch: 1;
+                            vertical-stretch: 1;
 
                             Rectangle {
-                                border-radius: 999px;
+                                x: 16px;
+                                y: 16px;
+                                width: parent.width - 32px;
+                                height: parent.height - 32px;
+                                border-radius: 12px;
                                 border-width: 1px;
-                                border-color: #496584;
-                                background: #23344a;
-                                min-width: 112px;
-                                min-height: 26px;
+                                border-color: #456789;
+                                background: #07111d;
 
-                                Text {
-                                    text: "CRT / NOTE FIELD";
-                                    color: #c7dbfb;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                    font-family: "monospace";
-                                    font-size: 11px;
+                                Image {
+                                    source: root.viewport-image;
+                                    width: parent.width;
+                                    height: parent.height;
+                                    image-fit: fill;
                                 }
                             }
                         }
                     }
+                }
 
-                    viewport-box := Rectangle {
-                        border-radius: 16px;
-                        border-width: 1px;
-                        border-color: rgb(52, 81, 110);
-                        background: rgb(13, 22, 36);
-                        horizontal-stretch: 1;
-                        vertical-stretch: 1;
+                Rectangle {
+                    width: 360px;
+                    border-radius: 18px;
+                    border-width: 1px;
+                    border-color: #263b56;
+                    background: #101926;
+
+                    VerticalLayout {
+                        padding: 10px;
+                        spacing: 8px;
+
+                        Text {
+                            text: "Live Stats";
+                            color: #f0f6ff;
+                            font-family: "monospace";
+                            font-size: 15px;
+                            font-weight: 700;
+                        }
+
+                        GridLayout {
+                            spacing: 8px;
+                            StatTile { label: "MIDI"; value: root.midi-path-text; }
+                            StatTile { label: "VISIBLE"; value: root.visible-note-count-text; }
+                            StatTile { label: "ACTIVE KEYS"; value: root.active-keys-text; }
+                            StatTile { label: "TOTAL NOTES"; value: root.note-count-text; }
+                        }
 
                         Rectangle {
-                            x: 18px;
-                            y: 18px;
-                            width: parent.width - 36px;
-                            height: parent.height - 36px;
-                            border-radius: 12px;
+                            border-radius: 14px;
                             border-width: 1px;
-                            border-color: #456789;
-                            background: rgb(7, 17, 29);
+                            border-color: #2e4763;
+                            background: #131f2d;
+                            min-height: 76px;
 
-                            Image {
-                                source: root.viewport-image;
-                                width: parent.width;
-                                height: parent.height;
-                                image-fit: fill;
+                            VerticalLayout {
+                                padding: 10px;
+                                spacing: 8px;
+
+                                Text {
+                                    text: "Projector";
+                                    color: #8fb3df;
+                                    font-family: "monospace";
+                                    font-size: 11px;
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    ActionButton { label: "PFA"; active: root.current-renderer-text == "pfa"; pressed => { root.select-renderer("pfa"); } }
+                                    ActionButton { label: "Flat"; active: root.current-renderer-text == "flat"; pressed => { root.select-renderer("flat"); } }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            border-radius: 14px;
+                            border-width: 1px;
+                            border-color: #2e4763;
+                            background: #131f2d;
+                            min-height: 86px;
+
+                            VerticalLayout {
+                                padding: 10px;
+                                spacing: 4px;
+                                Text {
+                                    text: "Status";
+                                    color: #8fb3df;
+                                    font-family: "monospace";
+                                    font-size: 11px;
+                                }
+                                Text {
+                                    text: root.status-text;
+                                    color: #deebff;
+                                    font-size: 12px;
+                                    wrap: word-wrap;
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            border-radius: 14px;
+                            border-width: 1px;
+                            border-color: #2e4763;
+                            background: #0f1824;
+                            vertical-stretch: 1;
+
+                            VerticalLayout {
+                                padding: 10px;
+                                spacing: 8px;
+
+                                Text {
+                                    text: "Advanced Inspector";
+                                    color: #f0f6ff;
+                                    font-family: "monospace";
+                                    font-size: 13px;
+                                    font-weight: 700;
+                                }
+
+                                Text {
+                                    text: "First pass: generated property list from the active scene config. Next pass can turn each row into a typed editor.";
+                                    color: #88a5ca;
+                                    font-size: 11px;
+                                    wrap: word-wrap;
+                                }
+
+                                Rectangle {
+                                    vertical-stretch: 1;
+                                    background: #00000000;
+                                    clip: true;
+
+                                    VerticalLayout {
+                                        width: parent.width;
+                                        spacing: 6px;
+                                        for row in root.inspector-items : InspectorLine {
+                                            section: row.section;
+                                            label: row.label;
+                                            value: row.value;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

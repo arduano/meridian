@@ -5,6 +5,8 @@ edition.workspace = true
 
 [dependencies]
 clap.workspace = true
+ctrlc = "3.4.5"
 meridian-core = { path = "../meridian-core" }
 serde.workspace = true
 serde_json.workspace = true
+shell-words = "1.1.0"

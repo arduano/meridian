@@ -23,6 +23,15 @@ struct Cli {
     renderer: RendererKind,
     #[arg(long, env = "MERIDIAN_DISABLE_WGPU", default_value_t = false)]
     disable_wgpu: bool,
+    #[cfg(feature = "debug-snapshots")]
+    #[arg(long, hide = true)]
+    debug_snapshot_output: Option<PathBuf>,
+    #[cfg(feature = "debug-snapshots")]
+    #[arg(long, hide = true, default_value_t = 1540)]
+    debug_snapshot_width: u32,
+    #[cfg(feature = "debug-snapshots")]
+    #[arg(long, hide = true, default_value_t = 940)]
+    debug_snapshot_height: u32,
 }
 
 fn parse_renderer(value: &str) -> Result<RendererKind, String> {
@@ -35,7 +44,7 @@ fn parse_renderer(value: &str) -> Result<RendererKind, String> {
 
 fn main() -> Result<(), meridian_core::MeridianError> {
     let cli = Cli::parse();
-    ui::run_ui(ui::UiOptions {
+    let options = ui::UiOptions {
         midi_path: cli.midi,
         renderer: cli.renderer,
         start_time: cli.time,
@@ -43,5 +52,15 @@ fn main() -> Result<(), meridian_core::MeridianError> {
         first_key: cli.first_key,
         last_key: cli.last_key,
         disable_wgpu: cli.disable_wgpu,
-    })
+    };
+    #[cfg(feature = "debug-snapshots")]
+    if let Some(output) = cli.debug_snapshot_output {
+        return ui::write_debug_snapshot(
+            options,
+            &output,
+            cli.debug_snapshot_width,
+            cli.debug_snapshot_height,
+        );
+    }
+    ui::run_ui(options)
 }

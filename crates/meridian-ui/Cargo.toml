@@ -3,6 +3,9 @@ name = "meridian-ui"
 version.workspace = true
 edition.workspace = true
 
+[features]
+debug-snapshots = []
+
 [dependencies]
 clap.workspace = true
 meridian-core = { path = "../meridian-core" }
