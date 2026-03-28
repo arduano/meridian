@@ -3,11 +3,10 @@ pub mod pfa;
 pub mod shared;
 
 pub use shared::{
-    BasicKeyboardProjectorConfig, BasicNoteProjectorConfig, FlatKeyboardProjectorConfig,
-    FlatNoteProjectorConfig, KeyboardHeightSpec, KeyboardProjectorConfig, NoteProjectorConfig,
-    PfaKeyboardProjectorConfig, PfaNoteProjectorConfig, PfaTopColor, ProjectedScene,
-    RendererKind, SceneConfig, SceneLayer, SceneLayout, SceneQuad, ThreeDSceneConfig,
-    TwoDSceneConfig,
+    FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardHeightSpec,
+    KeyboardProjectorConfig, NoteProjectorConfig, PfaKeyboardProjectorConfig,
+    PfaNoteProjectorConfig, PfaTopColor, ProjectedScene, RendererKind, SceneConfig, SceneLayer,
+    SceneLayout, SceneQuad, ThreeDSceneConfig, TwoDSceneConfig,
 };
 
 use crate::midi::{backend::MIDIFileUnion, views::MIDIFileViewsUnion};
@@ -54,42 +53,21 @@ pub fn project_scene_views_into(
     match &layout.scene {
         TwoD(config) => {
             match &config.notes {
-                NoteConfig::Basic(config) => BasicNoteProjector(*config).project_notes(
-                    views,
-                    layout,
-                    piano_height,
-                    scene,
-                ),
-                NoteConfig::Flat(config) => FlatNoteProjector(*config).project_notes(
-                    views,
-                    layout,
-                    piano_height,
-                    scene,
-                ),
-                NoteConfig::Pfa(config) => PfaNoteProjector(*config).project_notes(
-                    views,
-                    layout,
-                    piano_height,
-                    scene,
-                ),
+                NoteConfig::Flat(config) => {
+                    FlatNoteProjector(*config).project_notes(views, layout, piano_height, scene)
+                }
+                NoteConfig::Pfa(config) => {
+                    PfaNoteProjector(*config).project_notes(views, layout, piano_height, scene)
+                }
             }
 
             match &config.keyboard {
-                KeyboardConfig::Basic(config) => BasicKeyboardProjector(*config).project_keyboard(
-                    layout,
-                    piano_height,
-                    scene,
-                ),
-                KeyboardConfig::Flat(config) => FlatKeyboardProjector(*config).project_keyboard(
-                    layout,
-                    piano_height,
-                    scene,
-                ),
-                KeyboardConfig::Pfa(config) => PfaKeyboardProjector(*config).project_keyboard(
-                    layout,
-                    piano_height,
-                    scene,
-                ),
+                KeyboardConfig::Flat(config) => {
+                    FlatKeyboardProjector(*config).project_keyboard(layout, piano_height, scene)
+                }
+                KeyboardConfig::Pfa(config) => {
+                    PfaKeyboardProjector(*config).project_keyboard(layout, piano_height, scene)
+                }
             }
         }
         ThreeD(_) => {}
@@ -108,35 +86,4 @@ pub(crate) trait NoteProjector {
 
 pub(crate) trait KeyboardProjector {
     fn project_keyboard(&self, layout: &SceneLayout, piano_height: f32, scene: &mut ProjectedScene);
-}
-
-#[derive(Clone, Copy)]
-struct BasicNoteProjector(BasicNoteProjectorConfig);
-
-impl NoteProjector for BasicNoteProjector {
-    fn project_notes(
-        &self,
-        views: &MIDIFileViewsUnion<'_>,
-        layout: &SceneLayout,
-        piano_height: f32,
-        scene: &mut ProjectedScene,
-    ) {
-        let _ = self.0;
-        flat::project_basic_notes(views, layout, piano_height, scene);
-    }
-}
-
-#[derive(Clone, Copy)]
-struct BasicKeyboardProjector(BasicKeyboardProjectorConfig);
-
-impl KeyboardProjector for BasicKeyboardProjector {
-    fn project_keyboard(
-        &self,
-        layout: &SceneLayout,
-        piano_height: f32,
-        scene: &mut ProjectedScene,
-    ) {
-        let _ = self.0;
-        flat::project_basic_keyboard(layout, piano_height, scene);
-    }
 }

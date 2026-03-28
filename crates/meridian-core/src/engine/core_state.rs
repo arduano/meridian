@@ -1,6 +1,6 @@
-use std::{path::PathBuf, thread, time::Instant};
+use std::{path::PathBuf, time::Instant};
 
-use flume::{Receiver, Sender};
+use flume::Receiver;
 
 use crate::{
     error::MeridianError,
@@ -9,73 +9,16 @@ use crate::{
         CoreCommand, CoreErrorCode, CoreEvent, FrameStats, ImageOutputFormat, RenderedFrame,
         StateSnapshot,
     },
-    render::{SceneLayout, pfa::wgpu::save_scene_headless, project_scene},
+    render::{SceneConfig, SceneLayout, pfa::wgpu::save_scene_headless, project_scene},
 };
 
-#[derive(Debug)]
-enum RequestMessage {
-    Command {
-        command: CoreCommand,
-        reply: Sender<CoreResponse>,
-    },
-    RenderFrame {
-        viewport_width: Option<u32>,
-        viewport_height: Option<u32>,
-        reply: Sender<Result<RenderedFrame, MeridianError>>,
-    },
-}
-
-pub type CoreResponse = Vec<CoreEvent>;
-
-#[derive(Clone)]
-pub struct CoreHandle {
-    sender: Sender<RequestMessage>,
-}
-
-pub fn spawn_core() -> CoreHandle {
-    let (sender, receiver) = flume::unbounded();
-    thread::spawn(move || {
-        let mut core = CoreState::default();
-        core.run(receiver);
-    });
-    CoreHandle { sender }
-}
-
-impl CoreHandle {
-    pub fn request(&self, command: CoreCommand) -> Result<CoreResponse, MeridianError> {
-        let (reply_tx, reply_rx) = flume::bounded(1);
-        self.sender
-            .send(RequestMessage::Command {
-                command,
-                reply: reply_tx,
-            })
-            .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))?;
-        reply_rx
-            .recv()
-            .map_err(|_| MeridianError::Wgpu("core reply channel closed".into()))
-    }
-
-    pub fn render_frame(
-        &self,
-        viewport_width: Option<u32>,
-        viewport_height: Option<u32>,
-    ) -> Result<RenderedFrame, MeridianError> {
-        let (reply_tx, reply_rx) = flume::bounded(1);
-        self.sender
-            .send(RequestMessage::RenderFrame {
-                viewport_width,
-                viewport_height,
-                reply: reply_tx,
-            })
-            .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))?;
-        reply_rx
-            .recv()
-            .map_err(|_| MeridianError::Wgpu("core reply channel closed".into()))?
-    }
-}
+use super::{
+    CoreResponse, RequestMessage,
+    support::{error_code, error_event, event_to_error},
+};
 
 #[derive(Default)]
-struct CoreState {
+pub(super) struct CoreState {
     midi: Option<MIDIFileUnion>,
     midi_path: Option<PathBuf>,
     layout: SceneLayout,
@@ -85,7 +28,7 @@ struct CoreState {
 }
 
 impl CoreState {
-    fn run(&mut self, receiver: Receiver<RequestMessage>) {
+    pub(super) fn run(&mut self, receiver: Receiver<RequestMessage>) {
         for request in receiver {
             match request {
                 RequestMessage::Command { command, reply } => {
@@ -157,12 +100,7 @@ impl CoreState {
             }
             CoreCommand::SetSceneConfig { scene } => {
                 self.layout.scene = scene;
-                match self.validate_layout() {
-                    Ok(()) => vec![CoreEvent::StateSnapshot {
-                        state: self.snapshot(),
-                    }],
-                    Err(event) => vec![event],
-                }
+                self.snapshot_after_layout_validation()
             }
             CoreCommand::SetViewRange { seconds } => {
                 self.layout.view_range = seconds.clamp(1.0, 30.0);
@@ -176,12 +114,7 @@ impl CoreState {
             } => {
                 self.layout.first_key = first_key;
                 self.layout.last_key = last_key;
-                match self.validate_layout() {
-                    Ok(()) => vec![CoreEvent::StateSnapshot {
-                        state: self.snapshot(),
-                    }],
-                    Err(event) => vec![event],
-                }
+                self.snapshot_after_layout_validation()
             }
             CoreCommand::SetViewport { width, height } => {
                 if let Err(error) = self.apply_viewport_overrides(Some(width), Some(height)) {
@@ -190,12 +123,7 @@ impl CoreState {
                         error.to_string(),
                     )];
                 }
-                match self.validate_layout() {
-                    Ok(()) => vec![CoreEvent::StateSnapshot {
-                        state: self.snapshot(),
-                    }],
-                    Err(event) => vec![event],
-                }
+                self.snapshot_after_layout_validation()
             }
             CoreCommand::RenderFrame {
                 viewport_width,
@@ -240,7 +168,7 @@ impl CoreState {
         }
     }
 
-    fn render_frame(
+    pub(super) fn render_frame(
         &mut self,
         viewport_width: Option<u32>,
         viewport_height: Option<u32>,
@@ -260,6 +188,15 @@ impl CoreState {
             stats,
             scene,
         })
+    }
+
+    fn snapshot_after_layout_validation(&self) -> CoreResponse {
+        match self.validate_layout() {
+            Ok(()) => vec![CoreEvent::StateSnapshot {
+                state: self.snapshot(),
+            }],
+            Err(event) => vec![event],
+        }
     }
 
     fn apply_viewport_overrides(
@@ -352,57 +289,12 @@ impl CoreState {
                 "first_key must be <= last_key",
             ));
         }
-        if matches!(self.layout.scene, crate::render::SceneConfig::ThreeD(_)) {
+        if matches!(self.layout.scene, SceneConfig::ThreeD(_)) {
             return Err(error_event(
                 CoreErrorCode::InvalidLayout,
                 "3d scene config is reserved but not implemented yet",
             ));
         }
         Ok(())
-    }
-}
-
-impl ImageOutputFormat {
-    pub fn infer_from_path(path: &std::path::Path) -> Self {
-        match path.extension().and_then(|ext| ext.to_str()) {
-            Some("png") => Self::Png,
-            Some("rgba") | Some("raw") => Self::Rgba,
-            Some("ppm") | _ => Self::Ppm,
-        }
-    }
-}
-
-fn error_event(code: CoreErrorCode, message: impl Into<String>) -> CoreEvent {
-    CoreEvent::Error {
-        code,
-        message: message.into(),
-    }
-}
-
-fn event_to_error(context: &str, event: &CoreEvent) -> MeridianError {
-    match event {
-        CoreEvent::Error { message, .. } => {
-            MeridianError::InvalidMidi(format!("{context}: {message}"))
-        }
-        _ => MeridianError::InvalidMidi(context.into()),
-    }
-}
-
-fn error_code(error: &MeridianError) -> CoreErrorCode {
-    match error {
-        MeridianError::InvalidMidi(message) if message.contains("no midi loaded") => {
-            CoreErrorCode::NoMidiLoaded
-        }
-        MeridianError::InvalidMidi(message)
-            if message.contains("viewport_width") || message.contains("viewport_height") =>
-        {
-            CoreErrorCode::InvalidViewport
-        }
-        MeridianError::InvalidMidi(_) => CoreErrorCode::InvalidCommand,
-        MeridianError::Io(_) | MeridianError::Platform(_) | MeridianError::SlintNotifier(_) => {
-            CoreErrorCode::Internal
-        }
-        MeridianError::MidiLoad(_) => CoreErrorCode::InvalidCommand,
-        MeridianError::Wgpu(_) => CoreErrorCode::Internal,
     }
 }

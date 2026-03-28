@@ -27,7 +27,6 @@ struct Cli {
 
 fn parse_renderer(value: &str) -> Result<RendererKind, String> {
     match value {
-        "basic" => Ok(RendererKind::Basic),
         "flat" => Ok(RendererKind::Flat),
         "pfa" => Ok(RendererKind::Pfa),
         _ => Err(format!("unknown renderer `{value}`")),
