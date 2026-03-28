@@ -4,12 +4,12 @@ use flume::{Receiver, Sender};
 
 use crate::{
     error::MeridianError,
-    midi::{MIDIFileBase, MIDIFileUnion},
+    midi::backend::{MIDIFileBase, MIDIFileUnion},
     protocol::{
         CoreCommand, CoreErrorCode, CoreEvent, FrameStats, ImageOutputFormat, RenderedFrame,
         StateSnapshot,
     },
-    render::{SceneLayout, project_scene, wgpu::save_scene_headless},
+    render::{SceneLayout, pfa::wgpu::save_scene_headless, project_scene},
 };
 
 #[derive(Debug)]

@@ -12,7 +12,7 @@ use meridian_core::{
     },
     render::{
         RendererKind,
-        wgpu::{
+        pfa::wgpu::{
             HeadlessRenderSession, encode_rgba_to_png, encode_rgba_to_ppm,
             render_scene_headless_to_rgba,
         },

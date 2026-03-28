@@ -11,7 +11,7 @@ use meridian_core::{
     protocol::{CoreCommand, CoreEvent, StateSnapshot},
     render::{
         RendererKind,
-        wgpu::{PrimitiveSceneRenderer, VIEWPORT_FORMAT},
+        pfa::wgpu::{PrimitiveSceneRenderer, VIEWPORT_FORMAT},
     },
     spawn_core,
 };
