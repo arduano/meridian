@@ -1,15 +1,31 @@
-[package]
-name = "meridian"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+    "crates/meridian-core",
+    "crates/meridian-stdio",
+    "crates/meridian-ui",
+]
+default-members = [
+    "crates/meridian-stdio",
+    "crates/meridian-ui",
+]
+resolver = "3"
 
-[dependencies]
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+
+[workspace.dependencies]
 bytemuck = { version = "1.18", features = ["derive"] }
 clap = { version = "4.6.0", features = ["derive", "env"] }
 enum_dispatch = "0.3.13"
+flume = "0.11.1"
 midly = "0.5.3"
+png = "0.18.0"
+pollster = "0.4.0"
 rayon = "1.10"
 rustc-hash = "2.0.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
 slint = { version = "~1.15", features = [
   "unstable-wgpu-28",
   "backend-winit-x11",
@@ -19,3 +35,4 @@ slint = { version = "~1.15", features = [
   "renderer-software",
 ] }
 thiserror = "2.0.12"
+wgpu = "28.0.0"

@@ -2,20 +2,22 @@ pub mod wgpu;
 
 use bytemuck::{Pod, Zeroable};
 use clap::ValueEnum;
+use serde::{Deserialize, Serialize};
 
 use crate::midi::{MIDI_KEY_COUNT, MIDIFileUnion};
 
 const LAYER_COUNT: usize = 7;
 const NOTE_DEPTH_STEP: f32 = 1.0 / 16_777_216.0;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum RendererKind {
     Basic,
     Pfa,
 }
 
 #[repr(usize)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum SceneLayer {
     Background = 0,
     WhiteNotes = 1,
@@ -27,7 +29,7 @@ pub enum SceneLayer {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable, Serialize, Deserialize)]
 pub struct SceneQuad {
     pub positions: [[f32; 2]; 4],
     pub colors: [[f32; 4]; 4],
@@ -35,7 +37,7 @@ pub struct SceneQuad {
     pub _padding: [f32; 3],
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct SceneLayout {
     pub renderer: RendererKind,
     pub view_range: f64,
@@ -60,6 +62,7 @@ impl Default for SceneLayout {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProjectedScene {
     layers: [Vec<SceneQuad>; LAYER_COUNT],
     pub notes_black_first: bool,

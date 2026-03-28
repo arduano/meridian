@@ -1,0 +1,9 @@
+[package]
+name = "meridian-ui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+clap.workspace = true
+meridian-core = { path = "../meridian-core" }
+slint.workspace = true

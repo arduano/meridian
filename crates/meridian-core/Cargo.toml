@@ -1,0 +1,22 @@
+[package]
+name = "meridian-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bytemuck.workspace = true
+clap.workspace = true
+enum_dispatch.workspace = true
+flume.workspace = true
+midly.workspace = true
+png.workspace = true
+pollster.workspace = true
+rayon.workspace = true
+rustc-hash.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+wgpu.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

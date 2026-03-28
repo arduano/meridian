@@ -6,16 +6,16 @@ use std::{
     time::{Duration, Instant},
 };
 
-use slint::wgpu_28::wgpu;
-
-use crate::{
-    error::MeridianError,
-    midi::{MIDIFileBase, MIDIFileUnion},
+use meridian_core::{
+    CoreHandle, MeridianError, RenderedFrame,
+    protocol::{CoreCommand, CoreEvent, StateSnapshot},
     render::{
-        ProjectedScene, RendererKind, SceneLayout, project_scene_into,
+        RendererKind,
         wgpu::{PrimitiveSceneRenderer, VIEWPORT_FORMAT},
     },
+    spawn_core,
 };
+use slint::wgpu_28::wgpu;
 
 slint::slint! {
     component ActionButton inherits Rectangle {
@@ -325,88 +325,6 @@ impl Default for UiOptions {
     }
 }
 
-struct AppModel {
-    midi: Option<MIDIFileUnion>,
-    midi_path: Option<PathBuf>,
-    layout: SceneLayout,
-    current_time: f64,
-    playing: bool,
-    last_tick: Instant,
-}
-
-impl AppModel {
-    fn new(options: &UiOptions, midi: Option<MIDIFileUnion>) -> Self {
-        Self {
-            midi,
-            midi_path: options.midi_path.clone(),
-            layout: SceneLayout {
-                renderer: options.renderer,
-                view_range: options.view_range,
-                first_key: options.first_key,
-                last_key: options.last_key,
-                viewport_width: 1280,
-                viewport_height: 720,
-                ..Default::default()
-            },
-            current_time: options.start_time.max(0.0),
-            playing: false,
-            last_tick: Instant::now(),
-        }
-    }
-
-    fn midi_length(&self) -> f64 {
-        self.midi
-            .as_ref()
-            .and_then(|midi| midi.midi_length())
-            .unwrap_or(0.0)
-    }
-
-    fn total_notes_text(&self) -> String {
-        self.midi
-            .as_ref()
-            .and_then(|midi| midi.stats().total_notes)
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| "0".into())
-    }
-
-    fn status_text(&self) -> String {
-        if let Some(path) = &self.midi_path {
-            format!(
-                "RAM backend loaded. Blue shell active. Rendering from shared note-view abstractions for {}",
-                path.display()
-            )
-        } else {
-            "Launch with `meridian ui --midi <file.mid>` to render a MIDI".into()
-        }
-    }
-
-    fn sync_time(&mut self) {
-        let now = Instant::now();
-        if self.playing {
-            self.current_time += now.duration_since(self.last_tick).as_secs_f64();
-            self.current_time = self.current_time.min(self.midi_length().max(0.0));
-            if self.current_time >= self.midi_length() && self.midi_length() > 0.0 {
-                self.playing = false;
-            }
-        }
-        self.last_tick = now;
-    }
-
-    fn step_time(&mut self, delta: f64) {
-        self.sync_time();
-        self.current_time = (self.current_time + delta).clamp(0.0, self.midi_length().max(0.0));
-    }
-
-    fn zoom(&mut self, delta: f64) {
-        self.layout.view_range = (self.layout.view_range + delta).clamp(1.0, 30.0);
-    }
-
-    fn toggle_play(&mut self) {
-        self.sync_time();
-        self.playing = !self.playing;
-    }
-}
-
 struct ViewportTexture {
     texture: wgpu::Texture,
     size: (u32, u32),
@@ -414,26 +332,31 @@ struct ViewportTexture {
 
 struct ViewportRenderer {
     app: slint::Weak<App>,
-    model: Rc<RefCell<AppModel>>,
+    core: CoreHandle,
+    shared_state: Rc<RefCell<Option<StateSnapshot>>>,
     renderer: Option<PrimitiveSceneRenderer>,
     viewport: Option<ViewportTexture>,
     enabled: bool,
     fps_smoothed: f32,
     last_frame_at: Option<Instant>,
-    scene: ProjectedScene,
 }
 
 impl ViewportRenderer {
-    fn new(app: slint::Weak<App>, model: Rc<RefCell<AppModel>>, enabled: bool) -> Self {
+    fn new(
+        app: slint::Weak<App>,
+        core: CoreHandle,
+        shared_state: Rc<RefCell<Option<StateSnapshot>>>,
+        enabled: bool,
+    ) -> Self {
         Self {
             app,
-            model,
+            core,
+            shared_state,
             renderer: None,
             viewport: None,
             enabled,
             fps_smoothed: 0.0,
             last_frame_at: None,
-            scene: ProjectedScene::default(),
         }
     }
 
@@ -511,43 +434,11 @@ impl ViewportRenderer {
             return;
         };
 
-        {
-            let mut model = self.model.borrow_mut();
-            model.sync_time();
-
-            let midi_path = model
-                .midi_path
-                .as_ref()
-                .map(|path| path.display().to_string())
-                .unwrap_or_else(|| "No MIDI loaded".into());
-            app.set_midi_path_text(midi_path.into());
-            app.set_time_text(format!("{:.3} s", model.current_time).into());
-            app.set_length_text(format!("{:.3} s", model.midi_length()).into());
-            app.set_note_count_text(model.total_notes_text().into());
-            app.set_view_range_text(format!("{:.1} s", model.layout.view_range).into());
-            app.set_play_label(if model.playing {
-                "Pause".into()
-            } else {
-                "Play".into()
-            });
-
-            let current_time = model.current_time;
-            model.layout.viewport_width = width;
-            model.layout.viewport_height = height;
-            let layout = model.layout;
-
-            if let Some(midi) = model.midi.as_mut() {
-                project_scene_into(midi, current_time, &layout, &mut self.scene);
-                app.set_visible_note_count_text(self.scene.visible_notes.to_string().into());
-                app.set_active_keys_text(self.scene.active_keys.to_string().into());
-                app.set_status_text(model.status_text().into());
-            } else {
-                self.scene.clear();
-                app.set_visible_note_count_text("0".into());
-                app.set_active_keys_text("0".into());
-                app.set_status_text(model.status_text().into());
-            }
-        }
+        let Ok(frame) = self.core.render_frame(Some(width), Some(height)) else {
+            app.set_status_text("Core render request failed".into());
+            return;
+        };
+        apply_rendered_frame_to_app(&app, &self.shared_state, &frame);
 
         let now = Instant::now();
         if let Some(previous) = self.last_frame_at {
@@ -564,70 +455,77 @@ impl ViewportRenderer {
         }
         self.last_frame_at = Some(now);
 
-        renderer.render(device, queue, &viewport.texture, &self.scene);
+        renderer.render(device, queue, &viewport.texture, &frame.scene);
     }
 }
 
 pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let backend_selector = slint::BackendSelector::new();
     if options.disable_wgpu {
-        backend_selector.select()?;
+        backend_selector
+            .select()
+            .map_err(|e| MeridianError::Platform(e.to_string()))?;
     } else {
         backend_selector
             .require_wgpu_28(slint::wgpu_28::WGPUConfiguration::default())
-            .select()?;
+            .select()
+            .map_err(|e| MeridianError::Platform(e.to_string()))?;
     }
 
-    let midi = if let Some(path) = &options.midi_path {
-        Some(MIDIFileUnion::load_ram(path)?)
-    } else {
-        None
-    };
-    let model = Rc::new(RefCell::new(AppModel::new(&options, midi)));
-
-    let app = App::new()?;
-    {
-        let model = model.borrow();
-        app.set_midi_path_text(
-            model
-                .midi_path
-                .as_ref()
-                .map(|path| path.display().to_string())
-                .unwrap_or_else(|| "No MIDI loaded".into())
-                .into(),
-        );
-        app.set_status_text(model.status_text().into());
-        app.set_length_text(format!("{:.3} s", model.midi_length()).into());
-        app.set_note_count_text(model.total_notes_text().into());
-        app.set_view_range_text(format!("{:.1} s", model.layout.view_range).into());
-    }
+    let app = App::new().map_err(|e| MeridianError::Platform(e.to_string()))?;
+    let core = spawn_core();
+    let shared_state = Rc::new(RefCell::new(None));
+    initialize_core(&core, &options, &app, &shared_state)?;
 
     {
-        let model = Rc::clone(&model);
+        let core = core.clone();
         let app_weak = app.as_weak();
+        let shared_state = Rc::clone(&shared_state);
         app.on_step_time(move |delta| {
-            model.borrow_mut().step_time(delta as f64);
             if let Some(app) = app_weak.upgrade() {
+                if let Ok(events) = core.request(CoreCommand::StepTime {
+                    delta: delta as f64,
+                }) {
+                    apply_events_to_app(&app, &shared_state, &events);
+                }
                 app.window().request_redraw();
             }
         });
     }
     {
-        let model = Rc::clone(&model);
+        let core = core.clone();
         let app_weak = app.as_weak();
+        let shared_state = Rc::clone(&shared_state);
         app.on_zoom(move |delta| {
-            model.borrow_mut().zoom(delta as f64);
             if let Some(app) = app_weak.upgrade() {
+                let current_view_range = shared_state
+                    .borrow()
+                    .as_ref()
+                    .map(|snapshot| snapshot.view_range)
+                    .unwrap_or(8.0);
+                if let Ok(events) = core.request(CoreCommand::SetLayout {
+                    renderer: None,
+                    view_range: Some((current_view_range + delta as f64).clamp(1.0, 30.0)),
+                    first_key: None,
+                    last_key: None,
+                    viewport_width: None,
+                    viewport_height: None,
+                }) {
+                    apply_events_to_app(&app, &shared_state, &events);
+                }
                 app.window().request_redraw();
             }
         });
     }
     {
-        let model = Rc::clone(&model);
+        let core = core.clone();
         let app_weak = app.as_weak();
+        let shared_state = Rc::clone(&shared_state);
         app.on_toggle_play(move || {
-            model.borrow_mut().toggle_play();
             if let Some(app) = app_weak.upgrade() {
+                if let Ok(events) = core.request(CoreCommand::TogglePlaying) {
+                    apply_events_to_app(&app, &shared_state, &events);
+                }
                 app.window().request_redraw();
             }
         });
@@ -636,7 +534,8 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     if !options.disable_wgpu {
         let renderer = Rc::new(RefCell::new(ViewportRenderer::new(
             app.as_weak(),
-            Rc::clone(&model),
+            core.clone(),
+            Rc::clone(&shared_state),
             true,
         )));
         let renderer_for_notifier = Rc::clone(&renderer);
@@ -653,13 +552,27 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
 
     let animation_timer = slint::Timer::default();
     let app_for_timer = app.as_weak();
-    let model_for_timer = Rc::clone(&model);
+    let core_for_timer = core.clone();
+    let shared_state_for_timer = Rc::clone(&shared_state);
+    let disable_wgpu = options.disable_wgpu;
     animation_timer.start(
         slint::TimerMode::Repeated,
         Duration::from_millis(16),
         move || {
-            if model_for_timer.borrow().playing {
-                if let Some(app) = app_for_timer.upgrade() {
+            if let Some(app) = app_for_timer.upgrade() {
+                if let Ok(events) = core_for_timer.request(CoreCommand::GetState) {
+                    let playing = events.iter().find_map(|event| match event {
+                        CoreEvent::StateSnapshot { state } => Some(state.playing),
+                        _ => None,
+                    });
+                    apply_events_to_app(&app, &shared_state_for_timer, &events);
+                    if playing == Some(true) || disable_wgpu {
+                        app.window().request_redraw();
+                    }
+                }
+                if disable_wgpu {
+                    app.window().request_redraw();
+                } else if app.get_play_label() == "Pause" {
                     app.window().request_redraw();
                 }
             }
@@ -667,6 +580,119 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     );
 
     app.window().request_redraw();
-    app.run()?;
+    app.run()
+        .map_err(|e| MeridianError::Platform(e.to_string()))?;
     Ok(())
+}
+
+fn initialize_core(
+    core: &CoreHandle,
+    options: &UiOptions,
+    app: &App,
+    shared_state: &Rc<RefCell<Option<StateSnapshot>>>,
+) -> Result<(), MeridianError> {
+    let events = core.request(CoreCommand::SetLayout {
+        renderer: Some(options.renderer),
+        view_range: Some(options.view_range),
+        first_key: Some(options.first_key),
+        last_key: Some(options.last_key),
+        viewport_width: Some(1280),
+        viewport_height: Some(720),
+    })?;
+    apply_events_to_app(app, shared_state, &events);
+    let events = core.request(CoreCommand::SetTime {
+        time: options.start_time.max(0.0),
+    })?;
+    apply_events_to_app(app, shared_state, &events);
+    if let Some(path) = &options.midi_path {
+        let events = core.request(CoreCommand::LoadMidi { path: path.clone() })?;
+        apply_events_to_app(app, shared_state, &events);
+    }
+    Ok(())
+}
+
+fn apply_events_to_app(
+    app: &App,
+    shared_state: &Rc<RefCell<Option<StateSnapshot>>>,
+    events: &[CoreEvent],
+) {
+    for event in events {
+        apply_event_to_app(app, shared_state, event);
+    }
+}
+
+fn apply_event_to_app(
+    app: &App,
+    shared_state: &Rc<RefCell<Option<StateSnapshot>>>,
+    event: &CoreEvent,
+) {
+    match event {
+        CoreEvent::StateSnapshot { state } | CoreEvent::MidiLoaded { state, .. } => {
+            apply_state_to_app(app, shared_state, state);
+            app.set_status_text(status_text(state).into());
+            app.set_visible_note_count_text("0".into());
+            app.set_active_keys_text("0".into());
+        }
+        CoreEvent::FrameProjected { state, stats, .. } => {
+            apply_state_to_app(app, shared_state, state);
+            app.set_visible_note_count_text(stats.visible_notes.to_string().into());
+            app.set_active_keys_text(stats.active_keys.to_string().into());
+            app.set_status_text(status_text(state).into());
+        }
+        CoreEvent::FrameSaved { state, output, .. } => {
+            apply_state_to_app(app, shared_state, state);
+            app.set_status_text(format!("Saved frame to {}", output.display()).into());
+        }
+        CoreEvent::Error { message, .. } => {
+            app.set_status_text(message.clone().into());
+        }
+        CoreEvent::ShutdownComplete => {}
+    }
+}
+
+fn apply_state_to_app(
+    app: &App,
+    shared_state: &Rc<RefCell<Option<StateSnapshot>>>,
+    state: &StateSnapshot,
+) {
+    *shared_state.borrow_mut() = Some(state.clone());
+    app.set_midi_path_text(
+        state
+            .midi_path
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "No MIDI loaded".into())
+            .into(),
+    );
+    app.set_time_text(format!("{:.3} s", state.current_time).into());
+    app.set_length_text(format!("{:.3} s", state.midi_length).into());
+    app.set_note_count_text(state.total_notes.to_string().into());
+    app.set_view_range_text(format!("{:.1} s", state.view_range).into());
+    app.set_play_label(if state.playing {
+        "Pause".into()
+    } else {
+        "Play".into()
+    });
+}
+
+fn apply_rendered_frame_to_app(
+    app: &App,
+    shared_state: &Rc<RefCell<Option<StateSnapshot>>>,
+    frame: &RenderedFrame,
+) {
+    apply_state_to_app(app, shared_state, &frame.state);
+    app.set_visible_note_count_text(frame.stats.visible_notes.to_string().into());
+    app.set_active_keys_text(frame.stats.active_keys.to_string().into());
+    app.set_status_text(status_text(&frame.state).into());
+}
+
+fn status_text(state: &StateSnapshot) -> String {
+    if let Some(path) = &state.midi_path {
+        format!(
+            "Core session active. UI frontend attached. Rendering {} through the shared event bus.",
+            path.display()
+        )
+    } else {
+        "Launch with `meridian-ui --midi <file.mid>` to render a MIDI".into()
+    }
 }

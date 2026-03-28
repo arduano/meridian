@@ -3,17 +3,17 @@ use crate::midi::TrackAndChannel;
 pub struct InRamNoteBlock {
     pub start: f64,
     pub max_length: f32,
-    pub notes: Box<[BasicMIDINote]>,
+    pub(crate) notes: Box<[BasicMIDINote]>,
 }
 
 #[derive(Debug, Clone)]
-pub struct BasicMIDINote {
-    pub len: f32,
-    pub track_chan: TrackAndChannel,
+pub(crate) struct BasicMIDINote {
+    pub(crate) len: f32,
+    pub(crate) track_chan: TrackAndChannel,
 }
 
 impl InRamNoteBlock {
-    pub fn new_from_trackchans(
+    pub(crate) fn new_from_trackchans(
         time: f64,
         track_chans: impl ExactSizeIterator<Item = TrackAndChannel>,
     ) -> Self {

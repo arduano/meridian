@@ -1,0 +1,10 @@
+[package]
+name = "meridian-stdio"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+clap.workspace = true
+meridian-core = { path = "../meridian-core" }
+serde.workspace = true
+serde_json.workspace = true
