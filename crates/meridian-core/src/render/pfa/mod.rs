@@ -8,8 +8,12 @@ use crate::midi::{
 };
 
 use super::{
-    SceneLayout, SceneProjector,
-    shared::{ProjectedScene, SceneLayer, is_black_key, mod_add, quad, vertical_gradient_quad},
+    KeyboardProjector, NoteProjector, SceneLayout,
+    shared::{
+        KeyActivity, PfaKeyboardProjectorConfig, PfaNoteProjectorConfig, PfaTopColor,
+        ProjectedScene, SceneLayer, alpha_blend, is_black_key, mod_add, quad,
+        vertical_gradient_quad,
+    },
 };
 
 #[repr(C)]
@@ -25,35 +29,10 @@ pub struct NoteInstance {
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct PfaProjector {
-    same_width_notes: bool,
-    black_notes_above: bool,
-    middle_c: bool,
-    border_width: f32,
-    top_color: PfaTopColor,
-    top_bar_rgb: [f32; 3],
-}
+pub(crate) struct PfaNoteProjector(pub PfaNoteProjectorConfig);
 
-impl Default for PfaProjector {
-    fn default() -> Self {
-        Self {
-            same_width_notes: false,
-            black_notes_above: true,
-            middle_c: false,
-            border_width: 1.0,
-            top_color: PfaTopColor::Red,
-            top_bar_rgb: [0.585, 0.0392, 0.0249],
-        }
-    }
-}
-
-#[allow(dead_code)]
 #[derive(Clone, Copy)]
-enum PfaTopColor {
-    Red,
-    Blue,
-    Green,
-}
+pub(crate) struct PfaKeyboardProjector(pub PfaKeyboardProjectorConfig);
 
 #[derive(Clone, Copy, Default)]
 struct KeyColorPair {
@@ -70,19 +49,60 @@ impl KeyColorPair {
     }
 }
 
-impl SceneProjector for PfaProjector {
-    fn project_into(
+impl NoteProjector for PfaNoteProjector {
+    fn project_notes(
         &self,
         views: &MIDIFileViewsUnion<'_>,
         layout: &SceneLayout,
+        piano_height: f32,
         scene: &mut ProjectedScene,
     ) {
-        scene.notes_black_first = self.black_notes_above;
-        let params = PfaLayoutParams::new(layout, views.range().length() as f32, self.border_width);
+        scene.notes_black_first = self.0.black_notes_above;
+        let params =
+            PfaLayoutParams::new(layout, piano_height, views.range().length() as f32, self.0.border_width);
         let first_note = layout.first_key.min(layout.last_key) as usize;
         let last_note = layout.last_key.max(layout.first_key) as usize + 1;
-        let arrays = KeyPositionArrays::new(first_note, last_note, self.same_width_notes);
+        let arrays = KeyPositionArrays::new(first_note, last_note, self.0.same_width_notes);
 
+        if self.0.black_notes_above {
+            self.project_note_pass(
+                scene,
+                &views,
+                &params,
+                &arrays,
+                first_note,
+                last_note,
+                false,
+            );
+            self.project_note_pass(
+                scene,
+                &views,
+                &params,
+                &arrays,
+                first_note,
+                last_note,
+                true,
+            );
+        } else {
+            self.project_note_pass(
+                scene,
+                &views,
+                &params,
+                &arrays,
+                first_note,
+                last_note,
+                false,
+            );
+        }
+    }
+}
+
+impl KeyboardProjector for PfaKeyboardProjector {
+    fn project_keyboard(&self, layout: &SceneLayout, piano_height: f32, scene: &mut ProjectedScene) {
+        let params = PfaLayoutParams::new(layout, piano_height, layout.view_range as f32, 1.0);
+        let first_note = layout.first_key.min(layout.last_key) as usize;
+        let last_note = layout.last_key.max(layout.first_key) as usize + 1;
+        let arrays = KeyPositionArrays::new(first_note, last_note, self.0.same_width_notes);
         let kbfirst = if is_black_key(first_note as u8) && first_note > 0 {
             first_note - 1
         } else {
@@ -94,70 +114,9 @@ impl SceneProjector for PfaProjector {
         }
         kblast = kblast.min(MIDI_KEY_COUNT);
 
-        let mut key_colors = [KeyColorPair::default(); MIDI_KEY_COUNT];
-        let mut key_pressed = [false; MIDI_KEY_COUNT];
-        let orig_white = KeyColorPair::for_base([1.0, 1.0, 1.0, 1.0]);
-        let orig_black = KeyColorPair::for_base([0.0, 0.0, 0.0, 1.0]);
-
         self.push_keyboard_decorations(scene, &params);
-
-        if self.black_notes_above {
-            self.project_note_pass(
-                scene,
-                &views,
-                &params,
-                &arrays,
-                first_note,
-                last_note,
-                false,
-                &mut key_colors,
-                &mut key_pressed,
-            );
-            self.project_note_pass(
-                scene,
-                &views,
-                &params,
-                &arrays,
-                first_note,
-                last_note,
-                true,
-                &mut key_colors,
-                &mut key_pressed,
-            );
-        } else {
-            self.project_note_pass(
-                scene,
-                &views,
-                &params,
-                &arrays,
-                first_note,
-                last_note,
-                false,
-                &mut key_colors,
-                &mut key_pressed,
-            );
-        }
-
-        self.push_white_keys(
-            scene,
-            &params,
-            &arrays,
-            kbfirst,
-            kblast,
-            &key_colors,
-            &key_pressed,
-            orig_white,
-        );
-        self.push_black_keys(
-            scene,
-            &params,
-            &arrays,
-            kbfirst,
-            kblast,
-            &key_colors,
-            &key_pressed,
-            orig_black,
-        );
+        self.push_white_keys(scene, &params, &arrays, kbfirst, kblast);
+        self.push_black_keys(scene, &params, &arrays, kbfirst, kblast);
     }
 }
 
@@ -186,8 +145,7 @@ struct PfaLayoutParams {
 }
 
 impl PfaLayoutParams {
-    fn new(layout: &SceneLayout, view_range: f32, border_width: f32) -> Self {
-        let piano_height = layout.piano_height;
+    fn new(layout: &SceneLayout, piano_height: f32, view_range: f32, border_width: f32) -> Self {
         let padding_x = 0.001 * border_width;
         let padding_y =
             padding_x * layout.viewport_width as f32 / layout.viewport_height.max(1) as f32;
@@ -277,7 +235,7 @@ impl KeyPositionArrays {
     }
 }
 
-impl PfaProjector {
+impl PfaNoteProjector {
     #[allow(clippy::too_many_arguments)]
     fn project_note_pass(
         &self,
@@ -288,8 +246,6 @@ impl PfaProjector {
         first_note: usize,
         last_note: usize,
         only_black: bool,
-        key_colors: &mut [KeyColorPair; MIDI_KEY_COUNT],
-        key_pressed: &mut [bool; MIDI_KEY_COUNT],
     ) {
         let layer = if only_black {
             SceneLayer::BlackNotes
@@ -312,8 +268,6 @@ impl PfaProjector {
                     first_note,
                     last_note,
                     only_black,
-                    key_colors,
-                    key_pressed,
                     layer,
                 );
             }
@@ -330,8 +284,6 @@ impl PfaProjector {
         first_note: usize,
         last_note: usize,
         only_black: bool,
-        key_colors: &mut [KeyColorPair; MIDI_KEY_COUNT],
-        key_pressed: &mut [bool; MIDI_KEY_COUNT],
         layer: SceneLayer,
     ) {
         let key_end = last_note.min(MIDI_KEY_COUNT);
@@ -355,7 +307,7 @@ impl PfaProjector {
                     let packed_color = note.color.to_rgba_packed(255);
                     if note.start <= 0.0 && end > 0.0 {
                         let rgba = note.color.to_rgba(1.0);
-                        if is_black && self.black_notes_above {
+                        if is_black && self.0.black_notes_above {
                             projected_key_color = KeyColorPair {
                                 left: rgba,
                                 right: rgba,
@@ -394,12 +346,23 @@ impl PfaProjector {
             );
             scene.visible_notes += result.notes.len();
             scene.note_quads += result.notes.len();
-            key_colors[result.key] = result.key_color;
-            key_pressed[result.key] = result.key_pressed;
+            scene.set_key_activity(
+                result.key,
+                KeyActivity {
+                    pressed: result.key_pressed,
+                    left: result.key_color.left,
+                    right: result.key_color.right,
+                },
+            );
+            if result.key_pressed {
+                scene.active_keys += 1;
+            }
             scene.extend_note_layer(layer, result.notes);
         }
     }
+}
 
+impl PfaKeyboardProjector {
     fn push_keyboard_decorations(&self, scene: &mut ProjectedScene, params: &PfaLayoutParams) {
         scene.push_quad(
             SceneLayer::KeyboardDecor,
@@ -415,18 +378,18 @@ impl PfaProjector {
             ),
         );
 
-        let (top, bottom) = match self.top_color {
+        let (top, bottom) = match self.0.top_color {
             PfaTopColor::Red => (
                 [
-                    self.top_bar_rgb[0] * 0.5,
-                    self.top_bar_rgb[1] * 0.5,
-                    self.top_bar_rgb[2] * 0.5,
+                    self.0.top_bar_rgb[0] * 0.5,
+                    self.0.top_bar_rgb[1] * 0.5,
+                    self.0.top_bar_rgb[2] * 0.5,
                     1.0,
                 ],
                 [
-                    self.top_bar_rgb[0],
-                    self.top_bar_rgb[1],
-                    self.top_bar_rgb[2],
+                    self.0.top_bar_rgb[0],
+                    self.0.top_bar_rgb[1],
+                    self.0.top_bar_rgb[2],
                     1.0,
                 ],
             ),
@@ -469,10 +432,8 @@ impl PfaProjector {
         arrays: &KeyPositionArrays,
         kbfirst: usize,
         kblast: usize,
-        key_colors: &[KeyColorPair; MIDI_KEY_COUNT],
-        key_pressed: &[bool; MIDI_KEY_COUNT],
-        orig_white: KeyColorPair,
     ) {
+        let orig_white = KeyColorPair::for_base([1.0, 1.0, 1.0, 1.0]);
         for n in kbfirst..kblast {
             if is_black_key(n as u8) {
                 continue;
@@ -480,7 +441,7 @@ impl PfaProjector {
             let (mut x1, mut x2) = (arrays.x1[n], arrays.x1[n] + arrays.width[n]);
             let width = x2 - x1;
 
-            if self.same_width_notes {
+            if self.0.same_width_notes {
                 match n % 12 {
                     0 => x2 += width * 0.666,
                     2 => {
@@ -502,9 +463,15 @@ impl PfaProjector {
                 }
             }
 
-            let pair = blend_key_pair(key_colors[n], orig_white);
-            if key_pressed[n] {
-                scene.active_keys += 1;
+            let activity = scene.key_activity(n);
+            let pair = blend_key_pair(
+                KeyColorPair {
+                    left: activity.left,
+                    right: activity.right,
+                },
+                orig_white,
+            );
+            if activity.pressed {
                 scene.push_quad(
                     SceneLayer::WhiteKeys,
                     vertical_gradient_quad(
@@ -575,10 +542,10 @@ impl PfaProjector {
                 scene.keyboard_quads += 3;
             }
 
-            if n == 60 && self.middle_c {
+            if n == 60 && self.0.middle_c {
                 let marker_x1 = x1 + width / 4.0;
                 let marker_x2 = x2 - width / 4.0;
-                let marker_y2 = if key_pressed[n] {
+                let marker_y2 = if activity.pressed {
                     params.w_end_down_t + width / 4.0
                 } else {
                     params.w_end_up_t + width / 4.0
@@ -633,10 +600,8 @@ impl PfaProjector {
         arrays: &KeyPositionArrays,
         kbfirst: usize,
         kblast: usize,
-        key_colors: &[KeyColorPair; MIDI_KEY_COUNT],
-        key_pressed: &[bool; MIDI_KEY_COUNT],
-        orig_black: KeyColorPair,
     ) {
+        let orig_black = KeyColorPair::for_base([0.0, 0.0, 0.0, 1.0]);
         for n in kbfirst..kblast {
             if !is_black_key(n as u8) {
                 continue;
@@ -647,7 +612,14 @@ impl PfaProjector {
             let ox2 = ox1 + width;
             let ix1 = ox1 + width / 8.0;
             let ix2 = ox2 - width / 8.0;
-            let pair = blend_key_pair(key_colors[n], orig_black);
+            let activity = scene.key_activity(n);
+            let pair = blend_key_pair(
+                KeyColorPair {
+                    left: activity.left,
+                    right: activity.right,
+                },
+                orig_black,
+            );
             let mid = [
                 (pair.left[0] + pair.right[0]) / 2.0,
                 (pair.left[1] + pair.right[1]) / 2.0,
@@ -655,21 +627,18 @@ impl PfaProjector {
                 1.0,
             ];
 
-            let top = if key_pressed[n] {
+            let top = if activity.pressed {
                 params.b_key_down_t
             } else {
                 params.b_key_up_t
             };
-            let bottom = if key_pressed[n] {
+            let bottom = if activity.pressed {
                 params.b_key_down_b
             } else {
                 params.b_key_up_b
             };
-            if key_pressed[n] {
-                scene.active_keys += 1;
-            }
 
-            if key_pressed[n] {
+            if activity.pressed {
                 scene.push_quad(
                     SceneLayer::BlackKeys,
                     quad(
@@ -904,15 +873,4 @@ fn blend_key_pair(pair: KeyColorPair, base: KeyColorPair) -> KeyColorPair {
         left: alpha_blend(pair.left, base.left),
         right: alpha_blend(pair.right, base.right),
     }
-}
-
-fn alpha_blend(top: [f32; 4], bottom: [f32; 4]) -> [f32; 4] {
-    let blend = top[3];
-    let inv = 1.0 - blend;
-    [
-        top[0] * blend + bottom[0] * inv,
-        top[1] * blend + bottom[1] * inv,
-        top[2] * blend + bottom[2] * inv,
-        1.0,
-    ]
 }

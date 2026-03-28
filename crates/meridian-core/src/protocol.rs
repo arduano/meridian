@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
-use crate::render::{ProjectedScene, RendererKind, SceneLayout};
+use crate::render::{ProjectedScene, SceneConfig, SceneLayout};
 
 pub const PROTOCOL_VERSION: u32 = 1;
 
@@ -28,13 +28,19 @@ pub enum CoreCommand {
         playing: bool,
     },
     TogglePlaying,
-    SetLayout {
-        renderer: Option<RendererKind>,
-        view_range: Option<f64>,
-        first_key: Option<u8>,
-        last_key: Option<u8>,
-        viewport_width: Option<u32>,
-        viewport_height: Option<u32>,
+    SetSceneConfig {
+        scene: SceneConfig,
+    },
+    SetViewRange {
+        seconds: f64,
+    },
+    SetKeyRange {
+        first_key: u8,
+        last_key: u8,
+    },
+    SetViewport {
+        width: u32,
+        height: u32,
     },
     RenderFrame {
         viewport_width: Option<u32>,
@@ -61,7 +67,7 @@ pub enum ImageOutputFormat {
 pub struct StateSnapshot {
     pub midi_path: Option<PathBuf>,
     pub midi_loaded: bool,
-    pub renderer: RendererKind,
+    pub scene: SceneConfig,
     pub current_time: f64,
     pub playing: bool,
     pub midi_length: f64,

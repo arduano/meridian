@@ -235,14 +235,19 @@ fn frame_stdout(
     renderer: RendererKind,
 ) -> Result<(), MeridianError> {
     let core = spawn_core();
-    core.request(CoreCommand::SetLayout {
-        renderer: Some(renderer),
-        view_range: Some(view_range),
-        first_key: Some(first_key),
-        last_key: Some(last_key),
-        viewport_width: Some(width),
-        viewport_height: Some(height),
+    let mut layout = SceneLayout::default();
+    layout.set_renderer_kind(renderer);
+    core.request(CoreCommand::SetSceneConfig {
+        scene: layout.scene.clone(),
     })?;
+    core.request(CoreCommand::SetViewRange {
+        seconds: view_range,
+    })?;
+    core.request(CoreCommand::SetKeyRange {
+        first_key,
+        last_key,
+    })?;
+    core.request(CoreCommand::SetViewport { width, height })?;
     core.request(CoreCommand::LoadMidi {
         path: midi.to_path_buf(),
     })?;
@@ -306,15 +311,15 @@ fn benchmark(
         ));
     }
 
-    let layout = SceneLayout {
-        renderer,
+    let mut layout = SceneLayout {
+        scene: Default::default(),
         view_range,
-        piano_height: SceneLayout::default().piano_height,
         first_key,
         last_key,
         viewport_width: width,
         viewport_height: height,
     };
+    layout.set_renderer_kind(renderer);
     let midi_path = midi.to_path_buf();
     let mut midi = MIDIFileUnion::load_ram(midi)?;
     let mut session = HeadlessRenderSession::new(width, height)?;

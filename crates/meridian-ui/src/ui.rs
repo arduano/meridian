@@ -9,10 +9,7 @@ use std::{
 use meridian_core::{
     CoreHandle, MeridianError, RenderedFrame,
     protocol::{CoreCommand, CoreEvent, StateSnapshot},
-    render::{
-        RendererKind,
-        pfa::wgpu::{PrimitiveSceneRenderer, VIEWPORT_FORMAT},
-    },
+    render::{RendererKind, SceneLayout, pfa::wgpu::{PrimitiveSceneRenderer, VIEWPORT_FORMAT}},
     spawn_core,
 };
 use slint::wgpu_28::wgpu;
@@ -503,13 +500,8 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
                     .as_ref()
                     .map(|snapshot| snapshot.view_range)
                     .unwrap_or(8.0);
-                if let Ok(events) = core.request(CoreCommand::SetLayout {
-                    renderer: None,
-                    view_range: Some((current_view_range + delta as f64).clamp(1.0, 30.0)),
-                    first_key: None,
-                    last_key: None,
-                    viewport_width: None,
-                    viewport_height: None,
+                if let Ok(events) = core.request(CoreCommand::SetViewRange {
+                    seconds: (current_view_range + delta as f64).clamp(1.0, 30.0),
                 }) {
                     apply_events_to_app(&app, &shared_state, &events);
                 }
@@ -591,13 +583,24 @@ fn initialize_core(
     app: &App,
     shared_state: &Rc<RefCell<Option<StateSnapshot>>>,
 ) -> Result<(), MeridianError> {
-    let events = core.request(CoreCommand::SetLayout {
-        renderer: Some(options.renderer),
-        view_range: Some(options.view_range),
-        first_key: Some(options.first_key),
-        last_key: Some(options.last_key),
-        viewport_width: Some(1280),
-        viewport_height: Some(720),
+    let mut layout = SceneLayout::default();
+    layout.set_renderer_kind(options.renderer);
+    let events = core.request(CoreCommand::SetSceneConfig {
+        scene: layout.scene.clone(),
+    })?;
+    apply_events_to_app(app, shared_state, &events);
+    let events = core.request(CoreCommand::SetViewRange {
+        seconds: options.view_range,
+    })?;
+    apply_events_to_app(app, shared_state, &events);
+    let events = core.request(CoreCommand::SetKeyRange {
+        first_key: options.first_key,
+        last_key: options.last_key,
+    })?;
+    apply_events_to_app(app, shared_state, &events);
+    let events = core.request(CoreCommand::SetViewport {
+        width: 1280,
+        height: 720,
     })?;
     apply_events_to_app(app, shared_state, &events);
     let events = core.request(CoreCommand::SetTime {

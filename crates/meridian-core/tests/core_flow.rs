@@ -7,6 +7,7 @@ use std::{
 use meridian_core::{
     PROTOCOL_VERSION,
     protocol::{CoreCommand, CoreEvent, JsonRequest, JsonResponse},
+    render::SceneLayout,
     spawn_core,
 };
 
@@ -39,6 +40,11 @@ fn stateful_core_projects_a_frame() {
         .expect("load midi");
     core.request(CoreCommand::SetTime { time: 0.25 })
         .expect("set time");
+    core.request(CoreCommand::SetViewport {
+        width: 320,
+        height: 180,
+    })
+    .expect("set viewport");
 
     let frame = core
         .render_frame(Some(320), Some(180))
@@ -63,6 +69,11 @@ fn save_frame_supports_png_and_rgba() {
         .expect("load midi");
     core.request(CoreCommand::SetTime { time: 0.25 })
         .expect("set time");
+    core.request(CoreCommand::SetViewport {
+        width: 320,
+        height: 180,
+    })
+    .expect("set viewport");
 
     let png_events = core
         .request(CoreCommand::SaveFrame {
@@ -102,6 +113,11 @@ fn json_protocol_defaults_version_and_render_response_is_lightweight() {
     let core = spawn_core();
     core.request(CoreCommand::LoadMidi { path: midi })
         .expect("load midi");
+    core.request(CoreCommand::SetViewport {
+        width: 320,
+        height: 180,
+    })
+    .expect("set viewport");
 
     let request: JsonRequest =
         serde_json::from_str(r#"{"id":7,"command":{"type":"get_state"}}"#).expect("json request");
@@ -121,5 +137,30 @@ fn json_protocol_defaults_version_and_render_response_is_lightweight() {
     let json = serde_json::to_string(&response).expect("serialize response");
 
     assert!(json.contains("\"frame_projected\""));
-    assert!(!json.contains("\"scene\""));
+    assert!(!json.contains("\"positions\""));
+    assert!(!json.contains("\"note_layers\""));
+}
+
+#[test]
+fn scene_and_view_commands_are_separate() {
+    let core = spawn_core();
+
+    let default_scene = SceneLayout::default().scene;
+    let events = core
+        .request(CoreCommand::SetSceneConfig {
+            scene: default_scene.clone(),
+        })
+        .expect("set scene config");
+    assert!(matches!(
+        events.as_slice(),
+        [CoreEvent::StateSnapshot { state }] if state.scene == default_scene
+    ));
+
+    let events = core
+        .request(CoreCommand::SetViewRange { seconds: 12.0 })
+        .expect("set view range");
+    assert!(matches!(
+        events.as_slice(),
+        [CoreEvent::StateSnapshot { state }] if (state.view_range - 12.0).abs() < f64::EPSILON
+    ));
 }

@@ -155,34 +155,41 @@ impl CoreState {
                     state: self.snapshot(),
                 }]
             }
-            CoreCommand::SetLayout {
-                renderer,
-                view_range,
+            CoreCommand::SetSceneConfig { scene } => {
+                self.layout.scene = scene;
+                match self.validate_layout() {
+                    Ok(()) => vec![CoreEvent::StateSnapshot {
+                        state: self.snapshot(),
+                    }],
+                    Err(event) => vec![event],
+                }
+            }
+            CoreCommand::SetViewRange { seconds } => {
+                self.layout.view_range = seconds.clamp(1.0, 30.0);
+                vec![CoreEvent::StateSnapshot {
+                    state: self.snapshot(),
+                }]
+            }
+            CoreCommand::SetKeyRange {
                 first_key,
                 last_key,
-                viewport_width,
-                viewport_height,
             } => {
-                if let Some(renderer) = renderer {
-                    self.layout.renderer = renderer;
+                self.layout.first_key = first_key;
+                self.layout.last_key = last_key;
+                match self.validate_layout() {
+                    Ok(()) => vec![CoreEvent::StateSnapshot {
+                        state: self.snapshot(),
+                    }],
+                    Err(event) => vec![event],
                 }
-                if let Some(view_range) = view_range {
-                    self.layout.view_range = view_range.clamp(1.0, 30.0);
-                }
-                if let Some(first_key) = first_key {
-                    self.layout.first_key = first_key;
-                }
-                if let Some(last_key) = last_key {
-                    self.layout.last_key = last_key;
-                }
-
-                if let Err(error) = self.apply_viewport_overrides(viewport_width, viewport_height) {
+            }
+            CoreCommand::SetViewport { width, height } => {
+                if let Err(error) = self.apply_viewport_overrides(Some(width), Some(height)) {
                     return vec![error_event(
                         CoreErrorCode::InvalidViewport,
                         error.to_string(),
                     )];
                 }
-
                 match self.validate_layout() {
                     Ok(()) => vec![CoreEvent::StateSnapshot {
                         state: self.snapshot(),
@@ -249,7 +256,7 @@ impl CoreState {
 
         Ok(RenderedFrame {
             state: self.snapshot(),
-            layout: self.layout,
+            layout: self.layout.clone(),
             stats,
             scene,
         })
@@ -305,7 +312,7 @@ impl CoreState {
         StateSnapshot {
             midi_path: self.midi_path.clone(),
             midi_loaded: self.midi.is_some(),
-            renderer: self.layout.renderer,
+            scene: self.layout.scene.clone(),
             current_time: self.current_time,
             playing: self.playing,
             midi_length: self.midi_length(),
@@ -343,6 +350,12 @@ impl CoreState {
             return Err(error_event(
                 CoreErrorCode::InvalidLayout,
                 "first_key must be <= last_key",
+            ));
+        }
+        if matches!(self.layout.scene, crate::render::SceneConfig::ThreeD(_)) {
+            return Err(error_event(
+                CoreErrorCode::InvalidLayout,
+                "3d scene config is reserved but not implemented yet",
             ));
         }
         Ok(())
