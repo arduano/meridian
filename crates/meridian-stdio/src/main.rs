@@ -1,4 +1,7 @@
-use std::io::{self, BufRead, Write};
+use std::{
+    io::{self, BufRead, Write},
+    time::Instant,
+};
 
 use clap::{Parser, Subcommand};
 use meridian_core::{
@@ -7,9 +10,16 @@ use meridian_core::{
         CoreCommand, CoreErrorCode, CoreEvent, ImageOutputFormat, JsonRequest, JsonResponse,
         PROTOCOL_VERSION,
     },
-    render::{RendererKind, wgpu::{encode_rgba_to_png, encode_rgba_to_ppm, render_scene_headless_to_rgba}},
+    render::{
+        RendererKind,
+        wgpu::{
+            HeadlessRenderSession, encode_rgba_to_png, encode_rgba_to_ppm,
+            render_scene_headless_to_rgba,
+        },
+    },
     spawn_core,
 };
+use serde::Serialize;
 
 #[derive(Debug, Parser)]
 #[command(name = "meridian-stdio")]
@@ -49,6 +59,29 @@ enum Command {
         #[arg(long, value_enum, default_value_t = RendererKind::Pfa)]
         renderer: RendererKind,
     },
+    /// Benchmark repeated projection and headless GPU rendering at a fixed MIDI timestamp
+    Benchmark {
+        #[arg(value_name = "MIDI")]
+        midi: std::path::PathBuf,
+        #[arg(long, default_value_t = 30.0)]
+        time: f64,
+        #[arg(long, default_value_t = 8.0)]
+        view_range: f64,
+        #[arg(long, default_value_t = 0)]
+        first_key: u8,
+        #[arg(long, default_value_t = 127)]
+        last_key: u8,
+        #[arg(long, default_value_t = 1280)]
+        width: u32,
+        #[arg(long, default_value_t = 720)]
+        height: u32,
+        #[arg(long, value_enum, default_value_t = RendererKind::Pfa)]
+        renderer: RendererKind,
+        #[arg(long, default_value_t = 120)]
+        iterations: u32,
+        #[arg(long, default_value_t = 10)]
+        warmup: u32,
+    },
 }
 
 fn main() -> Result<(), MeridianError> {
@@ -68,6 +101,21 @@ fn main() -> Result<(), MeridianError> {
             renderer,
         } => frame_stdout(
             &midi, format, time, view_range, first_key, last_key, width, height, renderer,
+        ),
+        Command::Benchmark {
+            midi,
+            time,
+            view_range,
+            first_key,
+            last_key,
+            width,
+            height,
+            renderer,
+            iterations,
+            warmup,
+        } => benchmark(
+            &midi, time, view_range, first_key, last_key, width, height, renderer, iterations,
+            warmup,
         ),
     }
 }
@@ -211,4 +259,134 @@ fn frame_stdout(
     stdout.flush()?;
     let _ = core.request(CoreCommand::Shutdown);
     Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct BenchmarkSummary {
+    midi: std::path::PathBuf,
+    renderer: RendererKind,
+    time: f64,
+    view_range: f64,
+    width: u32,
+    height: u32,
+    iterations: u32,
+    warmup: u32,
+    frame_stats: meridian_core::protocol::FrameStats,
+    projection_ms: TimingSummary,
+    gpu_render_ms: TimingSummary,
+    total_ms: TimingSummary,
+    projected_quads_per_second: f64,
+    rendered_quads_per_second: f64,
+}
+
+#[derive(Debug, Serialize)]
+struct TimingSummary {
+    avg: f64,
+    min: f64,
+    max: f64,
+}
+
+fn benchmark(
+    midi: &std::path::Path,
+    time: f64,
+    view_range: f64,
+    first_key: u8,
+    last_key: u8,
+    width: u32,
+    height: u32,
+    renderer: RendererKind,
+    iterations: u32,
+    warmup: u32,
+) -> Result<(), MeridianError> {
+    if iterations == 0 {
+        return Err(MeridianError::InvalidMidi(
+            "iterations must be greater than zero".into(),
+        ));
+    }
+
+    let core = spawn_core();
+    core.request(CoreCommand::SetLayout {
+        renderer: Some(renderer),
+        view_range: Some(view_range),
+        first_key: Some(first_key),
+        last_key: Some(last_key),
+        viewport_width: Some(width),
+        viewport_height: Some(height),
+    })?;
+    core.request(CoreCommand::LoadMidi {
+        path: midi.to_path_buf(),
+    })?;
+    core.request(CoreCommand::SetTime { time })?;
+
+    let mut session = HeadlessRenderSession::new(width, height)?;
+    for _ in 0..warmup {
+        let frame = core.render_frame(Some(width), Some(height))?;
+        session.render_blocking(&frame.scene)?;
+    }
+
+    let mut projection_ms = Vec::with_capacity(iterations as usize);
+    let mut gpu_render_ms = Vec::with_capacity(iterations as usize);
+    let mut total_ms = Vec::with_capacity(iterations as usize);
+    let mut frame_stats = None;
+
+    for _ in 0..iterations {
+        let total_start = Instant::now();
+
+        let projection_start = Instant::now();
+        let frame = core.render_frame(Some(width), Some(height))?;
+        let projection_elapsed = projection_start.elapsed().as_secs_f64() * 1_000.0;
+
+        let gpu_start = Instant::now();
+        session.render_blocking(&frame.scene)?;
+        let gpu_elapsed = gpu_start.elapsed().as_secs_f64() * 1_000.0;
+
+        projection_ms.push(projection_elapsed);
+        gpu_render_ms.push(gpu_elapsed);
+        total_ms.push(total_start.elapsed().as_secs_f64() * 1_000.0);
+        frame_stats = Some(frame.stats);
+    }
+
+    let frame_stats = frame_stats.expect("benchmark iterations > 0");
+    let summary = BenchmarkSummary {
+        midi: midi.to_path_buf(),
+        renderer,
+        time,
+        view_range,
+        width,
+        height,
+        iterations,
+        warmup,
+        projected_quads_per_second: frame_stats.total_quads as f64
+            / (timing_summary(&projection_ms).avg / 1_000.0).max(f64::EPSILON),
+        rendered_quads_per_second: frame_stats.total_quads as f64
+            / (timing_summary(&gpu_render_ms).avg / 1_000.0).max(f64::EPSILON),
+        frame_stats,
+        projection_ms: timing_summary(&projection_ms),
+        gpu_render_ms: timing_summary(&gpu_render_ms),
+        total_ms: timing_summary(&total_ms),
+    };
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&summary)
+            .map_err(|error| MeridianError::InvalidMidi(error.to_string()))?
+    );
+    let _ = core.request(CoreCommand::Shutdown);
+    Ok(())
+}
+
+fn timing_summary(samples: &[f64]) -> TimingSummary {
+    let mut min = f64::INFINITY;
+    let mut max = 0.0_f64;
+    let mut sum = 0.0_f64;
+    for &sample in samples {
+        min = min.min(sample);
+        max = max.max(sample);
+        sum += sample;
+    }
+    TimingSummary {
+        avg: sum / samples.len() as f64,
+        min,
+        max,
+    }
 }

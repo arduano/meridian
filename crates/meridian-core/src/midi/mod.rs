@@ -120,6 +120,13 @@ impl MIDIColor {
         ]
     }
 
+    pub fn to_rgba_packed(self, alpha: u8) -> u32 {
+        (self.red() as u32)
+            | ((self.green() as u32) << 8)
+            | ((self.blue() as u32) << 16)
+            | ((alpha as u32) << 24)
+    }
+
     pub fn red(&self) -> u8 {
         (self.0 >> 16) as u8
     }
@@ -244,7 +251,7 @@ pub enum MIDINoteColumnViewUnion<'a> {
 impl MIDINoteColumnViewUnion<'_> {
     pub fn iterate_displaced_notes(
         &self,
-    ) -> Box<dyn ExactSizeIterator<Item = DisplacedMIDINote> + '_> {
+    ) -> Box<dyn ExactSizeIterator<Item = DisplacedMIDINote> + Send + '_> {
         match self {
             Self::InRam(view) => Box::new(view.iterate_displaced_notes()),
         }
