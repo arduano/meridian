@@ -1,13 +1,18 @@
 mod core_state;
+mod render_job;
+mod state_ops;
 mod support;
 
-use std::thread;
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+};
 
-use flume::Sender;
+use flume::{Receiver, Sender};
 
 use crate::{
     error::MeridianError,
-    protocol::{CoreCommand, CoreEvent, RenderedFrame},
+    protocol::{CoreCommand, CoreEvent, RenderedFrame, VideoRenderEvent},
 };
 
 pub use support::{error_code, event_to_error};
@@ -23,6 +28,9 @@ enum RequestMessage {
         viewport_height: Option<u32>,
         reply: Sender<Result<RenderedFrame, MeridianError>>,
     },
+    VideoRenderUpdate {
+        event: VideoRenderEvent,
+    },
 }
 
 pub type CoreResponse = Vec<CoreEvent>;
@@ -30,15 +38,21 @@ pub type CoreResponse = Vec<CoreEvent>;
 #[derive(Clone)]
 pub struct CoreHandle {
     sender: Sender<RequestMessage>,
+    subscribers: Arc<Mutex<Vec<Sender<CoreEvent>>>>,
 }
 
 pub fn spawn_core() -> CoreHandle {
     let (sender, receiver) = flume::unbounded();
+    let subscribers = Arc::new(Mutex::new(Vec::new()));
+    let core_handle = CoreHandle {
+        sender: sender.clone(),
+        subscribers: Arc::clone(&subscribers),
+    };
     thread::spawn(move || {
-        let mut core = core_state::CoreState::default();
+        let mut core = core_state::CoreState::new(sender, subscribers);
         core.run(receiver);
     });
-    CoreHandle { sender }
+    core_handle
 }
 
 impl CoreHandle {
@@ -71,5 +85,19 @@ impl CoreHandle {
         reply_rx
             .recv()
             .map_err(|_| MeridianError::Wgpu("core reply channel closed".into()))?
+    }
+
+    pub fn subscribe_events(&self) -> Receiver<CoreEvent> {
+        let (sender, receiver) = flume::unbounded();
+        if let Ok(mut subscribers) = self.subscribers.lock() {
+            subscribers.push(sender);
+        }
+        receiver
+    }
+
+    pub(crate) fn publish_video_event(&self, event: VideoRenderEvent) -> Result<(), MeridianError> {
+        self.sender
+            .send(RequestMessage::VideoRenderUpdate { event })
+            .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))
     }
 }

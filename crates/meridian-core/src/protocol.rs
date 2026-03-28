@@ -52,6 +52,11 @@ pub enum CoreCommand {
         viewport_width: Option<u32>,
         viewport_height: Option<u32>,
     },
+    StartRenderVideo {
+        config: VideoRenderConfig,
+    },
+    CancelRenderVideo,
+    GetRenderVideoStatus,
     Shutdown,
 }
 
@@ -110,6 +115,83 @@ pub struct RenderedFrame {
     pub scene: ProjectedScene,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoRenderConfig {
+    pub midi_path: Option<PathBuf>,
+    pub output: PathBuf,
+    pub fps: f64,
+    pub width: u32,
+    pub height: u32,
+    pub scene: Option<SceneConfig>,
+    pub view_range: Option<f64>,
+    pub first_key: Option<u8>,
+    pub last_key: Option<u8>,
+    #[serde(default)]
+    pub ffmpeg_args: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum VideoRenderEvent {
+    RenderStarted {
+        midi: Option<PathBuf>,
+        output: PathBuf,
+        fps: f64,
+        width: u32,
+        height: u32,
+        total_frames: u64,
+        duration_seconds: f64,
+        ffmpeg_command: Vec<String>,
+    },
+    RenderProgress {
+        frame_index: u64,
+        total_frames: u64,
+        current_time: f64,
+        elapsed_seconds: f64,
+        average_fps: f64,
+    },
+    RenderCancelled {
+        frame_index: u64,
+        total_frames: u64,
+        elapsed_seconds: f64,
+    },
+    RenderFinished {
+        total_frames: u64,
+        elapsed_seconds: f64,
+        average_fps: f64,
+        output: PathBuf,
+    },
+    RenderFailed {
+        message: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum VideoRenderStatus {
+    Idle,
+    Running {
+        output: PathBuf,
+        fps: f64,
+        width: u32,
+        height: u32,
+        total_frames: u64,
+        frame_index: u64,
+        current_time: f64,
+        elapsed_seconds: f64,
+    },
+    Cancelling {
+        output: PathBuf,
+        fps: f64,
+        width: u32,
+        height: u32,
+        total_frames: u64,
+        frame_index: u64,
+        current_time: f64,
+        elapsed_seconds: f64,
+    },
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CoreErrorCode {
@@ -144,6 +226,12 @@ pub enum CoreEvent {
         state: StateSnapshot,
         stats: FrameStats,
         bytes_written: u64,
+    },
+    VideoRender {
+        event: VideoRenderEvent,
+    },
+    VideoRenderStatus {
+        status: VideoRenderStatus,
     },
     Error {
         code: CoreErrorCode,

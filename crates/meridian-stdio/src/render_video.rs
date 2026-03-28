@@ -9,9 +9,9 @@ use std::{
 
 use meridian_core::{
     MeridianError,
+    protocol::{CoreCommand, CoreEvent, VideoRenderConfig, VideoRenderEvent, VideoRenderStatus},
     render::{RendererKind, SceneLayout},
     spawn_core,
-    video::{VideoRenderConfig, VideoRenderEvent, render_video},
 };
 
 pub fn run(
@@ -44,18 +44,52 @@ pub fn run(
         width,
         height,
         scene: Some(layout.scene),
-        view_range,
-        first_key,
-        last_key,
+        view_range: Some(view_range),
+        first_key: Some(first_key),
+        last_key: Some(last_key),
         ffmpeg_args: parse_ffmpeg_args(ffmpeg_flags)?,
     };
 
     let core = spawn_core();
+    let event_rx = core.subscribe_events();
     let mut stdout = BufWriter::new(io::stdout().lock());
-    let result = render_video(&core, &config, &cancel, |event| {
-        let _ = write_event(&mut stdout, &event);
-    });
-    let _ = core.request(meridian_core::protocol::CoreCommand::Shutdown);
+    write_core_events(
+        &mut stdout,
+        &core.request(CoreCommand::StartRenderVideo { config })?,
+    )?;
+    let mut terminal_result: Option<Result<(), MeridianError>> = None;
+    let result = loop {
+        if cancel.load(Ordering::SeqCst) {
+            let _ = core.request(CoreCommand::CancelRenderVideo);
+        }
+
+        let event = event_rx
+            .recv()
+            .map_err(|_| MeridianError::Wgpu("core event channel closed".into()))?;
+        match &event {
+            CoreEvent::VideoRender { event } => {
+                write_event(&mut stdout, event)?;
+                match event {
+                    VideoRenderEvent::RenderFinished { .. }
+                    | VideoRenderEvent::RenderCancelled { .. } => terminal_result = Some(Ok(())),
+                    VideoRenderEvent::RenderFailed { message } => {
+                        terminal_result = Some(Err(MeridianError::Platform(message.clone())));
+                    }
+                    VideoRenderEvent::RenderStarted { .. }
+                    | VideoRenderEvent::RenderProgress { .. } => {}
+                }
+            }
+            CoreEvent::VideoRenderStatus { status } => {
+                if matches!(status, VideoRenderStatus::Idle) {
+                    if let Some(result) = terminal_result.take() {
+                        break result;
+                    }
+                }
+            }
+            _ => {}
+        }
+    };
+    let _ = core.request(CoreCommand::Shutdown);
     result
 }
 
@@ -74,6 +108,19 @@ fn write_event(
     serde_json::to_writer(&mut *stdout, event)
         .map_err(|e| MeridianError::Platform(format!("failed to serialize progress event: {e}")))?;
     stdout.write_all(b"\n")?;
+    stdout.flush()?;
+    Ok(())
+}
+
+fn write_core_events(
+    stdout: &mut BufWriter<impl Write>,
+    events: &[CoreEvent],
+) -> Result<(), MeridianError> {
+    for event in events {
+        serde_json::to_writer(&mut *stdout, event)
+            .map_err(|e| MeridianError::Platform(format!("failed to serialize core event: {e}")))?;
+        stdout.write_all(b"\n")?;
+    }
     stdout.flush()?;
     Ok(())
 }
