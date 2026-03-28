@@ -88,9 +88,10 @@ var<uniform> key_positions: KeyPositions;
 
 struct VsOut {
     @builtin(position) position: vec4<f32>,
-    @location(0) quad_kind: f32,
-    @location(1) local_v: f32,
-    @location(2) color: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+    @location(1) color: vec4<f32>,
+    @location(2) size: vec2<f32>,
+    @location(3) pad: vec2<f32>,
 };
 
 fn mod_add(color: vec4<f32>, add: f32, mul: f32) -> vec4<f32> {
@@ -105,45 +106,49 @@ fn mod_add(color: vec4<f32>, add: f32, mul: f32) -> vec4<f32> {
 @vertex
 fn vs_main(
     @location(0) unit_position: vec2<f32>,
-    @location(1) quad_kind: f32,
-    @location(2) key: u32,
-    @location(3) start: f32,
-    @location(4) end: f32,
-    @location(5) color: vec4<f32>,
-    @location(6) depth: f32,
+    @location(1) key: u32,
+    @location(2) start: f32,
+    @location(3) end: f32,
+    @location(4) color: vec4<f32>,
 ) -> VsOut {
     let key_pos = key_positions.values[key];
-    let outer_x1 = key_pos.x;
-    let outer_x2 = key_pos.y;
-    let outer_y1 = note_params.piano_height + start * note_params.note_pos_factor;
-    let outer_y2 = note_params.piano_height + end * note_params.note_pos_factor;
-
-    let has_inner = (outer_x2 - outer_x1) > note_params.pad_x * 2.0 &&
-                    (outer_y2 - outer_y1) > note_params.pad_y * 2.0;
-    let use_inner = quad_kind > 0.5 && has_inner;
-    let x1 = select(outer_x1, outer_x1 + note_params.pad_x, use_inner);
-    let x2 = select(outer_x2, outer_x2 - note_params.pad_x, use_inner);
-    let y1 = select(outer_y1, outer_y1 + note_params.pad_y, use_inner);
-    let y2 = select(outer_y2, outer_y2 - note_params.pad_y, use_inner);
+    let x1 = key_pos.x;
+    let x2 = key_pos.y;
+    let y1 = note_params.piano_height + start * note_params.note_pos_factor;
+    let y2 = note_params.piano_height + end * note_params.note_pos_factor;
 
     var out: VsOut;
     let pos = vec2<f32>(mix(x1, x2, unit_position.x), mix(y1, y2, unit_position.y));
-    out.position = vec4<f32>(pos.x * 2.0 - 1.0, pos.y * 2.0 - 1.0, depth, 1.0);
-    out.quad_kind = quad_kind;
-    out.local_v = unit_position.y;
+    out.position = vec4<f32>(pos.x * 2.0 - 1.0, pos.y * 2.0 - 1.0, 0.5, 1.0);
+    out.uv = unit_position;
     out.color = color;
+    out.size = vec2<f32>(max(x2 - x1, 1e-6), max(y2 - y1, 1e-6));
+    out.pad = vec2<f32>(note_params.pad_x, note_params.pad_y);
     return out;
 }
 
 @fragment
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
-    if in.quad_kind > 0.5 {
-        let bottom = mod_add(in.color, 0.0, 0.5);
-        let top = mod_add(in.color, 0.0, 1.0);
-        return mix(bottom, top, in.local_v);
+    let border_u = clamp(in.pad.x / in.size.x, 0.0, 0.49);
+    let border_v = clamp(in.pad.y / in.size.y, 0.0, 0.49);
+    let has_inner = in.size.x > in.pad.x * 2.0 && in.size.y > in.pad.y * 2.0;
+    let inside_inner =
+        has_inner &&
+        in.uv.x >= border_u &&
+        in.uv.x <= (1.0 - border_u) &&
+        in.uv.y >= border_v &&
+        in.uv.y <= (1.0 - border_v);
+
+    if inside_inner {
+        let inner_u = clamp((in.uv.x - border_u) / max(1.0 - border_u * 2.0, 1e-6), 0.0, 1.0);
+        let left = mod_add(in.color, 0.18, 1.0);
+        let right = mod_add(in.color, 0.0, 0.55);
+        return mix(left, right, inner_u);
     }
 
-    return mod_add(in.color, 0.0, 0.2);
+    let border_left = mod_add(in.color, 0.0, 0.3);
+    let border_right = mod_add(in.color, 0.0, 0.12);
+    return mix(border_left, border_right, in.uv.x);
 }
 "#;
 
@@ -291,19 +296,18 @@ impl PrimitiveSceneRenderer {
                 compilation_options: Default::default(),
                 buffers: &[
                     wgpu::VertexBufferLayout {
-                        array_stride: std::mem::size_of::<[f32; 3]>() as u64,
+                        array_stride: std::mem::size_of::<[f32; 2]>() as u64,
                         step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32],
+                        attributes: &wgpu::vertex_attr_array![0 => Float32x2],
                     },
                     wgpu::VertexBufferLayout {
                         array_stride: std::mem::size_of::<NoteInstance>() as u64,
                         step_mode: wgpu::VertexStepMode::Instance,
                         attributes: &wgpu::vertex_attr_array![
-                            2 => Uint32,
+                            1 => Uint32,
+                            2 => Float32,
                             3 => Float32,
-                            4 => Float32,
-                            5 => Unorm8x4,
-                            6 => Float32
+                            4 => Unorm8x4
                         ],
                     },
                 ],
@@ -347,19 +351,13 @@ impl PrimitiveSceneRenderer {
             contents: cast_slice(&quad_vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
-        let note_vertices: [[f32; 3]; 12] = [
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [1.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0],
-            [1.0, 1.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 0.0, 1.0],
-            [1.0, 0.0, 1.0],
-            [1.0, 1.0, 1.0],
-            [0.0, 0.0, 1.0],
-            [1.0, 1.0, 1.0],
-            [0.0, 1.0, 1.0],
+        let note_vertices: [[f32; 2]; 6] = [
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+            [0.0, 0.0],
+            [1.0, 1.0],
+            [0.0, 1.0],
         ];
         let note_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("MeridianNoteVertices"),
@@ -626,7 +624,7 @@ impl PrimitiveSceneRenderer {
                 self.note_instance_buffer
                     .slice(..(chunk.len() * std::mem::size_of::<NoteInstance>()) as u64),
             );
-            pass.draw(0..12, 0..chunk.len() as u32);
+            pass.draw(0..6, 0..chunk.len() as u32);
             drop(pass);
             queue.submit(Some(encoder.finish()));
             rendered_any = true;

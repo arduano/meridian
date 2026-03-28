@@ -6,10 +6,7 @@ use crate::midi::{MIDI_KEY_COUNT, views::MIDIFileViewsUnion};
 
 use super::{
     SceneLayout, SceneProjector,
-    shared::{
-        NOTE_DEPTH_STEP, ProjectedScene, SceneLayer, is_black_key, mod_add, quad,
-        vertical_gradient_quad,
-    },
+    shared::{ProjectedScene, SceneLayer, is_black_key, mod_add, quad, vertical_gradient_quad},
 };
 
 #[repr(C)]
@@ -21,7 +18,6 @@ pub struct NoteInstance {
     pub start: f32,
     pub end: f32,
     pub color: u32,
-    pub depth: f32,
     pub _padding: [u32; 3],
 }
 
@@ -80,7 +76,6 @@ impl SceneProjector for PfaProjector {
     ) {
         scene.notes_black_first = self.black_notes_above;
         let params = PfaLayoutParams::new(layout, views.range().length() as f32, self.border_width);
-        let mut note_depth_index = 0_u32;
         let first_note = layout.first_key.min(layout.last_key) as usize;
         let last_note = layout.last_key.max(layout.first_key) as usize + 1;
         let arrays = KeyPositionArrays::new(first_note, last_note, self.same_width_notes);
@@ -114,7 +109,6 @@ impl SceneProjector for PfaProjector {
                 false,
                 &mut key_colors,
                 &mut key_pressed,
-                &mut note_depth_index,
             );
             self.project_note_pass(
                 scene,
@@ -126,7 +120,6 @@ impl SceneProjector for PfaProjector {
                 true,
                 &mut key_colors,
                 &mut key_pressed,
-                &mut note_depth_index,
             );
         } else {
             self.project_note_pass(
@@ -139,7 +132,6 @@ impl SceneProjector for PfaProjector {
                 false,
                 &mut key_colors,
                 &mut key_pressed,
-                &mut note_depth_index,
             );
         }
 
@@ -295,7 +287,6 @@ impl PfaProjector {
         only_black: bool,
         key_colors: &mut [KeyColorPair; MIDI_KEY_COUNT],
         key_pressed: &mut [bool; MIDI_KEY_COUNT],
-        note_depth_index: &mut u32,
     ) {
         let layer = if only_black {
             SceneLayer::BlackNotes
@@ -311,71 +302,78 @@ impl PfaProjector {
         let results: Vec<KeyNoteProjection> = (first_note..last_note.min(MIDI_KEY_COUNT))
             .into_par_iter()
             .filter(|&k| only_black == is_black_key(k as u8))
-            .map(|k| {
-                let is_black = is_black_key(k as u8);
-                let column = views.get_column(k);
-                let iter = column.iterate_displaced_notes();
-                let mut projected_notes = Vec::with_capacity(iter.len());
-                let mut projected_key_color = KeyColorPair::default();
-                let mut projected_key_pressed = false;
-
-                for note in iter {
-                    let end = note.start + note.len;
-                    if end <= 0.0 || note.start >= params.view_range {
-                        continue;
-                    }
-
-                    let packed_color = note.color.to_rgba_packed(255);
-                    if note.start <= 0.0 && end > 0.0 {
-                        let rgba = note.color.to_rgba(1.0);
-                        if is_black && self.black_notes_above {
-                            projected_key_color = KeyColorPair {
-                                left: rgba,
-                                right: rgba,
-                            };
-                        } else {
-                            projected_key_color.left = alpha_blend(rgba, projected_key_color.left);
-                            projected_key_color.right =
-                                alpha_blend(rgba, projected_key_color.right);
-                        }
-                        projected_key_pressed = true;
-                    }
-
-                    projected_notes.push(NoteInstance {
-                        key: k as u32,
-                        start: note.start.max(0.0),
-                        end: end.min(params.view_range),
-                        color: packed_color,
-                        depth: 0.0,
-                        _padding: [0; 3],
-                    });
-                }
-
-                KeyNoteProjection {
-                    key: k,
-                    notes: projected_notes,
-                    key_color: projected_key_color,
-                    key_pressed: projected_key_pressed,
-                }
-            })
+            .map(|k| self.project_key_notes(views, params, k))
             .collect();
 
-        for mut result in results {
+        for result in results {
             scene.set_note_key_x(
                 result.key as u8,
                 arrays.x1[result.key],
                 arrays.x1[result.key] + arrays.width[result.key],
             );
-            let base_depth = (*note_depth_index as f32) * NOTE_DEPTH_STEP * 2.0;
-            for (index, note) in result.notes.iter_mut().enumerate() {
-                note.depth = base_depth + (index as f32) * NOTE_DEPTH_STEP * 2.0;
-            }
-            *note_depth_index += result.notes.len() as u32;
             scene.visible_notes += result.notes.len();
             scene.note_quads += result.notes.len() * 2;
             key_colors[result.key] = result.key_color;
             key_pressed[result.key] = result.key_pressed;
             scene.extend_note_layer(layer, result.notes);
+        }
+    }
+
+    fn project_key_notes(
+        &self,
+        views: &MIDIFileViewsUnion<'_>,
+        params: &PfaLayoutParams,
+        key: usize,
+    ) -> KeyNoteProjection {
+        let is_black = is_black_key(key as u8);
+        let column = views.get_column(key);
+        let iter = column.iterate_displaced_notes();
+        let mut projected_notes = Vec::with_capacity(iter.len());
+        let mut projected_key_color = KeyColorPair::default();
+        let mut projected_key_pressed = false;
+
+        for note in iter {
+            let end = note.start + note.len;
+            if end <= 0.0 || note.start >= params.view_range {
+                continue;
+            }
+
+            let packed_color = note.color.to_rgba_packed(255);
+            if note.start <= 0.0 && end > 0.0 {
+                let rgba = note.color.to_rgba(1.0);
+                if is_black && self.black_notes_above {
+                    projected_key_color = KeyColorPair {
+                        left: rgba,
+                        right: rgba,
+                    };
+                } else {
+                    projected_key_color.left = alpha_blend(rgba, projected_key_color.left);
+                    projected_key_color.right = alpha_blend(rgba, projected_key_color.right);
+                }
+                projected_key_pressed = true;
+            }
+
+            projected_notes.push(NoteInstance {
+                key: key as u32,
+                start: note.start.max(0.0),
+                end: end.min(params.view_range),
+                color: packed_color,
+                _padding: [0; 3],
+            });
+        }
+
+        // Wasabi-style depth masking depends on drawing topmost notes first.
+        projected_notes.sort_unstable_by(|a, b| {
+            b.start
+                .total_cmp(&a.start)
+                .then_with(|| b.end.total_cmp(&a.end))
+        });
+
+        KeyNoteProjection {
+            key,
+            notes: projected_notes,
+            key_color: projected_key_color,
+            key_pressed: projected_key_pressed,
         }
     }
 

@@ -6,16 +6,18 @@ use std::{
 use clap::{Parser, Subcommand};
 use meridian_core::{
     MeridianError,
+    midi::backend::MIDIFileUnion,
     protocol::{
         CoreCommand, CoreErrorCode, CoreEvent, ImageOutputFormat, JsonRequest, JsonResponse,
         PROTOCOL_VERSION,
     },
     render::{
-        RendererKind,
+        RendererKind, SceneLayout,
         pfa::wgpu::{
             HeadlessRenderSession, encode_rgba_to_png, encode_rgba_to_ppm,
             render_scene_headless_to_rgba,
         },
+        project_scene,
     },
     spawn_core,
 };
@@ -304,24 +306,21 @@ fn benchmark(
         ));
     }
 
-    let core = spawn_core();
-    core.request(CoreCommand::SetLayout {
-        renderer: Some(renderer),
-        view_range: Some(view_range),
-        first_key: Some(first_key),
-        last_key: Some(last_key),
-        viewport_width: Some(width),
-        viewport_height: Some(height),
-    })?;
-    core.request(CoreCommand::LoadMidi {
-        path: midi.to_path_buf(),
-    })?;
-    core.request(CoreCommand::SetTime { time })?;
-
+    let layout = SceneLayout {
+        renderer,
+        view_range,
+        piano_height: SceneLayout::default().piano_height,
+        first_key,
+        last_key,
+        viewport_width: width,
+        viewport_height: height,
+    };
+    let midi_path = midi.to_path_buf();
+    let mut midi = MIDIFileUnion::load_ram(midi)?;
     let mut session = HeadlessRenderSession::new(width, height)?;
     for _ in 0..warmup {
-        let frame = core.render_frame(Some(width), Some(height))?;
-        session.render_blocking(&frame.scene)?;
+        let scene = project_scene(&mut midi, time, &layout);
+        session.render_blocking(&scene)?;
     }
 
     let mut projection_ms = Vec::with_capacity(iterations as usize);
@@ -333,22 +332,29 @@ fn benchmark(
         let total_start = Instant::now();
 
         let projection_start = Instant::now();
-        let frame = core.render_frame(Some(width), Some(height))?;
+        let scene = project_scene(&mut midi, time, &layout);
         let projection_elapsed = projection_start.elapsed().as_secs_f64() * 1_000.0;
 
         let gpu_start = Instant::now();
-        session.render_blocking(&frame.scene)?;
+        session.render_blocking(&scene)?;
         let gpu_elapsed = gpu_start.elapsed().as_secs_f64() * 1_000.0;
 
         projection_ms.push(projection_elapsed);
         gpu_render_ms.push(gpu_elapsed);
         total_ms.push(total_start.elapsed().as_secs_f64() * 1_000.0);
-        frame_stats = Some(frame.stats);
+        frame_stats = Some(meridian_core::protocol::FrameStats {
+            visible_notes: scene.visible_notes,
+            active_keys: scene.active_keys,
+            note_quads: scene.note_quads,
+            keyboard_quads: scene.keyboard_quads,
+            total_quads: scene.total_quads(),
+            total_vertices: scene.total_vertices(),
+        });
     }
 
     let frame_stats = frame_stats.expect("benchmark iterations > 0");
     let summary = BenchmarkSummary {
-        midi: midi.to_path_buf(),
+        midi: midi_path,
         renderer,
         time,
         view_range,
@@ -371,7 +377,6 @@ fn benchmark(
         serde_json::to_string_pretty(&summary)
             .map_err(|error| MeridianError::InvalidMidi(error.to_string()))?
     );
-    let _ = core.request(CoreCommand::Shutdown);
     Ok(())
 }
 
