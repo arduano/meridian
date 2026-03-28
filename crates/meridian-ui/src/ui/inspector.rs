@@ -42,11 +42,6 @@ fn note_rows(config: &NoteProjectorConfig) -> Vec<InspectorRow> {
             row("Notes", "Same Width Notes", yes_no(config.same_width_notes)),
             row(
                 "Notes",
-                "Black Notes Above",
-                yes_no(config.black_notes_above),
-            ),
-            row(
-                "Notes",
                 "Border Width",
                 format!("{:.2}", config.border_width),
             ),

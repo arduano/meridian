@@ -22,7 +22,7 @@ impl NoteProjector for PfaNoteProjector {
         piano_height: f32,
         scene: &mut ProjectedScene,
     ) {
-        scene.notes_black_first = self.0.black_notes_above;
+        scene.notes_black_first = true;
         let params = PfaLayoutParams::new(
             layout,
             piano_height,
@@ -33,12 +33,8 @@ impl NoteProjector for PfaNoteProjector {
         let last_note = layout.last_key.max(layout.first_key) as usize + 1;
         let arrays = KeyPositionArrays::new(first_note, last_note, self.0.same_width_notes);
 
-        if self.0.black_notes_above {
-            self.project_note_pass(scene, views, &params, &arrays, first_note, last_note, false);
-            self.project_note_pass(scene, views, &params, &arrays, first_note, last_note, true);
-        } else {
-            self.project_note_pass(scene, views, &params, &arrays, first_note, last_note, false);
-        }
+        self.project_note_pass(scene, views, &params, &arrays, first_note, last_note, false);
+        self.project_note_pass(scene, views, &params, &arrays, first_note, last_note, true);
     }
 }
 
@@ -105,7 +101,7 @@ impl PfaNoteProjector {
                     let packed_color = note.color.to_rgba_packed(255);
                     if note.start <= 0.0 && end > 0.0 {
                         let rgba = note.color.to_rgba(1.0);
-                        if is_black && self.0.black_notes_above {
+                        if is_black {
                             projected_key_color = KeyColorPair {
                                 left: rgba,
                                 right: rgba,

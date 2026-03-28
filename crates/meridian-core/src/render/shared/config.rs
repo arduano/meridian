@@ -24,8 +24,6 @@ pub struct FlatNoteProjectorConfig;
 pub struct PfaNoteProjectorConfig {
     #[serde(default)]
     pub same_width_notes: bool,
-    #[serde(default = "default_true")]
-    pub black_notes_above: bool,
     #[serde(default = "default_border_width")]
     pub border_width: f32,
 }
@@ -121,7 +119,6 @@ impl Default for PfaNoteProjectorConfig {
     fn default() -> Self {
         Self {
             same_width_notes: false,
-            black_notes_above: true,
             border_width: 1.0,
         }
     }
@@ -205,6 +202,34 @@ impl Default for PfaTopColor {
     }
 }
 
+impl PfaTopColor {
+    pub fn preset_bar_rgb(self) -> Option<[f32; 3]> {
+        match self {
+            Self::Red => None,
+            Self::Blue => Some([0.0392, 0.0249, 0.585]),
+            Self::Green => Some([0.0249, 0.585, 0.0392]),
+        }
+    }
+}
+
+impl PfaKeyboardProjectorConfig {
+    pub fn resolved_top_bar_rgb(&self) -> [f32; 3] {
+        self.top_color.preset_bar_rgb().unwrap_or(self.top_bar_rgb)
+    }
+
+    pub fn resolved_top_bar_gradient(&self) -> ([f32; 4], [f32; 4]) {
+        let rgb = self.resolved_top_bar_rgb();
+        let bottom = [rgb[0], rgb[1], rgb[2], 1.0];
+        let top = [rgb[0] * 0.5, rgb[1] * 0.5, rgb[2] * 0.5, 1.0];
+        (top, bottom)
+    }
+
+    pub fn set_top_bar_rgb(&mut self, rgb: [f32; 3]) {
+        self.top_color = PfaTopColor::Red;
+        self.top_bar_rgb = rgb;
+    }
+}
+
 impl SceneLayout {
     pub fn piano_height(&self) -> f32 {
         match &self.scene {
@@ -225,10 +250,6 @@ impl SceneLayout {
             RendererKind::Pfa => TwoDSceneConfig::default(),
         });
     }
-}
-
-const fn default_true() -> bool {
-    true
 }
 
 const fn default_border_width() -> f32 {
