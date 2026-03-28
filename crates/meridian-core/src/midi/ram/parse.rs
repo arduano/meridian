@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     error::MeridianError,
     midi::{
-        MIDI_KEY_COUNT, MIDIColor, TrackAndChannel, open_file_and_signature,
+        MIDI_KEY_COUNT, MIDIColor, MIDIColorPair, TrackAndChannel, open_file_and_signature,
         ram::{block::InRamNoteBlock, column::InRamNoteColumn, view::InRamNoteViewData},
     },
 };
@@ -20,7 +20,7 @@ struct UnendedNote {
 
 struct KeyBuilder {
     column: Vec<InRamNoteBlock>,
-    block_builder: Vec<TrackAndChannel>,
+    block_builder: Vec<(TrackAndChannel, Option<MIDIColorPair>)>,
     unended_notes: FxHashMap<TrackAndChannel, VecDeque<UnendedNote>>,
 }
 
@@ -33,10 +33,10 @@ impl KeyBuilder {
         }
     }
 
-    fn add_note(&mut self, track_chan: TrackAndChannel) {
+    fn add_note(&mut self, track_chan: TrackAndChannel, explicit_colors: Option<MIDIColorPair>) {
         let block_index = self.block_builder.len();
         let column_index = self.column.len();
-        self.block_builder.push(track_chan);
+        self.block_builder.push((track_chan, explicit_colors));
         self.unended_notes
             .entry(track_chan)
             .or_default()
@@ -61,7 +61,7 @@ impl KeyBuilder {
 
     fn flush(&mut self, time: f64) {
         if !self.block_builder.is_empty() {
-            self.column.push(InRamNoteBlock::new_from_trackchans(
+            self.column.push(InRamNoteBlock::new_from_notes(
                 time,
                 self.block_builder.drain(..),
             ));
@@ -79,9 +79,22 @@ impl KeyBuilder {
 
 #[derive(Clone, Copy)]
 enum EventKind {
-    NoteOn { channel: u8, key: u8, velocity: u8 },
-    NoteOff { channel: u8, key: u8 },
-    Tempo { micros_per_quarter: u32 },
+    NoteOn {
+        channel: u8,
+        key: u8,
+        velocity: u8,
+    },
+    NoteOff {
+        channel: u8,
+        key: u8,
+    },
+    Tempo {
+        micros_per_quarter: u32,
+    },
+    Color {
+        channel: Option<u8>,
+        pair: MIDIColorPair,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -157,6 +170,17 @@ impl InRamMIDIFile {
                         });
                         order += 1;
                     }
+                    TrackEventKind::Meta(MetaMessage::Unknown(0x0A, data)) => {
+                        if let Some((channel, pair)) = parse_color_event(data) {
+                            events.push(EventRecord {
+                                tick: absolute_tick,
+                                track: track_index as u32,
+                                order,
+                                kind: EventKind::Color { channel, pair },
+                            });
+                            order += 1;
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -169,6 +193,7 @@ impl InRamMIDIFile {
         let mut last_tick = 0_u64;
         let mut current_tempo = 500_000_u32;
         let mut notes = 0_u64;
+        let mut current_colors = vec![None; midi.tracks.len().max(1) * 16];
 
         for event in events {
             if event.tick > last_tick {
@@ -189,7 +214,8 @@ impl InRamMIDIFile {
                 } if velocity > 0 => {
                     let key_index = key as usize;
                     if key_index < MIDI_KEY_COUNT {
-                        keys[key_index].add_note(TrackAndChannel::new(event.track, channel));
+                        let track_chan = TrackAndChannel::new(event.track, channel);
+                        keys[key_index].add_note(track_chan, current_colors[track_chan.as_usize()]);
                         notes += 1;
                     }
                 }
@@ -200,6 +226,22 @@ impl InRamMIDIFile {
                     }
                 }
                 EventKind::Tempo { micros_per_quarter } => current_tempo = micros_per_quarter,
+                EventKind::Color { channel, pair } => {
+                    let track = event.track as usize;
+                    match channel {
+                        Some(channel) => {
+                            let index = track * 16 + channel as usize;
+                            if index < current_colors.len() {
+                                current_colors[index] = Some(pair);
+                            }
+                        }
+                        None => {
+                            let start = track * 16;
+                            let end = (start + 16).min(current_colors.len());
+                            current_colors[start..end].fill(Some(pair));
+                        }
+                    }
+                }
             }
         }
 
@@ -212,7 +254,7 @@ impl InRamMIDIFile {
             .into_iter()
             .map(|key| InRamNoteColumn::new(key.column))
             .collect();
-        let colors = MIDIColor::new_vec(midi.tracks.len().max(1));
+        let colors = MIDIColorPair::new_vec(midi.tracks.len().max(1));
 
         Ok(Self {
             view_data: InRamNoteViewData::new(columns, colors),
@@ -221,4 +263,22 @@ impl InRamMIDIFile {
             signature,
         })
     }
+}
+
+fn parse_color_event(data: &[u8]) -> Option<(Option<u8>, MIDIColorPair)> {
+    if !(data.len() == 8 || data.len() == 12) || data[0] != 0x00 || data[1] != 0x0F {
+        return None;
+    }
+    let channel = match data[2] {
+        0x00..=0x0F => Some(data[2]),
+        0x7F => None,
+        _ => return None,
+    };
+    let left = MIDIColor::new(data[4], data[5], data[6]);
+    let right = if data.len() == 12 {
+        MIDIColor::new(data[8], data[9], data[10])
+    } else {
+        left
+    };
+    Some((channel, MIDIColorPair::new(left, right)))
 }

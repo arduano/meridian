@@ -90,6 +90,9 @@ impl CoreState {
                 Ok(midi) => {
                     self.midi_path = Some(path.clone());
                     self.midi = Some(midi);
+                    if let Err(error) = self.refresh_note_colors() {
+                        return vec![error_event(CoreErrorCode::Internal, error.to_string())];
+                    }
                     self.current_time = 0.0;
                     vec![CoreEvent::MidiLoaded {
                         path,
@@ -127,6 +130,9 @@ impl CoreState {
             }
             CoreCommand::SetSceneConfig { scene } => {
                 self.layout.scene = scene;
+                if let Err(error) = self.refresh_note_colors() {
+                    return vec![error_event(CoreErrorCode::Internal, error.to_string())];
+                }
                 self.snapshot_after_layout_validation()
             }
             CoreCommand::SetViewRange { seconds } => {

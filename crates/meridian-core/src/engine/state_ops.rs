@@ -13,6 +13,21 @@ use super::{
 };
 
 impl CoreState {
+    pub(super) fn refresh_note_colors(&mut self) -> Result<(), MeridianError> {
+        let Some(midi) = self.midi.as_mut() else {
+            return Ok(());
+        };
+        let SceneConfig::TwoD(scene) = &self.layout.scene else {
+            return Ok(());
+        };
+        let colors = scene
+            .notes
+            .palette()
+            .build_color_table(midi.track_count())?;
+        midi.apply_default_track_colors(colors);
+        Ok(())
+    }
+
     pub(super) fn render_frame(
         &mut self,
         viewport_width: Option<u32>,

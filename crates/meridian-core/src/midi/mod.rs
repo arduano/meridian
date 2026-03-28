@@ -1,4 +1,5 @@
 pub mod backend;
+pub mod colors;
 pub mod ram;
 pub mod views;
 
@@ -7,6 +8,7 @@ use std::{fs::File, path::PathBuf, time::UNIX_EPOCH};
 use enum_dispatch::enum_dispatch;
 
 use crate::error::MeridianError;
+pub use colors::{MIDIColor, MIDIColorPair};
 
 pub const MIDI_KEY_COUNT: usize = 256;
 
@@ -72,76 +74,6 @@ pub(crate) fn open_file_and_signature(
     ))
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct MIDIColor(u32);
-
-impl MIDIColor {
-    pub fn new(r: u8, g: u8, b: u8) -> Self {
-        Self((r as u32) << 16 | (g as u32) << 8 | b as u32)
-    }
-
-    pub fn new_from_hue(hue: f64) -> Self {
-        let hue = hue.rem_euclid(360.0) / 60.0;
-        let c = 0.78;
-        let x = c * (1.0 - ((hue % 2.0) - 1.0).abs());
-        let (r, g, b) = match hue as u32 {
-            0 => (c, x, 0.0),
-            1 => (x, c, 0.0),
-            2 => (0.0, c, x),
-            3 => (0.0, x, c),
-            4 => (x, 0.0, c),
-            _ => (c, 0.0, x),
-        };
-        let m = 0.12;
-        Self::new(
-            ((r + m) * 255.0) as u8,
-            ((g + m) * 255.0) as u8,
-            ((b + m) * 255.0) as u8,
-        )
-    }
-
-    pub fn new_vec(tracks: usize) -> Vec<Self> {
-        let count = tracks.max(1) * 16;
-        let mut vec = Vec::with_capacity(count);
-        for index in 0..count {
-            let track = index / 16;
-            let channel = index % 16;
-            vec.push(Self::new_from_hue(
-                ((track + channel) as f64 * -16.0) % 360.0,
-            ));
-        }
-        vec
-    }
-
-    pub fn to_rgba(self, alpha: f32) -> [f32; 4] {
-        [
-            self.red() as f32 / 255.0,
-            self.green() as f32 / 255.0,
-            self.blue() as f32 / 255.0,
-            alpha,
-        ]
-    }
-
-    pub fn to_rgba_packed(self, alpha: u8) -> u32 {
-        (self.red() as u32)
-            | ((self.green() as u32) << 8)
-            | ((self.blue() as u32) << 16)
-            | ((alpha as u32) << 24)
-    }
-
-    pub fn red(&self) -> u8 {
-        (self.0 >> 16) as u8
-    }
-
-    pub fn green(&self) -> u8 {
-        (self.0 >> 8) as u8
-    }
-
-    pub fn blue(&self) -> u8 {
-        self.0 as u8
-    }
-}
-
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub(crate) struct TrackAndChannel(u32);
 
@@ -159,7 +91,7 @@ impl TrackAndChannel {
 pub struct DisplacedMIDINote {
     pub start: f32,
     pub len: f32,
-    pub color: MIDIColor,
+    pub color: MIDIColorPair,
 }
 
 #[allow(dead_code)]
@@ -218,6 +150,18 @@ impl MIDIFileUnion {
     pub fn analysis_summary(&self) -> MIDIAnalysisSummary {
         match self {
             Self::InRam(file) => file.analysis_summary(),
+        }
+    }
+
+    pub fn apply_default_track_colors(&mut self, colors: Vec<MIDIColorPair>) {
+        match self {
+            Self::InRam(file) => file.apply_default_track_colors(colors),
+        }
+    }
+
+    pub fn track_count(&self) -> usize {
+        match self {
+            Self::InRam(file) => file.track_count(),
         }
     }
 

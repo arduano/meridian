@@ -1,5 +1,6 @@
 use meridian_core::render::{
-    KeyboardHeightSpec, KeyboardProjectorConfig, NoteProjectorConfig, PfaTopColor, SceneConfig,
+    KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
+    PfaTopColor, SceneConfig, ZenithPaletteSpec,
 };
 
 use super::view::InspectorRow;
@@ -36,7 +37,10 @@ pub fn rows_for_scene(scene: &SceneConfig) -> Vec<InspectorRow> {
 
 fn note_rows(config: &NoteProjectorConfig) -> Vec<InspectorRow> {
     match config {
-        NoteProjectorConfig::Flat(_) => vec![row("Notes", "Projector", "flat")],
+        NoteProjectorConfig::Flat(config) => vec![
+            row("Notes", "Projector", "flat"),
+            row("Notes", "Palette", palette_name(&config.palette)),
+        ],
         NoteProjectorConfig::Pfa(config) => vec![
             row("Notes", "Projector", "pfa"),
             row("Notes", "Same Width Notes", yes_no(config.same_width_notes)),
@@ -45,6 +49,7 @@ fn note_rows(config: &NoteProjectorConfig) -> Vec<InspectorRow> {
                 "Border Width",
                 format!("{:.2}", config.border_width),
             ),
+            row("Notes", "Palette", palette_name(&config.palette)),
         ],
     }
 }
@@ -94,5 +99,19 @@ fn top_color(color: PfaTopColor) -> &'static str {
         PfaTopColor::Red => "red",
         PfaTopColor::Blue => "blue",
         PfaTopColor::Green => "green",
+    }
+}
+
+fn palette_name(config: &NotePaletteConfig) -> String {
+    match config {
+        NotePaletteConfig::DefaultTrackColors => "default_track_colors".into(),
+        NotePaletteConfig::ZenithPalette { palette, randomize } => {
+            let base = match palette {
+                ZenithPaletteSpec::Random => "zenith_random".to_string(),
+                ZenithPaletteSpec::RandomGradients => "zenith_random_gradients".to_string(),
+                ZenithPaletteSpec::PngFile { path } => path.to_string_lossy().into_owned(),
+            };
+            format!("{base}{}", if *randomize { " / randomized" } else { "" })
+        }
     }
 }

@@ -98,18 +98,23 @@ impl PfaNoteProjector {
                         continue;
                     }
 
-                    let packed_color = note.color.to_rgba_packed(255);
+                    let packed_left = note.color.left.to_rgba_packed(255);
+                    let packed_right = note.color.right.to_rgba_packed(255);
                     if note.start <= 0.0 && end > 0.0 {
-                        let rgba = note.color.to_rgba(1.0);
+                        let pair = KeyColorPair {
+                            left: note.color.left.to_rgba(1.0),
+                            right: note.color.right.to_rgba(1.0),
+                        };
                         if is_black {
                             projected_key_color = KeyColorPair {
-                                left: rgba,
-                                right: rgba,
+                                left: pair.left,
+                                right: pair.right,
                             };
                         } else {
-                            projected_key_color.left = alpha_blend(rgba, projected_key_color.left);
+                            projected_key_color.left =
+                                alpha_blend(pair.left, projected_key_color.left);
                             projected_key_color.right =
-                                alpha_blend(rgba, projected_key_color.right);
+                                alpha_blend(pair.right, projected_key_color.right);
                         }
                         projected_key_pressed = true;
                     }
@@ -118,8 +123,9 @@ impl PfaNoteProjector {
                         key: key as u32,
                         start: note.start.max(0.0),
                         end: end.min(params.view_range),
-                        color: packed_color,
-                        _padding: [0; 3],
+                        left_color: packed_left,
+                        right_color: packed_right,
+                        _padding: [0; 2],
                     });
                 }
 

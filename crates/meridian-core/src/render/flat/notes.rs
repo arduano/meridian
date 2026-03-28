@@ -42,7 +42,10 @@ impl NoteProjector for FlatNoteProjector {
                 let bottom =
                     piano_height + (note.start.max(0.0) / view_range) * (1.0 - piano_height);
                 let top = piano_height + (end.min(view_range) / view_range) * (1.0 - piano_height);
-                let color = note.color.to_rgba(if is_black { 0.94 } else { 0.88 });
+                let color = note
+                    .color
+                    .average()
+                    .to_rgba(if is_black { 0.94 } else { 0.88 });
 
                 scene.push_quad(note_layer, solid_quad(x1, bottom, x2, top, color));
 

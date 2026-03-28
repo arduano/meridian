@@ -4,9 +4,9 @@ pub mod shared;
 
 pub use shared::{
     FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardHeightSpec,
-    KeyboardProjectorConfig, NoteProjectorConfig, PfaKeyboardProjectorConfig,
+    KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig, PfaKeyboardProjectorConfig,
     PfaNoteProjectorConfig, PfaTopColor, ProjectedScene, RendererKind, SceneConfig, SceneLayer,
-    SceneLayout, SceneQuad, ThreeDSceneConfig, TwoDSceneConfig,
+    SceneLayout, SceneQuad, ThreeDSceneConfig, TwoDSceneConfig, ZenithPaletteSpec,
 };
 
 use crate::midi::{backend::MIDIFileUnion, views::MIDIFileViewsUnion};
@@ -53,12 +53,18 @@ pub fn project_scene_views_into(
     match &layout.scene {
         TwoD(config) => {
             match &config.notes {
-                NoteConfig::Flat(config) => {
-                    FlatNoteProjector(*config).project_notes(views, layout, piano_height, scene)
-                }
-                NoteConfig::Pfa(config) => {
-                    PfaNoteProjector(*config).project_notes(views, layout, piano_height, scene)
-                }
+                NoteConfig::Flat(config) => FlatNoteProjector(config.clone()).project_notes(
+                    views,
+                    layout,
+                    piano_height,
+                    scene,
+                ),
+                NoteConfig::Pfa(config) => PfaNoteProjector(config.clone()).project_notes(
+                    views,
+                    layout,
+                    piano_height,
+                    scene,
+                ),
             }
 
             match &config.keyboard {

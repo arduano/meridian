@@ -59,4 +59,12 @@ impl InRamMIDIFile {
     pub fn key_note_counts(&self) -> [u64; super::MIDI_KEY_COUNT] {
         self.view_data.key_note_counts()
     }
+
+    pub fn apply_default_track_colors(&mut self, colors: Vec<super::MIDIColorPair>) {
+        self.view_data.apply_default_track_colors(colors);
+    }
+
+    pub fn track_count(&self) -> usize {
+        self.view_data.track_count()
+    }
 }

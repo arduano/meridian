@@ -75,9 +75,10 @@ var<uniform> key_positions: KeyPositions;
 struct VsOut {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
-    @location(1) color: vec4<f32>,
-    @location(2) size: vec2<f32>,
-    @location(3) pad: vec2<f32>,
+    @location(1) left_color: vec4<f32>,
+    @location(2) right_color: vec4<f32>,
+    @location(3) size: vec2<f32>,
+    @location(4) pad: vec2<f32>,
 };
 
 fn mod_add(color: vec4<f32>, add: f32, mul: f32) -> vec4<f32> {
@@ -95,7 +96,8 @@ fn vs_main(
     @location(1) key: u32,
     @location(2) start: f32,
     @location(3) end: f32,
-    @location(4) color: vec4<f32>,
+    @location(4) left_color: vec4<f32>,
+    @location(5) right_color: vec4<f32>,
 ) -> VsOut {
     let key_pos = key_positions.values[key];
     let x1 = key_pos.x;
@@ -107,7 +109,8 @@ fn vs_main(
     let pos = vec2<f32>(mix(x1, x2, unit_position.x), mix(y1, y2, unit_position.y));
     out.position = vec4<f32>(pos.x * 2.0 - 1.0, pos.y * 2.0 - 1.0, 0.5, 1.0);
     out.uv = unit_position;
-    out.color = color;
+    out.left_color = left_color;
+    out.right_color = right_color;
     out.size = vec2<f32>(max(x2 - x1, 1e-6), max(y2 - y1, 1e-6));
     out.pad = vec2<f32>(note_params.pad_x, note_params.pad_y);
     return out;
@@ -127,13 +130,13 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
 
     if inside_inner {
         let inner_u = clamp((in.uv.x - border_u) / max(1.0 - border_u * 2.0, 1e-6), 0.0, 1.0);
-        let left = mod_add(in.color, 0.18, 1.0);
-        let right = mod_add(in.color, 0.0, 0.55);
+        let left = mod_add(in.left_color, 0.18, 1.0);
+        let right = mod_add(in.right_color, 0.0, 0.55);
         return mix(left, right, inner_u);
     }
 
-    let border_left = mod_add(in.color, 0.0, 0.3);
-    let border_right = mod_add(in.color, 0.0, 0.12);
+    let border_left = mod_add(in.left_color, 0.0, 0.3);
+    let border_right = mod_add(in.right_color, 0.0, 0.12);
     return mix(border_left, border_right, in.uv.x);
 }
 "#;

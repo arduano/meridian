@@ -1,4 +1,4 @@
-use crate::midi::TrackAndChannel;
+use crate::midi::{MIDIColorPair, TrackAndChannel};
 
 pub struct InRamNoteBlock {
     pub start: f64,
@@ -10,25 +10,27 @@ pub struct InRamNoteBlock {
 pub(crate) struct BasicMIDINote {
     pub(crate) len: f32,
     pub(crate) track_chan: TrackAndChannel,
+    pub(crate) explicit_colors: Option<MIDIColorPair>,
 }
 
 impl InRamNoteBlock {
-    pub(crate) fn new_from_trackchans(
+    pub(crate) fn new_from_notes(
         time: f64,
-        track_chans: impl ExactSizeIterator<Item = TrackAndChannel>,
+        notes: impl ExactSizeIterator<Item = (TrackAndChannel, Option<MIDIColorPair>)>,
     ) -> Self {
-        let mut notes = Vec::with_capacity(track_chans.len());
-        for track_chan in track_chans {
-            notes.push(BasicMIDINote {
+        let mut built = Vec::with_capacity(notes.len());
+        for (track_chan, explicit_colors) in notes {
+            built.push(BasicMIDINote {
                 len: 0.0,
                 track_chan,
+                explicit_colors,
             });
         }
 
         Self {
             start: time,
             max_length: 0.0,
-            notes: notes.into_boxed_slice(),
+            notes: built.into_boxed_slice(),
         }
     }
 

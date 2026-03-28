@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::NotePaletteConfig;
+
 pub const DEFAULT_PFA_KEYBOARD_ASPECT_RATIO: f32 = 0.084_937_5;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, clap::ValueEnum, Serialize, Deserialize)]
@@ -17,15 +19,20 @@ pub enum PfaTopColor {
     Green,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct FlatNoteProjectorConfig;
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FlatNoteProjectorConfig {
+    #[serde(default)]
+    pub palette: NotePaletteConfig,
+}
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PfaNoteProjectorConfig {
     #[serde(default)]
     pub same_width_notes: bool,
     #[serde(default = "default_border_width")]
     pub border_width: f32,
+    #[serde(default)]
+    pub palette: NotePaletteConfig,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -120,6 +127,15 @@ impl Default for PfaNoteProjectorConfig {
         Self {
             same_width_notes: false,
             border_width: 1.0,
+            palette: NotePaletteConfig::default(),
+        }
+    }
+}
+
+impl Default for FlatNoteProjectorConfig {
+    fn default() -> Self {
+        Self {
+            palette: NotePaletteConfig::default(),
         }
     }
 }
@@ -244,11 +260,20 @@ impl SceneLayout {
         self.scene = SceneConfig::TwoD(match renderer {
             RendererKind::Flat => TwoDSceneConfig {
                 keyboard_height: KeyboardHeightSpec::default(),
-                notes: NoteProjectorConfig::Flat(FlatNoteProjectorConfig),
+                notes: NoteProjectorConfig::Flat(FlatNoteProjectorConfig::default()),
                 keyboard: KeyboardProjectorConfig::Flat(FlatKeyboardProjectorConfig),
             },
             RendererKind::Pfa => TwoDSceneConfig::default(),
         });
+    }
+}
+
+impl NoteProjectorConfig {
+    pub fn palette(&self) -> &NotePaletteConfig {
+        match self {
+            Self::Flat(config) => &config.palette,
+            Self::Pfa(config) => &config.palette,
+        }
     }
 }
 

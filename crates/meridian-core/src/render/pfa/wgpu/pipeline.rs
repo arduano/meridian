@@ -272,7 +272,8 @@ fn create_note_pipeline(
                         1 => Uint32,
                         2 => Float32,
                         3 => Float32,
-                        4 => Unorm8x4
+                        4 => Unorm8x4,
+                        5 => Unorm8x4
                     ],
                 },
             ],

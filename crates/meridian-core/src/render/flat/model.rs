@@ -2,7 +2,7 @@ use crate::midi::MIDI_KEY_COUNT;
 
 use super::super::shared::KeyActivity;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct FlatNoteProjector(pub super::super::shared::FlatNoteProjectorConfig);
 
 #[derive(Clone, Copy)]

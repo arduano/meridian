@@ -1,7 +1,7 @@
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 
 use crate::midi::{
-    DisplacedMIDINote, MIDIAnalysisSummary, MIDIColor, MIDINoteColumnView, MIDINoteViews,
+    DisplacedMIDINote, MIDIAnalysisSummary, MIDIColorPair, MIDINoteColumnView, MIDINoteViews,
     MIDIViewRange,
 };
 
@@ -9,7 +9,7 @@ use super::column::InRamNoteColumn;
 
 pub struct InRamNoteViewData {
     columns: Vec<InRamNoteColumn>,
-    default_track_colors: Vec<MIDIColor>,
+    default_track_colors: Vec<MIDIColorPair>,
     view_range: MIDIViewRange,
 }
 
@@ -24,12 +24,20 @@ impl<'a> InRamCurrentNoteViews<'a> {
 }
 
 impl InRamNoteViewData {
-    pub fn new(columns: Vec<InRamNoteColumn>, colors: Vec<MIDIColor>) -> Self {
+    pub fn new(columns: Vec<InRamNoteColumn>, colors: Vec<MIDIColorPair>) -> Self {
         Self {
             columns,
             default_track_colors: colors,
             view_range: MIDIViewRange::default(),
         }
+    }
+
+    pub fn apply_default_track_colors(&mut self, colors: Vec<MIDIColorPair>) {
+        self.default_track_colors = colors;
+    }
+
+    pub fn track_count(&self) -> usize {
+        (self.default_track_colors.len() / 16).max(1)
     }
 
     pub fn passed_notes(&self) -> u64 {
@@ -258,7 +266,9 @@ impl Iterator for InRamNoteIter<'_> {
             return Some(DisplacedMIDINote {
                 start: (block.start - self.view.view_range.start) as f32,
                 len: note.len,
-                color: self.view.view.default_track_colors[note.track_chan.as_usize()],
+                color: note
+                    .explicit_colors
+                    .unwrap_or(self.view.view.default_track_colors[note.track_chan.as_usize()]),
             });
         }
     }

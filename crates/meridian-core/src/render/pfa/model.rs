@@ -17,11 +17,12 @@ pub struct NoteInstance {
     pub key: u32,
     pub start: f32,
     pub end: f32,
-    pub color: u32,
-    pub _padding: [u32; 3],
+    pub left_color: u32,
+    pub right_color: u32,
+    pub _padding: [u32; 2],
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct PfaNoteProjector(pub PfaNoteProjectorConfig);
 
 #[derive(Clone, Copy)]
