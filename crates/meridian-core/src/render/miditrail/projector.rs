@@ -1,3 +1,6 @@
+use glam::{Mat4, Vec3};
+use rayon::prelude::*;
+
 use crate::{
     midi::views::MIDIFileViewsUnion,
     render::{
@@ -55,6 +58,7 @@ pub fn project_miditrail_scene(
         _ => None,
     };
     let key_order = key_render_order(config, &key_layout);
+    let world_to_camera = build_world_to_camera(config);
 
     let mut key_state = vec![KeyState::default(); 256];
     for notes in &notes_by_key {
@@ -91,6 +95,7 @@ pub fn project_miditrail_scene(
                     &mut miditrail,
                     &key_layout,
                     config,
+                    &world_to_camera,
                     layout.view_range as f32,
                     *note,
                 );
@@ -130,58 +135,58 @@ fn collect_visible_notes(
     key_layout: &MiditrailLayout,
     view_range: f32,
 ) -> Vec<Vec<VisibleNote>> {
-    let mut notes = vec![Vec::new(); key_layout.last_key_exclusive - key_layout.first_key];
     let render_start = -view_range * config.viewback;
-    for key in key_layout.first_key..key_layout.last_key_exclusive {
-        let column = views.get_column(key);
-        column.for_each_displaced_note(|note| {
-            let start = note.start;
-            let mut end = start + note.len;
-            if end < render_start || start >= view_range {
-                return;
+    (key_layout.first_key..key_layout.last_key_exclusive)
+        .into_par_iter()
+        .map(|key| {
+            let column = views.get_column(key);
+            let iter = column.iterate_displaced_notes();
+            let mut notes = Vec::with_capacity(iter.len());
+            for note in iter {
+                let start = note.start;
+                let mut end = start + note.len;
+                if end < render_start || start >= view_range {
+                    continue;
+                }
+                let mut clamped_start = start.max(render_start);
+                if config.eat_notes {
+                    clamped_start = clamped_start.max(0.0);
+                    end = end.max(0.0);
+                }
+                notes.push(VisibleNote {
+                    key,
+                    start: clamped_start,
+                    end: end.min(view_range),
+                    left: note.color.left.to_rgba(1.0),
+                    right: note.color.right.to_rgba(1.0),
+                    active: note.start <= 0.0 && end > 0.0,
+                });
             }
-            let mut clamped_start = start.max(render_start);
-            if config.eat_notes {
-                clamped_start = clamped_start.max(0.0);
-                end = end.max(0.0);
-            }
-            notes[key - key_layout.first_key].push(VisibleNote {
-                key,
-                start: clamped_start,
-                end: end.min(view_range),
-                left: note.color.left.to_rgba(1.0),
-                right: note.color.right.to_rgba(1.0),
-                active: note.start <= 0.0 && end > 0.0,
-            });
-        });
-    }
-    notes
+            notes
+        })
+        .collect()
 }
 
 fn key_render_order(config: &MiditrailSceneConfig, key_layout: &MiditrailLayout) -> Vec<usize> {
-    let count = key_layout.last_key_exclusive.saturating_sub(key_layout.first_key);
-    let mut keys = Vec::with_capacity(count);
-    if count == 0 {
-        return keys;
-    }
-
-    let mut left = key_layout.first_key;
-    let mut right = key_layout.last_key_exclusive - 1;
-    while left <= right {
-        let left_x = key_layout.key_x1(left) + key_layout.key_width(left) * 0.5 + config.view_pan;
-        let right_x =
-            key_layout.key_x1(right) + key_layout.key_width(right) * 0.5 + config.view_pan;
-        if left_x.abs() >= right_x.abs() {
-            keys.push(left);
-            left += 1;
-        } else {
-            keys.push(right);
-            if right == 0 {
-                break;
-            }
-            right -= 1;
-        }
-    }
+    let mut keys: Vec<usize> = (key_layout.first_key..key_layout.last_key_exclusive).collect();
+    let world_to_camera = build_world_to_camera(config);
+    keys.sort_by(|&a, &b| {
+        let a_center = key_layout.key_x1(a) + key_layout.key_width(a) * 0.5;
+        let b_center = key_layout.key_x1(b) + key_layout.key_width(b) * 0.5;
+        let a_view = world_to_camera.transform_point3(Vec3::new(a_center, 0.0, 0.0));
+        let b_view = world_to_camera.transform_point3(Vec3::new(b_center, 0.0, 0.0));
+        a_view
+            .z
+            .partial_cmp(&b_view.z)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                b_view
+                    .x
+                    .abs()
+                    .partial_cmp(&a_view.x.abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+        });
     keys
 }
 
@@ -189,6 +194,7 @@ fn emit_note_side(
     scene: &mut MiditrailScene,
     key_layout: &MiditrailLayout,
     config: &MiditrailSceneConfig,
+    world_to_camera: &Mat4,
     view_range: f32,
     note: VisibleNote,
 ) {
@@ -198,10 +204,13 @@ fn emit_note_side(
     let z2 = note.start * (config.viewdist / view_range.max(0.0001));
 
     let factor = active_factor(note, config);
-    let mut side_x = base_x1;
-    if side_x < -config.view_pan {
-        side_x += width;
-    }
+    let mut side_x = choose_camera_facing_x(
+        base_x1,
+        base_x1 + width,
+        -width * 0.5,
+        (z1 + z2) * 0.5,
+        world_to_camera,
+    );
     let mut side_shade = 0.0;
     if note.active {
         if config.notes_change_tint {
@@ -233,6 +242,28 @@ fn emit_note_side(
         side_right,
         side_right,
     );
+}
+
+fn choose_camera_facing_x(x1: f32, x2: f32, y: f32, z: f32, world_to_camera: &Mat4) -> f32 {
+    let p1 = world_to_camera.transform_point3(Vec3::new(x1, y, z));
+    let p2 = world_to_camera.transform_point3(Vec3::new(x2, y, z));
+    if p1.length_squared() <= p2.length_squared() {
+        x1
+    } else {
+        x2
+    }
+}
+
+fn build_world_to_camera(config: &MiditrailSceneConfig) -> Mat4 {
+    Mat4::from_rotation_x(config.cam_ang)
+        * Mat4::from_rotation_y(config.cam_rot)
+        * Mat4::from_rotation_z(config.cam_spin)
+        * Mat4::from_scale(Vec3::new(1.0, 1.0, -1.0))
+        * Mat4::from_translation(Vec3::new(
+            config.view_pan,
+            -config.view_height,
+            config.view_offset,
+        ))
 }
 
 fn emit_note_cap(
@@ -599,22 +630,29 @@ fn squeeze_local_x(x: f32) -> f32 {
     (x - 0.5) * KEY_X_SQUEEZE + 0.5
 }
 
-fn apply_key_motion(position: [f32; 3], press: f32, tilt_keys: bool, down_divisor: f32) -> [f32; 3] {
+fn apply_key_motion_world(
+    position: [f32; 3],
+    press: f32,
+    tilt_keys: bool,
+    down_divisor: f32,
+    pivot_y: f32,
+    pivot_z: f32,
+) -> [f32; 3] {
     if press <= 0.0 {
         return position;
     }
     if tilt_keys {
-        rotate_local_x_around(position, -press / 20.0, 4.0)
+        rotate_local_x_around(position, -press / 20.0, pivot_y, pivot_z)
     } else {
         [position[0], position[1] - press / down_divisor, position[2]]
     }
 }
 
-fn rotate_local_x_around(position: [f32; 3], angle: f32, pivot_z: f32) -> [f32; 3] {
+fn rotate_local_x_around(position: [f32; 3], angle: f32, pivot_y: f32, pivot_z: f32) -> [f32; 3] {
     let (sin, cos) = angle.sin_cos();
-    let y = position[1];
+    let y = position[1] - pivot_y;
     let z_rel = position[2] - pivot_z;
-    let y2 = y * cos - z_rel * sin;
+    let y2 = y * cos - z_rel * sin + pivot_y;
     let z2 = y * sin + z_rel * cos + pivot_z;
     [position[0], y2, z2]
 }
@@ -628,12 +666,13 @@ fn transform_white_key(
     press: f32,
     tilt_keys: bool,
 ) -> [f32; 3] {
-    let position = apply_key_motion(position, press, tilt_keys, 2.0);
-    [
+    let pivot_y = -WHITE_KEY_Y_DROP * scale_y;
+    let transformed = [
         base_x + squeeze_local_x(position[0]) * scale_x,
-        (position[1] - WHITE_KEY_Y_DROP) * scale_y,
+        position[1] * scale_y + pivot_y,
         -position[2] * scale_z,
-    ]
+    ];
+    apply_key_motion_world(transformed, press, tilt_keys, 2.0, pivot_y, 0.0)
 }
 
 fn transform_black_key(
@@ -646,12 +685,13 @@ fn transform_black_key(
     press: f32,
     tilt_keys: bool,
 ) -> [f32; 3] {
-    let position = apply_key_motion(position, press, tilt_keys, 1.2);
-    [
+    let pivot_y = vert_offset * (BLACK_KEY_Y_LIFT / 1.2) * scale_y;
+    let transformed = [
         base_x + squeeze_local_x(position[0]) * scale_x,
-        (position[1] + vert_offset * (BLACK_KEY_Y_LIFT / 1.2)) * scale_y,
+        position[1] * scale_y + pivot_y,
         -position[2] * scale_z,
-    ]
+    ];
+    apply_key_motion_world(transformed, press, tilt_keys, 1.2, pivot_y, 0.0)
 }
 
 fn white_key_color(left: [f32; 4], right: [f32; 4], brightness: f32, blend: f32) -> [f32; 4] {

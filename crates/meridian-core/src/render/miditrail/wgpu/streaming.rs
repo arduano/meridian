@@ -52,6 +52,44 @@ impl<T: Pod> StreamingVertexBuffer<T> {
     }
 }
 
+pub struct StreamingBufferPool<T> {
+    buffers: Vec<StreamingVertexBuffer<T>>,
+    label: &'static str,
+    _marker: PhantomData<T>,
+}
+
+impl<T: Pod> StreamingBufferPool<T> {
+    pub fn new(label: &'static str) -> Self {
+        Self {
+            buffers: Vec::new(),
+            label,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn write_chunk(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        chunk_index: usize,
+        vertices: &[T],
+    ) {
+        if self.buffers.len() <= chunk_index {
+            self.buffers
+                .resize_with(chunk_index + 1, || StreamingVertexBuffer::new(device, self.label));
+        }
+        self.buffers[chunk_index].write(device, queue, vertices);
+    }
+
+    pub fn slice(&self, chunk_index: usize) -> wgpu::BufferSlice<'_> {
+        self.buffers[chunk_index].slice()
+    }
+
+    pub fn max_chunk_len() -> usize {
+        StreamingVertexBuffer::<T>::max_chunk_len()
+    }
+}
+
 fn create_buffer<T: Pod>(device: &wgpu::Device, label: &'static str, capacity: usize) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
         label: Some(label),

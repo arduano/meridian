@@ -1,7 +1,7 @@
 use glam::{Mat4, Vec3};
 
 use super::pipeline::{MiditrailPipelines, Uniforms, VIEWPORT_FORMAT};
-use super::streaming::StreamingVertexBuffer;
+use super::streaming::StreamingBufferPool;
 use crate::render::{
     SceneLayout,
     miditrail::model::{MiditrailQuadInstance, MiditrailScene},
@@ -18,10 +18,10 @@ const OPENGL_TO_WGPU: Mat4 = Mat4::from_cols_array(&[
 pub struct MiditrailRenderer {
     pipelines: MiditrailPipelines,
     depth: wgpu::Texture,
-    note_quads: StreamingVertexBuffer<MiditrailQuadInstance>,
-    white_key_quads: StreamingVertexBuffer<MiditrailQuadInstance>,
-    black_key_quads: StreamingVertexBuffer<MiditrailQuadInstance>,
-    aura_quads: StreamingVertexBuffer<MiditrailQuadInstance>,
+    note_quads: StreamingBufferPool<MiditrailQuadInstance>,
+    white_key_quads: StreamingBufferPool<MiditrailQuadInstance>,
+    black_key_quads: StreamingBufferPool<MiditrailQuadInstance>,
+    aura_quads: StreamingBufferPool<MiditrailQuadInstance>,
 }
 
 impl MiditrailRenderer {
@@ -29,10 +29,10 @@ impl MiditrailRenderer {
         Self {
             pipelines: MiditrailPipelines::new(device),
             depth: create_depth_texture(device, width, height),
-            note_quads: StreamingVertexBuffer::new(device, "MiditrailNoteQuads"),
-            white_key_quads: StreamingVertexBuffer::new(device, "MiditrailWhiteKeyQuads"),
-            black_key_quads: StreamingVertexBuffer::new(device, "MiditrailBlackKeyQuads"),
-            aura_quads: StreamingVertexBuffer::new(device, "MiditrailAuraQuads"),
+            note_quads: StreamingBufferPool::new("MiditrailNoteQuads"),
+            white_key_quads: StreamingBufferPool::new("MiditrailWhiteKeyQuads"),
+            black_key_quads: StreamingBufferPool::new("MiditrailBlackKeyQuads"),
+            aura_quads: StreamingBufferPool::new("MiditrailAuraQuads"),
         }
     }
 
@@ -112,7 +112,7 @@ impl MiditrailRenderer {
                     queue,
                     &mut self.aura_quads,
                     &mut pass,
-                    &self.pipelines.aura_always,
+                    &self.pipelines.aura_less,
                     &scene.aura_quads,
                 );
                 draw_color_chunks(
@@ -153,7 +153,7 @@ impl MiditrailRenderer {
                     queue,
                     &mut self.aura_quads,
                     &mut pass,
-                    &self.pipelines.aura_always,
+                    &self.pipelines.aura_less,
                     &scene.aura_quads,
                 );
             }
@@ -165,7 +165,7 @@ impl MiditrailRenderer {
 fn draw_color_chunks(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    buffer: &mut StreamingVertexBuffer<MiditrailQuadInstance>,
+    buffer: &mut StreamingBufferPool<MiditrailQuadInstance>,
     pass: &mut wgpu::RenderPass<'_>,
     pipeline: &wgpu::RenderPipeline,
     quads: &[MiditrailQuadInstance],
@@ -174,9 +174,12 @@ fn draw_color_chunks(
         return;
     }
     pass.set_pipeline(pipeline);
-    for chunk in quads.chunks(StreamingVertexBuffer::<MiditrailQuadInstance>::max_chunk_len()) {
-        buffer.write(device, queue, chunk);
-        pass.set_vertex_buffer(0, buffer.slice());
+    for (chunk_index, chunk) in quads
+        .chunks(StreamingBufferPool::<MiditrailQuadInstance>::max_chunk_len())
+        .enumerate()
+    {
+        buffer.write_chunk(device, queue, chunk_index, chunk);
+        pass.set_vertex_buffer(0, buffer.slice(chunk_index));
         pass.draw(0..6, 0..chunk.len() as u32);
     }
 }
@@ -184,7 +187,7 @@ fn draw_color_chunks(
 fn draw_aura_chunks(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    buffer: &mut StreamingVertexBuffer<MiditrailQuadInstance>,
+    buffer: &mut StreamingBufferPool<MiditrailQuadInstance>,
     pass: &mut wgpu::RenderPass<'_>,
     pipeline: &wgpu::RenderPipeline,
     quads: &[MiditrailQuadInstance],
@@ -193,9 +196,12 @@ fn draw_aura_chunks(
         return;
     }
     pass.set_pipeline(pipeline);
-    for chunk in quads.chunks(StreamingVertexBuffer::<MiditrailQuadInstance>::max_chunk_len()) {
-        buffer.write(device, queue, chunk);
-        pass.set_vertex_buffer(0, buffer.slice());
+    for (chunk_index, chunk) in quads
+        .chunks(StreamingBufferPool::<MiditrailQuadInstance>::max_chunk_len())
+        .enumerate()
+    {
+        buffer.write_chunk(device, queue, chunk_index, chunk);
+        pass.set_vertex_buffer(0, buffer.slice(chunk_index));
         pass.draw(0..6, 0..chunk.len() as u32);
     }
 }

@@ -16,7 +16,7 @@ pub struct MiditrailPipelines {
     pub bind_group: wgpu::BindGroup,
     pub color_always: wgpu::RenderPipeline,
     pub color_less: wgpu::RenderPipeline,
-    pub aura_always: wgpu::RenderPipeline,
+    pub aura_less: wgpu::RenderPipeline,
 }
 
 impl MiditrailPipelines {
@@ -67,7 +67,7 @@ impl MiditrailPipelines {
                 &pipeline_layout,
                 wgpu::CompareFunction::Less,
             ),
-            aura_always: create_aura_pipeline(device, &pipeline_layout),
+            aura_less: create_aura_pipeline(device, &pipeline_layout),
         }
     }
 }
@@ -177,8 +177,8 @@ fn create_aura_pipeline(
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: Some(wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth32Float,
-            depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::Always,
+            depth_write_enabled: false,
+            depth_compare: wgpu::CompareFunction::Less,
             stencil: Default::default(),
             bias: Default::default(),
         }),

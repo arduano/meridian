@@ -106,15 +106,17 @@ impl PfaNoteProjector {
                             right: note.color.right.to_rgba(1.0),
                         };
                         if is_black {
-                            projected_key_color = KeyColorPair {
-                                left: pair.left,
-                                right: pair.right,
-                            };
+                            if !projected_key_pressed {
+                                projected_key_color = KeyColorPair {
+                                    left: pair.left,
+                                    right: pair.right,
+                                };
+                            }
                         } else {
                             projected_key_color.left =
-                                alpha_blend(pair.left, projected_key_color.left);
+                                alpha_blend(projected_key_color.left, pair.left);
                             projected_key_color.right =
-                                alpha_blend(pair.right, projected_key_color.right);
+                                alpha_blend(projected_key_color.right, pair.right);
                         }
                         projected_key_pressed = true;
                     }
