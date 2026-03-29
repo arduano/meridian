@@ -22,10 +22,11 @@ impl HeadlessRenderSession {
         let instance = wgpu::Instance::default();
         let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
             .map_err(|e| MeridianError::Wgpu(format!("request_adapter failed: {e}")))?;
+        let required_limits = adapter.limits();
         let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("MeridianHeadlessDevice"),
             required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::downlevel_defaults(),
+            required_limits,
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::Performance,
             trace: Default::default(),
@@ -33,7 +34,7 @@ impl HeadlessRenderSession {
         .map_err(|e| MeridianError::Wgpu(format!("request_device failed: {e}")))?;
 
         Ok(Self {
-            texture: create_headless_target(&device, width, height),
+            texture: create_headless_target(&device, width, height)?,
             renderer: PrimitiveSceneRenderer::new(&device),
             device,
             queue,
@@ -181,8 +182,13 @@ pub fn save_scene_headless(
     Ok(bytes.len() as u64)
 }
 
-fn create_headless_target(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
-    device.create_texture(&wgpu::TextureDescriptor {
+fn create_headless_target(
+    device: &wgpu::Device,
+    width: u32,
+    height: u32,
+) -> Result<wgpu::Texture, MeridianError> {
+    validate_headless_target_size(device, width, height)?;
+    Ok(device.create_texture(&wgpu::TextureDescriptor {
         label: Some("MeridianHeadlessTarget"),
         size: Extent3d {
             width,
@@ -195,5 +201,20 @@ fn create_headless_target(device: &wgpu::Device, width: u32, height: u32) -> wgp
         format: VIEWPORT_FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
-    })
+    }))
+}
+
+fn validate_headless_target_size(
+    device: &wgpu::Device,
+    width: u32,
+    height: u32,
+) -> Result<(), MeridianError> {
+    let limits = device.limits();
+    let max_dimension = limits.max_texture_dimension_2d;
+    if width > max_dimension || height > max_dimension {
+        return Err(MeridianError::Wgpu(format!(
+            "requested headless target {width}x{height} exceeds device 2D texture limit {max_dimension}x{max_dimension}"
+        )));
+    }
+    Ok(())
 }

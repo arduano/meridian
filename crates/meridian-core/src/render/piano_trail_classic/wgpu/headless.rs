@@ -9,7 +9,7 @@ use crate::{
     render::{SceneLayout, piano_trail_classic::model::PianoTrailClassicScene},
 };
 
-use super::renderer::{PianoTrailClassicRenderer, create_headless_target};
+use super::renderer::PianoTrailClassicRenderer;
 
 pub struct HeadlessRenderSession {
     device: wgpu::Device,
@@ -25,17 +25,18 @@ impl HeadlessRenderSession {
         let instance = wgpu::Instance::default();
         let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
             .map_err(|e| MeridianError::Wgpu(format!("request_adapter failed: {e}")))?;
+        let required_limits = adapter.limits();
         let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("MeridianPianoTrailClassicDevice"),
             required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::downlevel_defaults(),
+            required_limits,
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::Performance,
             trace: Default::default(),
         }))
         .map_err(|e| MeridianError::Wgpu(format!("request_device failed: {e}")))?;
         Ok(Self {
-            texture: create_headless_target(&device, width, height),
+            texture: create_headless_target(&device, width, height)?,
             renderer: PianoTrailClassicRenderer::new(&device, width, height),
             device,
             queue,
@@ -113,6 +114,32 @@ impl HeadlessRenderSession {
         output_buffer.unmap();
         Ok(rgba)
     }
+}
+
+fn create_headless_target(
+    device: &wgpu::Device,
+    width: u32,
+    height: u32,
+) -> Result<wgpu::Texture, MeridianError> {
+    validate_headless_target_size(device, width, height)?;
+    Ok(super::renderer::create_headless_target(
+        device, width, height,
+    ))
+}
+
+fn validate_headless_target_size(
+    device: &wgpu::Device,
+    width: u32,
+    height: u32,
+) -> Result<(), MeridianError> {
+    let limits = device.limits();
+    let max_dimension = limits.max_texture_dimension_2d;
+    if width > max_dimension || height > max_dimension {
+        return Err(MeridianError::Wgpu(format!(
+            "requested headless target {width}x{height} exceeds device 2D texture limit {max_dimension}x{max_dimension}"
+        )));
+    }
+    Ok(())
 }
 
 pub fn render_scene_headless_to_rgba(
