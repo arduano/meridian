@@ -1,7 +1,7 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Instant};
+use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use crate::{
-    midi::{MidiCacheStack, audio_cache::InRamAudioCache, display_cache::DisplayMidiCache},
+    midi::MidiCacheStack,
     protocol::{
         AudioCacheId, AudioSessionId, CoreErrorCode, CoreEvent, DisplayCacheId,
         DisplaySessionId, ParsedMidiId,
@@ -10,37 +10,12 @@ use crate::{
 
 use super::{
     core_state::CoreState,
+    resource_types::{
+        AudioCacheResource, AudioSessionResource, DisplayCacheResource, DisplaySessionResource,
+        ParsedMidiResource,
+    },
     support::error_event,
 };
-
-pub(super) struct ParsedMidiResource {
-    pub(super) path: PathBuf,
-    pub(super) cache_stack: MidiCacheStack,
-}
-
-pub(super) struct DisplayCacheResource {
-    pub(super) parsed_midi_id: ParsedMidiId,
-    pub(super) cache: Arc<DisplayMidiCache>,
-}
-
-pub(super) struct AudioCacheResource {
-    pub(super) parsed_midi_id: ParsedMidiId,
-    pub(super) cache: Arc<InRamAudioCache>,
-}
-
-pub(super) struct DisplaySessionResource {
-    pub(super) display_cache_id: DisplayCacheId,
-}
-
-pub(super) struct AudioSessionResource {
-    pub(super) audio_cache_id: AudioCacheId,
-}
-
-pub(super) type ParsedMidiRegistry = HashMap<ParsedMidiId, ParsedMidiResource>;
-pub(super) type DisplayCacheRegistry = HashMap<DisplayCacheId, DisplayCacheResource>;
-pub(super) type AudioCacheRegistry = HashMap<AudioCacheId, AudioCacheResource>;
-pub(super) type DisplaySessionRegistry = HashMap<DisplaySessionId, DisplaySessionResource>;
-pub(super) type AudioSessionRegistry = HashMap<AudioSessionId, AudioSessionResource>;
 
 impl CoreState {
     pub(super) fn load_parsed_midi_resource(&mut self, path: PathBuf) -> Vec<CoreEvent> {

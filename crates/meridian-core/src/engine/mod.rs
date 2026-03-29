@@ -1,8 +1,10 @@
+mod audio_render_job;
 mod core_state;
-mod render_job;
+mod resource_types;
 mod resources;
 mod state_ops;
 mod support;
+mod video_render_job;
 
 use std::{
     sync::{Arc, Mutex},
