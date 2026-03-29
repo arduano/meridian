@@ -5,14 +5,14 @@ use crate::{
     midi::views::MIDIFileViewsUnion,
     render::{
         SceneLayout,
-        shared::{MiditrailSceneConfig, ProjectedScene, alpha_blend, is_black_key},
+        shared::{PianoTrailClassicSceneConfig, ProjectedScene, alpha_blend, is_black_key},
     },
 };
 
 use super::{
-    layout::MiditrailLayout,
-    model::{MiditrailQuadInstance, MiditrailScene},
-    physics::MiditrailPhysicsState,
+    layout::PianoTrailClassicLayout,
+    model::{PianoTrailClassicQuadInstance, PianoTrailClassicScene},
+    physics::PianoTrailClassicPhysicsState,
 };
 
 const WHITE_KEY_LEN: f32 = 5.0;
@@ -43,8 +43,8 @@ struct KeyState {
     aura: f32,
 }
 
-pub fn project_miditrail_scene(
-    config: &MiditrailSceneConfig,
+pub fn project_piano_trail_classic_scene(
+    config: &PianoTrailClassicSceneConfig,
     physics: Option<&crate::render::ScenePhysicsState>,
     views: &MIDIFileViewsUnion<'_>,
     layout: &SceneLayout,
@@ -52,13 +52,13 @@ pub fn project_miditrail_scene(
 ) {
     let first_key = layout.first_key.min(layout.last_key) as usize;
     let last_key = layout.last_key.max(layout.first_key) as usize + 1;
-    let key_layout = MiditrailLayout::new(first_key, last_key, config);
-    let mut miditrail = scene.take_miditrail().unwrap_or_default();
-    miditrail.clear();
+    let key_layout = PianoTrailClassicLayout::new(first_key, last_key, config);
+    let mut piano_trail_classic = scene.take_piano_trail_classic().unwrap_or_default();
+    piano_trail_classic.clear();
 
     let notes_by_key = collect_visible_notes(config, views, &key_layout, layout.view_range as f32);
-    let miditrail_physics = match physics {
-        Some(crate::render::ScenePhysicsState::Miditrail(state)) => Some(state),
+    let piano_trail_classic_physics = match physics {
+        Some(crate::render::ScenePhysicsState::PianoTrailClassic(state)) => Some(state),
         _ => None,
     };
     let key_order = key_render_order(config, &key_layout);
@@ -78,7 +78,7 @@ pub fn project_miditrail_scene(
         }
     }
 
-    if let Some(physics) = miditrail_physics {
+    if let Some(physics) = piano_trail_classic_physics {
         apply_key_press_state(&mut key_state, physics);
     }
 
@@ -87,7 +87,7 @@ pub fn project_miditrail_scene(
         if config.box_notes {
             for note in notes {
                 emit_note_cap(
-                    &mut miditrail,
+                    &mut piano_trail_classic,
                     &key_layout,
                     config,
                     layout.view_range as f32,
@@ -96,7 +96,7 @@ pub fn project_miditrail_scene(
             }
             for note in notes.iter().rev() {
                 emit_note_side(
-                    &mut miditrail,
+                    &mut piano_trail_classic,
                     &key_layout,
                     config,
                     &world_to_camera,
@@ -107,7 +107,7 @@ pub fn project_miditrail_scene(
         }
         for note in notes.iter().rev() {
             emit_note_front(
-                &mut miditrail,
+                &mut piano_trail_classic,
                 &key_layout,
                 config,
                 layout.view_range as f32,
@@ -118,7 +118,7 @@ pub fn project_miditrail_scene(
 
     if config.show_keyboard {
         emit_keyboard(
-            &mut miditrail,
+            &mut piano_trail_classic,
             &key_layout,
             config,
             &key_state,
@@ -127,16 +127,16 @@ pub fn project_miditrail_scene(
         );
     }
     if config.aura_enabled {
-        emit_aura(&mut miditrail, &key_layout, config, &key_state);
+        emit_aura(&mut piano_trail_classic, &key_layout, config, &key_state);
     }
 
-    scene.set_miditrail(miditrail);
+    scene.set_piano_trail_classic(piano_trail_classic);
 }
 
 fn collect_visible_notes(
-    config: &MiditrailSceneConfig,
+    config: &PianoTrailClassicSceneConfig,
     views: &MIDIFileViewsUnion<'_>,
-    key_layout: &MiditrailLayout,
+    key_layout: &PianoTrailClassicLayout,
     view_range: f32,
 ) -> Vec<Vec<VisibleNote>> {
     let render_start = -view_range * config.viewback;
@@ -174,7 +174,7 @@ fn collect_visible_notes(
         .collect()
 }
 
-fn key_render_order(config: &MiditrailSceneConfig, key_layout: &MiditrailLayout) -> Vec<usize> {
+fn key_render_order(config: &PianoTrailClassicSceneConfig, key_layout: &PianoTrailClassicLayout) -> Vec<usize> {
     let mut keys: Vec<usize> = (key_layout.first_key..key_layout.last_key_exclusive).collect();
     let world_to_camera = build_world_to_camera(config);
     keys.sort_by(|&a, &b| {
@@ -198,9 +198,9 @@ fn key_render_order(config: &MiditrailSceneConfig, key_layout: &MiditrailLayout)
 }
 
 fn emit_note_side(
-    scene: &mut MiditrailScene,
-    key_layout: &MiditrailLayout,
-    config: &MiditrailSceneConfig,
+    scene: &mut PianoTrailClassicScene,
+    key_layout: &PianoTrailClassicLayout,
+    config: &PianoTrailClassicSceneConfig,
     world_to_camera: &Mat4,
     view_range: f32,
     note: VisibleNote,
@@ -261,7 +261,7 @@ fn choose_camera_facing_x(x1: f32, x2: f32, y: f32, z: f32, world_to_camera: &Ma
     }
 }
 
-fn build_world_to_camera(config: &MiditrailSceneConfig) -> Mat4 {
+fn build_world_to_camera(config: &PianoTrailClassicSceneConfig) -> Mat4 {
     Mat4::from_rotation_x(config.cam_ang)
         * Mat4::from_rotation_y(config.cam_rot)
         * Mat4::from_rotation_z(config.cam_spin)
@@ -274,9 +274,9 @@ fn build_world_to_camera(config: &MiditrailSceneConfig) -> Mat4 {
 }
 
 fn emit_note_cap(
-    scene: &mut MiditrailScene,
-    key_layout: &MiditrailLayout,
-    config: &MiditrailSceneConfig,
+    scene: &mut PianoTrailClassicScene,
+    key_layout: &PianoTrailClassicLayout,
+    config: &PianoTrailClassicSceneConfig,
     view_range: f32,
     note: VisibleNote,
 ) {
@@ -308,9 +308,9 @@ fn emit_note_cap(
 }
 
 fn emit_note_front(
-    scene: &mut MiditrailScene,
-    key_layout: &MiditrailLayout,
-    config: &MiditrailSceneConfig,
+    scene: &mut PianoTrailClassicScene,
+    key_layout: &PianoTrailClassicLayout,
+    config: &PianoTrailClassicSceneConfig,
     view_range: f32,
     note: VisibleNote,
 ) {
@@ -336,7 +336,7 @@ fn emit_note_front(
     );
 }
 
-fn active_factor(note: VisibleNote, config: &MiditrailSceneConfig) -> f32 {
+fn active_factor(note: VisibleNote, config: &PianoTrailClassicSceneConfig) -> f32 {
     if !note.active {
         return 0.0;
     }
@@ -364,7 +364,7 @@ fn cap_or_front_shape(
     base_x2: f32,
     width: f32,
     note: VisibleNote,
-    config: &MiditrailSceneConfig,
+    config: &PianoTrailClassicSceneConfig,
 ) -> (f32, f32, f32) {
     let mut x1 = base_x1;
     let mut x2 = base_x2;
@@ -383,9 +383,9 @@ fn cap_or_front_shape(
 }
 
 fn emit_keyboard(
-    scene: &mut MiditrailScene,
-    key_layout: &MiditrailLayout,
-    config: &MiditrailSceneConfig,
+    scene: &mut PianoTrailClassicScene,
+    key_layout: &PianoTrailClassicLayout,
+    config: &PianoTrailClassicSceneConfig,
     key_state: &[KeyState],
     active_keys: &mut usize,
     keyboard_quads: &mut usize,
@@ -430,9 +430,9 @@ fn emit_keyboard(
 }
 
 fn emit_aura(
-    scene: &mut MiditrailScene,
-    key_layout: &MiditrailLayout,
-    config: &MiditrailSceneConfig,
+    scene: &mut PianoTrailClassicScene,
+    key_layout: &PianoTrailClassicLayout,
+    config: &PianoTrailClassicSceneConfig,
     key_state: &[KeyState],
 ) {
     for key in key_layout.first_key..key_layout.last_key_exclusive {
@@ -467,9 +467,9 @@ fn emit_aura(
 }
 
 fn emit_white_key(
-    out: &mut Vec<MiditrailQuadInstance>,
-    key_layout: &MiditrailLayout,
-    config: &MiditrailSceneConfig,
+    out: &mut Vec<PianoTrailClassicQuadInstance>,
+    key_layout: &PianoTrailClassicLayout,
+    config: &PianoTrailClassicSceneConfig,
     key: usize,
     left: [f32; 4],
     right: [f32; 4],
@@ -671,9 +671,9 @@ fn emit_white_key(
 }
 
 fn emit_black_key(
-    out: &mut Vec<MiditrailQuadInstance>,
-    key_layout: &MiditrailLayout,
-    config: &MiditrailSceneConfig,
+    out: &mut Vec<PianoTrailClassicQuadInstance>,
+    key_layout: &PianoTrailClassicLayout,
+    config: &PianoTrailClassicSceneConfig,
     key: usize,
     left: [f32; 4],
     right: [f32; 4],
@@ -807,7 +807,7 @@ fn emit_black_key(
     }
 }
 
-fn white_key_offsets(key_layout: &MiditrailLayout, key: usize, pitch: usize) -> (f32, f32) {
+fn white_key_offsets(key_layout: &PianoTrailClassicLayout, key: usize, pitch: usize) -> (f32, f32) {
     let offsets = [
         (0.0, 0.6),
         (0.2, 0.8),
@@ -840,7 +840,7 @@ fn white_pitch_index(key: u8) -> usize {
     }
 }
 
-fn apply_key_press_state(key_state: &mut [KeyState], physics: &MiditrailPhysicsState) {
+fn apply_key_press_state(key_state: &mut [KeyState], physics: &PianoTrailClassicPhysicsState) {
     for (state, press) in key_state.iter_mut().zip(physics.key_press.iter()) {
         state.press = *press;
     }
@@ -938,7 +938,7 @@ fn black_key_color(left: [f32; 4], right: [f32; 4], brightness: f32, blend: f32)
 }
 
 fn push_quad_instance(
-    out: &mut Vec<MiditrailQuadInstance>,
+    out: &mut Vec<PianoTrailClassicQuadInstance>,
     a: [f32; 3],
     b: [f32; 3],
     c: [f32; 3],
@@ -948,14 +948,14 @@ fn push_quad_instance(
     cc: [f32; 4],
     cd: [f32; 4],
 ) {
-    out.push(MiditrailQuadInstance {
+    out.push(PianoTrailClassicQuadInstance {
         positions: [a, b, c, d],
         colors: [ca, cb, cc, cd],
     });
 }
 
 fn push_aura_quad(
-    scene: &mut MiditrailScene,
+    scene: &mut PianoTrailClassicScene,
     a: [f32; 3],
     b: [f32; 3],
     c: [f32; 3],
@@ -963,7 +963,7 @@ fn push_aura_quad(
     left: [f32; 4],
     right: [f32; 4],
 ) {
-    scene.aura_quads.push(MiditrailQuadInstance {
+    scene.aura_quads.push(PianoTrailClassicQuadInstance {
         positions: [a, b, c, d],
         colors: [left, left, right, right],
     });

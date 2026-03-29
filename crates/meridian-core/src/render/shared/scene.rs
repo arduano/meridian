@@ -1,7 +1,7 @@
 use crate::midi::MIDI_KEY_COUNT;
 
 use super::{LAYER_COUNT, SceneLayer, SceneQuad};
-use crate::render::{miditrail::MiditrailScene, pfa::NoteInstance};
+use crate::render::{piano_trail_classic::PianoTrailClassicScene, pfa::NoteInstance};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct KeyActivity {
@@ -14,7 +14,7 @@ pub struct KeyActivity {
 pub struct ProjectedScene {
     layers: [Vec<SceneQuad>; LAYER_COUNT],
     note_layers: [Vec<NoteInstance>; 2],
-    miditrail: Option<MiditrailScene>,
+    piano_trail_classic: Option<PianoTrailClassicScene>,
     note_key_x: [[f32; 2]; MIDI_KEY_COUNT],
     note_params: [f32; 4],
     key_activity: [KeyActivity; MIDI_KEY_COUNT],
@@ -30,7 +30,7 @@ impl Default for ProjectedScene {
         Self {
             layers: std::array::from_fn(|_| Vec::new()),
             note_layers: std::array::from_fn(|_| Vec::new()),
-            miditrail: None,
+            piano_trail_classic: None,
             note_key_x: [[0.0; 2]; MIDI_KEY_COUNT],
             note_params: [0.0; 4],
             key_activity: [KeyActivity::default(); MIDI_KEY_COUNT],
@@ -51,8 +51,8 @@ impl ProjectedScene {
         for layer in &mut self.note_layers {
             layer.clear();
         }
-        if let Some(miditrail) = &mut self.miditrail {
-            miditrail.clear();
+        if let Some(piano_trail_classic) = &mut self.piano_trail_classic {
+            piano_trail_classic.clear();
         }
         self.key_activity.fill(KeyActivity::default());
         self.notes_black_first = false;
@@ -78,12 +78,12 @@ impl ProjectedScene {
         }
     }
 
-    pub fn miditrail(&self) -> Option<&MiditrailScene> {
-        self.miditrail.as_ref()
+    pub fn piano_trail_classic(&self) -> Option<&PianoTrailClassicScene> {
+        self.piano_trail_classic.as_ref()
     }
 
-    pub(crate) fn take_miditrail(&mut self) -> Option<MiditrailScene> {
-        self.miditrail.take()
+    pub(crate) fn take_piano_trail_classic(&mut self) -> Option<PianoTrailClassicScene> {
+        self.piano_trail_classic.take()
     }
 
     pub fn note_key_x(&self) -> &[[f32; 2]; MIDI_KEY_COUNT] {
@@ -124,22 +124,22 @@ impl ProjectedScene {
         self.key_activity[key] = activity;
     }
 
-    pub(crate) fn set_miditrail(&mut self, miditrail: MiditrailScene) {
-        self.miditrail = Some(miditrail);
+    pub(crate) fn set_piano_trail_classic(&mut self, piano_trail_classic: PianoTrailClassicScene) {
+        self.piano_trail_classic = Some(piano_trail_classic);
     }
 
     pub fn total_quads(&self) -> usize {
         let base = self.layers.iter().map(Vec::len).sum::<usize>()
             + self.note_layers.iter().map(Vec::len).sum::<usize>();
-        match &self.miditrail {
+        match &self.piano_trail_classic {
             Some(_) => self.note_quads + self.keyboard_quads,
             None => base,
         }
     }
 
     pub fn total_vertices(&self) -> usize {
-        match &self.miditrail {
-            Some(miditrail) => miditrail.total_vertices(),
+        match &self.piano_trail_classic {
+            Some(piano_trail_classic) => piano_trail_classic.total_vertices(),
             None => self.total_quads() * 6,
         }
     }

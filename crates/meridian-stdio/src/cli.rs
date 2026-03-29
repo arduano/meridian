@@ -80,7 +80,7 @@ pub enum Command {
         #[arg(long, allow_hyphen_values = true)]
         ffmpeg_flags: Option<String>,
     },
-    DebugMiditrailGeometry {
+    DebugPianoTrailClassicGeometry {
         #[arg(long, default_value_t = 0)]
         first_key: u8,
         #[arg(long, default_value_t = 127)]
@@ -150,12 +150,12 @@ pub fn run() -> Result<(), MeridianError> {
             renderer,
             ffmpeg_flags.as_deref(),
         ),
-        Command::DebugMiditrailGeometry {
+        Command::DebugPianoTrailClassicGeometry {
             first_key,
             last_key,
             width,
             height,
             scene_json,
-        } => crate::debug_miditrail::run(first_key, last_key, width, height, scene_json.as_deref()),
+        } => crate::debug_piano_trail_classic::run(first_key, last_key, width, height, scene_json.as_deref()),
     }
 }

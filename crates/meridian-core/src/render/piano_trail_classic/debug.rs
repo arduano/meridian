@@ -1,27 +1,27 @@
 use glam::{Mat4, Vec3, Vec4};
 use serde::Serialize;
 
-use crate::render::shared::{MiditrailSceneConfig, is_black_key};
+use crate::render::shared::{PianoTrailClassicSceneConfig, is_black_key};
 
-use super::layout::MiditrailLayout;
+use super::layout::PianoTrailClassicLayout;
 
 const KEY_X_SQUEEZE: f32 = 0.95;
 const WHITE_KEY_Y_DROP: f32 = 0.3;
 const BLACK_KEY_Y_LIFT: f32 = 1.2;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct MiditrailGeometryDump {
+pub struct PianoTrailClassicGeometryDump {
     pub same_width_notes: bool,
     pub first_key: u8,
     pub last_key: u8,
     pub viewport_width: u32,
     pub viewport_height: u32,
-    pub keys: Vec<MiditrailKeyGeometry>,
-    pub overlaps: Vec<MiditrailOverlap>,
+    pub keys: Vec<PianoTrailClassicKeyGeometry>,
+    pub overlaps: Vec<PianoTrailClassicOverlap>,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct MiditrailKeyGeometry {
+pub struct PianoTrailClassicKeyGeometry {
     pub key: u8,
     pub is_black: bool,
     pub note_x1: f32,
@@ -39,7 +39,7 @@ pub struct MiditrailKeyGeometry {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct MiditrailOverlap {
+pub struct PianoTrailClassicOverlap {
     pub relation: &'static str,
     pub left_key: u8,
     pub right_key: u8,
@@ -48,16 +48,16 @@ pub struct MiditrailOverlap {
     pub overlap_width: f32,
 }
 
-pub fn dump_miditrail_geometry(
-    config: &MiditrailSceneConfig,
+pub fn dump_piano_trail_classic_geometry(
+    config: &PianoTrailClassicSceneConfig,
     first_key: u8,
     last_key: u8,
     viewport_width: u32,
     viewport_height: u32,
-) -> MiditrailGeometryDump {
+) -> PianoTrailClassicGeometryDump {
     let first = first_key.min(last_key) as usize;
     let last_exclusive = first_key.max(last_key) as usize + 1;
-    let layout = MiditrailLayout::new(first, last_exclusive, config);
+    let layout = PianoTrailClassicLayout::new(first, last_exclusive, config);
     let mvp = build_mvp(
         config,
         viewport_width as f32 / viewport_height.max(1) as f32,
@@ -129,7 +129,7 @@ pub fn dump_miditrail_geometry(
                 Some(slot_right),
             )
         };
-        keys.push(MiditrailKeyGeometry {
+        keys.push(PianoTrailClassicKeyGeometry {
             key: key as u8,
             is_black,
             note_x1,
@@ -147,7 +147,7 @@ pub fn dump_miditrail_geometry(
         });
     }
     let overlaps = compute_overlaps(&keys);
-    MiditrailGeometryDump {
+    PianoTrailClassicGeometryDump {
         same_width_notes: config.same_width_notes,
         first_key,
         last_key,
@@ -158,7 +158,7 @@ pub fn dump_miditrail_geometry(
     }
 }
 
-fn build_mvp(config: &MiditrailSceneConfig, aspect: f32) -> Mat4 {
+fn build_mvp(config: &PianoTrailClassicSceneConfig, aspect: f32) -> Mat4 {
     let mut model = Mat4::IDENTITY;
     if config.vertical_notes {
         model *= Mat4::from_rotation_x(-std::f32::consts::FRAC_PI_2);
@@ -185,7 +185,7 @@ fn project_ndc_x(mvp: Mat4, world: [f32; 3]) -> f32 {
     }
 }
 
-fn compute_overlaps(keys: &[MiditrailKeyGeometry]) -> Vec<MiditrailOverlap> {
+fn compute_overlaps(keys: &[PianoTrailClassicKeyGeometry]) -> Vec<PianoTrailClassicOverlap> {
     let mut overlaps = Vec::new();
     for window in keys.windows(2) {
         let left = &window[0];
@@ -201,7 +201,7 @@ fn compute_overlaps(keys: &[MiditrailKeyGeometry]) -> Vec<MiditrailOverlap> {
             (false, true) | (true, false) => "white_black",
             (true, true) => "black_black",
         };
-        overlaps.push(MiditrailOverlap {
+        overlaps.push(PianoTrailClassicOverlap {
             relation,
             left_key: left.key,
             right_key: right.key,
@@ -213,7 +213,7 @@ fn compute_overlaps(keys: &[MiditrailKeyGeometry]) -> Vec<MiditrailOverlap> {
     overlaps
 }
 
-fn white_key_offsets(key_layout: &MiditrailLayout, key: usize, pitch: usize) -> (f32, f32) {
+fn white_key_offsets(key_layout: &PianoTrailClassicLayout, key: usize, pitch: usize) -> (f32, f32) {
     let offsets = [
         (0.0, 0.6),
         (0.2, 0.8),

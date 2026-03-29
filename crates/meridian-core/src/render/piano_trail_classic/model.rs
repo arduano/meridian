@@ -2,20 +2,20 @@ use bytemuck::{Pod, Zeroable};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct MiditrailQuadInstance {
+pub struct PianoTrailClassicQuadInstance {
     pub positions: [[f32; 3]; 4],
     pub colors: [[f32; 4]; 4],
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct MiditrailScene {
-    pub note_quads: Vec<MiditrailQuadInstance>,
-    pub white_key_quads: Vec<MiditrailQuadInstance>,
-    pub black_key_quads: Vec<MiditrailQuadInstance>,
-    pub aura_quads: Vec<MiditrailQuadInstance>,
+pub struct PianoTrailClassicScene {
+    pub note_quads: Vec<PianoTrailClassicQuadInstance>,
+    pub white_key_quads: Vec<PianoTrailClassicQuadInstance>,
+    pub black_key_quads: Vec<PianoTrailClassicQuadInstance>,
+    pub aura_quads: Vec<PianoTrailClassicQuadInstance>,
 }
 
-impl MiditrailScene {
+impl PianoTrailClassicScene {
     pub fn clear(&mut self) {
         self.note_quads.clear();
         self.white_key_quads.clear();

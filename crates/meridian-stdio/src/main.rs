@@ -1,6 +1,6 @@
 mod benchmark;
 mod cli;
-mod debug_miditrail;
+mod debug_piano_trail_classic;
 mod frame_stdout;
 mod json_mode;
 mod render_video;

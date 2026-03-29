@@ -9,7 +9,9 @@ pub const DEFAULT_PFA_KEYBOARD_ASPECT_RATIO: f32 = 0.084_937_5;
 pub enum RendererKind {
     Flat,
     Pfa,
-    Miditrail,
+    #[serde(rename = "piano_trail_classic")]
+    #[value(name = "piano-trail-classic")]
+    PianoTrailClassic,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -83,63 +85,64 @@ pub struct TwoDSceneConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct MiditrailSceneConfig {
-    #[serde(default = "default_miditrail_same_width_notes")]
+pub struct PianoTrailClassicSceneConfig {
+    #[serde(default = "default_piano_trail_classic_same_width_notes")]
     pub same_width_notes: bool,
-    #[serde(default = "default_miditrail_fov")]
+    #[serde(default = "default_piano_trail_classic_fov")]
     pub fov: f32,
-    #[serde(default = "default_miditrail_view_height")]
+    #[serde(default = "default_piano_trail_classic_view_height")]
     pub view_height: f32,
-    #[serde(default = "default_miditrail_view_offset")]
+    #[serde(default = "default_piano_trail_classic_view_offset")]
     pub view_offset: f32,
     #[serde(default)]
     pub view_pan: f32,
-    #[serde(default = "default_miditrail_cam_ang")]
+    #[serde(default = "default_piano_trail_classic_cam_ang")]
     pub cam_ang: f32,
     #[serde(default)]
     pub cam_rot: f32,
     #[serde(default)]
     pub cam_spin: f32,
-    #[serde(default = "default_miditrail_viewdist")]
+    #[serde(default = "default_piano_trail_classic_viewdist")]
     pub viewdist: f32,
-    #[serde(default = "default_miditrail_viewback")]
+    #[serde(default = "default_piano_trail_classic_viewback")]
     pub viewback: f32,
     #[serde(default)]
     pub vertical_notes: bool,
-    #[serde(default = "default_miditrail_note_down_speed")]
+    #[serde(default = "default_piano_trail_classic_note_down_speed")]
     pub note_down_speed: f32,
-    #[serde(default = "default_miditrail_note_up_speed")]
+    #[serde(default = "default_piano_trail_classic_note_up_speed")]
     pub note_up_speed: f32,
     #[serde(default)]
     pub box_notes: bool,
     #[serde(default)]
     pub light_shade: bool,
-    #[serde(default = "default_miditrail_show_keyboard")]
+    #[serde(default = "default_piano_trail_classic_show_keyboard")]
     pub show_keyboard: bool,
-    #[serde(default = "default_miditrail_tilt_keys")]
+    #[serde(default = "default_piano_trail_classic_tilt_keys")]
     pub tilt_keys: bool,
     #[serde(default)]
     pub eat_notes: bool,
-    #[serde(default = "default_miditrail_aura_strength")]
+    #[serde(default = "default_piano_trail_classic_aura_strength")]
     pub aura_strength: f32,
-    #[serde(default = "default_miditrail_aura_enabled")]
+    #[serde(default = "default_piano_trail_classic_aura_enabled")]
     pub aura_enabled: bool,
     #[serde(default)]
     pub notes_change_size: bool,
-    #[serde(default = "default_miditrail_notes_change_tint")]
+    #[serde(default = "default_piano_trail_classic_notes_change_tint")]
     pub notes_change_tint: bool,
     #[serde(default)]
     pub use_vel: bool,
     #[serde(default)]
     pub palette: NotePaletteConfig,
-    #[serde(default = "default_miditrail_aura_image")]
+    #[serde(default = "default_piano_trail_classic_aura_image")]
     pub aura_image: ProjectorImageConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "projector", rename_all = "snake_case")]
 pub enum ThreeDSceneConfig {
-    Miditrail(MiditrailSceneConfig),
+    #[serde(rename = "piano_trail_classic")]
+    PianoTrailClassic(PianoTrailClassicSceneConfig),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -276,41 +279,41 @@ impl Default for PfaTopColor {
     }
 }
 
-impl Default for MiditrailSceneConfig {
+impl Default for PianoTrailClassicSceneConfig {
     fn default() -> Self {
         Self {
-            same_width_notes: default_miditrail_same_width_notes(),
-            fov: default_miditrail_fov(),
-            view_height: default_miditrail_view_height(),
-            view_offset: default_miditrail_view_offset(),
+            same_width_notes: default_piano_trail_classic_same_width_notes(),
+            fov: default_piano_trail_classic_fov(),
+            view_height: default_piano_trail_classic_view_height(),
+            view_offset: default_piano_trail_classic_view_offset(),
             view_pan: 0.0,
-            cam_ang: default_miditrail_cam_ang(),
+            cam_ang: default_piano_trail_classic_cam_ang(),
             cam_rot: 0.0,
             cam_spin: 0.0,
-            viewdist: default_miditrail_viewdist(),
-            viewback: default_miditrail_viewback(),
+            viewdist: default_piano_trail_classic_viewdist(),
+            viewback: default_piano_trail_classic_viewback(),
             vertical_notes: false,
-            note_down_speed: default_miditrail_note_down_speed(),
-            note_up_speed: default_miditrail_note_up_speed(),
+            note_down_speed: default_piano_trail_classic_note_down_speed(),
+            note_up_speed: default_piano_trail_classic_note_up_speed(),
             box_notes: false,
             light_shade: false,
-            show_keyboard: default_miditrail_show_keyboard(),
-            tilt_keys: default_miditrail_tilt_keys(),
+            show_keyboard: default_piano_trail_classic_show_keyboard(),
+            tilt_keys: default_piano_trail_classic_tilt_keys(),
             eat_notes: false,
-            aura_strength: default_miditrail_aura_strength(),
-            aura_enabled: default_miditrail_aura_enabled(),
+            aura_strength: default_piano_trail_classic_aura_strength(),
+            aura_enabled: default_piano_trail_classic_aura_enabled(),
             notes_change_size: false,
-            notes_change_tint: default_miditrail_notes_change_tint(),
+            notes_change_tint: default_piano_trail_classic_notes_change_tint(),
             use_vel: false,
             palette: NotePaletteConfig::default(),
-            aura_image: default_miditrail_aura_image(),
+            aura_image: default_piano_trail_classic_aura_image(),
         }
     }
 }
 
 impl Default for ThreeDSceneConfig {
     fn default() -> Self {
-        Self::Miditrail(MiditrailSceneConfig::default())
+        Self::PianoTrailClassic(PianoTrailClassicSceneConfig::default())
     }
 }
 
@@ -360,10 +363,10 @@ impl SceneLayout {
                 keyboard: KeyboardProjectorConfig::Flat(FlatKeyboardProjectorConfig),
             }),
             RendererKind::Pfa => SceneConfig::TwoD(TwoDSceneConfig::default()),
-            RendererKind::Miditrail => {
-                SceneConfig::ThreeD(ThreeDSceneConfig::Miditrail(MiditrailSceneConfig {
+            RendererKind::PianoTrailClassic => {
+                SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(PianoTrailClassicSceneConfig {
                     box_notes: true,
-                    ..MiditrailSceneConfig::default()
+                    ..PianoTrailClassicSceneConfig::default()
                 }))
             }
         };
@@ -382,7 +385,7 @@ impl NoteProjectorConfig {
 impl ThreeDSceneConfig {
     pub fn palette(&self) -> &NotePaletteConfig {
         match self {
-            Self::Miditrail(config) => &config.palette,
+            Self::PianoTrailClassic(config) => &config.palette,
         }
     }
 }
@@ -395,63 +398,63 @@ const fn default_top_bar_rgb() -> [f32; 3] {
     [0.585, 0.0392, 0.0249]
 }
 
-const fn default_miditrail_same_width_notes() -> bool {
+const fn default_piano_trail_classic_same_width_notes() -> bool {
     true
 }
 
-const fn default_miditrail_fov() -> f32 {
+const fn default_piano_trail_classic_fov() -> f32 {
     std::f32::consts::PI / 3.0
 }
 
-const fn default_miditrail_view_height() -> f32 {
+const fn default_piano_trail_classic_view_height() -> f32 {
     0.5
 }
 
-const fn default_miditrail_view_offset() -> f32 {
+const fn default_piano_trail_classic_view_offset() -> f32 {
     0.4
 }
 
-const fn default_miditrail_cam_ang() -> f32 {
+const fn default_piano_trail_classic_cam_ang() -> f32 {
     0.56
 }
 
-const fn default_miditrail_viewdist() -> f32 {
+const fn default_piano_trail_classic_viewdist() -> f32 {
     14.0
 }
 
-const fn default_miditrail_viewback() -> f32 {
+const fn default_piano_trail_classic_viewback() -> f32 {
     0.2
 }
 
-const fn default_miditrail_note_down_speed() -> f32 {
+const fn default_piano_trail_classic_note_down_speed() -> f32 {
     0.6
 }
 
-const fn default_miditrail_note_up_speed() -> f32 {
+const fn default_piano_trail_classic_note_up_speed() -> f32 {
     0.2
 }
 
-const fn default_miditrail_show_keyboard() -> bool {
+const fn default_piano_trail_classic_show_keyboard() -> bool {
     true
 }
 
-const fn default_miditrail_tilt_keys() -> bool {
+const fn default_piano_trail_classic_tilt_keys() -> bool {
     true
 }
 
-const fn default_miditrail_aura_strength() -> f32 {
+const fn default_piano_trail_classic_aura_strength() -> f32 {
     2.0
 }
 
-const fn default_miditrail_aura_enabled() -> bool {
+const fn default_piano_trail_classic_aura_enabled() -> bool {
     true
 }
 
-const fn default_miditrail_notes_change_tint() -> bool {
+const fn default_piano_trail_classic_notes_change_tint() -> bool {
     true
 }
 
-fn default_miditrail_aura_image() -> ProjectorImageConfig {
+fn default_piano_trail_classic_aura_image() -> ProjectorImageConfig {
     ProjectorImageConfig::Builtin {
         name: "ring".to_string(),
     }

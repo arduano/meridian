@@ -1,12 +1,12 @@
 use glam::{Mat4, Vec3};
 
-use super::pipeline::{MiditrailPipelines, Uniforms, VIEWPORT_FORMAT};
+use super::pipeline::{PianoTrailClassicPipelines, Uniforms, VIEWPORT_FORMAT};
 use super::streaming::StreamingBufferPool;
 use crate::render::{
     SceneLayout,
-    miditrail::model::{MiditrailQuadInstance, MiditrailScene},
+    piano_trail_classic::model::{PianoTrailClassicQuadInstance, PianoTrailClassicScene},
     shared::{
-        BuiltinProjectorImage, LoadedProjectorImage, MiditrailSceneConfig, ProjectorImageConfig,
+        BuiltinProjectorImage, LoadedProjectorImage, PianoTrailClassicSceneConfig, ProjectorImageConfig,
         ThreeDSceneConfig, load_projector_image,
     },
 };
@@ -18,13 +18,13 @@ const OPENGL_TO_WGPU: Mat4 = Mat4::from_cols_array(&[
     0.0, 0.0, 0.5, 1.0, //
 ]);
 
-pub struct MiditrailRenderer {
-    pipelines: MiditrailPipelines,
+pub struct PianoTrailClassicRenderer {
+    pipelines: PianoTrailClassicPipelines,
     depth: wgpu::Texture,
-    note_quads: StreamingBufferPool<MiditrailQuadInstance>,
-    white_key_quads: StreamingBufferPool<MiditrailQuadInstance>,
-    black_key_quads: StreamingBufferPool<MiditrailQuadInstance>,
-    aura_quads: StreamingBufferPool<MiditrailQuadInstance>,
+    note_quads: StreamingBufferPool<PianoTrailClassicQuadInstance>,
+    white_key_quads: StreamingBufferPool<PianoTrailClassicQuadInstance>,
+    black_key_quads: StreamingBufferPool<PianoTrailClassicQuadInstance>,
+    aura_quads: StreamingBufferPool<PianoTrailClassicQuadInstance>,
     aura_texture: Option<AuraTextureState>,
 }
 
@@ -35,15 +35,15 @@ struct AuraTextureState {
     bind_group: wgpu::BindGroup,
 }
 
-impl MiditrailRenderer {
+impl PianoTrailClassicRenderer {
     pub fn new(device: &wgpu::Device, width: u32, height: u32) -> Self {
         Self {
-            pipelines: MiditrailPipelines::new(device),
+            pipelines: PianoTrailClassicPipelines::new(device),
             depth: create_depth_texture(device, width, height),
-            note_quads: StreamingBufferPool::new("MiditrailNoteQuads"),
-            white_key_quads: StreamingBufferPool::new("MiditrailWhiteKeyQuads"),
-            black_key_quads: StreamingBufferPool::new("MiditrailBlackKeyQuads"),
-            aura_quads: StreamingBufferPool::new("MiditrailAuraQuads"),
+            note_quads: StreamingBufferPool::new("PianoTrailClassicNoteQuads"),
+            white_key_quads: StreamingBufferPool::new("PianoTrailClassicWhiteKeyQuads"),
+            black_key_quads: StreamingBufferPool::new("PianoTrailClassicBlackKeyQuads"),
+            aura_quads: StreamingBufferPool::new("PianoTrailClassicAuraQuads"),
             aura_texture: None,
         }
     }
@@ -54,10 +54,10 @@ impl MiditrailRenderer {
         queue: &wgpu::Queue,
         target: &wgpu::Texture,
         layout: &SceneLayout,
-        scene: &MiditrailScene,
+        scene: &PianoTrailClassicScene,
     ) {
         let config = match &layout.scene {
-            crate::render::SceneConfig::ThreeD(ThreeDSceneConfig::Miditrail(config)) => config,
+            crate::render::SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => config,
             _ => return,
         };
         let mvp = build_mvp(
@@ -76,11 +76,11 @@ impl MiditrailRenderer {
         let target_view = target.create_view(&Default::default());
         let depth_view = self.depth.create_view(&Default::default());
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("MiditrailEncoder"),
+            label: Some("PianoTrailClassicEncoder"),
         });
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("MiditrailPass"),
+                label: Some("PianoTrailClassicPass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &target_view,
                     resolve_target: None,
@@ -194,13 +194,13 @@ impl MiditrailRenderer {
         {
             return;
         }
-        let loaded = match load_projector_image(selection, miditrail_aura_builtins()) {
+        let loaded = match load_projector_image(selection, piano_trail_classic_aura_builtins()) {
             Ok(image) => image,
             Err(error) => {
                 eprintln!(
                     "failed to load aura image {selection:?}: {error}; falling back to builtin ring"
                 );
-                load_projector_image(&default_miditrail_aura_image(), miditrail_aura_builtins())
+                load_projector_image(&default_piano_trail_classic_aura_image(), piano_trail_classic_aura_builtins())
                     .expect("builtin ring aura should load")
             }
         };
@@ -217,7 +217,7 @@ impl MiditrailRenderer {
 fn create_aura_texture_state(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    pipelines: &MiditrailPipelines,
+    pipelines: &PianoTrailClassicPipelines,
     selection: ProjectorImageConfig,
     loaded: LoadedProjectorImage,
 ) -> AuraTextureState {
@@ -227,7 +227,7 @@ fn create_aura_texture_state(
         depth_or_array_layers: 1,
     };
     let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("MiditrailAuraTexture"),
+        label: Some("PianoTrailClassicAuraTexture"),
         size,
         mip_level_count: 1,
         sample_count: 1,
@@ -253,7 +253,7 @@ fn create_aura_texture_state(
     );
     let texture_view = texture.create_view(&Default::default());
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some("MiditrailAuraSampler"),
+        label: Some("PianoTrailClassicAuraSampler"),
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,
         address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -263,7 +263,7 @@ fn create_aura_texture_state(
         ..Default::default()
     });
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("MiditrailAuraBindGroup"),
+        label: Some("PianoTrailClassicAuraBindGroup"),
         layout: &pipelines.aura_bind_group_layout,
         entries: &[
             wgpu::BindGroupEntry {
@@ -288,17 +288,17 @@ fn create_aura_texture_state(
     }
 }
 
-fn miditrail_aura_builtins() -> &'static [BuiltinProjectorImage] {
+fn piano_trail_classic_aura_builtins() -> &'static [BuiltinProjectorImage] {
     &[BuiltinProjectorImage {
         name: "ring",
         png_bytes: include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/assets/miditrail/aura_ring.png"
+            "/assets/piano_trail_classic/aura_ring.png"
         )),
     }]
 }
 
-fn default_miditrail_aura_image() -> ProjectorImageConfig {
+fn default_piano_trail_classic_aura_image() -> ProjectorImageConfig {
     ProjectorImageConfig::Builtin {
         name: "ring".to_string(),
     }
@@ -307,17 +307,17 @@ fn default_miditrail_aura_image() -> ProjectorImageConfig {
 fn draw_color_chunks(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    buffer: &mut StreamingBufferPool<MiditrailQuadInstance>,
+    buffer: &mut StreamingBufferPool<PianoTrailClassicQuadInstance>,
     pass: &mut wgpu::RenderPass<'_>,
     pipeline: &wgpu::RenderPipeline,
-    quads: &[MiditrailQuadInstance],
+    quads: &[PianoTrailClassicQuadInstance],
 ) {
     if quads.is_empty() {
         return;
     }
     pass.set_pipeline(pipeline);
     for (chunk_index, chunk) in quads
-        .chunks(StreamingBufferPool::<MiditrailQuadInstance>::max_chunk_len())
+        .chunks(StreamingBufferPool::<PianoTrailClassicQuadInstance>::max_chunk_len())
         .enumerate()
     {
         buffer.write_chunk(device, queue, chunk_index, chunk);
@@ -329,17 +329,17 @@ fn draw_color_chunks(
 fn draw_aura_chunks(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    buffer: &mut StreamingBufferPool<MiditrailQuadInstance>,
+    buffer: &mut StreamingBufferPool<PianoTrailClassicQuadInstance>,
     pass: &mut wgpu::RenderPass<'_>,
     pipeline: &wgpu::RenderPipeline,
-    quads: &[MiditrailQuadInstance],
+    quads: &[PianoTrailClassicQuadInstance],
 ) {
     if quads.is_empty() {
         return;
     }
     pass.set_pipeline(pipeline);
     for (chunk_index, chunk) in quads
-        .chunks(StreamingBufferPool::<MiditrailQuadInstance>::max_chunk_len())
+        .chunks(StreamingBufferPool::<PianoTrailClassicQuadInstance>::max_chunk_len())
         .enumerate()
     {
         buffer.write_chunk(device, queue, chunk_index, chunk);
@@ -348,7 +348,7 @@ fn draw_aura_chunks(
     }
 }
 
-fn build_mvp(config: &MiditrailSceneConfig, aspect: f32) -> Mat4 {
+fn build_mvp(config: &PianoTrailClassicSceneConfig, aspect: f32) -> Mat4 {
     let mut model = Mat4::IDENTITY;
     if config.vertical_notes {
         model *= Mat4::from_rotation_x(-std::f32::consts::FRAC_PI_2);
@@ -368,7 +368,7 @@ fn build_mvp(config: &MiditrailSceneConfig, aspect: f32) -> Mat4 {
 
 fn create_depth_texture(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
     device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("MiditrailDepthTexture"),
+        label: Some("PianoTrailClassicDepthTexture"),
         size: wgpu::Extent3d {
             width,
             height,
@@ -385,7 +385,7 @@ fn create_depth_texture(device: &wgpu::Device, width: u32, height: u32) -> wgpu:
 
 pub fn create_headless_target(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
     device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("MiditrailHeadlessTarget"),
+        label: Some("PianoTrailClassicHeadlessTarget"),
         size: wgpu::Extent3d {
             width,
             height,

@@ -27,9 +27,9 @@ pub fn rows_for_scene(scene: &SceneConfig) -> Vec<InspectorRow> {
             rows.extend(note_rows(&config.notes));
             rows.extend(keyboard_rows(&config.keyboard));
         }
-        SceneConfig::ThreeD(ThreeDSceneConfig::Miditrail(config)) => {
+        SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => {
             rows.push(row("Scene", "Scene Type", "3D"));
-            rows.push(row("Scene", "Projector", "miditrail"));
+            rows.push(row("Scene", "Projector", "piano_trail_classic"));
             rows.push(row(
                 "Camera",
                 "FOV",

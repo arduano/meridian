@@ -1,12 +1,12 @@
 pub mod flat;
 pub mod headless;
-pub mod miditrail;
+pub mod piano_trail_classic;
 pub mod pfa;
 pub mod shared;
 
 pub use shared::{
     FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardHeightSpec,
-    KeyboardProjectorConfig, MiditrailSceneConfig, NotePaletteConfig, NoteProjectorConfig,
+    KeyboardProjectorConfig, PianoTrailClassicSceneConfig, NotePaletteConfig, NoteProjectorConfig,
     PfaKeyboardProjectorConfig, PfaNoteProjectorConfig, PfaTopColor, ProjectedScene,
     ProjectorImageConfig, RendererKind, SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState,
     SceneQuad, ThreeDSceneConfig, TwoDSceneConfig, ZenithPaletteSpec, tick_scene_physics,
@@ -14,7 +14,7 @@ pub use shared::{
 
 use crate::midi::{backend::MIDIFileUnion, views::MIDIFileViewsUnion};
 use flat::{FlatKeyboardProjector, FlatNoteProjector};
-use miditrail::project_miditrail_scene;
+use piano_trail_classic::project_piano_trail_classic_scene;
 use pfa::{PfaKeyboardProjector, PfaNoteProjector};
 use shared::{
     KeyboardProjectorConfig as KeyboardConfig, NoteProjectorConfig as NoteConfig, SceneConfig::*,
@@ -87,8 +87,8 @@ pub fn project_scene_views_into(
                 }
             }
         }
-        ThreeD(ThreeDSceneConfig::Miditrail(config)) => {
-            project_miditrail_scene(config, physics, views, layout, scene)
+        ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => {
+            project_piano_trail_classic_scene(config, physics, views, layout, scene)
         }
     }
 }

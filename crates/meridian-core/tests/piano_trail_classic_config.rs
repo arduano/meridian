@@ -1,10 +1,10 @@
 use meridian_core::render::{
-    MiditrailSceneConfig, ProjectorImageConfig, SceneConfig, ThreeDSceneConfig,
+    PianoTrailClassicSceneConfig, ProjectorImageConfig, SceneConfig, ThreeDSceneConfig,
 };
 
 #[test]
-fn miditrail_defaults_match_zenith_master() {
-    let config = MiditrailSceneConfig::default();
+fn piano_trail_classic_defaults_match_zenith_master() {
+    let config = PianoTrailClassicSceneConfig::default();
     assert!(config.same_width_notes);
     assert!((config.fov - std::f32::consts::PI / 3.0).abs() < 1e-6);
     assert!((config.view_height - 0.5).abs() < 1e-6);
@@ -27,10 +27,10 @@ fn miditrail_defaults_match_zenith_master() {
 }
 
 #[test]
-fn three_d_scene_defaults_to_miditrail() {
+fn three_d_scene_defaults_to_piano_trail_classic() {
     let scene = SceneConfig::ThreeD(ThreeDSceneConfig::default());
     match scene {
-        SceneConfig::ThreeD(ThreeDSceneConfig::Miditrail(_)) => {}
-        _ => panic!("expected miditrail default"),
+        SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => {}
+        _ => panic!("expected piano_trail_classic default"),
     }
 }

@@ -3,8 +3,8 @@ use std::io::{self, Write};
 use meridian_core::{
     MeridianError,
     render::{
-        SceneConfig, ThreeDSceneConfig, miditrail::debug::dump_miditrail_geometry,
-        shared::MiditrailSceneConfig,
+        SceneConfig, ThreeDSceneConfig, piano_trail_classic::debug::dump_piano_trail_classic_geometry,
+        shared::PianoTrailClassicSceneConfig,
     },
 };
 
@@ -19,17 +19,17 @@ pub fn run(
         Some(raw) => match serde_json::from_str::<SceneConfig>(raw)
             .map_err(|err| MeridianError::Platform(format!("invalid scene json: {err}")))?
         {
-            SceneConfig::ThreeD(ThreeDSceneConfig::Miditrail(config)) => config,
+            SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => config,
             _ => {
                 return Err(MeridianError::Platform(
-                    "scene json must be a three_d miditrail scene".to_string(),
+                    "scene json must be a three_d piano_trail_classic scene".to_string(),
                 ));
             }
         },
-        None => MiditrailSceneConfig::default(),
+        None => PianoTrailClassicSceneConfig::default(),
     };
 
-    let dump = dump_miditrail_geometry(&config, first_key, last_key, width, height);
+    let dump = dump_piano_trail_classic_geometry(&config, first_key, last_key, width, height);
     let stdout = io::stdout();
     let mut lock = stdout.lock();
     serde_json::to_writer_pretty(&mut lock, &dump)

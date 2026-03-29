@@ -1,9 +1,9 @@
 use crate::midi::MIDI_KEY_COUNT;
 
-use crate::render::shared::{MiditrailSceneConfig, is_black_key};
+use crate::render::shared::{PianoTrailClassicSceneConfig, is_black_key};
 
 #[derive(Clone, Copy, Debug)]
-pub struct MiditrailLayout {
+pub struct PianoTrailClassicLayout {
     pub first_key: usize,
     pub last_key_exclusive: usize,
     pub x1: [f32; MIDI_KEY_COUNT],
@@ -11,8 +11,8 @@ pub struct MiditrailLayout {
     pub circle_radius: f32,
 }
 
-impl MiditrailLayout {
-    pub fn new(first_key: usize, last_key_exclusive: usize, config: &MiditrailSceneConfig) -> Self {
+impl PianoTrailClassicLayout {
+    pub fn new(first_key: usize, last_key_exclusive: usize, config: &PianoTrailClassicSceneConfig) -> Self {
         let last_key_exclusive = last_key_exclusive.min(MIDI_KEY_COUNT);
         let mut x1 = [0.0; MIDI_KEY_COUNT];
         let mut width = [0.0; MIDI_KEY_COUNT];

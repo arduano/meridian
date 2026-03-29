@@ -6,16 +6,16 @@ use pollster::block_on;
 use crate::{
     error::MeridianError,
     protocol::ImageOutputFormat,
-    render::{SceneLayout, miditrail::model::MiditrailScene},
+    render::{SceneLayout, piano_trail_classic::model::PianoTrailClassicScene},
 };
 
-use super::renderer::{MiditrailRenderer, create_headless_target};
+use super::renderer::{PianoTrailClassicRenderer, create_headless_target};
 
 pub struct HeadlessRenderSession {
     device: wgpu::Device,
     queue: wgpu::Queue,
     texture: wgpu::Texture,
-    renderer: MiditrailRenderer,
+    renderer: PianoTrailClassicRenderer,
     width: u32,
     height: u32,
 }
@@ -26,7 +26,7 @@ impl HeadlessRenderSession {
         let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
             .map_err(|e| MeridianError::Wgpu(format!("request_adapter failed: {e}")))?;
         let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("MeridianMiditrailDevice"),
+            label: Some("MeridianPianoTrailClassicDevice"),
             required_features: wgpu::Features::empty(),
             required_limits: wgpu::Limits::downlevel_defaults(),
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
@@ -36,7 +36,7 @@ impl HeadlessRenderSession {
         .map_err(|e| MeridianError::Wgpu(format!("request_device failed: {e}")))?;
         Ok(Self {
             texture: create_headless_target(&device, width, height),
-            renderer: MiditrailRenderer::new(&device, width, height),
+            renderer: PianoTrailClassicRenderer::new(&device, width, height),
             device,
             queue,
             width,
@@ -44,7 +44,7 @@ impl HeadlessRenderSession {
         })
     }
 
-    pub fn render(&mut self, layout: &SceneLayout, scene: &MiditrailScene) {
+    pub fn render(&mut self, layout: &SceneLayout, scene: &PianoTrailClassicScene) {
         self.renderer
             .render(&self.device, &self.queue, &self.texture, layout, scene);
     }
@@ -56,7 +56,7 @@ impl HeadlessRenderSession {
             unpadded_bytes_per_row.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize);
         let output_size = padded_bytes_per_row * self.height as usize;
         let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("MiditrailReadback"),
+            label: Some("PianoTrailClassicReadback"),
             size: output_size as u64,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
@@ -65,7 +65,7 @@ impl HeadlessRenderSession {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("MiditrailReadbackEncoder"),
+                label: Some("PianoTrailClassicReadbackEncoder"),
             });
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
@@ -119,7 +119,7 @@ pub fn render_scene_headless_to_rgba(
     width: u32,
     height: u32,
     layout: &SceneLayout,
-    scene: &MiditrailScene,
+    scene: &PianoTrailClassicScene,
 ) -> Result<Vec<u8>, MeridianError> {
     let mut session = HeadlessRenderSession::new(width, height)?;
     session.render(layout, scene);
@@ -130,7 +130,7 @@ pub fn save_scene_headless(
     width: u32,
     height: u32,
     layout: &SceneLayout,
-    scene: &MiditrailScene,
+    scene: &PianoTrailClassicScene,
     format: ImageOutputFormat,
     output: &Path,
 ) -> Result<u64, MeridianError> {

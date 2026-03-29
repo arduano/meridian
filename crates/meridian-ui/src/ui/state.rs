@@ -154,7 +154,7 @@ fn scene_summary(scene: &SceneConfig) -> String {
             keyboard_name(&scene.keyboard),
             height_name(&scene.keyboard_height),
         ),
-        SceneConfig::ThreeD(_) => "3D / Miditrail".into(),
+        SceneConfig::ThreeD(_) => "3D / Piano Trail Classic".into(),
     }
 }
 

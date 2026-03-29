@@ -8,7 +8,7 @@ use crate::{
 
 pub enum HeadlessRenderSession {
     TwoD(crate::render::pfa::wgpu::HeadlessRenderSession),
-    ThreeD(crate::render::miditrail::wgpu::HeadlessRenderSession),
+    ThreeD(crate::render::piano_trail_classic::wgpu::HeadlessRenderSession),
 }
 
 impl HeadlessRenderSession {
@@ -18,7 +18,7 @@ impl HeadlessRenderSession {
                 crate::render::pfa::wgpu::HeadlessRenderSession::new(width, height)?,
             )),
             SceneConfig::ThreeD(_) => Ok(Self::ThreeD(
-                crate::render::miditrail::wgpu::HeadlessRenderSession::new(width, height)?,
+                crate::render::piano_trail_classic::wgpu::HeadlessRenderSession::new(width, height)?,
             )),
         }
     }
@@ -27,8 +27,8 @@ impl HeadlessRenderSession {
         match self {
             Self::TwoD(session) => session.render(scene),
             Self::ThreeD(session) => {
-                if let Some(miditrail) = scene.miditrail() {
-                    session.render(layout, miditrail);
+                if let Some(piano_trail_classic) = scene.piano_trail_classic() {
+                    session.render(layout, piano_trail_classic);
                 }
             }
         }
@@ -66,11 +66,11 @@ pub fn save_scene_headless(
             crate::render::pfa::wgpu::save_scene_headless(width, height, scene, format, output)
         }
         SceneConfig::ThreeD(_) => {
-            let miditrail = scene.miditrail().ok_or_else(|| {
-                MeridianError::InvalidMidi("missing miditrail scene payload".into())
+            let piano_trail_classic = scene.piano_trail_classic().ok_or_else(|| {
+                MeridianError::InvalidMidi("missing piano_trail_classic scene payload".into())
             })?;
-            crate::render::miditrail::wgpu::save_scene_headless(
-                width, height, layout, miditrail, format, output,
+            crate::render::piano_trail_classic::wgpu::save_scene_headless(
+                width, height, layout, piano_trail_classic, format, output,
             )
         }
     }

@@ -1,20 +1,20 @@
 use crate::midi::{backend::MIDIFileUnion, views::MIDIFileViewsUnion};
 
 use super::{SceneConfig, SceneLayout, ThreeDSceneConfig};
-use crate::render::miditrail::{MiditrailPhysicsState, tick_miditrail_physics};
+use crate::render::piano_trail_classic::{PianoTrailClassicPhysicsState, tick_piano_trail_classic_physics};
 
 #[derive(Clone, Debug)]
 pub enum ScenePhysicsState {
     TwoD,
-    Miditrail(MiditrailPhysicsState),
+    PianoTrailClassic(PianoTrailClassicPhysicsState),
 }
 
 impl ScenePhysicsState {
     pub fn new(scene: &SceneConfig) -> Self {
         match scene {
             SceneConfig::TwoD(_) => Self::TwoD,
-            SceneConfig::ThreeD(ThreeDSceneConfig::Miditrail(_)) => {
-                Self::Miditrail(MiditrailPhysicsState::default())
+            SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => {
+                Self::PianoTrailClassic(PianoTrailClassicPhysicsState::default())
             }
         }
     }
@@ -48,9 +48,9 @@ pub fn tick_scene_physics_views(
     match (&layout.scene, physics) {
         (SceneConfig::TwoD(_), ScenePhysicsState::TwoD) => {}
         (
-            SceneConfig::ThreeD(ThreeDSceneConfig::Miditrail(config)),
-            ScenePhysicsState::Miditrail(state),
-        ) => tick_miditrail_physics(state, config, views, delta_seconds as f32),
+            SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)),
+            ScenePhysicsState::PianoTrailClassic(state),
+        ) => tick_piano_trail_classic_physics(state, config, views, delta_seconds as f32),
         (scene, state) => state.reset(scene),
     }
 }

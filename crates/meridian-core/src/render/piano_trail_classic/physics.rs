@@ -1,13 +1,13 @@
 use crate::{
-    midi::MIDI_KEY_COUNT, midi::views::MIDIFileViewsUnion, render::shared::MiditrailSceneConfig,
+    midi::MIDI_KEY_COUNT, midi::views::MIDIFileViewsUnion, render::shared::PianoTrailClassicSceneConfig,
 };
 
 #[derive(Clone, Debug)]
-pub struct MiditrailPhysicsState {
+pub struct PianoTrailClassicPhysicsState {
     pub key_press: [f32; MIDI_KEY_COUNT],
 }
 
-impl Default for MiditrailPhysicsState {
+impl Default for PianoTrailClassicPhysicsState {
     fn default() -> Self {
         Self {
             key_press: [0.0; MIDI_KEY_COUNT],
@@ -15,9 +15,9 @@ impl Default for MiditrailPhysicsState {
     }
 }
 
-pub fn tick_miditrail_physics(
-    state: &mut MiditrailPhysicsState,
-    config: &MiditrailSceneConfig,
+pub fn tick_piano_trail_classic_physics(
+    state: &mut PianoTrailClassicPhysicsState,
+    config: &PianoTrailClassicSceneConfig,
     views: &MIDIFileViewsUnion<'_>,
     delta_seconds: f32,
 ) {

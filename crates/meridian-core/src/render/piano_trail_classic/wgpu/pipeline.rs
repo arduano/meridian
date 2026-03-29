@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 
 use super::shaders::{AURA_SHADER, COLOR_SHADER};
-use crate::render::miditrail::model::MiditrailQuadInstance;
+use crate::render::piano_trail_classic::model::PianoTrailClassicQuadInstance;
 
 pub const VIEWPORT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
@@ -11,7 +11,7 @@ pub struct Uniforms {
     pub mvp: [[f32; 4]; 4],
 }
 
-pub struct MiditrailPipelines {
+pub struct PianoTrailClassicPipelines {
     pub uniform_buffer: wgpu::Buffer,
     pub color_bind_group: wgpu::BindGroup,
     pub aura_bind_group_layout: wgpu::BindGroupLayout,
@@ -20,17 +20,17 @@ pub struct MiditrailPipelines {
     pub aura_less: wgpu::RenderPipeline,
 }
 
-impl MiditrailPipelines {
+impl PianoTrailClassicPipelines {
     pub fn new(device: &wgpu::Device) -> Self {
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("MiditrailUniformBuffer"),
+            label: Some("PianoTrailClassicUniformBuffer"),
             size: std::mem::size_of::<Uniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let color_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("MiditrailColorBindGroupLayout"),
+                label: Some("PianoTrailClassicColorBindGroupLayout"),
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
@@ -43,7 +43,7 @@ impl MiditrailPipelines {
                 }],
             });
         let color_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("MiditrailColorBindGroup"),
+            label: Some("PianoTrailClassicColorBindGroup"),
             layout: &color_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
@@ -52,13 +52,13 @@ impl MiditrailPipelines {
         });
         let color_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("MiditrailColorPipelineLayout"),
+                label: Some("PianoTrailClassicColorPipelineLayout"),
                 bind_group_layouts: &[&color_bind_group_layout],
                 immediate_size: 0,
             });
         let aura_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("MiditrailAuraBindGroupLayout"),
+                label: Some("PianoTrailClassicAuraBindGroupLayout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
@@ -89,7 +89,7 @@ impl MiditrailPipelines {
                 ],
             });
         let aura_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("MiditrailAuraPipelineLayout"),
+            label: Some("PianoTrailClassicAuraPipelineLayout"),
             bind_group_layouts: &[&aura_bind_group_layout],
             immediate_size: 0,
         });
@@ -119,18 +119,18 @@ fn create_color_pipeline(
     depth_compare: wgpu::CompareFunction,
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("MiditrailColorShader"),
+        label: Some("PianoTrailClassicColorShader"),
         source: wgpu::ShaderSource::Wgsl(COLOR_SHADER.into()),
     });
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("MiditrailColorPipeline"),
+        label: Some("PianoTrailClassicColorPipeline"),
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: Some("vs_main"),
             compilation_options: Default::default(),
             buffers: &[wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<MiditrailQuadInstance>() as u64,
+                array_stride: std::mem::size_of::<PianoTrailClassicQuadInstance>() as u64,
                 step_mode: wgpu::VertexStepMode::Instance,
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3,
@@ -173,18 +173,18 @@ fn create_aura_pipeline(
     layout: &wgpu::PipelineLayout,
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("MiditrailAuraShader"),
+        label: Some("PianoTrailClassicAuraShader"),
         source: wgpu::ShaderSource::Wgsl(AURA_SHADER.into()),
     });
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("MiditrailAuraPipeline"),
+        label: Some("PianoTrailClassicAuraPipeline"),
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: Some("vs_main"),
             compilation_options: Default::default(),
             buffers: &[wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<MiditrailQuadInstance>() as u64,
+                array_stride: std::mem::size_of::<PianoTrailClassicQuadInstance>() as u64,
                 step_mode: wgpu::VertexStepMode::Instance,
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3,
