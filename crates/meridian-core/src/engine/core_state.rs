@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     path::PathBuf,
     sync::{Arc, Mutex, atomic::AtomicBool},
     time::Instant,
@@ -9,12 +10,20 @@ use flume::{Receiver, Sender};
 use crate::{
     audio::{AudioConfig, LiveAudioSession, MeridianAudioPlayer, PlaybackClock},
     display::LiveDisplaySession,
+    midi::audio_cache::InRamAudioCache,
     midi::MidiCacheStack,
-    protocol::{AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, VideoRenderStatus},
+    protocol::{
+        AudioCacheId, AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, DisplayCacheId,
+        ParsedMidiId, VideoRenderStatus,
+    },
     transport::TransportState,
 };
 
-use super::{CoreHandle, CoreResponse, RequestMessage, support::error_event};
+use super::{
+    CoreHandle, CoreResponse, RequestMessage,
+    resources::{AudioCacheRegistry, DisplayCacheRegistry, ParsedMidiRegistry},
+    support::error_event,
+};
 
 pub(super) struct RenderJobState {
     pub(super) cancel: Arc<AtomicBool>,
@@ -30,6 +39,14 @@ pub(super) struct CoreState {
     pub(super) core_handle: CoreHandle,
     pub(super) subscribers: Arc<Mutex<Vec<Sender<CoreEvent>>>>,
     pub(super) midi_cache: Option<MidiCacheStack>,
+    pub(super) parsed_midis: ParsedMidiRegistry,
+    pub(super) display_caches: DisplayCacheRegistry,
+    pub(super) audio_caches: AudioCacheRegistry,
+    pub(super) next_resource_id: u64,
+    pub(super) active_parsed_midi_id: Option<ParsedMidiId>,
+    pub(super) active_display_cache_id: Option<DisplayCacheId>,
+    pub(super) active_audio_cache_id: Option<AudioCacheId>,
+    pub(super) current_audio_cache: Option<Arc<InRamAudioCache>>,
     pub(super) display: LiveDisplaySession,
     pub(super) audio_config: AudioConfig,
     pub(super) audio_player: Arc<MeridianAudioPlayer>,
@@ -53,6 +70,14 @@ impl CoreState {
             },
             subscribers,
             midi_cache: None,
+            parsed_midis: HashMap::new(),
+            display_caches: HashMap::new(),
+            audio_caches: HashMap::new(),
+            next_resource_id: 1,
+            active_parsed_midi_id: None,
+            active_display_cache_id: None,
+            active_audio_cache_id: None,
+            current_audio_cache: None,
             display: LiveDisplaySession::new(),
             audio_config: AudioConfig::default(),
             audio_player: MeridianAudioPlayer::new(&AudioConfig::default()),
@@ -102,30 +127,20 @@ impl CoreState {
             CoreCommand::GetState => vec![CoreEvent::StateSnapshot {
                 state: self.snapshot(),
             }],
-            CoreCommand::LoadMidi { path } => match MidiCacheStack::load(&path)
-                .and_then(|cache| cache.instantiate_display_in_ram().map(|midi| (cache, midi)))
-            {
-                Ok((cache, midi)) => {
-                    self.audio_session = None;
-                    self.midi_cache = Some(cache);
-                    self.midi_path = Some(path.clone());
-                    self.display.load_midi(midi, Instant::now());
-                    if let Err(error) = self.refresh_note_colors() {
-                        return vec![error_event(CoreErrorCode::Internal, error.to_string())];
-                    }
-                    let now = Instant::now();
-                    self.transport.reset(now);
-                    self.display.mark_physics_tick(now);
-                    self.audio_clock.set_time(0.0);
-                    self.audio_clock.set_playing(false);
-                    self.start_audio_session();
-                    vec![CoreEvent::MidiLoaded {
-                        path,
-                        state: self.snapshot(),
-                    }]
-                }
-                Err(error) => vec![error_event(CoreErrorCode::Internal, error.to_string())],
-            },
+            CoreCommand::LoadParsedMidi { path } => self.load_parsed_midi_resource(path),
+            CoreCommand::BuildDisplayCache { parsed_midi_id } => {
+                self.build_display_cache_resource(parsed_midi_id)
+            }
+            CoreCommand::BuildAudioCache { parsed_midi_id } => {
+                self.build_audio_cache_resource(parsed_midi_id)
+            }
+            CoreCommand::AttachDisplayCache { display_cache_id } => {
+                self.attach_display_cache_resource(display_cache_id)
+            }
+            CoreCommand::AttachAudioCache { audio_cache_id } => {
+                self.attach_audio_cache_resource(audio_cache_id)
+            }
+            CoreCommand::LoadMidi { path } => self.load_midi_legacy(path),
             CoreCommand::SetAudioConfig { config } => {
                 self.audio_config = config;
                 if let Err(error) = self.audio_player.switch(&self.audio_config) {
@@ -268,11 +283,8 @@ impl CoreState {
         }
     }
 
-    fn start_audio_session(&mut self) {
-        let Some(cache) = self.midi_cache.as_ref() else {
-            return;
-        };
-        let Ok(audio_cache) = cache.audio_cache() else {
+    pub(super) fn start_audio_session(&mut self) {
+        let Some(audio_cache) = self.current_audio_cache.clone() else {
             return;
         };
         self.audio_session = Some(LiveAudioSession::spawn(
@@ -282,7 +294,7 @@ impl CoreState {
         ));
     }
 
-    fn restart_audio_session(&mut self) {
+    pub(super) fn restart_audio_session(&mut self) {
         self.audio_session = None;
         self.audio_clock = Arc::new(PlaybackClock::new());
         self.audio_clock.set_time(self.transport.current_time());

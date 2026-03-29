@@ -79,7 +79,10 @@ fn apply_event_to_app(
     event: &CoreEvent,
 ) {
     match event {
-        CoreEvent::StateSnapshot { state } | CoreEvent::MidiLoaded { state, .. } => {
+        CoreEvent::StateSnapshot { state }
+        | CoreEvent::MidiLoaded { state, .. }
+        | CoreEvent::DisplayCacheAttached { state, .. }
+        | CoreEvent::AudioCacheAttached { state, .. } => {
             apply_state_to_app(app, shared_state, state);
             app.set_status_text(status_text(state).into());
             app.set_visible_note_count_text("0".into());
@@ -99,7 +102,10 @@ fn apply_event_to_app(
         | CoreEvent::VideoRenderStatus { .. }
         | CoreEvent::AudioRender { .. }
         | CoreEvent::AudioRenderStatus { .. }
-        | CoreEvent::AudioStatus { .. } => {}
+        | CoreEvent::AudioStatus { .. }
+        | CoreEvent::ParsedMidiLoaded { .. }
+        | CoreEvent::DisplayCacheBuilt { .. }
+        | CoreEvent::AudioCacheBuilt { .. } => {}
         CoreEvent::Error { message, .. } => {
             app.set_status_text(message.clone().into());
         }

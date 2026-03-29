@@ -68,6 +68,9 @@ impl CoreState {
     pub(super) fn snapshot(&self) -> StateSnapshot {
         let transport = self.transport.snapshot();
         StateSnapshot {
+            active_parsed_midi_id: self.active_parsed_midi_id,
+            active_display_cache_id: self.active_display_cache_id,
+            active_audio_cache_id: self.active_audio_cache_id,
             midi_path: self.midi_path.clone(),
             midi_loaded: self.display.midi_loaded(),
             audio: self.audio_config.clone(),

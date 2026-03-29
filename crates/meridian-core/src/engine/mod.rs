@@ -1,5 +1,6 @@
 mod core_state;
 mod render_job;
+mod resources;
 mod state_ops;
 mod support;
 

@@ -14,10 +14,37 @@ pub const fn protocol_version() -> u32 {
     PROTOCOL_VERSION
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ParsedMidiId(pub u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct DisplayCacheId(pub u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AudioCacheId(pub u64);
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CoreCommand {
     GetState,
+    LoadParsedMidi {
+        path: PathBuf,
+    },
+    BuildDisplayCache {
+        parsed_midi_id: ParsedMidiId,
+    },
+    BuildAudioCache {
+        parsed_midi_id: ParsedMidiId,
+    },
+    AttachDisplayCache {
+        display_cache_id: DisplayCacheId,
+    },
+    AttachAudioCache {
+        audio_cache_id: AudioCacheId,
+    },
     LoadMidi {
         path: PathBuf,
     },
@@ -86,6 +113,9 @@ pub enum ImageOutputFormat {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateSnapshot {
+    pub active_parsed_midi_id: Option<ParsedMidiId>,
+    pub active_display_cache_id: Option<DisplayCacheId>,
+    pub active_audio_cache_id: Option<AudioCacheId>,
     pub midi_path: Option<PathBuf>,
     pub midi_loaded: bool,
     pub audio: AudioConfig,
@@ -248,6 +278,30 @@ pub enum CoreErrorCode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CoreEvent {
+    ParsedMidiLoaded {
+        parsed_midi_id: ParsedMidiId,
+        path: PathBuf,
+    },
+    DisplayCacheBuilt {
+        parsed_midi_id: ParsedMidiId,
+        display_cache_id: DisplayCacheId,
+        midi_length: f64,
+        total_notes: u64,
+        track_count: usize,
+    },
+    AudioCacheBuilt {
+        parsed_midi_id: ParsedMidiId,
+        audio_cache_id: AudioCacheId,
+        total_events: usize,
+    },
+    DisplayCacheAttached {
+        display_cache_id: DisplayCacheId,
+        state: StateSnapshot,
+    },
+    AudioCacheAttached {
+        audio_cache_id: AudioCacheId,
+        state: StateSnapshot,
+    },
     StateSnapshot {
         state: StateSnapshot,
     },
