@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use meridian_core::{
     audio::AudioStatus,
     protocol::{AudioRenderStatus, CoreEvent, StateSnapshot, VideoRenderStatus},
-    render::SceneConfig,
+    render::{DisplayTimeSpace, SceneConfig},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -12,6 +12,7 @@ pub struct TransportViewModel {
     pub midi_length: f64,
     pub playing: bool,
     pub view_range: f64,
+    pub time_space: DisplayTimeSpace,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -68,6 +69,7 @@ impl UiViewModel {
         self.transport.midi_length = state.midi_length;
         self.transport.playing = state.playing;
         self.transport.view_range = state.view_range;
+        self.transport.time_space = state.time_space;
 
         self.scene.midi_path = state.midi_path.clone();
         self.scene.midi_loaded = state.midi_loaded;

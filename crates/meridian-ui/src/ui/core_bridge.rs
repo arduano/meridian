@@ -106,15 +106,15 @@ impl UiCoreBridge {
         delta: f64,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
-        let current = model
+        let transport = model
             .lock()
             .expect("ui model mutex poisoned")
             .transport
-            .view_range;
+            .clone();
         self.request(
             CoreCommand::SetViewRange {
-                seconds: (current + delta).clamp(1.0, 30.0),
-                time_space: None,
+                seconds: (transport.view_range + delta).clamp(1.0, 30.0),
+                time_space: Some(transport.time_space),
             },
             model,
         )

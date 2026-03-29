@@ -5,3 +5,5 @@ mod shaders;
 mod streaming;
 
 pub use headless::{HeadlessRenderSession, render_scene_headless_to_rgba, save_scene_headless};
+pub use pipeline::VIEWPORT_FORMAT;
+pub use renderer::PianoTrailClassicRenderer;
