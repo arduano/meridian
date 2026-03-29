@@ -6,7 +6,7 @@ use std::{
 
 use crate::midi::{
     DisplacedMIDINote, MIDIAnalysisSummary, MIDIColorPair, MIDINoteColumnView, MIDINoteViews,
-    MIDIViewRange,
+    MIDIViewRange, tempo_map::TempoMap,
 };
 
 use super::{cache::InRamMidiCache, column::InRamNoteColumn};
@@ -131,7 +131,32 @@ impl InRamNoteViewData {
         counts
     }
 
-    pub fn shift_view_range(&mut self, new_view_range: MIDIViewRange) {
+    pub fn shift_view_range(
+        &mut self,
+        tempo_map: &TempoMap,
+        current_time: f64,
+        range: f64,
+        time_space: crate::render::DisplayTimeSpace,
+    ) {
+        let new_view_range = match time_space {
+            crate::render::DisplayTimeSpace::Time => {
+                MIDIViewRange::new(current_time, current_time + range, time_space, 1.0)
+            }
+            crate::render::DisplayTimeSpace::Tick => {
+                let start_tick = tempo_map.tick_at_seconds(current_time);
+                // Keep the tick-space window width stable across tempo changes so
+                // faster tempos move the playhead through the scene instead of
+                // rescaling all note geometry each frame.
+                let base_ticks_per_second = tempo_map.ticks_per_second_at_tick(0);
+                let tick_range = range * base_ticks_per_second;
+                MIDIViewRange::new(
+                    start_tick,
+                    start_tick + tick_range,
+                    time_space,
+                    1.0 / base_ticks_per_second.max(f64::EPSILON),
+                )
+            }
+        };
         let old_view_range = self.view_range;
         self.view_range = new_view_range;
 
@@ -149,7 +174,7 @@ impl InRamNoteViewData {
             if new_view_range.end > old_view_range.end {
                 while new_block_end < blocks.len() {
                     let block = &blocks[new_block_end];
-                    if block.start >= new_view_range.end {
+                    if block.start(new_view_range.time_space) >= new_view_range.end {
                         break;
                     }
                     data.notes_to_render_end += block.notes.len() as u64;
@@ -158,7 +183,7 @@ impl InRamNoteViewData {
             } else if new_view_range.end < old_view_range.end {
                 while new_block_end > 0 {
                     let block = &blocks[new_block_end - 1];
-                    if block.start < new_view_range.end {
+                    if block.start(new_view_range.time_space) < new_view_range.end {
                         break;
                     }
                     data.notes_to_render_end -= block.notes.len() as u64;
@@ -171,7 +196,7 @@ impl InRamNoteViewData {
             if new_view_range.start > old_view_range.start {
                 while new_block_start < blocks.len() {
                     let block = &blocks[new_block_start];
-                    if block.max_end() >= new_view_range.start {
+                    if block.max_end(new_view_range.time_space) >= new_view_range.start {
                         break;
                     }
                     data.notes_to_render_start += block.notes.len() as u64;
@@ -180,7 +205,7 @@ impl InRamNoteViewData {
 
                 while data.blocks_to_keyboard < blocks.len() {
                     let block = &blocks[data.blocks_to_keyboard];
-                    if block.start > new_view_range.start {
+                    if block.start(new_view_range.time_space) > new_view_range.start {
                         break;
                     }
                     data.notes_to_keyboard += block.notes.len() as u64;
@@ -195,7 +220,7 @@ impl InRamNoteViewData {
 
                 while new_block_start < blocks.len() {
                     let block = &blocks[new_block_start];
-                    if block.max_end() >= new_view_range.start {
+                    if block.max_end(new_view_range.time_space) >= new_view_range.start {
                         break;
                     }
                     data.notes_to_render_start += block.notes.len() as u64;
@@ -206,7 +231,7 @@ impl InRamNoteViewData {
 
                 while data.blocks_to_keyboard < blocks.len() {
                     let block = &blocks[data.blocks_to_keyboard];
-                    if block.start > new_view_range.start {
+                    if block.start(new_view_range.time_space) > new_view_range.start {
                         break;
                     }
                     data.notes_to_keyboard += block.notes.len() as u64;
@@ -264,12 +289,28 @@ impl<'a> MIDINoteColumnView for InRamNoteColumnView<'a> {
             move || {
                 for block_index in self.column.data.block_range.clone().rev() {
                     let block = &self.column.blocks[block_index];
-                    let start = (block.start - self.view_range.start) as f32;
+                    let start = match self.view_range.time_space {
+                        crate::render::DisplayTimeSpace::Time => {
+                            ((block.start_seconds - self.view_range.start) * self.view_range.scale)
+                                as f32
+                        }
+                        crate::render::DisplayTimeSpace::Tick => {
+                            ((block.start_ticks as f64 - self.view_range.start)
+                                * self.view_range.scale) as f32
+                        }
+                    };
 
                     for note in block.notes.iter().rev() {
                         yield DisplacedMIDINote {
                             start,
-                            len: note.len,
+                            len: match self.view_range.time_space {
+                                crate::render::DisplayTimeSpace::Time => {
+                                    (note.len_seconds as f64 * self.view_range.scale) as f32
+                                }
+                                crate::render::DisplayTimeSpace::Tick => {
+                                    (note.len_ticks as f64 * self.view_range.scale) as f32
+                                }
+                            },
                             color: note
                                 .explicit_colors
                                 .unwrap_or(colors[note.track_chan.as_usize()]),

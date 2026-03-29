@@ -208,6 +208,7 @@ slint::slint! {
         in-out property <string> scene-summary-text: "2D / PFA notes / PFA keyboard";
         in-out property <string> viewport-text: "1280 x 720";
         in-out property <string> current-renderer-text: "pfa";
+        in-out property <string> time-space-text: "time";
         in-out property <float> current-time-seconds: 0;
         in-out property <float> midi-length-seconds: 1;
         in-out property <[InspectorRow]> inspector-items;
@@ -220,6 +221,7 @@ slint::slint! {
         callback toggle-play();
         callback seek-time(float);
         callback select-renderer(string);
+        callback select-time-space(string);
 
         title: "Meridian";
         preferred-width: 1540px;
@@ -271,6 +273,33 @@ slint::slint! {
                     }
 
                     IconButton { glyph: "+"; pressed => { root.zoom(1.0); } }
+
+                    VerticalLayout {
+                        width: 76px;
+                        spacing: 4px;
+                        Text {
+                            text: "SPACE";
+                            color: #86a2c7;
+                            font-family: "monospace";
+                            font-size: 9px;
+                            horizontal-alignment: right;
+                        }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            ActionButton {
+                                min-width: 36px;
+                                label: "T";
+                                active: root.time-space-text == "time";
+                                pressed => { root.select-time-space("time"); }
+                            }
+                            ActionButton {
+                                min-width: 36px;
+                                label: "K";
+                                active: root.time-space-text == "tick";
+                                pressed => { root.select-time-space("tick"); }
+                            }
+                        }
+                    }
 
                     VerticalLayout {
                         width: 58px;
@@ -409,6 +438,7 @@ slint::slint! {
                                     spacing: 8px;
                                     ActionButton { label: "PFA"; active: root.current-renderer-text == "pfa"; pressed => { root.select-renderer("pfa"); } }
                                     ActionButton { label: "Flat"; active: root.current-renderer-text == "flat"; pressed => { root.select-renderer("flat"); } }
+                                    ActionButton { label: "Trail"; active: root.current-renderer-text == "3d"; pressed => { root.select-renderer("3d"); } }
                                 }
                             }
                         }

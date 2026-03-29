@@ -5,7 +5,11 @@ use std::{
     time::Duration,
 };
 
-use meridian_core::{CoreHandle, MeridianError, render::RendererKind, spawn_core};
+use meridian_core::{
+    CoreHandle, MeridianError,
+    render::{DisplayTimeSpace, RendererKind},
+    spawn_core,
+};
 use slint::ComponentHandle;
 
 use super::{
@@ -135,6 +139,23 @@ fn wire_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mutex<UiV
                     _ => RendererKind::Pfa,
                 };
                 if let Ok(events) = bridge.set_renderer(renderer, &shared_state) {
+                    apply_events_to_app(&app, &shared_state, &events);
+                }
+                app.window().request_redraw();
+            }
+        });
+    }
+    {
+        let bridge = bridge.clone();
+        let app_weak = app.as_weak();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_time_space(move |time_space| {
+            if let Some(app) = app_weak.upgrade() {
+                let time_space = match time_space.as_str() {
+                    "tick" => DisplayTimeSpace::Tick,
+                    _ => DisplayTimeSpace::Time,
+                };
+                if let Ok(events) = bridge.set_time_space(time_space, &shared_state) {
                     apply_events_to_app(&app, &shared_state, &events);
                 }
                 app.window().request_redraw();

@@ -149,6 +149,10 @@ fn apply_state_to_app(app: &App, shared_state: &Arc<Mutex<UiViewModel>>, state: 
     app.set_midi_length_seconds(state.midi_length.max(0.001) as f32);
     app.set_scene_summary_text(scene_summary(&state.scene).into());
     app.set_current_renderer_text(renderer_summary(&state.scene).into());
+    app.set_time_space_text(match state.time_space {
+        meridian_core::render::DisplayTimeSpace::Time => "time".into(),
+        meridian_core::render::DisplayTimeSpace::Tick => "tick".into(),
+    });
     app.set_viewport_text(format!("{} x {}", state.viewport_width, state.viewport_height).into());
     app.set_inspector_items(ModelRc::from(std::rc::Rc::new(VecModel::from(
         rows_for_scene(&state.scene),

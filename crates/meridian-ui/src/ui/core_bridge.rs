@@ -7,7 +7,7 @@ use meridian_core::{
     CoreHandle, MeridianError,
     audio::{AudioBackend, AudioConfig},
     protocol::{CoreCommand, CoreEvent},
-    render::{RendererKind, SceneLayout},
+    render::{DisplayTimeSpace, RendererKind, SceneLayout},
 };
 
 use super::{state::UiOptions, view_model::UiViewModel};
@@ -52,6 +52,7 @@ impl UiCoreBridge {
             self.request(
                 CoreCommand::SetViewRange {
                     seconds: options.view_range,
+                    time_space: None,
                 },
                 model,
             )?,
@@ -113,6 +114,7 @@ impl UiCoreBridge {
         self.request(
             CoreCommand::SetViewRange {
                 seconds: (current + delta).clamp(1.0, 30.0),
+                time_space: None,
             },
             model,
         )
@@ -131,6 +133,25 @@ impl UiCoreBridge {
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
         self.request(CoreCommand::SetTime { time }, model)
+    }
+
+    pub fn set_time_space(
+        &self,
+        time_space: DisplayTimeSpace,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        let current = model
+            .lock()
+            .expect("ui model mutex poisoned")
+            .transport
+            .clone();
+        self.request(
+            CoreCommand::SetViewRange {
+                seconds: current.view_range.clamp(1.0, 30.0),
+                time_space: Some(time_space),
+            },
+            model,
+        )
     }
 
     pub fn set_renderer(
