@@ -103,7 +103,7 @@ impl CoreState {
                 state: self.snapshot(),
             }],
             CoreCommand::LoadMidi { path } => match MidiCacheStack::load(&path)
-                .and_then(|cache| cache.instantiate_in_ram().map(|midi| (cache, midi)))
+                .and_then(|cache| cache.instantiate_display_in_ram().map(|midi| (cache, midi)))
             {
                 Ok((cache, midi)) => {
                     self.audio_session = None;

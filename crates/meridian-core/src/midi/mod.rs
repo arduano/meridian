@@ -2,6 +2,7 @@ pub mod audio_cache;
 pub mod backend;
 pub mod cache;
 pub mod colors;
+pub mod display_cache;
 pub mod parsed;
 pub mod ram;
 pub mod views;
@@ -140,7 +141,7 @@ pub enum MIDIFileUnion {
 
 impl MIDIFileUnion {
     pub fn load_ram(path: impl Into<PathBuf>) -> Result<Self, MeridianError> {
-        MidiCacheStack::load(path)?.instantiate_in_ram()
+        MidiCacheStack::load(path)?.instantiate_display_in_ram()
     }
 
     pub fn get_current_column_views(&mut self, time: f64, range: f64) -> MIDIFileViewsUnion<'_> {
