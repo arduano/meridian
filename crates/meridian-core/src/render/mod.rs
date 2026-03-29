@@ -1,21 +1,21 @@
 pub mod flat;
 pub mod headless;
-pub mod piano_trail_classic;
 pub mod pfa;
+pub mod piano_trail_classic;
 pub mod shared;
 
 pub use shared::{
     FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardHeightSpec,
-    KeyboardProjectorConfig, PianoTrailClassicSceneConfig, NotePaletteConfig, NoteProjectorConfig, PfaKeyboardProjectorConfig,
-    PfaNoteProjectorConfig, PfaTopColor, ProjectedScene, ProjectorImageConfig, RendererKind,
-    SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState, SceneQuad, ThreeDSceneConfig,
-    TwoDSceneConfig, ZenithPaletteSpec, tick_scene_physics,
+    KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig, PfaKeyboardProjectorConfig,
+    PfaNoteProjectorConfig, PfaTopColor, PianoTrailClassicSceneConfig, ProjectedScene,
+    ProjectorImageConfig, RendererKind, SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState,
+    SceneQuad, ThreeDSceneConfig, TwoDSceneConfig, ZenithPaletteSpec, tick_scene_physics,
 };
 
 use crate::midi::{backend::MIDIFileUnion, views::MIDIFileViewsUnion};
 use flat::{FlatKeyboardProjector, FlatNoteProjector};
-use piano_trail_classic::project_piano_trail_classic_scene;
 use pfa::{PfaKeyboardProjector, PfaNoteProjector};
+use piano_trail_classic::project_piano_trail_classic_scene;
 use shared::{
     KeyboardProjectorConfig as KeyboardConfig, NoteProjectorConfig as NoteConfig, SceneConfig::*,
 };

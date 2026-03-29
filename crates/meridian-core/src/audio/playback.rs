@@ -1,4 +1,7 @@
-use std::{sync::Arc, thread::{self, JoinHandle}};
+use std::{
+    sync::Arc,
+    thread::{self, JoinHandle},
+};
 
 use crate::midi::audio_cache::{CompressedAudio, InRamAudioCache};
 
@@ -23,7 +26,11 @@ impl LiveAudioSession {
                     match clock_for_thread.wait_until(f64::INFINITY) {
                         WaitResult::Killed => break,
                         WaitResult::StateChanged => {
-                            index = seek_to_time(events.events(), clock_for_thread.snapshot_time(), &player);
+                            index = seek_to_time(
+                                events.events(),
+                                clock_for_thread.snapshot_time(),
+                                &player,
+                            );
                         }
                         WaitResult::Reached => unreachable!(),
                     }
@@ -37,7 +44,11 @@ impl LiveAudioSession {
                         index += 1;
                     }
                     WaitResult::StateChanged => {
-                        index = seek_to_time(events.events(), clock_for_thread.snapshot_time(), &player);
+                        index = seek_to_time(
+                            events.events(),
+                            clock_for_thread.snapshot_time(),
+                            &player,
+                        );
                     }
                     WaitResult::Killed => {
                         player.reset();
@@ -82,7 +93,10 @@ fn find_time_index(events: &[CompressedAudio], time: f64) -> usize {
     let mut right = size;
     while left < right {
         let mid = left + size / 2;
-        let range_start = events.get(mid.saturating_sub(1)).map(|t| t.time).unwrap_or(f64::NEG_INFINITY);
+        let range_start = events
+            .get(mid.saturating_sub(1))
+            .map(|t| t.time)
+            .unwrap_or(f64::NEG_INFINITY);
         let range_end = events[mid].time;
         if time < range_start {
             right = mid;

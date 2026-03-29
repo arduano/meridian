@@ -174,7 +174,10 @@ fn collect_visible_notes(
         .collect()
 }
 
-fn key_render_order(config: &PianoTrailClassicSceneConfig, key_layout: &PianoTrailClassicLayout) -> Vec<usize> {
+fn key_render_order(
+    config: &PianoTrailClassicSceneConfig,
+    key_layout: &PianoTrailClassicLayout,
+) -> Vec<usize> {
     let mut keys: Vec<usize> = (key_layout.first_key..key_layout.last_key_exclusive).collect();
     let world_to_camera = build_world_to_camera(config);
     keys.sort_by(|&a, &b| {

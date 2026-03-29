@@ -2,8 +2,9 @@ use midi_toolkit::{
     events::{Event, MIDIEventEnum},
     pipe,
     sequence::{
-        TimeCaster, unwrap_items,
+        TimeCaster,
         event::{Delta, EventBatch, Track, cancel_tempo_events, scale_event_time},
+        unwrap_items,
     },
 };
 
@@ -58,7 +59,9 @@ impl InRamAudioCache {
 
             for event in block.iter_events() {
                 match event.as_event() {
-                    Event::NoteOn(e) => data.extend_from_slice(&[EV_ON | e.channel, e.key, e.velocity]),
+                    Event::NoteOn(e) => {
+                        data.extend_from_slice(&[EV_ON | e.channel, e.key, e.velocity])
+                    }
                     Event::NoteOff(e) => data.extend_from_slice(&[EV_OFF | e.channel, e.key]),
                     Event::PolyphonicKeyPressure(e) => {
                         data.extend_from_slice(&[EV_POLYPHONIC | e.channel, e.key, e.velocity])

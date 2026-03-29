@@ -4,8 +4,9 @@ use midi_toolkit::{
     events::{Event, MIDIEventEnum, TextEventKind},
     pipe,
     sequence::{
-        TimeCaster, unwrap_items,
+        TimeCaster,
         event::{Delta, Track, cancel_tempo_events, scale_event_time},
+        unwrap_items,
     },
 };
 use rustc_hash::FxHashMap;

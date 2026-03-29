@@ -1,6 +1,6 @@
 pub mod audio_cache;
-pub mod cache;
 pub mod backend;
+pub mod cache;
 pub mod colors;
 pub mod parsed;
 pub mod ram;

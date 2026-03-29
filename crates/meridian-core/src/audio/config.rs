@@ -8,8 +8,7 @@ use xsynth_core::{
 };
 use xsynth_realtime::XSynthRealtimeConfig;
 
-pub const DEFAULT_SOUNDFONT: &str =
-    "/mnt/fat/Midis/Soundfonts/Loud and Proud Remastered/Axley Presets/Loud and Proud Remastered.sfz";
+pub const DEFAULT_SOUNDFONT: &str = "/mnt/fat/Midis/Soundfonts/Loud and Proud Remastered/Axley Presets/Loud and Proud Remastered.sfz";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

@@ -6,10 +6,10 @@ mod render;
 mod soundfont_cache;
 mod xsynth;
 
+pub use clock::PlaybackClock;
 pub use config::{
     AudioBackend, AudioConfig, MeridianSoundfont, XSynthRenderSettings, XSynthSettings,
 };
-pub use clock::PlaybackClock;
 pub use playback::LiveAudioSession;
 pub use player::{AudioStatus, MeridianAudioPlayer};
 pub use render::{AudioRenderConfig, AudioRenderEvent, render_audio, render_audio_to_wav};

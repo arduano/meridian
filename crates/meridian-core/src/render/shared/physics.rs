@@ -1,7 +1,9 @@
 use crate::midi::{backend::MIDIFileUnion, views::MIDIFileViewsUnion};
 
 use super::{SceneConfig, SceneLayout, ThreeDSceneConfig};
-use crate::render::piano_trail_classic::{PianoTrailClassicPhysicsState, tick_piano_trail_classic_physics};
+use crate::render::piano_trail_classic::{
+    PianoTrailClassicPhysicsState, tick_piano_trail_classic_physics,
+};
 
 #[derive(Clone, Debug)]
 pub enum ScenePhysicsState {

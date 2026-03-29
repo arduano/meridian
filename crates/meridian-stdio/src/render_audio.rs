@@ -5,7 +5,10 @@ use std::{
 
 use meridian_core::{
     MeridianError,
-    audio::{AudioBackend, AudioConfig, AudioRenderConfig, MeridianSoundfont, SoundfontCache, render_audio_to_wav},
+    audio::{
+        AudioBackend, AudioConfig, AudioRenderConfig, MeridianSoundfont, SoundfontCache,
+        render_audio_to_wav,
+    },
     midi::MidiCacheStack,
 };
 
@@ -59,8 +62,9 @@ fn write_event(
     stdout: &mut BufWriter<impl Write>,
     event: &meridian_core::audio::AudioRenderEvent,
 ) -> Result<(), MeridianError> {
-    serde_json::to_writer(&mut *stdout, event)
-        .map_err(|e| MeridianError::Platform(format!("failed to serialize audio render event: {e}")))?;
+    serde_json::to_writer(&mut *stdout, event).map_err(|e| {
+        MeridianError::Platform(format!("failed to serialize audio render event: {e}"))
+    })?;
     stdout.write_all(b"\n")?;
     stdout.flush()?;
     Ok(())

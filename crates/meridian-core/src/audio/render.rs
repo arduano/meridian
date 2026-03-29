@@ -12,15 +12,9 @@ use xsynth_core::{
 };
 use xsynth_render::{OfflineRenderConfig, OfflineWavRenderer};
 
-use crate::{
-    MeridianError,
-    midi::MidiCacheStack,
-};
+use crate::{MeridianError, midi::MidiCacheStack};
 
-use super::{
-    AudioBackend, AudioConfig,
-    soundfont_cache::SoundfontCache,
-};
+use super::{AudioBackend, AudioConfig, soundfont_cache::SoundfontCache};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -215,12 +209,12 @@ fn render_audio_inner(
         }
     }
 
-    renderer.send_event(SynthEvent::AllChannels(
-        ChannelEvent::Audio(ChannelAudioEvent::AllNotesOff),
-    ));
-    renderer.send_event(SynthEvent::AllChannels(
-        ChannelEvent::Audio(ChannelAudioEvent::ResetControl),
-    ));
+    renderer.send_event(SynthEvent::AllChannels(ChannelEvent::Audio(
+        ChannelAudioEvent::AllNotesOff,
+    )));
+    renderer.send_event(SynthEvent::AllChannels(ChannelEvent::Audio(
+        ChannelAudioEvent::ResetControl,
+    )));
     let frames_written = renderer.finalize()?;
 
     callback(AudioRenderEvent::RenderFinished {
@@ -261,8 +255,10 @@ impl OfflineAudioRenderer {
             group_options,
             use_limiter,
         };
-        let inner = OfflineWavRenderer::new(render_config, output, soundfonts, layers)
-            .map_err(|e| MeridianError::Platform(format!("failed to create xsynth wav renderer: {e}")))?;
+        let inner =
+            OfflineWavRenderer::new(render_config, output, soundfonts, layers).map_err(|e| {
+                MeridianError::Platform(format!("failed to create xsynth wav renderer: {e}"))
+            })?;
         Ok(Self {
             inner,
             frames_written: 0,
@@ -278,9 +274,9 @@ impl OfflineAudioRenderer {
     }
 
     fn finalize(self) -> Result<u64, MeridianError> {
-        self.inner
-            .finalize()
-            .map_err(|e| MeridianError::Platform(format!("failed to finalize xsynth wav render: {e}")))
+        self.inner.finalize().map_err(|e| {
+            MeridianError::Platform(format!("failed to finalize xsynth wav render: {e}"))
+        })
     }
 
     fn send_event(&mut self, event: SynthEvent) {

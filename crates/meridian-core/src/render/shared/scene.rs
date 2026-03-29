@@ -1,7 +1,7 @@
 use crate::midi::MIDI_KEY_COUNT;
 
 use super::{LAYER_COUNT, SceneLayer, SceneQuad};
-use crate::render::{piano_trail_classic::PianoTrailClassicScene, pfa::NoteInstance};
+use crate::render::{pfa::NoteInstance, piano_trail_classic::PianoTrailClassicScene};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct KeyActivity {

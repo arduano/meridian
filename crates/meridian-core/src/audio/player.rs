@@ -16,7 +16,11 @@ pub trait MidiAudioPlayer: Send + Sync {
     fn reset(&mut self);
     fn voice_count(&self) -> Option<u64>;
     fn stream_params(&self) -> Option<AudioStreamParams>;
-    fn configure(&mut self, config: &AudioConfig, cache: &SoundfontCache) -> Result<(), MeridianError>;
+    fn configure(
+        &mut self,
+        config: &AudioConfig,
+        cache: &SoundfontCache,
+    ) -> Result<(), MeridianError>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,9 +50,19 @@ struct EmptyPlayer;
 impl MidiAudioPlayer for EmptyPlayer {
     fn push_event(&mut self, _data: u32) {}
     fn reset(&mut self) {}
-    fn voice_count(&self) -> Option<u64> { None }
-    fn stream_params(&self) -> Option<AudioStreamParams> { None }
-    fn configure(&mut self, _config: &AudioConfig, _cache: &SoundfontCache) -> Result<(), MeridianError> { Ok(()) }
+    fn voice_count(&self) -> Option<u64> {
+        None
+    }
+    fn stream_params(&self) -> Option<AudioStreamParams> {
+        None
+    }
+    fn configure(
+        &mut self,
+        _config: &AudioConfig,
+        _cache: &SoundfontCache,
+    ) -> Result<(), MeridianError> {
+        Ok(())
+    }
 }
 
 pub struct MeridianAudioPlayer {

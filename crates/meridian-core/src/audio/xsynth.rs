@@ -8,11 +8,7 @@ use xsynth_realtime::{RealtimeEventSender, RealtimeSynth, RealtimeSynthStatsRead
 
 use crate::error::MeridianError;
 
-use super::{
-    config::AudioConfig,
-    player::MidiAudioPlayer,
-    soundfont_cache::SoundfontCache,
-};
+use super::{config::AudioConfig, player::MidiAudioPlayer, soundfont_cache::SoundfontCache};
 
 #[repr(transparent)]
 struct SendSyncSynth<T>(T);
@@ -24,11 +20,15 @@ unsafe impl<T> Sync for SendSyncSynth<T> {}
 
 impl<T> Deref for SendSyncSynth<T> {
     type Target = T;
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl<T> DerefMut for SendSyncSynth<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 pub struct XSynthPlayer {
@@ -41,9 +41,13 @@ pub struct XSynthPlayer {
 impl XSynthPlayer {
     pub fn new(config: &AudioConfig) -> Result<Self, MeridianError> {
         let synth = std::panic::catch_unwind(|| {
-            SendSyncSynth(RealtimeSynth::open_with_default_output(config.xsynth.config.clone()))
+            SendSyncSynth(RealtimeSynth::open_with_default_output(
+                config.xsynth.config.clone(),
+            ))
         })
-        .map_err(|_| MeridianError::MidiLoad("xsynth panicked during output initialization".into()))?;
+        .map_err(|_| {
+            MeridianError::MidiLoad("xsynth panicked during output initialization".into())
+        })?;
         let sender = synth.get_sender_ref().clone();
         let stats = synth.get_stats();
         let stream_params = synth.stream_params();
@@ -73,17 +77,23 @@ impl MidiAudioPlayer for XSynthPlayer {
         Some(self.stream_params)
     }
 
-    fn configure(&mut self, config: &AudioConfig, cache: &SoundfontCache) -> Result<(), MeridianError> {
+    fn configure(
+        &mut self,
+        config: &AudioConfig,
+        cache: &SoundfontCache,
+    ) -> Result<(), MeridianError> {
         let layers = if config.xsynth.limit_layers {
             Some(config.xsynth.layers)
         } else {
             None
         };
-        self.sender.send_event(SynthEvent::AllChannels(ChannelEvent::Config(
-            ChannelConfigEvent::SetLayerCount(layers),
-        )));
+        self.sender
+            .send_event(SynthEvent::AllChannels(ChannelEvent::Config(
+                ChannelConfigEvent::SetLayerCount(layers),
+            )));
         self.synth.set_buffer(config.xsynth.config.render_window_ms);
-        self.sender.set_ignore_range(config.xsynth.config.ignore_range.clone());
+        self.sender
+            .set_ignore_range(config.xsynth.config.ignore_range.clone());
         let soundfonts = cache.load_enabled(&config.soundfonts, self.stream_params)?;
         let mut sender = self.sender.clone();
         sender.send_event(SynthEvent::AllChannels(ChannelEvent::Config(

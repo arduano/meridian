@@ -252,26 +252,32 @@ struct InRamNoteBlockIter<'a, Iter: Iterator<Item = DisplacedMIDINote>> {
 }
 
 impl<'a> MIDINoteColumnView for InRamNoteColumnView<'a> {
-    type Iter<'b> = impl 'b + ExactSizeIterator<Item = DisplacedMIDINote> where Self: 'b;
+    type Iter<'b>
+        = impl 'b + ExactSizeIterator<Item = DisplacedMIDINote>
+    where
+        Self: 'b;
 
     fn iterate_displaced_notes(&self) -> Self::Iter<'_> {
         let colors = &self.view.default_track_colors;
-        let iter = GenIter(Box::pin(#[coroutine] move || {
-            for block_index in self.column.data.block_range.clone().rev() {
-                let block = &self.column.blocks[block_index];
-                let start = (block.start - self.view_range.start) as f32;
+        let iter = GenIter(Box::pin(
+            #[coroutine]
+            move || {
+                for block_index in self.column.data.block_range.clone().rev() {
+                    let block = &self.column.blocks[block_index];
+                    let start = (block.start - self.view_range.start) as f32;
 
-                for note in block.notes.iter().rev() {
-                    yield DisplacedMIDINote {
-                        start,
-                        len: note.len,
-                        color: note
-                            .explicit_colors
-                            .unwrap_or(colors[note.track_chan.as_usize()]),
-                    };
+                    for note in block.notes.iter().rev() {
+                        yield DisplacedMIDINote {
+                            start,
+                            len: note.len,
+                            color: note
+                                .explicit_colors
+                                .unwrap_or(colors[note.track_chan.as_usize()]),
+                        };
+                    }
                 }
-            }
-        }));
+            },
+        ));
 
         InRamNoteBlockIter { view: self, iter }
     }

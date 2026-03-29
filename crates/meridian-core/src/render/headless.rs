@@ -18,7 +18,9 @@ impl HeadlessRenderSession {
                 crate::render::pfa::wgpu::HeadlessRenderSession::new(width, height)?,
             )),
             SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => Ok(Self::ThreeD(
-                crate::render::piano_trail_classic::wgpu::HeadlessRenderSession::new(width, height)?,
+                crate::render::piano_trail_classic::wgpu::HeadlessRenderSession::new(
+                    width, height,
+                )?,
             )),
         }
     }
@@ -70,7 +72,12 @@ pub fn save_scene_headless(
                 MeridianError::InvalidMidi("missing piano_trail_classic scene payload".into())
             })?;
             crate::render::piano_trail_classic::wgpu::save_scene_headless(
-                width, height, layout, piano_trail_classic, format, output,
+                width,
+                height,
+                layout,
+                piano_trail_classic,
+                format,
+                output,
             )
         }
     }

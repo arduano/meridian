@@ -2,7 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::error::MeridianError;
 
-use super::{MIDIFileUnion, audio_cache::InRamAudioCache, parsed::ParsedMidiFile, ram::InRamMidiCache};
+use super::{
+    MIDIFileUnion, audio_cache::InRamAudioCache, parsed::ParsedMidiFile, ram::InRamMidiCache,
+};
 
 pub struct MidiCacheStack {
     parsed: Arc<ParsedMidiFile>,

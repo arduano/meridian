@@ -363,12 +363,12 @@ impl SceneLayout {
                 keyboard: KeyboardProjectorConfig::Flat(FlatKeyboardProjectorConfig),
             }),
             RendererKind::Pfa => SceneConfig::TwoD(TwoDSceneConfig::default()),
-            RendererKind::PianoTrailClassic => {
-                SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(PianoTrailClassicSceneConfig {
+            RendererKind::PianoTrailClassic => SceneConfig::ThreeD(
+                ThreeDSceneConfig::PianoTrailClassic(PianoTrailClassicSceneConfig {
                     box_notes: true,
                     ..PianoTrailClassicSceneConfig::default()
-                }))
-            }
+                }),
+            ),
         };
     }
 }

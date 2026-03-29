@@ -75,7 +75,7 @@ fn decode_png_rgba<R: std::io::BufRead + std::io::Seek>(
         png::ColorType::Grayscale => grayscale_to_rgba(src),
         png::ColorType::Indexed => src.to_vec(),
         png::ColorType::GrayscaleAlpha => grayscale_alpha_to_rgba(src),
-        };
+    };
     Ok(LoadedProjectorImage {
         width: info.width,
         height: info.height,

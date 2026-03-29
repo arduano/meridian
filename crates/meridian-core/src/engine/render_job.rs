@@ -35,7 +35,10 @@ impl CoreState {
                 "no midi loaded for audio render",
             )];
         };
-        let audio_config = config.audio.clone().unwrap_or_else(|| self.audio_config.clone());
+        let audio_config = config
+            .audio
+            .clone()
+            .unwrap_or_else(|| self.audio_config.clone());
         let soundfont_cache = SoundfontCache::new();
         let cancel = Arc::new(AtomicBool::new(false));
         self.audio_render_job = Some(AudioRenderJobState {
@@ -268,17 +271,18 @@ impl CoreState {
                 total_events,
                 ..
             } => {
-                self.audio_render_job = self.audio_render_job.take().map(|job| AudioRenderJobState {
-                    cancel: job.cancel,
-                    status: AudioRenderStatus::Running {
-                        output: output.clone(),
-                        total_events: *total_events,
-                        event_index: 0,
-                        time_seconds: 0.0,
-                        rendered_seconds: 0.0,
-                        frames_written: 0,
-                    },
-                });
+                self.audio_render_job =
+                    self.audio_render_job.take().map(|job| AudioRenderJobState {
+                        cancel: job.cancel,
+                        status: AudioRenderStatus::Running {
+                            output: output.clone(),
+                            total_events: *total_events,
+                            event_index: 0,
+                            time_seconds: 0.0,
+                            rendered_seconds: 0.0,
+                            frames_written: 0,
+                        },
+                    });
             }
             AudioRenderEvent::RenderProgress {
                 event_index,

@@ -185,6 +185,12 @@ pub fn run() -> Result<(), MeridianError> {
             width,
             height,
             scene_json,
-        } => crate::debug_piano_trail_classic::run(first_key, last_key, width, height, scene_json.as_deref()),
+        } => crate::debug_piano_trail_classic::run(
+            first_key,
+            last_key,
+            width,
+            height,
+            scene_json.as_deref(),
+        ),
     }
 }

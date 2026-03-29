@@ -6,8 +6,8 @@ use crate::render::{
     SceneLayout,
     piano_trail_classic::model::{PianoTrailClassicQuadInstance, PianoTrailClassicScene},
     shared::{
-        BuiltinProjectorImage, LoadedProjectorImage, PianoTrailClassicSceneConfig, ProjectorImageConfig,
-        ThreeDSceneConfig, load_projector_image,
+        BuiltinProjectorImage, LoadedProjectorImage, PianoTrailClassicSceneConfig,
+        ProjectorImageConfig, ThreeDSceneConfig, load_projector_image,
     },
 };
 
@@ -57,7 +57,9 @@ impl PianoTrailClassicRenderer {
         scene: &PianoTrailClassicScene,
     ) {
         let config = match &layout.scene {
-            crate::render::SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => config,
+            crate::render::SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => {
+                config
+            }
             _ => return,
         };
         let mvp = build_mvp(
@@ -200,8 +202,11 @@ impl PianoTrailClassicRenderer {
                 eprintln!(
                     "failed to load aura image {selection:?}: {error}; falling back to builtin ring"
                 );
-                load_projector_image(&default_piano_trail_classic_aura_image(), piano_trail_classic_aura_builtins())
-                    .expect("builtin ring aura should load")
+                load_projector_image(
+                    &default_piano_trail_classic_aura_image(),
+                    piano_trail_classic_aura_builtins(),
+                )
+                .expect("builtin ring aura should load")
             }
         };
         self.aura_texture = Some(create_aura_texture_state(

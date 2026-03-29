@@ -12,7 +12,11 @@ pub struct PianoTrailClassicLayout {
 }
 
 impl PianoTrailClassicLayout {
-    pub fn new(first_key: usize, last_key_exclusive: usize, config: &PianoTrailClassicSceneConfig) -> Self {
+    pub fn new(
+        first_key: usize,
+        last_key_exclusive: usize,
+        config: &PianoTrailClassicSceneConfig,
+    ) -> Self {
         let last_key_exclusive = last_key_exclusive.min(MIDI_KEY_COUNT);
         let mut x1 = [0.0; MIDI_KEY_COUNT];
         let mut width = [0.0; MIDI_KEY_COUNT];

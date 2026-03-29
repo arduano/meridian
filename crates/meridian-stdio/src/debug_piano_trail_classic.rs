@@ -3,7 +3,8 @@ use std::io::{self, Write};
 use meridian_core::{
     MeridianError,
     render::{
-        SceneConfig, ThreeDSceneConfig, piano_trail_classic::debug::dump_piano_trail_classic_geometry,
+        SceneConfig, ThreeDSceneConfig,
+        piano_trail_classic::debug::dump_piano_trail_classic_geometry,
         shared::PianoTrailClassicSceneConfig,
     },
 };

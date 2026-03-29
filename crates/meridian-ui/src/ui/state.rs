@@ -7,8 +7,8 @@ use std::{
 use meridian_core::{
     protocol::{CoreEvent, StateSnapshot},
     render::{
-        KeyboardHeightSpec, KeyboardProjectorConfig, NoteProjectorConfig, RendererKind, SceneConfig,
-        ThreeDSceneConfig,
+        KeyboardHeightSpec, KeyboardProjectorConfig, NoteProjectorConfig, RendererKind,
+        SceneConfig, ThreeDSceneConfig,
     },
 };
 use slint::{ModelRc, VecModel};
