@@ -22,9 +22,8 @@ use crate::{
 
 use super::{
     CoreHandle, CoreResponse, RequestMessage,
-    resources::{
-        AudioCacheRegistry, AudioSessionRegistry, DisplayCacheRegistry, DisplaySessionRegistry,
-        ParsedMidiRegistry,
+    resource_types::{
+        AudioCacheRegistry, AudioSessionRegistry, DisplayCacheRegistry, DisplaySessionRegistry, ParsedMidiRegistry,
     },
     support::error_event,
 };
