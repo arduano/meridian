@@ -106,6 +106,7 @@ fn render_video_inner(
     });
 
     let start = Instant::now();
+    core.request(CoreCommand::ResetProjectorPhysics)?;
     for frame_index in 0..total_frames {
         if cancel.load(Ordering::SeqCst) {
             drop(ffmpeg_stdin);
@@ -121,6 +122,9 @@ fn render_video_inner(
 
         let current_time = frame_index as f64 / config.fps;
         core.request(CoreCommand::SetTime { time: current_time })?;
+        core.request(CoreCommand::TickProjectorPhysics {
+            delta_seconds: 1.0 / config.fps,
+        })?;
         let frame = core.render_frame(Some(config.width), Some(config.height))?;
         session.render(&frame.layout, &frame.scene);
         let rgba = session.readback_rgba()?;

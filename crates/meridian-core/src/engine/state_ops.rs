@@ -4,7 +4,7 @@ use crate::{
     error::MeridianError,
     midi::backend::MIDIFileBase,
     protocol::{CoreErrorCode, CoreEvent, FrameStats, RenderedFrame, StateSnapshot},
-    render::{SceneConfig, headless::save_scene_headless, project_scene},
+    render::{SceneConfig, headless::save_scene_headless, project_scene, tick_scene_physics},
 };
 
 use super::{
@@ -34,6 +34,7 @@ impl CoreState {
         viewport_height: Option<u32>,
     ) -> Result<RenderedFrame, MeridianError> {
         self.sync_time();
+        self.sync_projector_physics()?;
         self.apply_viewport_overrides(viewport_width, viewport_height)?;
         self.validate_layout()
             .map_err(|event| event_to_error("invalid layout", &event))?;
@@ -90,7 +91,12 @@ impl CoreState {
             .midi
             .as_mut()
             .ok_or_else(|| "no midi loaded".to_string())?;
-        Ok(project_scene(midi, self.current_time, &self.layout))
+        Ok(project_scene(
+            midi,
+            self.current_time,
+            Some(&self.scene_physics),
+            &self.layout,
+        ))
     }
 
     pub(super) fn midi_length(&self) -> f64 {
@@ -136,6 +142,29 @@ impl CoreState {
             }
         }
         self.last_tick = Some(now);
+    }
+
+    pub(super) fn tick_projector_physics(&mut self, delta_seconds: f64) -> Result<(), MeridianError> {
+        let Some(midi) = self.midi.as_mut() else {
+            return Ok(());
+        };
+        tick_scene_physics(
+            midi,
+            self.current_time,
+            &self.layout,
+            &mut self.scene_physics,
+            delta_seconds,
+        );
+        Ok(())
+    }
+
+    pub(super) fn sync_projector_physics(&mut self) -> Result<(), MeridianError> {
+        let now = Instant::now();
+        if let Some(last_tick) = self.last_physics_tick {
+            self.tick_projector_physics(now.duration_since(last_tick).as_secs_f64())?;
+        }
+        self.last_physics_tick = Some(now);
+        Ok(())
     }
 
     pub(super) fn validate_layout(&self) -> Result<(), CoreEvent> {

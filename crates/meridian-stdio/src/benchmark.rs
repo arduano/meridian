@@ -65,7 +65,7 @@ pub fn run(
     let mut session = HeadlessRenderSession::new(&layout, width, height)?;
 
     for _ in 0..warmup {
-        let scene = project_scene(&mut midi, time, &layout);
+        let scene = project_scene(&mut midi, time, None, &layout);
         session.render(&layout, &scene);
     }
 
@@ -78,7 +78,7 @@ pub fn run(
         let total_start = Instant::now();
 
         let projection_start = Instant::now();
-        let scene = project_scene(&mut midi, time, &layout);
+        let scene = project_scene(&mut midi, time, None, &layout);
         let projection_elapsed = projection_start.elapsed().as_secs_f64() * 1_000.0;
 
         let gpu_start = Instant::now();

@@ -8,7 +8,8 @@ pub use shared::{
     FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardHeightSpec,
     KeyboardProjectorConfig, MiditrailAuraImage, MiditrailSceneConfig, NotePaletteConfig,
     NoteProjectorConfig, PfaKeyboardProjectorConfig, PfaNoteProjectorConfig, PfaTopColor,
-    ProjectedScene, RendererKind, SceneConfig, SceneLayer, SceneLayout, SceneQuad,
+    ProjectedScene, RendererKind, SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState,
+    SceneQuad, tick_scene_physics,
     ThreeDSceneConfig, TwoDSceneConfig, ZenithPaletteSpec,
 };
 
@@ -23,32 +24,39 @@ use shared::{
 pub fn project_scene(
     midi: &mut MIDIFileUnion,
     current_time: f64,
+    physics: Option<&ScenePhysicsState>,
     layout: &SceneLayout,
 ) -> ProjectedScene {
     let mut scene = ProjectedScene::default();
     let views = midi.get_current_column_views(current_time, layout.view_range);
-    project_scene_views_into(&views, layout, &mut scene);
+    project_scene_views_into(&views, physics, layout, &mut scene);
     scene
 }
 
 pub fn project_scene_into(
     midi: &mut MIDIFileUnion,
     current_time: f64,
+    physics: Option<&ScenePhysicsState>,
     layout: &SceneLayout,
     scene: &mut ProjectedScene,
 ) {
     let views = midi.get_current_column_views(current_time, layout.view_range);
-    project_scene_views_into(&views, layout, scene);
+    project_scene_views_into(&views, physics, layout, scene);
 }
 
-pub fn project_scene_views(views: &MIDIFileViewsUnion<'_>, layout: &SceneLayout) -> ProjectedScene {
+pub fn project_scene_views(
+    views: &MIDIFileViewsUnion<'_>,
+    physics: Option<&ScenePhysicsState>,
+    layout: &SceneLayout,
+) -> ProjectedScene {
     let mut scene = ProjectedScene::default();
-    project_scene_views_into(views, layout, &mut scene);
+    project_scene_views_into(views, physics, layout, &mut scene);
     scene
 }
 
 pub fn project_scene_views_into(
     views: &MIDIFileViewsUnion<'_>,
+    physics: Option<&ScenePhysicsState>,
     layout: &SceneLayout,
     scene: &mut ProjectedScene,
 ) {
@@ -81,7 +89,7 @@ pub fn project_scene_views_into(
             }
         }
         ThreeD(ThreeDSceneConfig::Miditrail(config)) => {
-            project_miditrail_scene(config, views, layout, scene)
+            project_miditrail_scene(config, physics, views, layout, scene)
         }
     }
 }

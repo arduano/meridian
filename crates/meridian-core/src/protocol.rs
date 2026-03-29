@@ -21,6 +21,10 @@ pub enum CoreCommand {
     SetTime {
         time: f64,
     },
+    TickProjectorPhysics {
+        delta_seconds: f64,
+    },
+    ResetProjectorPhysics,
     StepTime {
         delta: f64,
     },

@@ -25,9 +25,11 @@ pub(super) struct CoreState {
     pub(super) midi: Option<MIDIFileUnion>,
     pub(super) midi_path: Option<PathBuf>,
     pub(super) layout: SceneLayout,
+    pub(super) scene_physics: crate::render::ScenePhysicsState,
     pub(super) current_time: f64,
     pub(super) playing: bool,
     pub(super) last_tick: Option<Instant>,
+    pub(super) last_physics_tick: Option<Instant>,
     pub(super) render_job: Option<RenderJobState>,
 }
 
@@ -45,9 +47,11 @@ impl CoreState {
             midi: None,
             midi_path: None,
             layout: SceneLayout::default(),
+            scene_physics: crate::render::ScenePhysicsState::new(&SceneLayout::default().scene),
             current_time: 0.0,
             playing: false,
             last_tick: None,
+            last_physics_tick: None,
             render_job: None,
         }
     }
@@ -93,7 +97,11 @@ impl CoreState {
                     if let Err(error) = self.refresh_note_colors() {
                         return vec![error_event(CoreErrorCode::Internal, error.to_string())];
                     }
+                    self.scene_physics.reset(&self.layout.scene);
                     self.current_time = 0.0;
+                    let now = Instant::now();
+                    self.last_tick = Some(now);
+                    self.last_physics_tick = Some(now);
                     vec![CoreEvent::MidiLoaded {
                         path,
                         state: self.snapshot(),
@@ -103,6 +111,23 @@ impl CoreState {
             },
             CoreCommand::SetTime { time } => {
                 self.current_time = time.clamp(0.0, self.midi_length().max(0.0));
+                self.last_physics_tick = Some(Instant::now());
+                vec![CoreEvent::StateSnapshot {
+                    state: self.snapshot(),
+                }]
+            }
+            CoreCommand::TickProjectorPhysics { delta_seconds } => {
+                if let Err(error) = self.tick_projector_physics(delta_seconds) {
+                    return vec![error_event(CoreErrorCode::Internal, error.to_string())];
+                }
+                self.last_physics_tick = Some(Instant::now());
+                vec![CoreEvent::StateSnapshot {
+                    state: self.snapshot(),
+                }]
+            }
+            CoreCommand::ResetProjectorPhysics => {
+                self.scene_physics.reset(&self.layout.scene);
+                self.last_physics_tick = Some(Instant::now());
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
@@ -110,29 +135,36 @@ impl CoreState {
             CoreCommand::StepTime { delta } => {
                 self.current_time =
                     (self.current_time + delta).clamp(0.0, self.midi_length().max(0.0));
+                self.last_physics_tick = Some(Instant::now());
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
             }
             CoreCommand::SetPlaying { playing } => {
                 self.playing = playing;
-                self.last_tick = Some(Instant::now());
+                let now = Instant::now();
+                self.last_tick = Some(now);
+                self.last_physics_tick = Some(now);
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
             }
             CoreCommand::TogglePlaying => {
                 self.playing = !self.playing;
-                self.last_tick = Some(Instant::now());
+                let now = Instant::now();
+                self.last_tick = Some(now);
+                self.last_physics_tick = Some(now);
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
             }
             CoreCommand::SetSceneConfig { scene } => {
                 self.layout.scene = scene;
+                self.scene_physics.reset(&self.layout.scene);
                 if let Err(error) = self.refresh_note_colors() {
                     return vec![error_event(CoreErrorCode::Internal, error.to_string())];
                 }
+                self.last_physics_tick = Some(Instant::now());
                 self.snapshot_after_layout_validation()
             }
             CoreCommand::SetViewRange { seconds } => {

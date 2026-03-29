@@ -1,5 +1,6 @@
 mod benchmark;
 mod cli;
+mod debug_miditrail;
 mod frame_stdout;
 mod json_mode;
 mod render_video;

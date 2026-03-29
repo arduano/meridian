@@ -80,6 +80,18 @@ pub enum Command {
         #[arg(long, allow_hyphen_values = true)]
         ffmpeg_flags: Option<String>,
     },
+    DebugMiditrailGeometry {
+        #[arg(long, default_value_t = 0)]
+        first_key: u8,
+        #[arg(long, default_value_t = 127)]
+        last_key: u8,
+        #[arg(long, default_value_t = 1280)]
+        width: u32,
+        #[arg(long, default_value_t = 720)]
+        height: u32,
+        #[arg(long, allow_hyphen_values = true)]
+        scene_json: Option<String>,
+    },
 }
 
 pub fn run() -> Result<(), MeridianError> {
@@ -138,5 +150,12 @@ pub fn run() -> Result<(), MeridianError> {
             renderer,
             ffmpeg_flags.as_deref(),
         ),
+        Command::DebugMiditrailGeometry {
+            first_key,
+            last_key,
+            width,
+            height,
+            scene_json,
+        } => crate::debug_miditrail::run(first_key, last_key, width, height, scene_json.as_deref()),
     }
 }

@@ -9,11 +9,15 @@ use crate::{
 use super::{
     layout::MiditrailLayout,
     model::{MiditrailQuadInstance, MiditrailScene},
+    physics::MiditrailPhysicsState,
 };
 
 const WHITE_KEY_LEN: f32 = 5.0;
 const BLACK_KEY_LEN: f32 = 6.9;
 const WHITE_KEY_LENFAC: f32 = 0.69;
+const KEY_X_SQUEEZE: f32 = 0.95;
+const WHITE_KEY_Y_DROP: f32 = 0.3;
+const BLACK_KEY_Y_LIFT: f32 = 1.2;
 #[derive(Clone, Copy)]
 struct VisibleNote {
     key: usize,
@@ -34,6 +38,7 @@ struct KeyState {
 
 pub fn project_miditrail_scene(
     config: &MiditrailSceneConfig,
+    physics: Option<&crate::render::ScenePhysicsState>,
     views: &MIDIFileViewsUnion<'_>,
     layout: &SceneLayout,
     scene: &mut ProjectedScene,
@@ -45,6 +50,10 @@ pub fn project_miditrail_scene(
     miditrail.clear();
 
     let notes_by_key = collect_visible_notes(config, views, &key_layout, layout.view_range as f32);
+    let miditrail_physics = match physics {
+        Some(crate::render::ScenePhysicsState::Miditrail(state)) => Some(state),
+        _ => None,
+    };
     let key_order = key_render_order(config, &key_layout);
 
     let mut key_state = vec![KeyState::default(); 256];
@@ -54,12 +63,15 @@ pub fn project_miditrail_scene(
             scene.note_quads += 1 + usize::from(config.box_notes) * 2;
             if note.active {
                 let state = &mut key_state[note.key];
-                state.left = alpha_blend(note.left, state.left);
-                state.right = alpha_blend(note.right, state.right);
-                state.press = state.press.max(config.note_down_speed.clamp(0.0, 1.0));
+                state.left = alpha_blend(state.left, note.left);
+                state.right = alpha_blend(state.right, note.right);
                 state.aura = state.aura.max(0.5);
             }
         }
+    }
+
+    if let Some(physics) = miditrail_physics {
+        apply_key_press_state(&mut key_state, physics);
     }
 
     for &key in &key_order {
@@ -335,11 +347,18 @@ fn emit_keyboard(
             [1.0, 1.0, 1.0, 1.0]
         };
         let base_right = base_left;
-        let tint_strength = key_state[key].press.clamp(0.0, 1.0) * 0.8;
-        let left = mix(base_left, key_state[key].left, tint_strength);
-        let right = mix(base_right, key_state[key].right, tint_strength);
+        let left = blend_key_tint(base_left, key_state[key].left);
+        let right = blend_key_tint(base_right, key_state[key].right);
         if is_black_key(key as u8) {
-            emit_black_key(&mut scene.black_key_quads, key_layout, config, key, left, right);
+            emit_black_key(
+                &mut scene.black_key_quads,
+                key_layout,
+                config,
+                key,
+                left,
+                right,
+                key_state[key].press,
+            );
             *keyboard_quads += 8;
         } else {
             emit_white_key(
@@ -349,6 +368,7 @@ fn emit_keyboard(
                 key,
                 left,
                 right,
+                key_state[key].press,
             );
             *keyboard_quads += 13;
         }
@@ -399,6 +419,7 @@ fn emit_white_key(
     key: usize,
     left: [f32; 4],
     right: [f32; 4],
+    press: f32,
 ) {
     let pitch = white_pitch_index(key as u8);
     let (offset_left, offset_right) = white_key_offsets(key_layout, key, pitch);
@@ -409,8 +430,12 @@ fn emit_white_key(
         (x1, x1 + key_layout.key_width(key))
     };
     let width = base_x2 - base_x;
-    let width2 = width;
-    let scale_x = width * 0.95;
+    let width2 = if config.same_width_notes {
+        key_layout.key_width(key_layout.first_key) * 2.0
+    } else {
+        width
+    };
+    let scale_x = width;
     let scale_y = if config.same_width_notes { width2 * 0.9 } else { width2 };
     let scale_z = if config.same_width_notes { width2 * 1.01 } else { width2 };
     let black_end = WHITE_KEY_LEN * WHITE_KEY_LENFAC;
@@ -438,10 +463,10 @@ fn emit_white_key(
         let d = white_key_color(left, right, brightness[3], blend[3]);
         push_quad_instance(
             out,
-            transform_white_key(a_pos, base_x, scale_x, scale_y, scale_z),
-            transform_white_key(b_pos, base_x, scale_x, scale_y, scale_z),
-            transform_white_key(c_pos, base_x, scale_x, scale_y, scale_z),
-            transform_white_key(d_pos, base_x, scale_x, scale_y, scale_z),
+            transform_white_key(a_pos, base_x, scale_x, scale_y, scale_z, press, config.tilt_keys),
+            transform_white_key(b_pos, base_x, scale_x, scale_y, scale_z, press, config.tilt_keys),
+            transform_white_key(c_pos, base_x, scale_x, scale_y, scale_z, press, config.tilt_keys),
+            transform_white_key(d_pos, base_x, scale_x, scale_y, scale_z, press, config.tilt_keys),
             a,
             b,
             c,
@@ -457,10 +482,11 @@ fn emit_black_key(
     key: usize,
     left: [f32; 4],
     right: [f32; 4],
+    press: f32,
 ) {
     let base_x = key_layout.key_x1(key);
     let width = key_layout.key_width(key);
-    let scale_x = width * 0.95;
+    let scale_x = width;
     let vert_offset = if config.same_width_notes { 1.2 } else { 1.1 };
     let scale_y = width / vert_offset;
     let scale_z = width;
@@ -482,10 +508,46 @@ fn emit_black_key(
         let d = black_key_color(left, right, brightness[3], blend[3]);
         push_quad_instance(
             out,
-            transform_black_key(a_pos, base_x, scale_x, scale_y, scale_z, vert_offset),
-            transform_black_key(b_pos, base_x, scale_x, scale_y, scale_z, vert_offset),
-            transform_black_key(c_pos, base_x, scale_x, scale_y, scale_z, vert_offset),
-            transform_black_key(d_pos, base_x, scale_x, scale_y, scale_z, vert_offset),
+            transform_black_key(
+                a_pos,
+                base_x,
+                scale_x,
+                scale_y,
+                scale_z,
+                vert_offset,
+                press,
+                config.tilt_keys,
+            ),
+            transform_black_key(
+                b_pos,
+                base_x,
+                scale_x,
+                scale_y,
+                scale_z,
+                vert_offset,
+                press,
+                config.tilt_keys,
+            ),
+            transform_black_key(
+                c_pos,
+                base_x,
+                scale_x,
+                scale_y,
+                scale_z,
+                vert_offset,
+                press,
+                config.tilt_keys,
+            ),
+            transform_black_key(
+                d_pos,
+                base_x,
+                scale_x,
+                scale_y,
+                scale_z,
+                vert_offset,
+                press,
+                config.tilt_keys,
+            ),
             a,
             b,
             c,
@@ -527,12 +589,69 @@ fn white_pitch_index(key: u8) -> usize {
     }
 }
 
-fn transform_white_key(position: [f32; 3], base_x: f32, scale_x: f32, scale_y: f32, scale_z: f32) -> [f32; 3] {
-    [base_x + position[0] * scale_x, -0.035 + position[1] * scale_y, -position[2] * scale_z]
+fn apply_key_press_state(key_state: &mut [KeyState], physics: &MiditrailPhysicsState) {
+    for (state, press) in key_state.iter_mut().zip(physics.key_press.iter()) {
+        state.press = *press;
+    }
 }
 
-fn transform_black_key(position: [f32; 3], base_x: f32, scale_x: f32, scale_y: f32, scale_z: f32, _vert_offset: f32) -> [f32; 3] {
-    [base_x + position[0] * scale_x, -0.01 + position[1] * scale_y, -position[2] * scale_z]
+fn squeeze_local_x(x: f32) -> f32 {
+    (x - 0.5) * KEY_X_SQUEEZE + 0.5
+}
+
+fn apply_key_motion(position: [f32; 3], press: f32, tilt_keys: bool, down_divisor: f32) -> [f32; 3] {
+    if press <= 0.0 {
+        return position;
+    }
+    if tilt_keys {
+        rotate_local_x_around(position, -press / 20.0, 4.0)
+    } else {
+        [position[0], position[1] - press / down_divisor, position[2]]
+    }
+}
+
+fn rotate_local_x_around(position: [f32; 3], angle: f32, pivot_z: f32) -> [f32; 3] {
+    let (sin, cos) = angle.sin_cos();
+    let y = position[1];
+    let z_rel = position[2] - pivot_z;
+    let y2 = y * cos - z_rel * sin;
+    let z2 = y * sin + z_rel * cos + pivot_z;
+    [position[0], y2, z2]
+}
+
+fn transform_white_key(
+    position: [f32; 3],
+    base_x: f32,
+    scale_x: f32,
+    scale_y: f32,
+    scale_z: f32,
+    press: f32,
+    tilt_keys: bool,
+) -> [f32; 3] {
+    let position = apply_key_motion(position, press, tilt_keys, 2.0);
+    [
+        base_x + squeeze_local_x(position[0]) * scale_x,
+        (position[1] - WHITE_KEY_Y_DROP) * scale_y,
+        -position[2] * scale_z,
+    ]
+}
+
+fn transform_black_key(
+    position: [f32; 3],
+    base_x: f32,
+    scale_x: f32,
+    scale_y: f32,
+    scale_z: f32,
+    vert_offset: f32,
+    press: f32,
+    tilt_keys: bool,
+) -> [f32; 3] {
+    let position = apply_key_motion(position, press, tilt_keys, 1.2);
+    [
+        base_x + squeeze_local_x(position[0]) * scale_x,
+        (position[1] + vert_offset * (BLACK_KEY_Y_LIFT / 1.2)) * scale_y,
+        -position[2] * scale_z,
+    ]
 }
 
 fn white_key_color(left: [f32; 4], right: [f32; 4], brightness: f32, blend: f32) -> [f32; 4] {
@@ -610,15 +729,6 @@ fn shaded(color: [f32; 4], shade: f32) -> [f32; 4] {
     ]
 }
 
-fn dim(color: [f32; 4], factor: f32) -> [f32; 4] {
-    [
-        (color[0] * factor).clamp(0.0, 1.0),
-        (color[1] * factor).clamp(0.0, 1.0),
-        (color[2] * factor).clamp(0.0, 1.0),
-        color[3],
-    ]
-}
-
 fn scale_alpha(color: [f32; 4], strength: f32) -> [f32; 4] {
     [
         color[0] * strength,
@@ -626,4 +736,9 @@ fn scale_alpha(color: [f32; 4], strength: f32) -> [f32; 4] {
         color[2] * strength,
         color[3] * strength,
     ]
+}
+
+fn blend_key_tint(base: [f32; 4], active: [f32; 4]) -> [f32; 4] {
+    let blend = (active[3].clamp(0.0, 1.0) * 0.8).clamp(0.0, 1.0);
+    mix(base, [active[0], active[1], active[2], 1.0], blend)
 }
