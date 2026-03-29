@@ -8,9 +8,9 @@ use flume::{Receiver, Sender};
 
 use crate::{
     audio::{AudioConfig, LiveAudioSession, MeridianAudioPlayer, PlaybackClock},
-    midi::{MidiCacheStack, backend::MIDIFileUnion},
+    display::LiveDisplaySession,
+    midi::MidiCacheStack,
     protocol::{AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, VideoRenderStatus},
-    render::SceneLayout,
     transport::TransportState,
 };
 
@@ -30,16 +30,13 @@ pub(super) struct CoreState {
     pub(super) core_handle: CoreHandle,
     pub(super) subscribers: Arc<Mutex<Vec<Sender<CoreEvent>>>>,
     pub(super) midi_cache: Option<MidiCacheStack>,
-    pub(super) midi: Option<MIDIFileUnion>,
+    pub(super) display: LiveDisplaySession,
     pub(super) audio_config: AudioConfig,
     pub(super) audio_player: Arc<MeridianAudioPlayer>,
     pub(super) audio_clock: Arc<PlaybackClock>,
     pub(super) audio_session: Option<LiveAudioSession>,
     pub(super) midi_path: Option<PathBuf>,
-    pub(super) layout: SceneLayout,
-    pub(super) scene_physics: crate::render::ScenePhysicsState,
     pub(super) transport: TransportState,
-    pub(super) last_physics_tick: Option<Instant>,
     pub(super) render_job: Option<RenderJobState>,
     pub(super) audio_render_job: Option<AudioRenderJobState>,
 }
@@ -56,16 +53,13 @@ impl CoreState {
             },
             subscribers,
             midi_cache: None,
-            midi: None,
+            display: LiveDisplaySession::new(),
             audio_config: AudioConfig::default(),
             audio_player: MeridianAudioPlayer::new(&AudioConfig::default()),
             audio_clock: Arc::new(PlaybackClock::new()),
             audio_session: None,
             midi_path: None,
-            layout: SceneLayout::default(),
-            scene_physics: crate::render::ScenePhysicsState::new(&SceneLayout::default().scene),
             transport: TransportState::new(),
-            last_physics_tick: None,
             render_job: None,
             audio_render_job: None,
         }
@@ -115,14 +109,13 @@ impl CoreState {
                     self.audio_session = None;
                     self.midi_cache = Some(cache);
                     self.midi_path = Some(path.clone());
-                    self.midi = Some(midi);
+                    self.display.load_midi(midi, Instant::now());
                     if let Err(error) = self.refresh_note_colors() {
                         return vec![error_event(CoreErrorCode::Internal, error.to_string())];
                     }
-                    self.scene_physics.reset(&self.layout.scene);
                     let now = Instant::now();
                     self.transport.reset(now);
-                    self.last_physics_tick = Some(now);
+                    self.display.mark_physics_tick(now);
                     self.audio_clock.set_time(0.0);
                     self.audio_clock.set_playing(false);
                     self.start_audio_session();
@@ -159,7 +152,7 @@ impl CoreState {
             CoreCommand::SetTime { time } => {
                 self.transport
                     .set_time(time, self.midi_length(), Instant::now());
-                self.last_physics_tick = Some(Instant::now());
+                self.display.mark_physics_tick(Instant::now());
                 self.audio_clock.set_time(self.transport.current_time());
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
@@ -169,14 +162,13 @@ impl CoreState {
                 if let Err(error) = self.tick_projector_physics(delta_seconds) {
                     return vec![error_event(CoreErrorCode::Internal, error.to_string())];
                 }
-                self.last_physics_tick = Some(Instant::now());
+                self.display.mark_physics_tick(Instant::now());
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
             }
             CoreCommand::ResetProjectorPhysics => {
-                self.scene_physics.reset(&self.layout.scene);
-                self.last_physics_tick = Some(Instant::now());
+                self.display.reset_physics(Instant::now());
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
@@ -184,7 +176,7 @@ impl CoreState {
             CoreCommand::StepTime { delta } => {
                 self.transport
                     .step_time(delta, self.midi_length(), Instant::now());
-                self.last_physics_tick = Some(Instant::now());
+                self.display.mark_physics_tick(Instant::now());
                 self.audio_clock.set_time(self.transport.current_time());
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
@@ -193,7 +185,7 @@ impl CoreState {
             CoreCommand::SetPlaying { playing } => {
                 let now = Instant::now();
                 self.transport.set_playing(playing, now);
-                self.last_physics_tick = Some(now);
+                self.display.mark_physics_tick(now);
                 self.audio_clock.set_time(self.transport.current_time());
                 self.audio_clock.set_playing(self.transport.playing());
                 vec![CoreEvent::StateSnapshot {
@@ -203,7 +195,7 @@ impl CoreState {
             CoreCommand::TogglePlaying => {
                 let now = Instant::now();
                 self.transport.toggle_playing(now);
-                self.last_physics_tick = Some(now);
+                self.display.mark_physics_tick(now);
                 self.audio_clock.set_time(self.transport.current_time());
                 self.audio_clock.set_playing(self.transport.playing());
                 vec![CoreEvent::StateSnapshot {
@@ -211,16 +203,14 @@ impl CoreState {
                 }]
             }
             CoreCommand::SetSceneConfig { scene } => {
-                self.layout.scene = scene;
-                self.scene_physics.reset(&self.layout.scene);
+                self.display.set_scene_config(scene, Instant::now());
                 if let Err(error) = self.refresh_note_colors() {
                     return vec![error_event(CoreErrorCode::Internal, error.to_string())];
                 }
-                self.last_physics_tick = Some(Instant::now());
                 self.snapshot_after_layout_validation()
             }
             CoreCommand::SetViewRange { seconds } => {
-                self.layout.view_range = seconds.clamp(1.0, 30.0);
+                self.display.set_view_range(seconds);
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
@@ -229,12 +219,14 @@ impl CoreState {
                 first_key,
                 last_key,
             } => {
-                self.layout.first_key = first_key;
-                self.layout.last_key = last_key;
+                self.display.set_key_range(first_key, last_key);
                 self.snapshot_after_layout_validation()
             }
             CoreCommand::SetViewport { width, height } => {
-                if let Err(error) = self.apply_viewport_overrides(Some(width), Some(height)) {
+                if let Err(error) = self
+                    .display
+                    .apply_viewport_overrides(Some(width), Some(height))
+                {
                     return vec![error_event(
                         CoreErrorCode::InvalidViewport,
                         error.to_string(),

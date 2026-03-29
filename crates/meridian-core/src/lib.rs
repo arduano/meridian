@@ -1,6 +1,7 @@
 #![feature(coroutines, coroutine_trait, impl_trait_in_assoc_type)]
 
 pub mod audio;
+pub mod display;
 pub mod engine;
 pub mod error;
 pub mod midi;
