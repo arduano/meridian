@@ -8,6 +8,7 @@ use meridian_core::{
     protocol::{CoreEvent, StateSnapshot},
     render::{
         KeyboardHeightSpec, KeyboardProjectorConfig, NoteProjectorConfig, RendererKind, SceneConfig,
+        ThreeDSceneConfig,
     },
 };
 use slint::{ModelRc, VecModel};
@@ -154,7 +155,9 @@ fn scene_summary(scene: &SceneConfig) -> String {
             keyboard_name(&scene.keyboard),
             height_name(&scene.keyboard_height),
         ),
-        SceneConfig::ThreeD(_) => "3D / Piano Trail Classic".into(),
+        SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => {
+            "3D / Piano Trail Classic".into()
+        }
     }
 }
 

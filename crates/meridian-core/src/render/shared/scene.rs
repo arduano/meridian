@@ -131,16 +131,18 @@ impl ProjectedScene {
     pub fn total_quads(&self) -> usize {
         let base = self.layers.iter().map(Vec::len).sum::<usize>()
             + self.note_layers.iter().map(Vec::len).sum::<usize>();
-        match &self.piano_trail_classic {
-            Some(_) => self.note_quads + self.keyboard_quads,
-            None => base,
+        if self.piano_trail_classic.is_some() {
+            self.note_quads + self.keyboard_quads
+        } else {
+            base
         }
     }
 
     pub fn total_vertices(&self) -> usize {
-        match &self.piano_trail_classic {
-            Some(piano_trail_classic) => piano_trail_classic.total_vertices(),
-            None => self.total_quads() * 6,
+        if let Some(piano_trail_classic) = &self.piano_trail_classic {
+            piano_trail_classic.total_vertices()
+        } else {
+            self.total_quads() * 6
         }
     }
 }

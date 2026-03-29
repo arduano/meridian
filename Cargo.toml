@@ -20,6 +20,7 @@ clap = { version = "4.6.0", features = ["derive", "env"] }
 enum_dispatch = "0.3.13"
 flume = "0.11.1"
 glam = "0.30.8"
+midi-toolkit-rs = "0.1.0"
 midly = "0.5.3"
 png = "0.18.0"
 pollster = "0.4.0"

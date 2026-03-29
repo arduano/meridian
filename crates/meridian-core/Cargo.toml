@@ -9,6 +9,7 @@ clap.workspace = true
 enum_dispatch.workspace = true
 flume.workspace = true
 glam.workspace = true
+midi-toolkit-rs.workspace = true
 midly.workspace = true
 png.workspace = true
 pollster.workspace = true

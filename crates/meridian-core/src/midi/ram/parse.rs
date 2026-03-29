@@ -1,6 +1,14 @@
-use std::{collections::VecDeque, io::Read, path::PathBuf};
+use std::{collections::VecDeque, path::PathBuf};
 
-use midly::{MetaMessage, MidiMessage, Smf, Timing, TrackEventKind};
+use midi_toolkit::{
+    events::{Event, MIDIEventEnum, TextEventKind},
+    io::MIDIFile as TKMIDIFile,
+    pipe,
+    sequence::{
+        TimeCaster, unwrap_items,
+        event::{Delta, Track, cancel_tempo_events, scale_event_time},
+    },
+};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -77,171 +85,77 @@ impl KeyBuilder {
     }
 }
 
-#[derive(Clone, Copy)]
-enum EventKind {
-    NoteOn {
-        channel: u8,
-        key: u8,
-        velocity: u8,
-    },
-    NoteOff {
-        channel: u8,
-        key: u8,
-    },
-    Tempo {
-        micros_per_quarter: u32,
-    },
-    Color {
-        channel: Option<u8>,
-        pair: MIDIColorPair,
-    },
-}
-
-#[derive(Clone, Copy)]
-struct EventRecord {
-    tick: u64,
-    track: u32,
-    order: u64,
-    kind: EventKind,
-}
-
 impl InRamMIDIFile {
     pub fn load_from_file(path: impl Into<PathBuf>) -> Result<Self, MeridianError> {
-        let (mut file, signature) = open_file_and_signature(path)?;
-        let mut bytes = Vec::new();
-        file.read_to_end(&mut bytes)?;
-
-        let midi = Smf::parse(&bytes).map_err(|e| MeridianError::MidiLoad(e.to_string()))?;
-        let ppq = match midi.header.timing {
-            Timing::Metrical(value) => value.as_int() as u64,
-            Timing::Timecode(_, _) => {
-                return Err(MeridianError::InvalidMidi(
-                    "timecode MIDI files are not supported yet".into(),
-                ));
-            }
-        };
-
-        let mut events = Vec::new();
-        let mut order = 0_u64;
-
-        for (track_index, track) in midi.tracks.iter().enumerate() {
-            let mut absolute_tick = 0_u64;
-
-            for event in track {
-                absolute_tick += event.delta.as_int() as u64;
-
-                match event.kind {
-                    TrackEventKind::Midi { channel, message } => match message {
-                        MidiMessage::NoteOn { key, vel } => {
-                            events.push(EventRecord {
-                                tick: absolute_tick,
-                                track: track_index as u32,
-                                order,
-                                kind: EventKind::NoteOn {
-                                    channel: channel.as_int(),
-                                    key: key.as_int(),
-                                    velocity: vel.as_int(),
-                                },
-                            });
-                            order += 1;
-                        }
-                        MidiMessage::NoteOff { key, .. } => {
-                            events.push(EventRecord {
-                                tick: absolute_tick,
-                                track: track_index as u32,
-                                order,
-                                kind: EventKind::NoteOff {
-                                    channel: channel.as_int(),
-                                    key: key.as_int(),
-                                },
-                            });
-                            order += 1;
-                        }
-                        _ => {}
-                    },
-                    TrackEventKind::Meta(MetaMessage::Tempo(tempo)) => {
-                        events.push(EventRecord {
-                            tick: absolute_tick,
-                            track: track_index as u32,
-                            order,
-                            kind: EventKind::Tempo {
-                                micros_per_quarter: tempo.as_int(),
-                            },
-                        });
-                        order += 1;
-                    }
-                    TrackEventKind::Meta(MetaMessage::Unknown(0x0A, data)) => {
-                        if let Some((channel, pair)) = parse_color_event(data) {
-                            events.push(EventRecord {
-                                tick: absolute_tick,
-                                track: track_index as u32,
-                                order,
-                                kind: EventKind::Color { channel, pair },
-                            });
-                            order += 1;
-                        }
-                    }
-                    _ => {}
-                }
-            }
+        let (file, signature) = open_file_and_signature(path)?;
+        let midi = TKMIDIFile::open_from_stream(file, None)
+            .map_err(|e| MeridianError::MidiLoad(format!("{e:?}")))?;
+        let ppq = midi.ppq();
+        if (ppq & 0x8000) != 0 {
+            return Err(MeridianError::InvalidMidi(
+                "timecode MIDI files are not supported yet".into(),
+            ));
         }
 
-        events.sort_by_key(|event| (event.tick, event.order));
+        let merged = pipe!(
+            midi.iter_all_track_events_merged()
+            |>TimeCaster::<f64>::cast_event_delta()
+            |>cancel_tempo_events(250000)
+            |>scale_event_time(1.0 / ppq as f64)
+            |>unwrap_items()
+        );
 
         let mut keys: Vec<KeyBuilder> = (0..MIDI_KEY_COUNT).map(|_| KeyBuilder::new()).collect();
         let mut time = 0.0;
-        let mut last_tick = 0_u64;
-        let mut current_tempo = 500_000_u32;
         let mut notes = 0_u64;
-        let mut current_colors = vec![None; midi.tracks.len().max(1) * 16];
+        let mut current_colors = vec![None; midi.track_count().max(1) * 16];
 
-        for event in events {
-            if event.tick > last_tick {
+        type ToolkitEvent = Delta<f64, Track<Event>>;
+        for event in merged {
+            let event: ToolkitEvent = event;
+            if event.delta > 0.0 {
                 for key in &mut keys {
                     key.flush(time);
                 }
-
-                let tick_delta = event.tick - last_tick;
-                time += tick_delta as f64 * (current_tempo as f64 / ppq as f64) / 1_000_000.0;
-                last_tick = event.tick;
+                time += event.delta;
             }
 
-            match event.kind {
-                EventKind::NoteOn {
-                    channel,
-                    key,
-                    velocity,
-                } if velocity > 0 => {
-                    let key_index = key as usize;
+            let track = event.track;
+            match event.as_event() {
+                Event::NoteOn(note_on) => {
+                    let key_index = note_on.key as usize;
                     if key_index < MIDI_KEY_COUNT {
-                        let track_chan = TrackAndChannel::new(event.track, channel);
+                        let track_chan = TrackAndChannel::new(track, note_on.channel);
                         keys[key_index].add_note(track_chan, current_colors[track_chan.as_usize()]);
                         notes += 1;
                     }
                 }
-                EventKind::NoteOn { channel, key, .. } | EventKind::NoteOff { channel, key } => {
-                    let key_index = key as usize;
+                Event::NoteOff(note_off) => {
+                    let key_index = note_off.key as usize;
                     if key_index < MIDI_KEY_COUNT {
-                        keys[key_index].end_note(TrackAndChannel::new(event.track, channel), time);
+                        let track_chan = TrackAndChannel::new(track, note_off.channel);
+                        keys[key_index].end_note(track_chan, time);
                     }
                 }
-                EventKind::Tempo { micros_per_quarter } => current_tempo = micros_per_quarter,
-                EventKind::Color { channel, pair } => {
-                    let track = event.track as usize;
-                    match channel {
-                        Some(channel) => {
-                            let index = track * 16 + channel as usize;
-                            if index < current_colors.len() {
-                                current_colors[index] = Some(pair);
+                Event::Text(text) if text.kind == TextEventKind::Undefined => {
+                    if let Some((channel, pair)) = parse_color_event(&text.bytes) {
+                        let track = track as usize;
+                        match channel {
+                            Some(channel) => {
+                                let index = track * 16 + channel as usize;
+                                if index < current_colors.len() {
+                                    current_colors[index] = Some(pair);
+                                }
+                            }
+                            None => {
+                                let start = track * 16;
+                                let end = (start + 16).min(current_colors.len());
+                                current_colors[start..end].fill(Some(pair));
                             }
                         }
-                        None => {
-                            let start = track * 16;
-                            let end = (start + 16).min(current_colors.len());
-                            current_colors[start..end].fill(Some(pair));
-                        }
                     }
                 }
+                _ => {}
             }
         }
 
@@ -254,7 +168,7 @@ impl InRamMIDIFile {
             .into_iter()
             .map(|key| InRamNoteColumn::new(key.column))
             .collect();
-        let colors = MIDIColorPair::new_vec(midi.tracks.len().max(1));
+        let colors = MIDIColorPair::new_vec(midi.track_count().max(1));
 
         Ok(Self {
             view_data: InRamNoteViewData::new(columns, colors),

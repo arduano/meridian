@@ -1,4 +1,8 @@
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use std::{
+    ops::{Coroutine, CoroutineState},
+    pin::Pin,
+};
 
 use crate::midi::{
     DisplacedMIDINote, MIDIAnalysisSummary, MIDIColorPair, MIDINoteColumnView, MIDINoteViews,
@@ -6,6 +10,22 @@ use crate::midi::{
 };
 
 use super::column::InRamNoteColumn;
+
+struct GenIter<G>(Pin<Box<G>>);
+
+impl<T, G> Iterator for GenIter<G>
+where
+    G: Coroutine<Return = (), Yield = T>,
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.0.as_mut().resume(()) {
+            CoroutineState::Yielded(value) => Some(value),
+            CoroutineState::Complete(()) => None,
+        }
+    }
+}
 
 pub struct InRamNoteViewData {
     columns: Vec<InRamNoteColumn>,
@@ -134,6 +154,8 @@ impl InRamNoteViewData {
                     data.notes_to_render_end -= block.notes.len() as u64;
                     new_block_end -= 1;
                 }
+            } else {
+                // No change in view end.
             }
 
             if new_view_range.start > old_view_range.start {
@@ -155,21 +177,11 @@ impl InRamNoteViewData {
                     data.blocks_to_keyboard += 1;
                 }
             } else if new_view_range.start < old_view_range.start {
+                // Rebuild the start-side counters when seeking backward.
                 data.notes_to_render_start = 0;
-                data.notes_to_render_end = 0;
                 new_block_start = 0;
-                new_block_end = 0;
                 data.notes_to_keyboard = 0;
                 data.blocks_to_keyboard = 0;
-
-                while new_block_end < blocks.len() {
-                    let block = &blocks[new_block_end];
-                    if block.start >= new_view_range.end {
-                        break;
-                    }
-                    data.notes_to_render_end += block.notes.len() as u64;
-                    new_block_end += 1;
-                }
 
                 while new_block_start < blocks.len() {
                     let block = &blocks[new_block_start];
@@ -190,6 +202,8 @@ impl InRamNoteViewData {
                     data.notes_to_keyboard += block.notes.len() as u64;
                     data.blocks_to_keyboard += 1;
                 }
+            } else {
+                // No change in view start.
             }
 
             data.block_range = new_block_start..new_block_end;
@@ -222,59 +236,46 @@ pub struct InRamNoteColumnView<'a> {
     view_range: MIDIViewRange,
 }
 
-pub struct InRamNoteIter<'a> {
+struct InRamNoteBlockIter<'a, Iter: Iterator<Item = DisplacedMIDINote>> {
     view: &'a InRamNoteColumnView<'a>,
-    block_index: usize,
-    note_index: usize,
+    iter: Iter,
 }
 
 impl<'a> MIDINoteColumnView for InRamNoteColumnView<'a> {
-    type Iter<'b>
-        = InRamNoteIter<'b>
-    where
-        Self: 'b;
+    type Iter<'b> = impl 'b + ExactSizeIterator<Item = DisplacedMIDINote> where Self: 'b;
 
     fn iterate_displaced_notes(&self) -> Self::Iter<'_> {
-        let block_range = self.column.data.block_range.clone();
-        Self::Iter {
-            view: self,
-            block_index: block_range.end,
-            note_index: 0,
-        }
+        let colors = &self.view.default_track_colors;
+        let iter = GenIter(Box::pin(#[coroutine] move || {
+            for block_index in self.column.data.block_range.clone().rev() {
+                let block = &self.column.blocks[block_index];
+                let start = (block.start - self.view_range.start) as f32;
+
+                for note in block.notes.iter().rev() {
+                    yield DisplacedMIDINote {
+                        start,
+                        len: note.len,
+                        color: note
+                            .explicit_colors
+                            .unwrap_or(colors[note.track_chan.as_usize()]),
+                    };
+                }
+            }
+        }));
+
+        InRamNoteBlockIter { view: self, iter }
     }
 }
 
-impl Iterator for InRamNoteIter<'_> {
+impl<Iter: Iterator<Item = DisplacedMIDINote>> Iterator for InRamNoteBlockIter<'_, Iter> {
     type Item = DisplacedMIDINote;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if self.block_index == self.view.column.data.block_range.start {
-                return None;
-            }
-
-            let block = &self.view.column.blocks[self.block_index - 1];
-            if self.note_index >= block.notes.len() {
-                self.block_index -= 1;
-                self.note_index = 0;
-                continue;
-            }
-
-            let note = &block.notes[block.notes.len() - 1 - self.note_index];
-            self.note_index += 1;
-
-            return Some(DisplacedMIDINote {
-                start: (block.start - self.view.view_range.start) as f32,
-                len: note.len,
-                color: note
-                    .explicit_colors
-                    .unwrap_or(self.view.view.default_track_colors[note.track_chan.as_usize()]),
-            });
-        }
+        self.iter.next()
     }
 }
 
-impl ExactSizeIterator for InRamNoteIter<'_> {
+impl<Iter: Iterator<Item = DisplacedMIDINote>> ExactSizeIterator for InRamNoteBlockIter<'_, Iter> {
     fn len(&self) -> usize {
         let data = &self.view.column.data;
         (data.notes_to_render_end - data.notes_to_render_start) as usize

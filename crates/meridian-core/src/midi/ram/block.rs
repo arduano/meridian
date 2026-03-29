@@ -14,6 +14,8 @@ pub(crate) struct BasicMIDINote {
 }
 
 impl InRamNoteBlock {
+    /// Creates a new block from notes that all start at the same time.
+    /// Lengths are filled in later when matching note-off events arrive.
     pub(crate) fn new_from_notes(
         time: f64,
         notes: impl ExactSizeIterator<Item = (TrackAndChannel, Option<MIDIColorPair>)>,

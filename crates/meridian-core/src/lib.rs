@@ -1,3 +1,5 @@
+#![feature(coroutines, coroutine_trait, impl_trait_in_assoc_type)]
+
 pub mod engine;
 pub mod error;
 pub mod midi;

@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::{
     error::MeridianError,
     protocol::ImageOutputFormat,
-    render::{SceneConfig, SceneLayout, shared::ProjectedScene},
+    render::{SceneConfig, SceneLayout, ThreeDSceneConfig, shared::ProjectedScene},
 };
 
 pub enum HeadlessRenderSession {
@@ -17,7 +17,7 @@ impl HeadlessRenderSession {
             SceneConfig::TwoD(_) => Ok(Self::TwoD(
                 crate::render::pfa::wgpu::HeadlessRenderSession::new(width, height)?,
             )),
-            SceneConfig::ThreeD(_) => Ok(Self::ThreeD(
+            SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => Ok(Self::ThreeD(
                 crate::render::piano_trail_classic::wgpu::HeadlessRenderSession::new(width, height)?,
             )),
         }
@@ -65,7 +65,7 @@ pub fn save_scene_headless(
         SceneConfig::TwoD(_) => {
             crate::render::pfa::wgpu::save_scene_headless(width, height, scene, format, output)
         }
-        SceneConfig::ThreeD(_) => {
+        SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => {
             let piano_trail_classic = scene.piano_trail_classic().ok_or_else(|| {
                 MeridianError::InvalidMidi("missing piano_trail_classic scene payload".into())
             })?;
