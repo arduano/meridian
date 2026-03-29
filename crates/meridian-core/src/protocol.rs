@@ -4,7 +4,7 @@ use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    audio::{AudioConfig, AudioStatus},
+    audio::{AudioConfig, AudioRenderConfig, AudioRenderEvent, AudioStatus},
     render::{ProjectedScene, SceneConfig, SceneLayout},
 };
 
@@ -25,6 +25,11 @@ pub enum CoreCommand {
         config: AudioConfig,
     },
     GetAudioStatus,
+    StartRenderAudio {
+        config: AudioRenderConfig,
+    },
+    CancelRenderAudio,
+    GetRenderAudioStatus,
     SetTime {
         time: f64,
     },
@@ -144,6 +149,28 @@ pub struct VideoRenderConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum AudioRenderStatus {
+    Idle,
+    Running {
+        output: PathBuf,
+        total_events: usize,
+        event_index: usize,
+        time_seconds: f64,
+        rendered_seconds: f64,
+        frames_written: u64,
+    },
+    Cancelling {
+        output: PathBuf,
+        total_events: usize,
+        event_index: usize,
+        time_seconds: f64,
+        rendered_seconds: f64,
+        frames_written: u64,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum VideoRenderEvent {
     RenderStarted {
@@ -230,6 +257,12 @@ pub enum CoreEvent {
     },
     AudioStatus {
         status: AudioStatus,
+    },
+    AudioRender {
+        event: AudioRenderEvent,
+    },
+    AudioRenderStatus {
+        status: AudioRenderStatus,
     },
     FrameProjected {
         state: StateSnapshot,

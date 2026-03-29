@@ -11,6 +11,7 @@ use std::{
 use flume::{Receiver, Sender};
 
 use crate::{
+    audio::AudioRenderEvent,
     error::MeridianError,
     protocol::{CoreCommand, CoreEvent, RenderedFrame, VideoRenderEvent},
 };
@@ -30,6 +31,9 @@ enum RequestMessage {
     },
     VideoRenderUpdate {
         event: VideoRenderEvent,
+    },
+    AudioRenderUpdate {
+        event: AudioRenderEvent,
     },
 }
 
@@ -98,6 +102,12 @@ impl CoreHandle {
     pub(crate) fn publish_video_event(&self, event: VideoRenderEvent) -> Result<(), MeridianError> {
         self.sender
             .send(RequestMessage::VideoRenderUpdate { event })
+            .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))
+    }
+
+    pub(crate) fn publish_audio_event(&self, event: AudioRenderEvent) -> Result<(), MeridianError> {
+        self.sender
+            .send(RequestMessage::AudioRenderUpdate { event })
             .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))
     }
 }

@@ -1,6 +1,7 @@
 use std::{
     ops::RangeInclusive,
     path::PathBuf,
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,8 @@ use super::{
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct AudioRenderConfig {
+    pub midi_path: Option<PathBuf>,
+    pub audio: Option<AudioConfig>,
     pub output: PathBuf,
     pub sample_rate: Option<u32>,
     pub channels: Option<u16>,
@@ -33,12 +36,41 @@ pub struct AudioRenderConfig {
 impl Default for AudioRenderConfig {
     fn default() -> Self {
         Self {
+            midi_path: None,
+            audio: None,
             output: PathBuf::from("out.wav"),
             sample_rate: None,
             channels: None,
             use_limiter: None,
         }
     }
+}
+
+pub fn render_audio(
+    midi_cache: &MidiCacheStack,
+    audio_config: &AudioConfig,
+    soundfont_cache: &SoundfontCache,
+    config: &AudioRenderConfig,
+    cancel: &AtomicBool,
+    mut on_event: impl FnMut(AudioRenderEvent),
+) -> Result<(), MeridianError> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        render_audio_inner(
+            midi_cache,
+            audio_config,
+            soundfont_cache,
+            config,
+            cancel,
+            &mut on_event,
+        )
+    }))
+    .map_err(|_| MeridianError::Platform("xsynth panicked during offline audio render".into()))?
+    .map_err(|error| {
+        on_event(AudioRenderEvent::RenderFailed {
+            message: error.to_string(),
+        });
+        error
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -63,6 +95,16 @@ pub enum AudioRenderEvent {
         frames_written: u64,
         rendered_seconds: f64,
     },
+    RenderCancelled {
+        output: PathBuf,
+        event_index: usize,
+        total_events: usize,
+        rendered_seconds: f64,
+        frames_written: u64,
+    },
+    RenderFailed {
+        message: String,
+    },
 }
 
 pub fn render_audio_to_wav(
@@ -72,23 +114,23 @@ pub fn render_audio_to_wav(
     render_config: &AudioRenderConfig,
     callback: impl FnMut(AudioRenderEvent),
 ) -> Result<(), MeridianError> {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        render_audio_to_wav_inner(
-            midi_cache,
-            audio_config,
-            soundfont_cache,
-            render_config,
-            callback,
-        )
-    }))
-    .map_err(|_| MeridianError::Platform("xsynth panicked during offline audio render".into()))?
+    let cancel = AtomicBool::new(false);
+    render_audio(
+        midi_cache,
+        audio_config,
+        soundfont_cache,
+        render_config,
+        &cancel,
+        callback,
+    )
 }
 
-fn render_audio_to_wav_inner(
+fn render_audio_inner(
     midi_cache: &MidiCacheStack,
     audio_config: &AudioConfig,
     soundfont_cache: &SoundfontCache,
     render_config: &AudioRenderConfig,
+    cancel: &AtomicBool,
     mut callback: impl FnMut(AudioRenderEvent),
 ) -> Result<(), MeridianError> {
     if matches!(audio_config.backend, AudioBackend::None) {
@@ -135,6 +177,17 @@ fn render_audio_to_wav_inner(
     let total_events = events.events().len();
     let progress_stride = progress_stride(total_events);
     for (event_index, event) in events.events().iter().enumerate() {
+        if cancel.load(Ordering::SeqCst) {
+            callback(AudioRenderEvent::RenderCancelled {
+                output: render_config.output.clone(),
+                event_index,
+                total_events,
+                rendered_seconds: current_time,
+                frames_written: renderer.frames_written(),
+            });
+            return Ok(());
+        }
+
         let delta = (event.time - current_time).max(0.0);
         if delta > 0.0 {
             renderer.render_batch(delta)?;

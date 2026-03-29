@@ -10,6 +10,18 @@ pub struct MidiCacheStack {
     audio: Mutex<Option<Arc<InRamAudioCache>>>,
 }
 
+impl Clone for MidiCacheStack {
+    fn clone(&self) -> Self {
+        let in_ram = self.in_ram.lock().ok().and_then(|cache| cache.clone());
+        let audio = self.audio.lock().ok().and_then(|cache| cache.clone());
+        Self {
+            parsed: Arc::clone(&self.parsed),
+            in_ram: Mutex::new(in_ram),
+            audio: Mutex::new(audio),
+        }
+    }
+}
+
 impl MidiCacheStack {
     pub fn load(path: impl Into<std::path::PathBuf>) -> Result<Self, MeridianError> {
         Ok(Self {

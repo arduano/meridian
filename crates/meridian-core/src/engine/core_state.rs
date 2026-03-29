@@ -9,7 +9,7 @@ use flume::{Receiver, Sender};
 use crate::{
     audio::{AudioConfig, LiveAudioSession, MeridianAudioPlayer, PlaybackClock},
     midi::{MidiCacheStack, backend::MIDIFileUnion},
-    protocol::{CoreCommand, CoreErrorCode, CoreEvent, VideoRenderStatus},
+    protocol::{AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, VideoRenderStatus},
     render::SceneLayout,
 };
 
@@ -18,6 +18,11 @@ use super::{CoreHandle, CoreResponse, RequestMessage, support::error_event};
 pub(super) struct RenderJobState {
     pub(super) cancel: Arc<AtomicBool>,
     pub(super) status: VideoRenderStatus,
+}
+
+pub(super) struct AudioRenderJobState {
+    pub(super) cancel: Arc<AtomicBool>,
+    pub(super) status: AudioRenderStatus,
 }
 
 pub(super) struct CoreState {
@@ -37,6 +42,7 @@ pub(super) struct CoreState {
     pub(super) last_tick: Option<Instant>,
     pub(super) last_physics_tick: Option<Instant>,
     pub(super) render_job: Option<RenderJobState>,
+    pub(super) audio_render_job: Option<AudioRenderJobState>,
 }
 
 impl CoreState {
@@ -64,6 +70,7 @@ impl CoreState {
             last_tick: None,
             last_physics_tick: None,
             render_job: None,
+            audio_render_job: None,
         }
     }
 
@@ -87,6 +94,9 @@ impl CoreState {
                 }
                 RequestMessage::VideoRenderUpdate { event } => {
                     self.handle_video_render_update(event);
+                }
+                RequestMessage::AudioRenderUpdate { event } => {
+                    self.handle_audio_render_update(event);
                 }
             }
         }
@@ -144,6 +154,11 @@ impl CoreState {
             }
             CoreCommand::GetAudioStatus => vec![CoreEvent::AudioStatus {
                 status: self.audio_player.status(),
+            }],
+            CoreCommand::StartRenderAudio { config } => self.start_render_audio(config),
+            CoreCommand::CancelRenderAudio => self.cancel_render_audio(),
+            CoreCommand::GetRenderAudioStatus => vec![CoreEvent::AudioRenderStatus {
+                status: self.audio_render_status(),
             }],
             CoreCommand::SetTime { time } => {
                 self.current_time = time.clamp(0.0, self.midi_length().max(0.0));

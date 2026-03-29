@@ -12,5 +12,5 @@ pub use config::{
 pub use clock::PlaybackClock;
 pub use playback::LiveAudioSession;
 pub use player::{AudioStatus, MeridianAudioPlayer};
-pub use render::{AudioRenderConfig, AudioRenderEvent, render_audio_to_wav};
+pub use render::{AudioRenderConfig, AudioRenderEvent, render_audio, render_audio_to_wav};
 pub use soundfont_cache::SoundfontCache;

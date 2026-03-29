@@ -5,7 +5,7 @@ use std::{
 
 use meridian_core::{
     MeridianError,
-    audio::{AudioConfig, AudioRenderConfig, MeridianSoundfont, SoundfontCache, render_audio_to_wav},
+    audio::{AudioBackend, AudioConfig, AudioRenderConfig, MeridianSoundfont, SoundfontCache, render_audio_to_wav},
     midi::MidiCacheStack,
 };
 
@@ -19,6 +19,7 @@ pub fn run(
 ) -> Result<(), MeridianError> {
     let midi_cache = MidiCacheStack::load(midi.to_path_buf())?;
     let mut audio_config = AudioConfig::default();
+    audio_config.backend = AudioBackend::Xsynth;
     if !soundfonts.is_empty() {
         audio_config.soundfonts = soundfonts
             .iter()
@@ -29,11 +30,17 @@ pub fn run(
             })
             .collect();
     }
+    audio_config.xsynth.render.audio_params.sample_rate = sample_rate;
+    audio_config.xsynth.render.audio_params.channels = channels.into();
+    audio_config.xsynth.render.use_limiter = use_limiter;
+
     let render_config = AudioRenderConfig {
+        midi_path: Some(midi.to_path_buf()),
+        audio: Some(audio_config.clone()),
         output: output.to_path_buf(),
-        sample_rate: Some(sample_rate),
-        channels: Some(channels),
-        use_limiter: Some(use_limiter),
+        sample_rate: None,
+        channels: None,
+        use_limiter: None,
     };
     let soundfont_cache = SoundfontCache::new();
     let mut stdout = BufWriter::new(io::stdout().lock());
