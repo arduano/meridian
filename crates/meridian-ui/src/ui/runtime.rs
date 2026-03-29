@@ -6,6 +6,7 @@ use std::{
 };
 
 use meridian_core::{
+    audio::{AudioBackend, AudioConfig},
     CoreHandle, MeridianError,
     protocol::{CoreCommand, CoreEvent, StateSnapshot},
     render::SceneLayout,
@@ -70,6 +71,12 @@ pub(crate) fn initialize_core(
     let mut layout = SceneLayout::default();
     layout.set_renderer_kind(options.renderer);
     for events in [
+        core.request(CoreCommand::SetAudioConfig {
+            config: AudioConfig {
+                backend: AudioBackend::Xsynth,
+                ..AudioConfig::default()
+            },
+        })?,
         core.request(CoreCommand::SetSceneConfig {
             scene: layout.scene.clone(),
         })?,

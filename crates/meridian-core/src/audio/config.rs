@@ -87,7 +87,7 @@ pub struct AudioConfig {
 impl Default for AudioConfig {
     fn default() -> Self {
         Self {
-            backend: AudioBackend::Xsynth,
+            backend: AudioBackend::None,
             soundfonts: vec![MeridianSoundfont::default()],
             xsynth: Default::default(),
         }

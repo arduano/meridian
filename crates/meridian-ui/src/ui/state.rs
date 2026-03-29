@@ -97,6 +97,8 @@ fn apply_event_to_app(
         }
         CoreEvent::VideoRender { .. }
         | CoreEvent::VideoRenderStatus { .. }
+        | CoreEvent::AudioRender { .. }
+        | CoreEvent::AudioRenderStatus { .. }
         | CoreEvent::AudioStatus { .. } => {}
         CoreEvent::Error { message, .. } => {
             app.set_status_text(message.clone().into());
