@@ -6,6 +6,7 @@ pub mod error;
 pub mod midi;
 pub mod protocol;
 pub mod render;
+pub mod transport;
 pub mod video;
 
 pub use engine::{CoreHandle, CoreResponse, spawn_core};

@@ -11,6 +11,7 @@ use crate::{
     midi::{MidiCacheStack, backend::MIDIFileUnion},
     protocol::{AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, VideoRenderStatus},
     render::SceneLayout,
+    transport::TransportState,
 };
 
 use super::{CoreHandle, CoreResponse, RequestMessage, support::error_event};
@@ -37,9 +38,7 @@ pub(super) struct CoreState {
     pub(super) midi_path: Option<PathBuf>,
     pub(super) layout: SceneLayout,
     pub(super) scene_physics: crate::render::ScenePhysicsState,
-    pub(super) current_time: f64,
-    pub(super) playing: bool,
-    pub(super) last_tick: Option<Instant>,
+    pub(super) transport: TransportState,
     pub(super) last_physics_tick: Option<Instant>,
     pub(super) render_job: Option<RenderJobState>,
     pub(super) audio_render_job: Option<AudioRenderJobState>,
@@ -65,9 +64,7 @@ impl CoreState {
             midi_path: None,
             layout: SceneLayout::default(),
             scene_physics: crate::render::ScenePhysicsState::new(&SceneLayout::default().scene),
-            current_time: 0.0,
-            playing: false,
-            last_tick: None,
+            transport: TransportState::new(),
             last_physics_tick: None,
             render_job: None,
             audio_render_job: None,
@@ -123,9 +120,8 @@ impl CoreState {
                         return vec![error_event(CoreErrorCode::Internal, error.to_string())];
                     }
                     self.scene_physics.reset(&self.layout.scene);
-                    self.current_time = 0.0;
                     let now = Instant::now();
-                    self.last_tick = Some(now);
+                    self.transport.reset(now);
                     self.last_physics_tick = Some(now);
                     self.audio_clock.set_time(0.0);
                     self.audio_clock.set_playing(false);
@@ -161,9 +157,10 @@ impl CoreState {
                 status: self.audio_render_status(),
             }],
             CoreCommand::SetTime { time } => {
-                self.current_time = time.clamp(0.0, self.midi_length().max(0.0));
+                self.transport
+                    .set_time(time, self.midi_length(), Instant::now());
                 self.last_physics_tick = Some(Instant::now());
-                self.audio_clock.set_time(self.current_time);
+                self.audio_clock.set_time(self.transport.current_time());
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
@@ -185,32 +182,30 @@ impl CoreState {
                 }]
             }
             CoreCommand::StepTime { delta } => {
-                self.current_time =
-                    (self.current_time + delta).clamp(0.0, self.midi_length().max(0.0));
+                self.transport
+                    .step_time(delta, self.midi_length(), Instant::now());
                 self.last_physics_tick = Some(Instant::now());
-                self.audio_clock.set_time(self.current_time);
+                self.audio_clock.set_time(self.transport.current_time());
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
             }
             CoreCommand::SetPlaying { playing } => {
-                self.playing = playing;
                 let now = Instant::now();
-                self.last_tick = Some(now);
+                self.transport.set_playing(playing, now);
                 self.last_physics_tick = Some(now);
-                self.audio_clock.set_time(self.current_time);
-                self.audio_clock.set_playing(self.playing);
+                self.audio_clock.set_time(self.transport.current_time());
+                self.audio_clock.set_playing(self.transport.playing());
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
             }
             CoreCommand::TogglePlaying => {
-                self.playing = !self.playing;
                 let now = Instant::now();
-                self.last_tick = Some(now);
+                self.transport.toggle_playing(now);
                 self.last_physics_tick = Some(now);
-                self.audio_clock.set_time(self.current_time);
-                self.audio_clock.set_playing(self.playing);
+                self.audio_clock.set_time(self.transport.current_time());
+                self.audio_clock.set_playing(self.transport.playing());
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
@@ -298,8 +293,8 @@ impl CoreState {
     fn restart_audio_session(&mut self) {
         self.audio_session = None;
         self.audio_clock = Arc::new(PlaybackClock::new());
-        self.audio_clock.set_time(self.current_time);
-        self.audio_clock.set_playing(self.playing);
+        self.audio_clock.set_time(self.transport.current_time());
+        self.audio_clock.set_playing(self.transport.playing());
         self.start_audio_session();
     }
 }

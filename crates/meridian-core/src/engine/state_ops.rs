@@ -93,7 +93,7 @@ impl CoreState {
             .ok_or_else(|| "no midi loaded".to_string())?;
         Ok(project_scene(
             midi,
-            self.current_time,
+            self.transport.current_time(),
             Some(&self.scene_physics),
             &self.layout,
         ))
@@ -114,14 +114,15 @@ impl CoreState {
     }
 
     pub(super) fn snapshot(&self) -> StateSnapshot {
+        let transport = self.transport.snapshot();
         StateSnapshot {
             midi_path: self.midi_path.clone(),
             midi_loaded: self.midi.is_some(),
             audio: self.audio_config.clone(),
             audio_status: self.audio_player.status(),
             scene: self.layout.scene.clone(),
-            current_time: self.current_time,
-            playing: self.playing,
+            current_time: transport.current_time,
+            playing: transport.playing,
             midi_length: self.midi_length(),
             total_notes: self.total_notes(),
             view_range: self.layout.view_range,
@@ -133,21 +134,9 @@ impl CoreState {
     }
 
     pub(super) fn sync_time(&mut self) {
-        let now = Instant::now();
-        let mut playing_changed = false;
-        if self.playing {
-            if let Some(last_tick) = self.last_tick {
-                self.current_time += now.duration_since(last_tick).as_secs_f64();
-                self.current_time = self.current_time.min(self.midi_length().max(0.0));
-                if self.current_time >= self.midi_length() && self.midi_length() > 0.0 {
-                    self.playing = false;
-                    playing_changed = true;
-                }
-            }
-        }
-        self.last_tick = Some(now);
-        if playing_changed {
-            self.audio_clock.set_time(self.current_time);
+        let sync = self.transport.sync(self.midi_length(), Instant::now());
+        if sync.stopped_at_end {
+            self.audio_clock.set_time(sync.snapshot.current_time);
             self.audio_clock.set_playing(false);
         }
     }
@@ -161,7 +150,7 @@ impl CoreState {
         };
         tick_scene_physics(
             midi,
-            self.current_time,
+            self.transport.current_time(),
             &self.layout,
             &mut self.scene_physics,
             delta_seconds,
