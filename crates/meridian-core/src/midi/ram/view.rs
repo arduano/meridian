@@ -9,7 +9,7 @@ use crate::midi::{
     MIDIViewRange,
 };
 
-use super::column::InRamNoteColumn;
+use super::{cache::InRamMidiCache, column::InRamNoteColumn};
 
 struct GenIter<G>(Pin<Box<G>>);
 
@@ -50,6 +50,16 @@ impl InRamNoteViewData {
             default_track_colors: colors,
             view_range: MIDIViewRange::default(),
         }
+    }
+
+    pub fn from_cache(cache: &InRamMidiCache) -> Self {
+        let columns = cache
+            .columns()
+            .iter()
+            .cloned()
+            .map(InRamNoteColumn::from_shared_blocks)
+            .collect();
+        Self::new(columns, cache.default_colors())
     }
 
     pub fn apply_default_track_colors(&mut self, colors: Vec<MIDIColorPair>) {
@@ -94,7 +104,7 @@ impl InRamNoteViewData {
                 densest_key_notes = note_count;
             }
 
-            for block in &column.blocks {
+            for block in column.blocks.iter() {
                 max_notes_in_block = max_notes_in_block.max(block.notes.len());
             }
         }

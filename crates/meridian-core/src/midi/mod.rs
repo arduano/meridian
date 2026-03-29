@@ -1,5 +1,7 @@
+pub mod cache;
 pub mod backend;
 pub mod colors;
+pub mod parsed;
 pub mod ram;
 pub mod views;
 
@@ -8,6 +10,7 @@ use std::{fs::File, path::PathBuf, time::UNIX_EPOCH};
 use enum_dispatch::enum_dispatch;
 
 use crate::error::MeridianError;
+pub use cache::MidiCacheStack;
 pub use colors::{MIDIColor, MIDIColorPair};
 
 pub const MIDI_KEY_COUNT: usize = 256;
@@ -136,7 +139,7 @@ pub enum MIDIFileUnion {
 
 impl MIDIFileUnion {
     pub fn load_ram(path: impl Into<PathBuf>) -> Result<Self, MeridianError> {
-        Ok(Self::InRam(ram::InRamMIDIFile::load_from_file(path)?))
+        MidiCacheStack::load(path)?.instantiate_in_ram()
     }
 
     pub fn get_current_column_views(&mut self, time: f64, range: f64) -> MIDIFileViewsUnion<'_> {

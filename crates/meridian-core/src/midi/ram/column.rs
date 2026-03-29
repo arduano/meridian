@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::sync::Arc;
 
 use super::block::InRamNoteBlock;
 
@@ -29,11 +30,18 @@ impl InRamNoteColumnViewData {
 
 pub struct InRamNoteColumn {
     pub data: InRamNoteColumnViewData,
-    pub blocks: Vec<InRamNoteBlock>,
+    pub blocks: Arc<[InRamNoteBlock]>,
 }
 
 impl InRamNoteColumn {
     pub fn new(blocks: Vec<InRamNoteBlock>) -> Self {
+        Self {
+            blocks: blocks.into(),
+            data: InRamNoteColumnViewData::new(),
+        }
+    }
+
+    pub fn from_shared_blocks(blocks: Arc<[InRamNoteBlock]>) -> Self {
         Self {
             blocks,
             data: InRamNoteColumnViewData::new(),

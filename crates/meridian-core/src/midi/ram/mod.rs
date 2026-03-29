@@ -1,21 +1,24 @@
 pub mod block;
+mod cache;
 pub mod column;
 mod parse;
 pub mod view;
+
+pub use cache::InRamMidiCache;
+
+use std::sync::Arc;
 
 use super::{MIDIAnalysisSummary, MIDIFile, MIDIFileBase, MIDIFileStats, MIDIFileUniqueSignature};
 use view::{InRamCurrentNoteViews, InRamNoteViewData};
 
 pub struct InRamMIDIFile {
+    cache: Arc<InRamMidiCache>,
     view_data: InRamNoteViewData,
-    length: f64,
-    note_count: u64,
-    signature: MIDIFileUniqueSignature,
 }
 
 impl MIDIFileBase for InRamMIDIFile {
     fn midi_length(&self) -> Option<f64> {
-        Some(self.length)
+        Some(self.cache.length())
     }
 
     fn parsed_up_to(&self) -> Option<f64> {
@@ -24,7 +27,7 @@ impl MIDIFileBase for InRamMIDIFile {
 
     fn stats(&self) -> MIDIFileStats {
         MIDIFileStats {
-            total_notes: Some(self.note_count),
+            total_notes: Some(self.cache.note_count()),
             passed_notes: Some(self.view_data.passed_notes()),
         }
     }
@@ -34,7 +37,7 @@ impl MIDIFileBase for InRamMIDIFile {
     }
 
     fn signature(&self) -> &MIDIFileUniqueSignature {
-        &self.signature
+        self.cache.signature()
     }
 }
 
@@ -52,6 +55,11 @@ impl MIDIFile for InRamMIDIFile {
 }
 
 impl InRamMIDIFile {
+    pub(crate) fn from_cache(cache: Arc<InRamMidiCache>) -> Self {
+        let view_data = InRamNoteViewData::from_cache(&cache);
+        Self { cache, view_data }
+    }
+
     pub fn analysis_summary(&self) -> MIDIAnalysisSummary {
         self.view_data.analysis_summary()
     }
@@ -65,6 +73,6 @@ impl InRamMIDIFile {
     }
 
     pub fn track_count(&self) -> usize {
-        self.view_data.track_count()
+        self.cache.track_count()
     }
 }

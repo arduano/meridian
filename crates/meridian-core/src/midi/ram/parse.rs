@@ -1,8 +1,7 @@
-use std::{collections::VecDeque, path::PathBuf};
+use std::{collections::VecDeque, sync::Arc};
 
 use midi_toolkit::{
     events::{Event, MIDIEventEnum, TextEventKind},
-    io::MIDIFile as TKMIDIFile,
     pipe,
     sequence::{
         TimeCaster, unwrap_items,
@@ -14,12 +13,11 @@ use rustc_hash::FxHashMap;
 use crate::{
     error::MeridianError,
     midi::{
-        MIDI_KEY_COUNT, MIDIColor, MIDIColorPair, TrackAndChannel, open_file_and_signature,
-        ram::{block::InRamNoteBlock, column::InRamNoteColumn, view::InRamNoteViewData},
+        MIDI_KEY_COUNT, MIDIColor, MIDIColorPair, TrackAndChannel,
+        parsed::ParsedMidiFile,
+        ram::{block::InRamNoteBlock, cache::InRamMidiCache},
     },
 };
-
-use super::InRamMIDIFile;
 
 struct UnendedNote {
     column_index: usize,
@@ -85,98 +83,94 @@ impl KeyBuilder {
     }
 }
 
-impl InRamMIDIFile {
-    pub fn load_from_file(path: impl Into<PathBuf>) -> Result<Self, MeridianError> {
-        let (file, signature) = open_file_and_signature(path)?;
-        let midi = TKMIDIFile::open_from_stream(file, None)
-            .map_err(|e| MeridianError::MidiLoad(format!("{e:?}")))?;
-        let ppq = midi.ppq();
-        if (ppq & 0x8000) != 0 {
-            return Err(MeridianError::InvalidMidi(
-                "timecode MIDI files are not supported yet".into(),
-            ));
+pub(super) fn build_in_ram_cache(parsed: &ParsedMidiFile) -> Result<InRamMidiCache, MeridianError> {
+    let midi = parsed.midi();
+    let ppq = midi.ppq();
+    if (ppq & 0x8000) != 0 {
+        return Err(MeridianError::InvalidMidi(
+            "timecode MIDI files are not supported yet".into(),
+        ));
+    }
+
+    let merged = pipe!(
+        midi.iter_all_track_events_merged()
+        |>TimeCaster::<f64>::cast_event_delta()
+        |>cancel_tempo_events(250000)
+        |>scale_event_time(1.0 / ppq as f64)
+        |>unwrap_items()
+    );
+
+    let mut keys: Vec<KeyBuilder> = (0..MIDI_KEY_COUNT).map(|_| KeyBuilder::new()).collect();
+    let mut time = 0.0;
+    let mut notes = 0_u64;
+    let mut current_colors = vec![None; midi.track_count().max(1) * 16];
+
+    type ToolkitEvent = Delta<f64, Track<Event>>;
+    for event in merged {
+        let event: ToolkitEvent = event;
+        if event.delta > 0.0 {
+            for key in &mut keys {
+                key.flush(time);
+            }
+            time += event.delta;
         }
 
-        let merged = pipe!(
-            midi.iter_all_track_events_merged()
-            |>TimeCaster::<f64>::cast_event_delta()
-            |>cancel_tempo_events(250000)
-            |>scale_event_time(1.0 / ppq as f64)
-            |>unwrap_items()
-        );
-
-        let mut keys: Vec<KeyBuilder> = (0..MIDI_KEY_COUNT).map(|_| KeyBuilder::new()).collect();
-        let mut time = 0.0;
-        let mut notes = 0_u64;
-        let mut current_colors = vec![None; midi.track_count().max(1) * 16];
-
-        type ToolkitEvent = Delta<f64, Track<Event>>;
-        for event in merged {
-            let event: ToolkitEvent = event;
-            if event.delta > 0.0 {
-                for key in &mut keys {
-                    key.flush(time);
+        let track = event.track;
+        match event.as_event() {
+            Event::NoteOn(note_on) => {
+                let key_index = note_on.key as usize;
+                if key_index < MIDI_KEY_COUNT {
+                    let track_chan = TrackAndChannel::new(track, note_on.channel);
+                    keys[key_index].add_note(track_chan, current_colors[track_chan.as_usize()]);
+                    notes += 1;
                 }
-                time += event.delta;
             }
-
-            let track = event.track;
-            match event.as_event() {
-                Event::NoteOn(note_on) => {
-                    let key_index = note_on.key as usize;
-                    if key_index < MIDI_KEY_COUNT {
-                        let track_chan = TrackAndChannel::new(track, note_on.channel);
-                        keys[key_index].add_note(track_chan, current_colors[track_chan.as_usize()]);
-                        notes += 1;
-                    }
+            Event::NoteOff(note_off) => {
+                let key_index = note_off.key as usize;
+                if key_index < MIDI_KEY_COUNT {
+                    let track_chan = TrackAndChannel::new(track, note_off.channel);
+                    keys[key_index].end_note(track_chan, time);
                 }
-                Event::NoteOff(note_off) => {
-                    let key_index = note_off.key as usize;
-                    if key_index < MIDI_KEY_COUNT {
-                        let track_chan = TrackAndChannel::new(track, note_off.channel);
-                        keys[key_index].end_note(track_chan, time);
-                    }
-                }
-                Event::Text(text) if text.kind == TextEventKind::Undefined => {
-                    if let Some((channel, pair)) = parse_color_event(&text.bytes) {
-                        let track = track as usize;
-                        match channel {
-                            Some(channel) => {
-                                let index = track * 16 + channel as usize;
-                                if index < current_colors.len() {
-                                    current_colors[index] = Some(pair);
-                                }
+            }
+            Event::Text(text) if text.kind == TextEventKind::Undefined => {
+                if let Some((channel, pair)) = parse_color_event(&text.bytes) {
+                    let track = track as usize;
+                    match channel {
+                        Some(channel) => {
+                            let index = track * 16 + channel as usize;
+                            if index < current_colors.len() {
+                                current_colors[index] = Some(pair);
                             }
-                            None => {
-                                let start = track * 16;
-                                let end = (start + 16).min(current_colors.len());
-                                current_colors[start..end].fill(Some(pair));
-                            }
+                        }
+                        None => {
+                            let start = track * 16;
+                            let end = (start + 16).min(current_colors.len());
+                            current_colors[start..end].fill(Some(pair));
                         }
                     }
                 }
-                _ => {}
             }
+            _ => {}
         }
-
-        for key in &mut keys {
-            key.flush(time);
-            key.end_all(time);
-        }
-
-        let columns = keys
-            .into_iter()
-            .map(|key| InRamNoteColumn::new(key.column))
-            .collect();
-        let colors = MIDIColorPair::new_vec(midi.track_count().max(1));
-
-        Ok(Self {
-            view_data: InRamNoteViewData::new(columns, colors),
-            length: time,
-            note_count: notes,
-            signature,
-        })
     }
+
+    for key in &mut keys {
+        key.flush(time);
+        key.end_all(time);
+    }
+
+    let columns = keys
+        .into_iter()
+        .map(|key| Arc::<[InRamNoteBlock]>::from(key.column))
+        .collect();
+
+    Ok(InRamMidiCache::new(
+        columns,
+        time,
+        notes,
+        parsed.signature().clone(),
+        midi.track_count().max(1),
+    ))
 }
 
 fn parse_color_event(data: &[u8]) -> Option<(Option<u8>, MIDIColorPair)> {

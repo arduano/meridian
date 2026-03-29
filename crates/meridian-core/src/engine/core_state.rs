@@ -7,7 +7,7 @@ use std::{
 use flume::{Receiver, Sender};
 
 use crate::{
-    midi::backend::MIDIFileUnion,
+    midi::{MidiCacheStack, backend::MIDIFileUnion},
     protocol::{CoreCommand, CoreErrorCode, CoreEvent, VideoRenderStatus},
     render::SceneLayout,
 };
@@ -22,6 +22,7 @@ pub(super) struct RenderJobState {
 pub(super) struct CoreState {
     pub(super) core_handle: CoreHandle,
     pub(super) subscribers: Arc<Mutex<Vec<Sender<CoreEvent>>>>,
+    pub(super) midi_cache: Option<MidiCacheStack>,
     pub(super) midi: Option<MIDIFileUnion>,
     pub(super) midi_path: Option<PathBuf>,
     pub(super) layout: SceneLayout,
@@ -44,6 +45,7 @@ impl CoreState {
                 subscribers: Arc::clone(&subscribers),
             },
             subscribers,
+            midi_cache: None,
             midi: None,
             midi_path: None,
             layout: SceneLayout::default(),
@@ -90,8 +92,11 @@ impl CoreState {
             CoreCommand::GetState => vec![CoreEvent::StateSnapshot {
                 state: self.snapshot(),
             }],
-            CoreCommand::LoadMidi { path } => match MIDIFileUnion::load_ram(&path) {
-                Ok(midi) => {
+            CoreCommand::LoadMidi { path } => match MidiCacheStack::load(&path)
+                .and_then(|cache| cache.instantiate_in_ram().map(|midi| (cache, midi)))
+            {
+                Ok((cache, midi)) => {
+                    self.midi_cache = Some(cache);
                     self.midi_path = Some(path.clone());
                     self.midi = Some(midi);
                     if let Err(error) = self.refresh_note_colors() {
