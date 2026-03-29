@@ -7,6 +7,7 @@ use std::{
 use flume::{Receiver, Sender};
 
 use crate::{
+    audio::{AudioConfig, LiveAudioSession, MeridianAudioPlayer, PlaybackClock},
     midi::{MidiCacheStack, backend::MIDIFileUnion},
     protocol::{CoreCommand, CoreErrorCode, CoreEvent, VideoRenderStatus},
     render::SceneLayout,
@@ -24,6 +25,10 @@ pub(super) struct CoreState {
     pub(super) subscribers: Arc<Mutex<Vec<Sender<CoreEvent>>>>,
     pub(super) midi_cache: Option<MidiCacheStack>,
     pub(super) midi: Option<MIDIFileUnion>,
+    pub(super) audio_config: AudioConfig,
+    pub(super) audio_player: Arc<MeridianAudioPlayer>,
+    pub(super) audio_clock: Arc<PlaybackClock>,
+    pub(super) audio_session: Option<LiveAudioSession>,
     pub(super) midi_path: Option<PathBuf>,
     pub(super) layout: SceneLayout,
     pub(super) scene_physics: crate::render::ScenePhysicsState,
@@ -47,6 +52,10 @@ impl CoreState {
             subscribers,
             midi_cache: None,
             midi: None,
+            audio_config: AudioConfig::default(),
+            audio_player: MeridianAudioPlayer::new(&AudioConfig::default()),
+            audio_clock: Arc::new(PlaybackClock::new()),
+            audio_session: None,
             midi_path: None,
             layout: SceneLayout::default(),
             scene_physics: crate::render::ScenePhysicsState::new(&SceneLayout::default().scene),
@@ -96,6 +105,7 @@ impl CoreState {
                 .and_then(|cache| cache.instantiate_in_ram().map(|midi| (cache, midi)))
             {
                 Ok((cache, midi)) => {
+                    self.audio_session = None;
                     self.midi_cache = Some(cache);
                     self.midi_path = Some(path.clone());
                     self.midi = Some(midi);
@@ -107,6 +117,9 @@ impl CoreState {
                     let now = Instant::now();
                     self.last_tick = Some(now);
                     self.last_physics_tick = Some(now);
+                    self.audio_clock.set_time(0.0);
+                    self.audio_clock.set_playing(false);
+                    self.start_audio_session();
                     vec![CoreEvent::MidiLoaded {
                         path,
                         state: self.snapshot(),
@@ -114,9 +127,28 @@ impl CoreState {
                 }
                 Err(error) => vec![error_event(CoreErrorCode::Internal, error.to_string())],
             },
+            CoreCommand::SetAudioConfig { config } => {
+                self.audio_config = config;
+                if let Err(error) = self.audio_player.switch(&self.audio_config) {
+                    return vec![error_event(CoreErrorCode::Internal, error.to_string())];
+                }
+                self.restart_audio_session();
+                vec![
+                    CoreEvent::StateSnapshot {
+                        state: self.snapshot(),
+                    },
+                    CoreEvent::AudioStatus {
+                        status: self.audio_player.status(),
+                    },
+                ]
+            }
+            CoreCommand::GetAudioStatus => vec![CoreEvent::AudioStatus {
+                status: self.audio_player.status(),
+            }],
             CoreCommand::SetTime { time } => {
                 self.current_time = time.clamp(0.0, self.midi_length().max(0.0));
                 self.last_physics_tick = Some(Instant::now());
+                self.audio_clock.set_time(self.current_time);
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
@@ -141,6 +173,7 @@ impl CoreState {
                 self.current_time =
                     (self.current_time + delta).clamp(0.0, self.midi_length().max(0.0));
                 self.last_physics_tick = Some(Instant::now());
+                self.audio_clock.set_time(self.current_time);
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
@@ -150,6 +183,8 @@ impl CoreState {
                 let now = Instant::now();
                 self.last_tick = Some(now);
                 self.last_physics_tick = Some(now);
+                self.audio_clock.set_time(self.current_time);
+                self.audio_clock.set_playing(self.playing);
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
@@ -159,6 +194,8 @@ impl CoreState {
                 let now = Instant::now();
                 self.last_tick = Some(now);
                 self.last_physics_tick = Some(now);
+                self.audio_clock.set_time(self.current_time);
+                self.audio_clock.set_playing(self.playing);
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]
@@ -222,7 +259,32 @@ impl CoreState {
             CoreCommand::GetRenderVideoStatus => vec![CoreEvent::VideoRenderStatus {
                 status: self.video_render_status(),
             }],
-            CoreCommand::Shutdown => vec![CoreEvent::ShutdownComplete],
+            CoreCommand::Shutdown => {
+                self.audio_session = None;
+                vec![CoreEvent::ShutdownComplete]
+            }
         }
+    }
+
+    fn start_audio_session(&mut self) {
+        let Some(cache) = self.midi_cache.as_ref() else {
+            return;
+        };
+        let Ok(audio_cache) = cache.audio_cache() else {
+            return;
+        };
+        self.audio_session = Some(LiveAudioSession::spawn(
+            audio_cache,
+            Arc::clone(&self.audio_clock),
+            Arc::clone(&self.audio_player),
+        ));
+    }
+
+    fn restart_audio_session(&mut self) {
+        self.audio_session = None;
+        self.audio_clock = Arc::new(PlaybackClock::new());
+        self.audio_clock.set_time(self.current_time);
+        self.audio_clock.set_playing(self.playing);
+        self.start_audio_session();
     }
 }

@@ -38,3 +38,5 @@ slint = { version = "~1.15", features = [
 ] }
 thiserror = "2.0.12"
 wgpu = "28.0.0"
+xsynth-core = { git = "https://github.com/BlackMIDIDevs/xsynth", rev = "0d1d11d", features = ["serde"] }
+xsynth-realtime = { git = "https://github.com/BlackMIDIDevs/xsynth", rev = "0d1d11d", features = ["serde"] }

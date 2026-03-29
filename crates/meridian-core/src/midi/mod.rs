@@ -1,3 +1,4 @@
+pub mod audio_cache;
 pub mod cache;
 pub mod backend;
 pub mod colors;

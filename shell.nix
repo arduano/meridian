@@ -3,6 +3,7 @@
 pkgs.mkShell {
   packages = with pkgs; [
     pkg-config
+    alsa-lib
     fontconfig
     freetype
     libxkbcommon
@@ -24,6 +25,7 @@ pkgs.mkShell {
 
   shellHook = ''
     export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
+      pkgs.alsa-lib
       pkgs.fontconfig
       pkgs.freetype
       pkgs.libxkbcommon

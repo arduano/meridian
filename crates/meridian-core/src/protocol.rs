@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
-use crate::render::{ProjectedScene, SceneConfig, SceneLayout};
+use crate::{
+    audio::{AudioConfig, AudioStatus},
+    render::{ProjectedScene, SceneConfig, SceneLayout},
+};
 
 pub const PROTOCOL_VERSION: u32 = 1;
 
@@ -18,6 +21,10 @@ pub enum CoreCommand {
     LoadMidi {
         path: PathBuf,
     },
+    SetAudioConfig {
+        config: AudioConfig,
+    },
+    GetAudioStatus,
     SetTime {
         time: f64,
     },
@@ -76,6 +83,8 @@ pub enum ImageOutputFormat {
 pub struct StateSnapshot {
     pub midi_path: Option<PathBuf>,
     pub midi_loaded: bool,
+    pub audio: AudioConfig,
+    pub audio_status: AudioStatus,
     pub scene: SceneConfig,
     pub current_time: f64,
     pub playing: bool,
@@ -218,6 +227,9 @@ pub enum CoreEvent {
     MidiLoaded {
         path: PathBuf,
         state: StateSnapshot,
+    },
+    AudioStatus {
+        status: AudioStatus,
     },
     FrameProjected {
         state: StateSnapshot,

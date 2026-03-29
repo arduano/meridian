@@ -117,6 +117,8 @@ impl CoreState {
         StateSnapshot {
             midi_path: self.midi_path.clone(),
             midi_loaded: self.midi.is_some(),
+            audio: self.audio_config.clone(),
+            audio_status: self.audio_player.status(),
             scene: self.layout.scene.clone(),
             current_time: self.current_time,
             playing: self.playing,
@@ -132,16 +134,22 @@ impl CoreState {
 
     pub(super) fn sync_time(&mut self) {
         let now = Instant::now();
+        let mut playing_changed = false;
         if self.playing {
             if let Some(last_tick) = self.last_tick {
                 self.current_time += now.duration_since(last_tick).as_secs_f64();
                 self.current_time = self.current_time.min(self.midi_length().max(0.0));
                 if self.current_time >= self.midi_length() && self.midi_length() > 0.0 {
                     self.playing = false;
+                    playing_changed = true;
                 }
             }
         }
         self.last_tick = Some(now);
+        if playing_changed {
+            self.audio_clock.set_time(self.current_time);
+            self.audio_clock.set_playing(false);
+        }
     }
 
     pub(super) fn tick_projector_physics(

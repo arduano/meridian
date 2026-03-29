@@ -95,7 +95,9 @@ fn apply_event_to_app(
             apply_state_to_app(app, shared_state, state);
             app.set_status_text(format!("Saved frame to {}", output.display()).into());
         }
-        CoreEvent::VideoRender { .. } | CoreEvent::VideoRenderStatus { .. } => {}
+        CoreEvent::VideoRender { .. }
+        | CoreEvent::VideoRenderStatus { .. }
+        | CoreEvent::AudioStatus { .. } => {}
         CoreEvent::Error { message, .. } => {
             app.set_status_text(message.clone().into());
         }

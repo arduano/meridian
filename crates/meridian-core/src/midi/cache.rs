@@ -2,11 +2,12 @@ use std::sync::{Arc, Mutex};
 
 use crate::error::MeridianError;
 
-use super::{MIDIFileUnion, parsed::ParsedMidiFile, ram::InRamMidiCache};
+use super::{MIDIFileUnion, audio_cache::InRamAudioCache, parsed::ParsedMidiFile, ram::InRamMidiCache};
 
 pub struct MidiCacheStack {
     parsed: Arc<ParsedMidiFile>,
     in_ram: Mutex<Option<Arc<InRamMidiCache>>>,
+    audio: Mutex<Option<Arc<InRamAudioCache>>>,
 }
 
 impl MidiCacheStack {
@@ -14,6 +15,7 @@ impl MidiCacheStack {
         Ok(Self {
             parsed: Arc::new(ParsedMidiFile::load_from_file(path)?),
             in_ram: Mutex::new(None),
+            audio: Mutex::new(None),
         })
     }
 
@@ -37,5 +39,19 @@ impl MidiCacheStack {
 
     pub fn instantiate_in_ram(&self) -> Result<MIDIFileUnion, MeridianError> {
         Ok(MIDIFileUnion::InRam(self.in_ram_cache()?.instantiate()))
+    }
+
+    pub fn audio_cache(&self) -> Result<Arc<InRamAudioCache>, MeridianError> {
+        let mut audio = self
+            .audio
+            .lock()
+            .map_err(|_| MeridianError::InvalidMidi("audio cache lock poisoned".into()))?;
+        if let Some(cache) = &*audio {
+            return Ok(Arc::clone(cache));
+        }
+
+        let cache = Arc::new(InRamAudioCache::from_parsed(self.parsed())?);
+        *audio = Some(Arc::clone(&cache));
+        Ok(cache)
     }
 }
