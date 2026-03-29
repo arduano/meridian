@@ -5,7 +5,7 @@ pub mod piano_trail_classic;
 pub mod shared;
 
 pub use shared::{
-    FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardHeightSpec,
+    DisplayTimeSpace, FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardHeightSpec,
     KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig, PfaKeyboardProjectorConfig,
     PfaNoteProjectorConfig, PfaTopColor, PianoTrailClassicSceneConfig, ProjectedScene,
     ProjectorImageConfig, RendererKind, SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState,
@@ -27,7 +27,7 @@ pub fn project_scene(
     layout: &SceneLayout,
 ) -> ProjectedScene {
     let mut scene = ProjectedScene::default();
-    let views = midi.get_current_column_views(current_time, layout.view_range);
+    let views = midi.get_current_column_views(current_time, layout.view_range, layout.time_space);
     project_scene_views_into(&views, physics, layout, &mut scene);
     scene
 }
@@ -39,7 +39,7 @@ pub fn project_scene_into(
     layout: &SceneLayout,
     scene: &mut ProjectedScene,
 ) {
-    let views = midi.get_current_column_views(current_time, layout.view_range);
+    let views = midi.get_current_column_views(current_time, layout.view_range, layout.time_space);
     project_scene_views_into(&views, physics, layout, scene);
 }
 

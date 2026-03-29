@@ -3,7 +3,9 @@ use std::time::Instant;
 use meridian_core::{
     MeridianError,
     midi::backend::MIDIFileUnion,
-    render::{RendererKind, SceneLayout, headless::HeadlessRenderSession, project_scene},
+    render::{
+        DisplayTimeSpace, RendererKind, SceneLayout, headless::HeadlessRenderSession, project_scene,
+    },
 };
 use serde::Serialize;
 
@@ -13,6 +15,7 @@ struct BenchmarkSummary {
     renderer: RendererKind,
     time: f64,
     view_range: f64,
+    time_space: DisplayTimeSpace,
     width: u32,
     height: u32,
     iterations: u32,
@@ -36,6 +39,7 @@ pub fn run(
     midi: &std::path::Path,
     time: f64,
     view_range: f64,
+    time_space: DisplayTimeSpace,
     first_key: u8,
     last_key: u8,
     width: u32,
@@ -53,6 +57,7 @@ pub fn run(
     let mut layout = SceneLayout {
         scene: Default::default(),
         view_range,
+        time_space,
         first_key,
         last_key,
         viewport_width: width,
@@ -104,6 +109,7 @@ pub fn run(
         renderer,
         time,
         view_range,
+        time_space,
         width,
         height,
         iterations,

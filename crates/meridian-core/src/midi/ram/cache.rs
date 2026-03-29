@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     error::MeridianError,
-    midi::{MIDIColorPair, MIDIFileUniqueSignature, parsed::ParsedMidiFile},
+    midi::{MIDIColorPair, MIDIFileUniqueSignature, parsed::ParsedMidiFile, tempo_map::TempoMap},
 };
 
 use super::{InRamMIDIFile, block::InRamNoteBlock};
@@ -13,6 +13,7 @@ pub struct InRamMidiCache {
     note_count: u64,
     signature: MIDIFileUniqueSignature,
     track_count: usize,
+    tempo_map: TempoMap,
 }
 
 impl InRamMidiCache {
@@ -22,6 +23,7 @@ impl InRamMidiCache {
         note_count: u64,
         signature: MIDIFileUniqueSignature,
         track_count: usize,
+        tempo_map: TempoMap,
     ) -> Self {
         Self {
             columns,
@@ -29,6 +31,7 @@ impl InRamMidiCache {
             note_count,
             signature,
             track_count,
+            tempo_map,
         }
     }
 
@@ -62,5 +65,9 @@ impl InRamMidiCache {
 
     pub fn track_count(&self) -> usize {
         self.track_count
+    }
+
+    pub fn tempo_map(&self) -> &TempoMap {
+        &self.tempo_map
     }
 }

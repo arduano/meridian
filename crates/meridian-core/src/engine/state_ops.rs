@@ -86,6 +86,7 @@ impl CoreState {
             midi_length: self.midi_length(),
             total_notes: self.total_notes(),
             view_range: self.display.layout().view_range,
+            time_space: self.display.layout().time_space,
             first_key: self.display.layout().first_key,
             last_key: self.display.layout().last_key,
             viewport_width: self.display.layout().viewport_width,

@@ -10,7 +10,7 @@ use std::{
 use meridian_core::{
     MeridianError,
     protocol::{CoreCommand, CoreEvent, VideoRenderConfig, VideoRenderEvent, VideoRenderStatus},
-    render::{RendererKind, SceneLayout},
+    render::{DisplayTimeSpace, RendererKind, SceneLayout},
     spawn_core,
 };
 
@@ -21,6 +21,7 @@ pub fn run(
     width: u32,
     height: u32,
     view_range: f64,
+    time_space: DisplayTimeSpace,
     first_key: u8,
     last_key: u8,
     renderer: RendererKind,
@@ -45,6 +46,7 @@ pub fn run(
         height,
         scene: Some(layout.scene),
         view_range: Some(view_range),
+        time_space: Some(time_space),
         first_key: Some(first_key),
         last_key: Some(last_key),
         ffmpeg_args: parse_ffmpeg_args(ffmpeg_flags)?,

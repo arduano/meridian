@@ -8,6 +8,8 @@ pub use cache::InRamMidiCache;
 
 use std::sync::Arc;
 
+use crate::render::DisplayTimeSpace;
+
 use super::{MIDIAnalysisSummary, MIDIFile, MIDIFileBase, MIDIFileStats, MIDIFileUniqueSignature};
 use view::{InRamCurrentNoteViews, InRamNoteViewData};
 
@@ -47,9 +49,14 @@ impl MIDIFile for InRamMIDIFile {
     where
         Self: 'a;
 
-    fn get_current_column_views(&mut self, time: f64, range: f64) -> Self::ColumnsViews<'_> {
+    fn get_current_column_views(
+        &mut self,
+        time: f64,
+        range: f64,
+        time_space: DisplayTimeSpace,
+    ) -> Self::ColumnsViews<'_> {
         self.view_data
-            .shift_view_range(super::MIDIViewRange::new(time, time + range));
+            .shift_view_range(self.cache.tempo_map(), time, range, time_space);
         InRamCurrentNoteViews::new(&self.view_data)
     }
 }

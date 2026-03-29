@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     audio::{AudioConfig, AudioRenderConfig},
     midi::MidiProcessingConfig,
-    render::SceneConfig,
+    render::{DisplayTimeSpace, SceneConfig},
 };
 
 use super::{
@@ -93,6 +93,8 @@ pub enum CoreCommand {
     },
     SetViewRange {
         seconds: f64,
+        #[serde(default)]
+        time_space: Option<DisplayTimeSpace>,
     },
     SetKeyRange {
         first_key: u8,

@@ -4,7 +4,7 @@ use meridian_core::{
     MeridianError,
     protocol::{CoreCommand, ImageOutputFormat},
     render::{
-        RendererKind, SceneLayout,
+        DisplayTimeSpace, RendererKind, SceneLayout,
         headless::render_scene_headless_to_rgba,
         pfa::wgpu::{encode_rgba_to_png, encode_rgba_to_ppm},
     },
@@ -16,6 +16,7 @@ pub fn run(
     format: ImageOutputFormat,
     time: f64,
     view_range: f64,
+    time_space: DisplayTimeSpace,
     first_key: u8,
     last_key: u8,
     width: u32,
@@ -30,6 +31,7 @@ pub fn run(
     })?;
     core.request(CoreCommand::SetViewRange {
         seconds: view_range,
+        time_space: Some(time_space),
     })?;
     core.request(CoreCommand::SetKeyRange {
         first_key,

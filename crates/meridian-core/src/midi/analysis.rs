@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::midi::{MIDIAnalysisSummary, display_cache::DisplayMidiCache};
+use crate::{
+    midi::{MIDIAnalysisSummary, display_cache::DisplayMidiCache},
+    render::DisplayTimeSpace,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MidiAnalysisBucket {
@@ -101,12 +104,16 @@ fn analyze_buckets(
 
     for column in cache.columns() {
         for block in column.iter() {
-            let start_index = bucket_index(block.start, bucket_width, bucket_count);
+            let start_index = bucket_index(
+                block.start(DisplayTimeSpace::Time),
+                bucket_width,
+                bucket_count,
+            );
             note_starts[start_index] += block.notes.len() as u64;
 
             for note in block.notes.iter() {
-                let note_start = block.start;
-                let note_end = block.start + note.len as f64;
+                let note_start = block.start(DisplayTimeSpace::Time);
+                let note_end = note_start + note.len_seconds as f64;
                 let start = bucket_index(note_start, bucket_width, bucket_count);
                 let end_exclusive = end_bucket_index(note_end, bucket_width, bucket_count);
                 active_deltas[start] += 1;

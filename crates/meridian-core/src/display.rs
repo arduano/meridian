@@ -59,8 +59,15 @@ impl LiveDisplaySession {
         self.last_physics_tick = Some(now);
     }
 
-    pub fn set_view_range(&mut self, seconds: f64) {
+    pub fn set_view_range(
+        &mut self,
+        seconds: f64,
+        time_space: Option<crate::render::DisplayTimeSpace>,
+    ) {
         self.layout.view_range = seconds.clamp(1.0, 30.0);
+        if let Some(time_space) = time_space {
+            self.layout.time_space = time_space;
+        }
     }
 
     pub fn set_key_range(&mut self, first_key: u8, last_key: u8) {

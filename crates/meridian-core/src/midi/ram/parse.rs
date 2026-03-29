@@ -4,8 +4,7 @@ use midi_toolkit::{
     events::{Event, MIDIEventEnum, TextEventKind},
     pipe,
     sequence::{
-        TimeCaster,
-        event::{Delta, Track, cancel_tempo_events, scale_event_time},
+        event::{Delta, Track},
         unwrap_items,
     },
 };
@@ -17,6 +16,7 @@ use crate::{
         MIDI_KEY_COUNT, MIDIColor, MIDIColorPair, TrackAndChannel,
         parsed::ParsedMidiFile,
         ram::{block::InRamNoteBlock, cache::InRamMidiCache},
+        tempo_map::TempoMap,
     },
 };
 
@@ -53,7 +53,7 @@ impl KeyBuilder {
             });
     }
 
-    fn end_note(&mut self, track_chan: TrackAndChannel, time: f64) {
+    fn end_note(&mut self, track_chan: TrackAndChannel, time_seconds: f64, time_ticks: u64) {
         let note = self
             .unended_notes
             .get_mut(&track_chan)
@@ -61,24 +61,33 @@ impl KeyBuilder {
 
         if let Some(note) = note {
             if note.column_index != self.column.len() {
-                self.column[note.column_index].set_note_end_time(note.block_index, time);
+                self.column[note.column_index].set_note_end_time(
+                    note.block_index,
+                    time_seconds,
+                    time_ticks,
+                );
             }
         }
     }
 
-    fn flush(&mut self, time: f64) {
+    fn flush(&mut self, time_seconds: f64, time_ticks: u64) {
         if !self.block_builder.is_empty() {
             self.column.push(InRamNoteBlock::new_from_notes(
-                time,
+                time_seconds,
+                time_ticks,
                 self.block_builder.drain(..),
             ));
         }
     }
 
-    fn end_all(&mut self, time: f64) {
+    fn end_all(&mut self, time_seconds: f64, time_ticks: u64) {
         for (_, mut queue) in self.unended_notes.drain() {
             for note in queue.drain(..) {
-                self.column[note.column_index].set_note_end_time(note.block_index, time);
+                self.column[note.column_index].set_note_end_time(
+                    note.block_index,
+                    time_seconds,
+                    time_ticks,
+                );
             }
         }
     }
@@ -93,31 +102,34 @@ pub(super) fn build_in_ram_cache(parsed: &ParsedMidiFile) -> Result<InRamMidiCac
         ));
     }
 
-    let merged = pipe!(
-        midi.iter_all_track_events_merged()
-        |>TimeCaster::<f64>::cast_event_delta()
-        |>cancel_tempo_events(250000)
-        |>scale_event_time(1.0 / ppq as f64)
-        |>unwrap_items()
-    );
+    let merged = pipe!(midi.iter_all_track_events_merged() |> unwrap_items());
 
     let mut keys: Vec<KeyBuilder> = (0..MIDI_KEY_COUNT).map(|_| KeyBuilder::new()).collect();
-    let mut time = 0.0;
+    let mut time_seconds = 0.0;
+    let mut time_ticks = 0_u64;
     let mut notes = 0_u64;
     let mut current_colors = vec![None; midi.track_count().max(1) * 16];
+    let mut tempo_map = TempoMap::new(ppq);
+    let mut micros_per_quarter = 500_000_u32;
 
-    type ToolkitEvent = Delta<f64, Track<Event>>;
+    type ToolkitEvent = Delta<u64, Track<Event>>;
     for event in merged {
         let event: ToolkitEvent = event;
-        if event.delta > 0.0 {
+        if event.delta > 0 {
             for key in &mut keys {
-                key.flush(time);
+                key.flush(time_seconds, time_ticks);
             }
-            time += event.delta;
+            time_ticks += event.delta;
+            time_seconds +=
+                event.delta as f64 * micros_per_quarter as f64 / 1_000_000.0 / ppq as f64;
         }
 
         let track = event.track;
         match event.as_event() {
+            Event::Tempo(tempo) => {
+                micros_per_quarter = tempo.tempo;
+                tempo_map.push_tempo_change(time_ticks, time_seconds, micros_per_quarter);
+            }
             Event::NoteOn(note_on) => {
                 let key_index = note_on.key as usize;
                 if key_index < MIDI_KEY_COUNT {
@@ -130,7 +142,7 @@ pub(super) fn build_in_ram_cache(parsed: &ParsedMidiFile) -> Result<InRamMidiCac
                 let key_index = note_off.key as usize;
                 if key_index < MIDI_KEY_COUNT {
                     let track_chan = TrackAndChannel::new(track, note_off.channel);
-                    keys[key_index].end_note(track_chan, time);
+                    keys[key_index].end_note(track_chan, time_seconds, time_ticks);
                 }
             }
             Event::Text(text) if text.kind == TextEventKind::Undefined => {
@@ -156,8 +168,8 @@ pub(super) fn build_in_ram_cache(parsed: &ParsedMidiFile) -> Result<InRamMidiCac
     }
 
     for key in &mut keys {
-        key.flush(time);
-        key.end_all(time);
+        key.flush(time_seconds, time_ticks);
+        key.end_all(time_seconds, time_ticks);
     }
 
     let columns = keys
@@ -167,10 +179,11 @@ pub(super) fn build_in_ram_cache(parsed: &ParsedMidiFile) -> Result<InRamMidiCac
 
     Ok(InRamMidiCache::new(
         columns,
-        time,
+        time_seconds,
         notes,
         parsed.signature().clone(),
         midi.track_count().max(1),
+        tempo_map,
     ))
 }
 

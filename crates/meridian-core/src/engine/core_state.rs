@@ -272,8 +272,11 @@ impl CoreState {
                 }
                 self.snapshot_after_layout_validation()
             }
-            CoreCommand::SetViewRange { seconds } => {
-                self.display.set_view_range(seconds);
+            CoreCommand::SetViewRange {
+                seconds,
+                time_space,
+            } => {
+                self.display.set_view_range(seconds, time_space);
                 vec![CoreEvent::StateSnapshot {
                     state: self.snapshot(),
                 }]

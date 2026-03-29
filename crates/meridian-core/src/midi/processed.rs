@@ -20,6 +20,7 @@ use crate::{
         parsed::ParsedMidiFile,
         processing::{MidiProcessingConfig, ZeroVelocityNoteOnMode},
         ram::block::InRamNoteBlock,
+        tempo_map::TempoMap,
     },
 };
 
@@ -298,6 +299,7 @@ fn build_processed_midi(
         note_count,
         parsed.signature().clone(),
         track_count,
+        TempoMap::new(parsed.midi().ppq()),
     ));
     let total_audio_events = audio_blocks.len();
     let audio = Arc::new(InRamAudioCache::new(audio_blocks));
@@ -351,12 +353,13 @@ fn notes_to_blocks(notes: Vec<FinishedNote>) -> Vec<InRamNoteBlock> {
         let end = notes.partition_point(|note| note.start <= start);
         let mut block = InRamNoteBlock::new_from_notes(
             start,
+            0,
             notes[index..end]
                 .iter()
                 .map(|note| (note.track_chan, note.explicit_colors)),
         );
         for (note_index, note) in notes[index..end].iter().enumerate() {
-            block.set_note_end_time(note_index, note.end);
+            block.set_note_end_time(note_index, note.end, 0);
         }
         blocks.push(block);
         index = end;
@@ -402,7 +405,7 @@ fn columns_length(columns: &[Arc<[InRamNoteBlock]>]) -> f64 {
     columns
         .iter()
         .flat_map(|column| column.iter())
-        .map(InRamNoteBlock::max_end)
+        .map(|block| block.max_end(crate::render::DisplayTimeSpace::Time))
         .fold(0.0, f64::max)
 }
 

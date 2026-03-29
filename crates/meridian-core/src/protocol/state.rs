@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     audio::{AudioConfig, AudioStatus},
-    render::SceneConfig,
+    render::{DisplayTimeSpace, SceneConfig},
 };
 
 use super::ids::{
@@ -32,6 +32,7 @@ pub struct StateSnapshot {
     pub midi_length: f64,
     pub total_notes: u64,
     pub view_range: f64,
+    pub time_space: DisplayTimeSpace,
     pub first_key: u8,
     pub last_key: u8,
     pub viewport_width: u32,

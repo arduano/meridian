@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::render::{ProjectedScene, SceneConfig, SceneLayout};
+use crate::render::{DisplayTimeSpace, ProjectedScene, SceneConfig, SceneLayout};
 
 use super::{
     ids::{AudioRenderJobId, VideoRenderJobId},
@@ -49,6 +49,8 @@ pub struct VideoRenderConfig {
     pub height: u32,
     pub scene: Option<SceneConfig>,
     pub view_range: Option<f64>,
+    #[serde(default)]
+    pub time_space: Option<DisplayTimeSpace>,
     pub first_key: Option<u8>,
     pub last_key: Option<u8>,
     #[serde(default)]

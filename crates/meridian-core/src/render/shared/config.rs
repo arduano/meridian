@@ -173,10 +173,25 @@ pub struct SceneQuad {
     pub _padding: [f32; 3],
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayTimeSpace {
+    Time,
+    Tick,
+}
+
+impl Default for DisplayTimeSpace {
+    fn default() -> Self {
+        Self::Time
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SceneLayout {
     pub scene: SceneConfig,
     pub view_range: f64,
+    #[serde(default)]
+    pub time_space: DisplayTimeSpace,
     pub first_key: u8,
     pub last_key: u8,
     pub viewport_width: u32,
@@ -265,6 +280,7 @@ impl Default for SceneLayout {
         Self {
             scene: SceneConfig::default(),
             view_range: 8.0,
+            time_space: DisplayTimeSpace::Time,
             first_key: 0,
             last_key: 127,
             viewport_width: 1280,

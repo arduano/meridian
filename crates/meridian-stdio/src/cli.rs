@@ -1,5 +1,8 @@
 use clap::{Parser, Subcommand};
-use meridian_core::{MeridianError, render::RendererKind};
+use meridian_core::{
+    MeridianError,
+    render::{DisplayTimeSpace, RendererKind},
+};
 
 #[derive(Debug, Parser)]
 #[command(name = "meridian-stdio")]
@@ -25,6 +28,8 @@ pub enum Command {
         time: f64,
         #[arg(long, default_value_t = 8.0)]
         view_range: f64,
+        #[arg(long, value_enum, default_value_t = DisplayTimeSpace::Time)]
+        time_space: DisplayTimeSpace,
         #[arg(long, default_value_t = 0)]
         first_key: u8,
         #[arg(long, default_value_t = 127)]
@@ -43,6 +48,8 @@ pub enum Command {
         time: f64,
         #[arg(long, default_value_t = 8.0)]
         view_range: f64,
+        #[arg(long, value_enum, default_value_t = DisplayTimeSpace::Time)]
+        time_space: DisplayTimeSpace,
         #[arg(long, default_value_t = 0)]
         first_key: u8,
         #[arg(long, default_value_t = 127)]
@@ -71,6 +78,8 @@ pub enum Command {
         height: u32,
         #[arg(long, default_value_t = 8.0)]
         view_range: f64,
+        #[arg(long, value_enum, default_value_t = DisplayTimeSpace::Time)]
+        time_space: DisplayTimeSpace,
         #[arg(long, default_value_t = 0)]
         first_key: u8,
         #[arg(long, default_value_t = 127)]
@@ -118,18 +127,21 @@ pub fn run() -> Result<(), MeridianError> {
             format,
             time,
             view_range,
+            time_space,
             first_key,
             last_key,
             width,
             height,
             renderer,
         } => crate::frame_stdout::run(
-            &midi, format, time, view_range, first_key, last_key, width, height, renderer,
+            &midi, format, time, view_range, time_space, first_key, last_key, width, height,
+            renderer,
         ),
         Command::Benchmark {
             midi,
             time,
             view_range,
+            time_space,
             first_key,
             last_key,
             width,
@@ -138,8 +150,8 @@ pub fn run() -> Result<(), MeridianError> {
             iterations,
             warmup,
         } => crate::benchmark::run(
-            &midi, time, view_range, first_key, last_key, width, height, renderer, iterations,
-            warmup,
+            &midi, time, view_range, time_space, first_key, last_key, width, height, renderer,
+            iterations, warmup,
         ),
         Command::RenderVideo {
             midi,
@@ -148,6 +160,7 @@ pub fn run() -> Result<(), MeridianError> {
             width,
             height,
             view_range,
+            time_space,
             first_key,
             last_key,
             renderer,
@@ -159,6 +172,7 @@ pub fn run() -> Result<(), MeridianError> {
             width,
             height,
             view_range,
+            time_space,
             first_key,
             last_key,
             renderer,

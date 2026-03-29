@@ -8,6 +8,7 @@ pub mod parsed;
 pub mod processed;
 pub mod processing;
 pub mod ram;
+pub mod tempo_map;
 pub mod views;
 
 use std::{fs::File, path::PathBuf, time::UNIX_EPOCH};
@@ -16,6 +17,7 @@ use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 
 use crate::error::MeridianError;
+use crate::render::DisplayTimeSpace;
 pub use cache::MidiCacheStack;
 pub use colors::{MIDIColor, MIDIColorPair};
 pub use processed::ProcessedMidi;
@@ -40,19 +42,37 @@ pub struct MIDIFileStats {
     pub passed_notes: Option<u64>,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct MIDIViewRange {
     pub start: f64,
     pub end: f64,
+    pub time_space: DisplayTimeSpace,
+    pub scale: f64,
 }
 
 impl MIDIViewRange {
-    pub fn new(start: f64, end: f64) -> Self {
-        Self { start, end }
+    pub fn new(start: f64, end: f64, time_space: DisplayTimeSpace, scale: f64) -> Self {
+        Self {
+            start,
+            end,
+            time_space,
+            scale,
+        }
     }
 
     pub fn length(&self) -> f64 {
-        self.end - self.start
+        (self.end - self.start) * self.scale
+    }
+}
+
+impl Default for MIDIViewRange {
+    fn default() -> Self {
+        Self {
+            start: 0.0,
+            end: 0.0,
+            time_space: DisplayTimeSpace::Time,
+            scale: 1.0,
+        }
     }
 }
 
@@ -120,7 +140,12 @@ pub trait MIDIFile: MIDIFileBase {
     where
         Self: 'a;
 
-    fn get_current_column_views(&mut self, time: f64, range: f64) -> Self::ColumnsViews<'_>;
+    fn get_current_column_views(
+        &mut self,
+        time: f64,
+        range: f64,
+        time_space: DisplayTimeSpace,
+    ) -> Self::ColumnsViews<'_>;
 }
 
 pub trait MIDINoteViews {
@@ -150,10 +175,15 @@ impl MIDIFileUnion {
         MidiCacheStack::load(path)?.instantiate_display_in_ram()
     }
 
-    pub fn get_current_column_views(&mut self, time: f64, range: f64) -> MIDIFileViewsUnion<'_> {
+    pub fn get_current_column_views(
+        &mut self,
+        time: f64,
+        range: f64,
+        time_space: DisplayTimeSpace,
+    ) -> MIDIFileViewsUnion<'_> {
         match self {
             Self::InRam(file) => {
-                MIDIFileViewsUnion::InRam(file.get_current_column_views(time, range))
+                MIDIFileViewsUnion::InRam(file.get_current_column_views(time, range, time_space))
             }
         }
     }

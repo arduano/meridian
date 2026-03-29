@@ -34,7 +34,7 @@ pub fn tick_scene_physics(
     delta_seconds: f64,
 ) {
     let delta_seconds = delta_seconds.max(0.0);
-    let views = midi.get_current_column_views(current_time, layout.view_range);
+    let views = midi.get_current_column_views(current_time, layout.view_range, layout.time_space);
     tick_scene_physics_views(&views, layout, physics, delta_seconds);
 }
 

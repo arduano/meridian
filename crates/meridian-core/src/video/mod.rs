@@ -71,6 +71,7 @@ fn render_video_inner(
     }
     core.request(CoreCommand::SetViewRange {
         seconds: config.view_range.unwrap_or(state.view_range),
+        time_space: config.time_space,
     })?;
     core.request(CoreCommand::SetKeyRange {
         first_key: config.first_key.unwrap_or(state.first_key),
