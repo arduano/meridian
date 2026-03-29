@@ -13,15 +13,19 @@ use crate::{
     midi::audio_cache::InRamAudioCache,
     midi::MidiCacheStack,
     protocol::{
-        AudioCacheId, AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, DisplayCacheId,
-        ParsedMidiId, VideoRenderStatus,
+        AudioCacheId, AudioRenderStatus, AudioSessionId, AudioRenderJobId, CoreCommand,
+        CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId, ParsedMidiId,
+        VideoRenderJobId, VideoRenderStatus,
     },
     transport::TransportState,
 };
 
 use super::{
     CoreHandle, CoreResponse, RequestMessage,
-    resources::{AudioCacheRegistry, DisplayCacheRegistry, ParsedMidiRegistry},
+    resources::{
+        AudioCacheRegistry, AudioSessionRegistry, DisplayCacheRegistry, DisplaySessionRegistry,
+        ParsedMidiRegistry,
+    },
     support::error_event,
 };
 
@@ -42,10 +46,16 @@ pub(super) struct CoreState {
     pub(super) parsed_midis: ParsedMidiRegistry,
     pub(super) display_caches: DisplayCacheRegistry,
     pub(super) audio_caches: AudioCacheRegistry,
+    pub(super) display_sessions: DisplaySessionRegistry,
+    pub(super) audio_sessions: AudioSessionRegistry,
     pub(super) next_resource_id: u64,
     pub(super) active_parsed_midi_id: Option<ParsedMidiId>,
     pub(super) active_display_cache_id: Option<DisplayCacheId>,
     pub(super) active_audio_cache_id: Option<AudioCacheId>,
+    pub(super) active_display_session_id: Option<DisplaySessionId>,
+    pub(super) active_audio_session_id: Option<AudioSessionId>,
+    pub(super) active_video_render_job_id: Option<VideoRenderJobId>,
+    pub(super) active_audio_render_job_id: Option<AudioRenderJobId>,
     pub(super) current_audio_cache: Option<Arc<InRamAudioCache>>,
     pub(super) display: LiveDisplaySession,
     pub(super) audio_config: AudioConfig,
@@ -73,10 +83,16 @@ impl CoreState {
             parsed_midis: HashMap::new(),
             display_caches: HashMap::new(),
             audio_caches: HashMap::new(),
+            display_sessions: HashMap::new(),
+            audio_sessions: HashMap::new(),
             next_resource_id: 1,
             active_parsed_midi_id: None,
             active_display_cache_id: None,
             active_audio_cache_id: None,
+            active_display_session_id: None,
+            active_audio_session_id: None,
+            active_video_render_job_id: None,
+            active_audio_render_job_id: None,
             current_audio_cache: None,
             display: LiveDisplaySession::new(),
             audio_config: AudioConfig::default(),
@@ -134,11 +150,23 @@ impl CoreState {
             CoreCommand::BuildAudioCache { parsed_midi_id } => {
                 self.build_audio_cache_resource(parsed_midi_id)
             }
+            CoreCommand::CreateDisplaySession { display_cache_id } => {
+                self.create_display_session_resource(display_cache_id)
+            }
+            CoreCommand::CreateAudioSession { audio_cache_id } => {
+                self.create_audio_session_resource(audio_cache_id)
+            }
             CoreCommand::AttachDisplayCache { display_cache_id } => {
                 self.attach_display_cache_resource(display_cache_id)
             }
             CoreCommand::AttachAudioCache { audio_cache_id } => {
                 self.attach_audio_cache_resource(audio_cache_id)
+            }
+            CoreCommand::AttachDisplaySession { display_session_id } => {
+                self.attach_display_session_resource(display_session_id)
+            }
+            CoreCommand::AttachAudioSession { audio_session_id } => {
+                self.attach_audio_session_resource(audio_session_id)
             }
             CoreCommand::LoadMidi { path } => self.load_midi_legacy(path),
             CoreCommand::SetAudioConfig { config } => {

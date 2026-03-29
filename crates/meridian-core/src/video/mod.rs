@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     CoreHandle, MeridianError,
-    protocol::{CoreCommand, CoreEvent, VideoRenderConfig, VideoRenderEvent},
+    protocol::{CoreCommand, CoreEvent, VideoRenderConfig, VideoRenderEvent, VideoRenderJobId},
     render::headless::HeadlessRenderSession,
 };
 
@@ -29,12 +29,13 @@ impl VideoRenderConfig {
 }
 
 pub fn render_video(
+    job_id: VideoRenderJobId,
     core: &CoreHandle,
     config: &VideoRenderConfig,
     cancel: &AtomicBool,
     mut on_event: impl FnMut(VideoRenderEvent),
 ) -> Result<(), MeridianError> {
-    if let Err(error) = render_video_inner(core, config, cancel, &mut on_event) {
+    if let Err(error) = render_video_inner(job_id, core, config, cancel, &mut on_event) {
         on_event(VideoRenderEvent::RenderFailed {
             message: error.to_string(),
         });
@@ -44,6 +45,7 @@ pub fn render_video(
 }
 
 fn render_video_inner(
+    job_id: VideoRenderJobId,
     core: &CoreHandle,
     config: &VideoRenderConfig,
     cancel: &AtomicBool,
@@ -95,6 +97,7 @@ fn render_video_inner(
     let mut session = HeadlessRenderSession::new(&frame0.layout, config.width, config.height)?;
 
     on_event(VideoRenderEvent::RenderStarted {
+        job_id,
         midi: config.midi_path.clone(),
         output: config.output.clone(),
         fps: config.fps,
@@ -113,6 +116,7 @@ fn render_video_inner(
             let _ = ffmpeg_child.kill();
             let _ = ffmpeg_child.wait();
             on_event(VideoRenderEvent::RenderCancelled {
+                job_id,
                 frame_index,
                 total_frames,
                 elapsed_seconds: start.elapsed().as_secs_f64(),
@@ -137,6 +141,7 @@ fn render_video_inner(
             0.0
         };
         on_event(VideoRenderEvent::RenderProgress {
+            job_id,
             frame_index: frame_index + 1,
             total_frames,
             current_time,
@@ -160,6 +165,7 @@ fn render_video_inner(
         0.0
     };
     on_event(VideoRenderEvent::RenderFinished {
+        job_id,
         total_frames,
         elapsed_seconds,
         average_fps,

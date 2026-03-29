@@ -105,7 +105,14 @@ fn apply_event_to_app(
         | CoreEvent::AudioStatus { .. }
         | CoreEvent::ParsedMidiLoaded { .. }
         | CoreEvent::DisplayCacheBuilt { .. }
-        | CoreEvent::AudioCacheBuilt { .. } => {}
+        | CoreEvent::AudioCacheBuilt { .. }
+        | CoreEvent::DisplaySessionCreated { .. }
+        | CoreEvent::AudioSessionCreated { .. } => {}
+        CoreEvent::DisplaySessionAttached { state, .. }
+        | CoreEvent::AudioSessionAttached { state, .. } => {
+            apply_state_to_app(app, shared_state, state);
+            app.set_status_text(status_text(state).into());
+        }
         CoreEvent::Error { message, .. } => {
             app.set_status_text(message.clone().into());
         }

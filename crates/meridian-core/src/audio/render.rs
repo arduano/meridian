@@ -12,7 +12,7 @@ use xsynth_core::{
 };
 use xsynth_render::{OfflineRenderConfig, OfflineWavRenderer};
 
-use crate::{MeridianError, midi::MidiCacheStack};
+use crate::{MeridianError, midi::MidiCacheStack, protocol::AudioRenderJobId};
 
 use super::{AudioBackend, AudioConfig, soundfont_cache::SoundfontCache};
 
@@ -45,6 +45,7 @@ pub fn render_audio(
     audio_config: &AudioConfig,
     soundfont_cache: &SoundfontCache,
     config: &AudioRenderConfig,
+    job_id: AudioRenderJobId,
     cancel: &AtomicBool,
     mut on_event: impl FnMut(AudioRenderEvent),
 ) -> Result<(), MeridianError> {
@@ -54,6 +55,7 @@ pub fn render_audio(
             audio_config,
             soundfont_cache,
             config,
+            job_id,
             cancel,
             &mut on_event,
         )
@@ -71,12 +73,14 @@ pub fn render_audio(
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AudioRenderEvent {
     RenderStarted {
+        job_id: AudioRenderJobId,
         output: PathBuf,
         sample_rate: u32,
         channels: u16,
         total_events: usize,
     },
     RenderProgress {
+        job_id: AudioRenderJobId,
         event_index: usize,
         total_events: usize,
         time_seconds: f64,
@@ -85,11 +89,13 @@ pub enum AudioRenderEvent {
         voice_count: u64,
     },
     RenderFinished {
+        job_id: AudioRenderJobId,
         output: PathBuf,
         frames_written: u64,
         rendered_seconds: f64,
     },
     RenderCancelled {
+        job_id: AudioRenderJobId,
         output: PathBuf,
         event_index: usize,
         total_events: usize,
@@ -114,6 +120,7 @@ pub fn render_audio_to_wav(
         audio_config,
         soundfont_cache,
         render_config,
+        AudioRenderJobId(0),
         &cancel,
         callback,
     )
@@ -124,6 +131,7 @@ fn render_audio_inner(
     audio_config: &AudioConfig,
     soundfont_cache: &SoundfontCache,
     render_config: &AudioRenderConfig,
+    job_id: AudioRenderJobId,
     cancel: &AtomicBool,
     mut callback: impl FnMut(AudioRenderEvent),
 ) -> Result<(), MeridianError> {
@@ -153,6 +161,7 @@ fn render_audio_inner(
     let events = midi_cache.audio_cache()?;
 
     callback(AudioRenderEvent::RenderStarted {
+        job_id,
         output: render_config.output.clone(),
         sample_rate,
         channels,
@@ -173,6 +182,7 @@ fn render_audio_inner(
     for (event_index, event) in events.events().iter().enumerate() {
         if cancel.load(Ordering::SeqCst) {
             callback(AudioRenderEvent::RenderCancelled {
+                job_id,
                 output: render_config.output.clone(),
                 event_index,
                 total_events,
@@ -199,6 +209,7 @@ fn render_audio_inner(
         if event_index == 0 || event_index + 1 == total_events || event_index % progress_stride == 0
         {
             callback(AudioRenderEvent::RenderProgress {
+                job_id,
                 event_index: event_index + 1,
                 total_events,
                 time_seconds: event.time,
@@ -218,6 +229,7 @@ fn render_audio_inner(
     let frames_written = renderer.finalize()?;
 
     callback(AudioRenderEvent::RenderFinished {
+        job_id,
         output: render_config.output.clone(),
         frames_written,
         rendered_seconds: current_time,

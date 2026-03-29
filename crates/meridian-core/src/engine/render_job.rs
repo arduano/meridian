@@ -9,8 +9,8 @@ use std::{
 use crate::{
     audio::{AudioRenderConfig, AudioRenderEvent, SoundfontCache, render_audio},
     protocol::{
-        AudioRenderStatus, CoreErrorCode, CoreEvent, VideoRenderConfig, VideoRenderEvent,
-        VideoRenderStatus,
+        AudioRenderJobId, AudioRenderStatus, CoreErrorCode, CoreEvent, VideoRenderConfig,
+        VideoRenderEvent, VideoRenderJobId, VideoRenderStatus,
     },
     video::render_video,
 };
@@ -41,9 +41,13 @@ impl CoreState {
             .unwrap_or_else(|| self.audio_config.clone());
         let soundfont_cache = SoundfontCache::new();
         let cancel = Arc::new(AtomicBool::new(false));
+        let job_id = AudioRenderJobId(self.next_resource_id);
+        self.next_resource_id += 1;
+        self.active_audio_render_job_id = Some(job_id);
         self.audio_render_job = Some(AudioRenderJobState {
             cancel: Arc::clone(&cancel),
             status: AudioRenderStatus::Running {
+                job_id,
                 output: config.output.clone(),
                 total_events: 0,
                 event_index: 0,
@@ -60,6 +64,7 @@ impl CoreState {
                 &audio_config,
                 &soundfont_cache,
                 &config,
+                job_id,
                 &cancel,
                 |event| {
                     let _ = core_handle.publish_audio_event(event);
@@ -81,9 +86,13 @@ impl CoreState {
         }
 
         let cancel = Arc::new(AtomicBool::new(false));
+        let job_id = VideoRenderJobId(self.next_resource_id);
+        self.next_resource_id += 1;
+        self.active_video_render_job_id = Some(job_id);
         self.render_job = Some(RenderJobState {
             cancel: Arc::clone(&cancel),
             status: VideoRenderStatus::Running {
+                job_id,
                 output: config.output.clone(),
                 fps: config.fps,
                 width: config.width,
@@ -97,7 +106,7 @@ impl CoreState {
 
         let core_handle = self.core_handle.clone();
         thread::spawn(move || {
-            let _ = render_video(&core_handle, &config, &cancel, |event| {
+            let _ = render_video(job_id, &core_handle, &config, &cancel, |event| {
                 let _ = core_handle.publish_video_event(event);
             });
         });
@@ -112,6 +121,7 @@ impl CoreState {
             Some(job) => {
                 job.cancel.store(true, Ordering::SeqCst);
                 if let VideoRenderStatus::Running {
+                    job_id,
                     output,
                     fps,
                     width,
@@ -123,6 +133,7 @@ impl CoreState {
                 } = &job.status
                 {
                     job.status = VideoRenderStatus::Cancelling {
+                        job_id: *job_id,
                         output: output.clone(),
                         fps: *fps,
                         width: *width,
@@ -149,6 +160,7 @@ impl CoreState {
             Some(job) => {
                 job.cancel.store(true, Ordering::SeqCst);
                 if let AudioRenderStatus::Running {
+                    job_id,
                     output,
                     total_events,
                     event_index,
@@ -158,6 +170,7 @@ impl CoreState {
                 } = &job.status
                 {
                     job.status = AudioRenderStatus::Cancelling {
+                        job_id: *job_id,
                         output: output.clone(),
                         total_events: *total_events,
                         event_index: *event_index,
@@ -180,6 +193,7 @@ impl CoreState {
     pub(super) fn handle_video_render_update(&mut self, event: VideoRenderEvent) {
         match &event {
             VideoRenderEvent::RenderStarted {
+                job_id,
                 output,
                 fps,
                 width,
@@ -190,6 +204,7 @@ impl CoreState {
                 self.render_job = self.render_job.take().map(|job| RenderJobState {
                     cancel: job.cancel,
                     status: VideoRenderStatus::Running {
+                        job_id: *job_id,
                         output: output.clone(),
                         fps: *fps,
                         width: *width,
@@ -202,6 +217,7 @@ impl CoreState {
                 });
             }
             VideoRenderEvent::RenderProgress {
+                job_id,
                 frame_index,
                 total_frames,
                 current_time,
@@ -209,8 +225,9 @@ impl CoreState {
                 ..
             } => {
                 if let Some(job) = &mut self.render_job {
-                    let (output, fps, width, height) = match &job.status {
+                    let (_status_job_id, output, fps, width, height) = match &job.status {
                         VideoRenderStatus::Running {
+                            job_id,
                             output,
                             fps,
                             width,
@@ -218,16 +235,18 @@ impl CoreState {
                             ..
                         }
                         | VideoRenderStatus::Cancelling {
+                            job_id,
                             output,
                             fps,
                             width,
                             height,
                             ..
-                        } => (output.clone(), *fps, *width, *height),
+                        } => (*job_id, output.clone(), *fps, *width, *height),
                         VideoRenderStatus::Idle => return,
                     };
                     job.status = match &job.status {
                         VideoRenderStatus::Running { .. } => VideoRenderStatus::Running {
+                            job_id: *job_id,
                             output,
                             fps,
                             width,
@@ -238,6 +257,7 @@ impl CoreState {
                             elapsed_seconds: *elapsed_seconds,
                         },
                         VideoRenderStatus::Cancelling { .. } => VideoRenderStatus::Cancelling {
+                            job_id: *job_id,
                             output,
                             fps,
                             width,
@@ -255,6 +275,7 @@ impl CoreState {
             | VideoRenderEvent::RenderFinished { .. }
             | VideoRenderEvent::RenderFailed { .. } => {
                 self.render_job = None;
+                self.active_video_render_job_id = None;
             }
         }
 
@@ -267,6 +288,7 @@ impl CoreState {
     pub(super) fn handle_audio_render_update(&mut self, event: AudioRenderEvent) {
         match &event {
             AudioRenderEvent::RenderStarted {
+                job_id,
                 output,
                 total_events,
                 ..
@@ -275,6 +297,7 @@ impl CoreState {
                     self.audio_render_job.take().map(|job| AudioRenderJobState {
                         cancel: job.cancel,
                         status: AudioRenderStatus::Running {
+                            job_id: *job_id,
                             output: output.clone(),
                             total_events: *total_events,
                             event_index: 0,
@@ -285,6 +308,7 @@ impl CoreState {
                     });
             }
             AudioRenderEvent::RenderProgress {
+                job_id,
                 event_index,
                 total_events,
                 time_seconds,
@@ -293,13 +317,16 @@ impl CoreState {
                 ..
             } => {
                 if let Some(job) = &mut self.audio_render_job {
-                    let output = match &job.status {
-                        AudioRenderStatus::Running { output, .. }
-                        | AudioRenderStatus::Cancelling { output, .. } => output.clone(),
+                    let (_status_job_id, output) = match &job.status {
+                        AudioRenderStatus::Running { job_id, output, .. }
+                        | AudioRenderStatus::Cancelling { job_id, output, .. } => {
+                            (*job_id, output.clone())
+                        }
                         AudioRenderStatus::Idle => return,
                     };
                     job.status = match &job.status {
                         AudioRenderStatus::Running { .. } => AudioRenderStatus::Running {
+                            job_id: *job_id,
                             output,
                             total_events: *total_events,
                             event_index: *event_index,
@@ -308,6 +335,7 @@ impl CoreState {
                             frames_written: *frames_written,
                         },
                         AudioRenderStatus::Cancelling { .. } => AudioRenderStatus::Cancelling {
+                            job_id: *job_id,
                             output,
                             total_events: *total_events,
                             event_index: *event_index,
@@ -323,6 +351,7 @@ impl CoreState {
             | AudioRenderEvent::RenderCancelled { .. }
             | AudioRenderEvent::RenderFailed { .. } => {
                 self.audio_render_job = None;
+                self.active_audio_render_job_id = None;
             }
         }
 

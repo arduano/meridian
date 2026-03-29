@@ -26,6 +26,22 @@ pub struct DisplayCacheId(pub u64);
 #[serde(transparent)]
 pub struct AudioCacheId(pub u64);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct DisplaySessionId(pub u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AudioSessionId(pub u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct VideoRenderJobId(pub u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AudioRenderJobId(pub u64);
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CoreCommand {
@@ -39,11 +55,23 @@ pub enum CoreCommand {
     BuildAudioCache {
         parsed_midi_id: ParsedMidiId,
     },
+    CreateDisplaySession {
+        display_cache_id: DisplayCacheId,
+    },
+    CreateAudioSession {
+        audio_cache_id: AudioCacheId,
+    },
     AttachDisplayCache {
         display_cache_id: DisplayCacheId,
     },
     AttachAudioCache {
         audio_cache_id: AudioCacheId,
+    },
+    AttachDisplaySession {
+        display_session_id: DisplaySessionId,
+    },
+    AttachAudioSession {
+        audio_session_id: AudioSessionId,
     },
     LoadMidi {
         path: PathBuf,
@@ -116,6 +144,10 @@ pub struct StateSnapshot {
     pub active_parsed_midi_id: Option<ParsedMidiId>,
     pub active_display_cache_id: Option<DisplayCacheId>,
     pub active_audio_cache_id: Option<AudioCacheId>,
+    pub active_display_session_id: Option<DisplaySessionId>,
+    pub active_audio_session_id: Option<AudioSessionId>,
+    pub active_video_render_job_id: Option<VideoRenderJobId>,
+    pub active_audio_render_job_id: Option<AudioRenderJobId>,
     pub midi_path: Option<PathBuf>,
     pub midi_loaded: bool,
     pub audio: AudioConfig,
@@ -183,6 +215,7 @@ pub struct VideoRenderConfig {
 pub enum AudioRenderStatus {
     Idle,
     Running {
+        job_id: AudioRenderJobId,
         output: PathBuf,
         total_events: usize,
         event_index: usize,
@@ -191,6 +224,7 @@ pub enum AudioRenderStatus {
         frames_written: u64,
     },
     Cancelling {
+        job_id: AudioRenderJobId,
         output: PathBuf,
         total_events: usize,
         event_index: usize,
@@ -204,6 +238,7 @@ pub enum AudioRenderStatus {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum VideoRenderEvent {
     RenderStarted {
+        job_id: VideoRenderJobId,
         midi: Option<PathBuf>,
         output: PathBuf,
         fps: f64,
@@ -214,6 +249,7 @@ pub enum VideoRenderEvent {
         ffmpeg_command: Vec<String>,
     },
     RenderProgress {
+        job_id: VideoRenderJobId,
         frame_index: u64,
         total_frames: u64,
         current_time: f64,
@@ -221,11 +257,13 @@ pub enum VideoRenderEvent {
         average_fps: f64,
     },
     RenderCancelled {
+        job_id: VideoRenderJobId,
         frame_index: u64,
         total_frames: u64,
         elapsed_seconds: f64,
     },
     RenderFinished {
+        job_id: VideoRenderJobId,
         total_frames: u64,
         elapsed_seconds: f64,
         average_fps: f64,
@@ -241,6 +279,7 @@ pub enum VideoRenderEvent {
 pub enum VideoRenderStatus {
     Idle,
     Running {
+        job_id: VideoRenderJobId,
         output: PathBuf,
         fps: f64,
         width: u32,
@@ -251,6 +290,7 @@ pub enum VideoRenderStatus {
         elapsed_seconds: f64,
     },
     Cancelling {
+        job_id: VideoRenderJobId,
         output: PathBuf,
         fps: f64,
         width: u32,
@@ -294,12 +334,28 @@ pub enum CoreEvent {
         audio_cache_id: AudioCacheId,
         total_events: usize,
     },
+    DisplaySessionCreated {
+        display_session_id: DisplaySessionId,
+        display_cache_id: DisplayCacheId,
+    },
+    AudioSessionCreated {
+        audio_session_id: AudioSessionId,
+        audio_cache_id: AudioCacheId,
+    },
     DisplayCacheAttached {
         display_cache_id: DisplayCacheId,
         state: StateSnapshot,
     },
     AudioCacheAttached {
         audio_cache_id: AudioCacheId,
+        state: StateSnapshot,
+    },
+    DisplaySessionAttached {
+        display_session_id: DisplaySessionId,
+        state: StateSnapshot,
+    },
+    AudioSessionAttached {
+        audio_session_id: AudioSessionId,
         state: StateSnapshot,
     },
     StateSnapshot {
