@@ -21,6 +21,7 @@ thiserror.workspace = true
 wgpu.workspace = true
 xsynth-core.workspace = true
 xsynth-realtime.workspace = true
+xsynth-render.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

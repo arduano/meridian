@@ -80,6 +80,20 @@ pub enum Command {
         #[arg(long, allow_hyphen_values = true)]
         ffmpeg_flags: Option<String>,
     },
+    RenderAudio {
+        #[arg(value_name = "MIDI")]
+        midi: std::path::PathBuf,
+        #[arg(long)]
+        output: std::path::PathBuf,
+        #[arg(long, default_value_t = 44_100)]
+        sample_rate: u32,
+        #[arg(long, default_value_t = 2)]
+        channels: u16,
+        #[arg(long)]
+        no_limiter: bool,
+        #[arg(long)]
+        soundfont: Vec<std::path::PathBuf>,
+    },
     DebugPianoTrailClassicGeometry {
         #[arg(long, default_value_t = 0)]
         first_key: u8,
@@ -149,6 +163,21 @@ pub fn run() -> Result<(), MeridianError> {
             last_key,
             renderer,
             ffmpeg_flags.as_deref(),
+        ),
+        Command::RenderAudio {
+            midi,
+            output,
+            sample_rate,
+            channels,
+            no_limiter,
+            soundfont,
+        } => crate::render_audio::run(
+            &midi,
+            &output,
+            sample_rate,
+            channels,
+            !no_limiter,
+            &soundfont,
         ),
         Command::DebugPianoTrailClassicGeometry {
             first_key,

@@ -1,7 +1,11 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use xsynth_core::soundfont::{EnvelopeCurveType, Interpolator, SoundfontInitOptions};
+use xsynth_core::{
+    AudioStreamParams, ChannelCount,
+    channel_group::{ParallelismOptions, ThreadCount},
+    soundfont::{EnvelopeCurveType, Interpolator, SoundfontInitOptions},
+};
 use xsynth_realtime::XSynthRealtimeConfig;
 
 pub const DEFAULT_SOUNDFONT: &str =
@@ -38,6 +42,15 @@ pub struct XSynthSettings {
     pub config: XSynthRealtimeConfig,
     pub limit_layers: bool,
     pub layers: usize,
+    pub render: XSynthRenderSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct XSynthRenderSettings {
+    pub audio_params: AudioStreamParams,
+    pub parallelism: ParallelismOptions,
+    pub use_limiter: bool,
 }
 
 impl Default for XSynthSettings {
@@ -46,6 +59,20 @@ impl Default for XSynthSettings {
             config: Default::default(),
             limit_layers: true,
             layers: 4,
+            render: Default::default(),
+        }
+    }
+}
+
+impl Default for XSynthRenderSettings {
+    fn default() -> Self {
+        Self {
+            audio_params: AudioStreamParams::new(48_000, ChannelCount::Stereo),
+            parallelism: ParallelismOptions {
+                channel: ThreadCount::Auto,
+                key: ThreadCount::Auto,
+            },
+            use_limiter: false,
         }
     }
 }
