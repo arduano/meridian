@@ -8,8 +8,8 @@ mod state;
 pub use commands::{CoreCommand, ImageOutputFormat};
 pub use events::{CoreErrorCode, CoreEvent};
 pub use ids::{
-    AudioCacheId, AudioRenderJobId, AudioSessionId, DisplayCacheId, DisplaySessionId,
-    ParsedMidiId, VideoRenderJobId,
+    AudioCacheId, AudioRenderJobId, AudioSessionId, DisplayCacheId, DisplaySessionId, ParsedMidiId,
+    ProcessedMidiId, VideoRenderJobId,
 };
 pub use json::{JsonRequest, JsonResponse};
 pub use render::{
@@ -17,6 +17,8 @@ pub use render::{
     VideoRenderStatus,
 };
 pub use state::StateSnapshot;
+
+pub use crate::midi::analysis::{MidiAnalysisBucket, MidiAnalysisData};
 
 pub const PROTOCOL_VERSION: u32 = 1;
 

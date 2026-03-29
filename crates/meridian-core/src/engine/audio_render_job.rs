@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    audio::{AudioRenderConfig, AudioRenderEvent, SoundfontCache, render_audio},
+    audio::{AudioRenderConfig, AudioRenderEvent, SoundfontCache, render_audio_from_cache},
     protocol::{AudioRenderJobId, AudioRenderStatus, CoreErrorCode, CoreEvent},
 };
 
@@ -25,7 +25,7 @@ impl CoreState {
             )];
         }
 
-        let Some(midi_cache) = self.midi_cache.clone() else {
+        let Some(audio_cache) = self.current_audio_cache.clone() else {
             return vec![error_event(
                 CoreErrorCode::NoMidiLoaded,
                 "no midi loaded for audio render",
@@ -55,8 +55,8 @@ impl CoreState {
 
         let core_handle = self.core_handle.clone();
         thread::spawn(move || {
-            let _ = render_audio(
-                &midi_cache,
+            let _ = render_audio_from_cache(
+                audio_cache.as_ref(),
                 &audio_config,
                 &soundfont_cache,
                 &config,

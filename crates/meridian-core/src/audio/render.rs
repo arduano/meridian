@@ -12,7 +12,11 @@ use xsynth_core::{
 };
 use xsynth_render::{OfflineRenderConfig, OfflineWavRenderer};
 
-use crate::{MeridianError, midi::MidiCacheStack, protocol::AudioRenderJobId};
+use crate::{
+    MeridianError,
+    midi::{MidiCacheStack, audio_cache::InRamAudioCache},
+    protocol::AudioRenderJobId,
+};
 
 use super::{AudioBackend, AudioConfig, soundfont_cache::SoundfontCache};
 
@@ -47,11 +51,32 @@ pub fn render_audio(
     config: &AudioRenderConfig,
     job_id: AudioRenderJobId,
     cancel: &AtomicBool,
+    on_event: impl FnMut(AudioRenderEvent),
+) -> Result<(), MeridianError> {
+    let events = midi_cache.audio_cache()?;
+    render_audio_from_cache(
+        events.as_ref(),
+        audio_config,
+        soundfont_cache,
+        config,
+        job_id,
+        cancel,
+        on_event,
+    )
+}
+
+pub fn render_audio_from_cache(
+    events: &InRamAudioCache,
+    audio_config: &AudioConfig,
+    soundfont_cache: &SoundfontCache,
+    config: &AudioRenderConfig,
+    job_id: AudioRenderJobId,
+    cancel: &AtomicBool,
     mut on_event: impl FnMut(AudioRenderEvent),
 ) -> Result<(), MeridianError> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         render_audio_inner(
-            midi_cache,
+            events,
             audio_config,
             soundfont_cache,
             config,
@@ -127,7 +152,7 @@ pub fn render_audio_to_wav(
 }
 
 fn render_audio_inner(
-    midi_cache: &MidiCacheStack,
+    events: &InRamAudioCache,
     audio_config: &AudioConfig,
     soundfont_cache: &SoundfontCache,
     render_config: &AudioRenderConfig,
@@ -158,8 +183,6 @@ fn render_audio_inner(
         ))
     })?;
     let audio_params = AudioStreamParams::new(sample_rate, channel_count);
-    let events = midi_cache.audio_cache()?;
-
     callback(AudioRenderEvent::RenderStarted {
         job_id,
         output: render_config.output.clone(),

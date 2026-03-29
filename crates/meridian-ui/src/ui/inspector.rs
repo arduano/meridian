@@ -1,9 +1,12 @@
 use meridian_core::render::{
     KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
-    PfaTopColor, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
+    PfaTopColor, RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
 };
 
-use super::view::InspectorRow;
+use super::{
+    editor_meta::{UiControlKind, projector_editor_meta},
+    view::InspectorRow,
+};
 
 pub fn rows_for_scene(scene: &SceneConfig) -> Vec<InspectorRow> {
     let mut rows = Vec::new();
@@ -58,6 +61,7 @@ pub fn rows_for_scene(scene: &SceneConfig) -> Vec<InspectorRow> {
             rows.push(row("Scene", "Box Notes", yes_no(config.box_notes)));
             rows.push(row("Scene", "Show Keyboard", yes_no(config.show_keyboard)));
             rows.push(row("Scene", "Palette", palette_name(&config.palette)));
+            rows.extend(metadata_rows(RendererKind::PianoTrailClassic));
         }
     }
     rows
@@ -65,20 +69,28 @@ pub fn rows_for_scene(scene: &SceneConfig) -> Vec<InspectorRow> {
 
 fn note_rows(config: &NoteProjectorConfig) -> Vec<InspectorRow> {
     match config {
-        NoteProjectorConfig::Flat(config) => vec![
-            row("Notes", "Projector", "flat"),
-            row("Notes", "Palette", palette_name(&config.palette)),
-        ],
-        NoteProjectorConfig::Pfa(config) => vec![
-            row("Notes", "Projector", "pfa"),
-            row("Notes", "Same Width Notes", yes_no(config.same_width_notes)),
-            row(
-                "Notes",
-                "Border Width",
-                format!("{:.2}", config.border_width),
-            ),
-            row("Notes", "Palette", palette_name(&config.palette)),
-        ],
+        NoteProjectorConfig::Flat(config) => {
+            let mut rows = vec![
+                row("Notes", "Projector", "flat"),
+                row("Notes", "Palette", palette_name(&config.palette)),
+            ];
+            rows.extend(metadata_rows(RendererKind::Flat));
+            rows
+        }
+        NoteProjectorConfig::Pfa(config) => {
+            let mut rows = vec![
+                row("Notes", "Projector", "pfa"),
+                row("Notes", "Same Width Notes", yes_no(config.same_width_notes)),
+                row(
+                    "Notes",
+                    "Border Width",
+                    format!("{:.2}", config.border_width),
+                ),
+                row("Notes", "Palette", palette_name(&config.palette)),
+            ];
+            rows.extend(metadata_rows(RendererKind::Pfa));
+            rows
+        }
     }
 }
 
@@ -141,5 +153,31 @@ fn palette_name(config: &NotePaletteConfig) -> String {
             };
             format!("{base}{}", if *randomize { " / randomized" } else { "" })
         }
+    }
+}
+
+fn metadata_rows(renderer: RendererKind) -> Vec<InspectorRow> {
+    let meta = projector_editor_meta(renderer);
+    let mut rows = vec![row("Editor", "Projector Family", meta.label)];
+    rows.extend(meta.fields.iter().map(|field| {
+        row(
+            field.section,
+            format!("{} Control ({})", field.label, field.key),
+            format!(
+                "{} / default {}",
+                control_kind_name(field.control),
+                field.default_hint
+            ),
+        )
+    }));
+    rows
+}
+
+fn control_kind_name(kind: UiControlKind) -> String {
+    match kind {
+        UiControlKind::Toggle => "toggle".into(),
+        UiControlKind::Slider { min, max } => format!("slider [{min:.1}, {max:.1}]"),
+        UiControlKind::Choice => "choice".into(),
+        UiControlKind::ColorRgb => "color_rgb".into(),
     }
 }

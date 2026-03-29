@@ -7,7 +7,6 @@ use std::{
 
 use meridian_core::{
     CoreHandle,
-    protocol::StateSnapshot,
     render::pfa::wgpu::{PrimitiveSceneRenderer, VIEWPORT_FORMAT},
 };
 use slint::wgpu_28::wgpu;
@@ -15,6 +14,7 @@ use slint::wgpu_28::wgpu;
 use super::{
     state::{UiFrameUpdate, apply_frame_update_to_app},
     view::App,
+    view_model::UiViewModel,
 };
 
 struct ViewportTexture {
@@ -25,7 +25,7 @@ struct ViewportTexture {
 pub(super) struct ViewportRenderer {
     app: slint::Weak<App>,
     core: CoreHandle,
-    shared_state: Arc<Mutex<Option<StateSnapshot>>>,
+    shared_state: Arc<Mutex<UiViewModel>>,
     pending_viewport_image: Rc<RefCell<Option<slint::Image>>>,
     viewport_size: Rc<RefCell<(u32, u32)>>,
     renderer: Option<PrimitiveSceneRenderer>,
@@ -39,7 +39,7 @@ impl ViewportRenderer {
     pub(super) fn new(
         app: slint::Weak<App>,
         core: CoreHandle,
-        shared_state: Arc<Mutex<Option<StateSnapshot>>>,
+        shared_state: Arc<Mutex<UiViewModel>>,
         pending_viewport_image: Rc<RefCell<Option<slint::Image>>>,
         viewport_size: Rc<RefCell<(u32, u32)>>,
         enabled: bool,

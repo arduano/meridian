@@ -30,6 +30,10 @@ const EV_CHAN_PRESSURE: u8 = 0xD0;
 const EV_PITCH_BEND: u8 = 0xE0;
 
 impl InRamAudioCache {
+    pub(crate) fn new(events: Vec<CompressedAudio>) -> Self {
+        Self { events }
+    }
+
     pub fn from_parsed(parsed: &ParsedMidiFile) -> Result<Self, MeridianError> {
         let midi = parsed.midi();
         let ppq = midi.ppq();
@@ -101,12 +105,21 @@ impl InRamAudioCache {
                 control_only_data: (!control.is_empty()).then_some(control),
             });
         }
-
-        Ok(Self { events: out })
+        Ok(Self::new(out))
     }
 
     pub fn events(&self) -> &[CompressedAudio] {
         &self.events
+    }
+}
+
+impl CompressedAudio {
+    pub(crate) fn from_parts(time: f64, data: Vec<u8>, control_only_data: Option<Vec<u8>>) -> Self {
+        Self {
+            time,
+            data,
+            control_only_data,
+        }
     }
 }
 

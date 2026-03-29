@@ -13,7 +13,7 @@ use meridian_core::{
 };
 use slint::{ModelRc, VecModel};
 
-use super::{inspector::rows_for_scene, view::App};
+use super::{inspector::rows_for_scene, view::App, view_model::UiViewModel};
 
 #[derive(Debug, Clone)]
 pub struct UiOptions {
@@ -45,11 +45,25 @@ impl Default for UiOptions {
 
 pub fn apply_events_to_app(
     app: &App,
-    shared_state: &Arc<Mutex<Option<StateSnapshot>>>,
+    shared_state: &Arc<Mutex<UiViewModel>>,
     events: &[CoreEvent],
 ) {
-    for event in events {
-        apply_event_to_app(app, shared_state, event);
+    let snapshot = shared_state
+        .lock()
+        .expect("shared UI state mutex poisoned")
+        .snapshot
+        .clone();
+    if let Some(state) = snapshot.as_ref() {
+        apply_state_to_app(app, shared_state, state);
+        for event in events {
+            apply_event_overrides_to_app(app, event, state);
+        }
+    } else {
+        for event in events {
+            if let CoreEvent::Error { message, .. } = event {
+                app.set_status_text(message.clone().into());
+            }
+        }
     }
 }
 
@@ -63,7 +77,7 @@ pub struct UiFrameUpdate {
 
 pub fn apply_frame_update_to_app(
     app: &App,
-    shared_state: &Arc<Mutex<Option<StateSnapshot>>>,
+    shared_state: &Arc<Mutex<UiViewModel>>,
     update: &UiFrameUpdate,
 ) {
     apply_state_to_app(app, shared_state, &update.state);
@@ -73,29 +87,23 @@ pub fn apply_frame_update_to_app(
     app.set_status_text(status_text(&update.state).into());
 }
 
-fn apply_event_to_app(
-    app: &App,
-    shared_state: &Arc<Mutex<Option<StateSnapshot>>>,
-    event: &CoreEvent,
-) {
+fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: &StateSnapshot) {
     match event {
-        CoreEvent::StateSnapshot { state }
-        | CoreEvent::MidiLoaded { state, .. }
-        | CoreEvent::DisplayCacheAttached { state, .. }
-        | CoreEvent::AudioCacheAttached { state, .. } => {
-            apply_state_to_app(app, shared_state, state);
+        CoreEvent::StateSnapshot { .. }
+        | CoreEvent::MidiLoaded { .. }
+        | CoreEvent::ProcessedMidiAttached { .. }
+        | CoreEvent::DisplayCacheAttached { .. }
+        | CoreEvent::AudioCacheAttached { .. } => {
             app.set_status_text(status_text(state).into());
             app.set_visible_note_count_text("0".into());
             app.set_active_keys_text("0".into());
         }
-        CoreEvent::FrameProjected { state, stats, .. } => {
-            apply_state_to_app(app, shared_state, state);
+        CoreEvent::FrameProjected { stats, .. } => {
             app.set_visible_note_count_text(stats.visible_notes.to_string().into());
             app.set_active_keys_text(stats.active_keys.to_string().into());
             app.set_status_text(status_text(state).into());
         }
-        CoreEvent::FrameSaved { state, output, .. } => {
-            apply_state_to_app(app, shared_state, state);
+        CoreEvent::FrameSaved { output, .. } => {
             app.set_status_text(format!("Saved frame to {}", output.display()).into());
         }
         CoreEvent::VideoRender { .. }
@@ -103,14 +111,14 @@ fn apply_event_to_app(
         | CoreEvent::AudioRender { .. }
         | CoreEvent::AudioRenderStatus { .. }
         | CoreEvent::AudioStatus { .. }
+        | CoreEvent::MidiAnalysis { .. }
         | CoreEvent::ParsedMidiLoaded { .. }
+        | CoreEvent::ProcessedMidiBuilt { .. }
         | CoreEvent::DisplayCacheBuilt { .. }
         | CoreEvent::AudioCacheBuilt { .. }
         | CoreEvent::DisplaySessionCreated { .. }
         | CoreEvent::AudioSessionCreated { .. } => {}
-        CoreEvent::DisplaySessionAttached { state, .. }
-        | CoreEvent::AudioSessionAttached { state, .. } => {
-            apply_state_to_app(app, shared_state, state);
+        CoreEvent::DisplaySessionAttached { .. } | CoreEvent::AudioSessionAttached { .. } => {
             app.set_status_text(status_text(state).into());
         }
         CoreEvent::Error { message, .. } => {
@@ -120,12 +128,11 @@ fn apply_event_to_app(
     }
 }
 
-fn apply_state_to_app(
-    app: &App,
-    shared_state: &Arc<Mutex<Option<StateSnapshot>>>,
-    state: &StateSnapshot,
-) {
-    *shared_state.lock().expect("shared UI state mutex poisoned") = Some(state.clone());
+fn apply_state_to_app(app: &App, shared_state: &Arc<Mutex<UiViewModel>>, state: &StateSnapshot) {
+    shared_state
+        .lock()
+        .expect("shared UI state mutex poisoned")
+        .apply_snapshot(state);
     app.set_midi_path_text(
         state
             .midi_path

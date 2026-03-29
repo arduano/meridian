@@ -3,11 +3,15 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::audio::{AudioRenderEvent, AudioStatus};
+use crate::midi::analysis::MidiAnalysisData;
 use crate::render::SceneLayout;
 
 use super::{
     commands::ImageOutputFormat,
-    ids::{AudioCacheId, AudioSessionId, DisplayCacheId, DisplaySessionId, ParsedMidiId},
+    ids::{
+        AudioCacheId, AudioSessionId, DisplayCacheId, DisplaySessionId, ParsedMidiId,
+        ProcessedMidiId,
+    },
     render::{AudioRenderStatus, FrameStats, VideoRenderEvent, VideoRenderStatus},
     state::StateSnapshot,
 };
@@ -32,6 +36,19 @@ pub enum CoreEvent {
         parsed_midi_id: ParsedMidiId,
         path: PathBuf,
     },
+    MidiAnalysis {
+        processed_midi_id: Option<ProcessedMidiId>,
+        display_cache_id: Option<DisplayCacheId>,
+        analysis: MidiAnalysisData,
+    },
+    ProcessedMidiBuilt {
+        parsed_midi_id: ParsedMidiId,
+        processed_midi_id: ProcessedMidiId,
+        midi_length: f64,
+        total_notes: u64,
+        total_audio_events: usize,
+        track_count: usize,
+    },
     DisplayCacheBuilt {
         parsed_midi_id: ParsedMidiId,
         display_cache_id: DisplayCacheId,
@@ -54,6 +71,10 @@ pub enum CoreEvent {
     },
     DisplayCacheAttached {
         display_cache_id: DisplayCacheId,
+        state: StateSnapshot,
+    },
+    ProcessedMidiAttached {
+        processed_midi_id: ProcessedMidiId,
         state: StateSnapshot,
     },
     AudioCacheAttached {

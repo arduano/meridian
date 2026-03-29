@@ -218,7 +218,10 @@ impl LiveDisplaySession {
         })
     }
 
-    fn project_current_scene(&mut self, current_time: f64) -> Result<ProjectedScene, MeridianError> {
+    fn project_current_scene(
+        &mut self,
+        current_time: f64,
+    ) -> Result<ProjectedScene, MeridianError> {
         let midi = self
             .midi
             .as_mut()

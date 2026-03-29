@@ -5,18 +5,14 @@ use std::{
     time::Duration,
 };
 
-use meridian_core::{
-    audio::{AudioBackend, AudioConfig},
-    CoreHandle, MeridianError,
-    protocol::{CoreCommand, CoreEvent, StateSnapshot},
-    render::SceneLayout,
-    spawn_core,
-};
+use meridian_core::{CoreHandle, MeridianError, render::RendererKind, spawn_core};
 use slint::ComponentHandle;
 
 use super::{
+    core_bridge::UiCoreBridge,
     state::{UiOptions, apply_events_to_app},
     view::App,
+    view_model::UiViewModel,
     viewport::ViewportRenderer,
 };
 
@@ -34,15 +30,15 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     }
 
     let app = App::new().map_err(|e| MeridianError::Platform(e.to_string()))?;
-    let core = spawn_core();
-    let shared_state = Arc::new(Mutex::new(None));
+    let bridge = UiCoreBridge::new(spawn_core());
+    let shared_state = Arc::new(Mutex::new(UiViewModel::default()));
     let pending_viewport_image = Rc::new(RefCell::new(None));
     let viewport_size = Rc::new(RefCell::new((1280_u32, 720_u32)));
-    initialize_core(&core, &options, &app, &shared_state)?;
-    wire_callbacks(&app, &core, &shared_state);
+    initialize_core(&bridge, &options, &app, &shared_state)?;
+    wire_callbacks(&app, &bridge, &shared_state);
     install_viewport(
         &app,
-        &core,
+        bridge.core(),
         &shared_state,
         &pending_viewport_image,
         &viewport_size,
@@ -50,7 +46,7 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     )?;
     let _animation_timer = install_timer(
         &app,
-        &core,
+        &bridge,
         &shared_state,
         &pending_viewport_image,
         &viewport_size,
@@ -63,57 +59,25 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
 }
 
 pub(crate) fn initialize_core(
-    core: &CoreHandle,
+    bridge: &UiCoreBridge,
     options: &UiOptions,
     app: &App,
-    shared_state: &Arc<Mutex<Option<StateSnapshot>>>,
+    shared_state: &Arc<Mutex<UiViewModel>>,
 ) -> Result<(), MeridianError> {
-    let mut layout = SceneLayout::default();
-    layout.set_renderer_kind(options.renderer);
-    for events in [
-        core.request(CoreCommand::SetAudioConfig {
-            config: AudioConfig {
-                backend: AudioBackend::Xsynth,
-                ..AudioConfig::default()
-            },
-        })?,
-        core.request(CoreCommand::SetSceneConfig {
-            scene: layout.scene.clone(),
-        })?,
-        core.request(CoreCommand::SetViewRange {
-            seconds: options.view_range,
-        })?,
-        core.request(CoreCommand::SetKeyRange {
-            first_key: options.first_key,
-            last_key: options.last_key,
-        })?,
-        core.request(CoreCommand::SetViewport {
-            width: 1280,
-            height: 720,
-        })?,
-        core.request(CoreCommand::SetTime {
-            time: options.start_time.max(0.0),
-        })?,
-    ] {
-        apply_events_to_app(app, shared_state, &events);
-    }
-    if let Some(path) = &options.midi_path {
-        let events = core.request(CoreCommand::LoadMidi { path: path.clone() })?;
-        apply_events_to_app(app, shared_state, &events);
-    }
+    bridge.initialize(options, shared_state)?;
+    let initial = bridge.refresh_state(shared_state)?;
+    apply_events_to_app(app, shared_state, &initial);
     Ok(())
 }
 
-fn wire_callbacks(app: &App, core: &CoreHandle, shared_state: &Arc<Mutex<Option<StateSnapshot>>>) {
+fn wire_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mutex<UiViewModel>>) {
     {
-        let core = core.clone();
+        let bridge = bridge.clone();
         let app_weak = app.as_weak();
         let shared_state = Arc::clone(shared_state);
         app.on_step_time(move |delta| {
             if let Some(app) = app_weak.upgrade() {
-                if let Ok(events) = core.request(CoreCommand::StepTime {
-                    delta: delta as f64,
-                }) {
+                if let Ok(events) = bridge.step_time(delta as f64, &shared_state) {
                     apply_events_to_app(&app, &shared_state, &events);
                 }
                 app.window().request_redraw();
@@ -121,20 +85,12 @@ fn wire_callbacks(app: &App, core: &CoreHandle, shared_state: &Arc<Mutex<Option<
         });
     }
     {
-        let core = core.clone();
+        let bridge = bridge.clone();
         let app_weak = app.as_weak();
         let shared_state = Arc::clone(shared_state);
         app.on_zoom(move |delta| {
             if let Some(app) = app_weak.upgrade() {
-                let current_view_range = shared_state
-                    .lock()
-                    .expect("shared UI state mutex poisoned")
-                    .as_ref()
-                    .map(|s| s.view_range)
-                    .unwrap_or(8.0);
-                if let Ok(events) = core.request(CoreCommand::SetViewRange {
-                    seconds: (current_view_range + delta as f64).clamp(1.0, 30.0),
-                }) {
+                if let Ok(events) = bridge.zoom(delta as f64, &shared_state) {
                     apply_events_to_app(&app, &shared_state, &events);
                 }
                 app.window().request_redraw();
@@ -142,12 +98,12 @@ fn wire_callbacks(app: &App, core: &CoreHandle, shared_state: &Arc<Mutex<Option<
         });
     }
     {
-        let core = core.clone();
+        let bridge = bridge.clone();
         let app_weak = app.as_weak();
         let shared_state = Arc::clone(shared_state);
         app.on_toggle_play(move || {
             if let Some(app) = app_weak.upgrade() {
-                if let Ok(events) = core.request(CoreCommand::TogglePlaying) {
+                if let Ok(events) = bridge.toggle_play(&shared_state) {
                     apply_events_to_app(&app, &shared_state, &events);
                 }
                 app.window().request_redraw();
@@ -155,12 +111,12 @@ fn wire_callbacks(app: &App, core: &CoreHandle, shared_state: &Arc<Mutex<Option<
         });
     }
     {
-        let core = core.clone();
+        let bridge = bridge.clone();
         let app_weak = app.as_weak();
         let shared_state = Arc::clone(shared_state);
         app.on_seek_time(move |time| {
             if let Some(app) = app_weak.upgrade() {
-                if let Ok(events) = core.request(CoreCommand::SetTime { time: time as f64 }) {
+                if let Ok(events) = bridge.seek_time(time as f64, &shared_state) {
                     apply_events_to_app(&app, &shared_state, &events);
                 }
                 app.window().request_redraw();
@@ -168,19 +124,17 @@ fn wire_callbacks(app: &App, core: &CoreHandle, shared_state: &Arc<Mutex<Option<
         });
     }
     {
-        let core = core.clone();
+        let bridge = bridge.clone();
         let app_weak = app.as_weak();
         let shared_state = Arc::clone(shared_state);
         app.on_select_renderer(move |renderer| {
             if let Some(app) = app_weak.upgrade() {
-                let mut layout = SceneLayout::default();
-                match renderer.as_str() {
-                    "flat" => layout.set_renderer_kind(meridian_core::render::RendererKind::Flat),
-                    _ => layout.set_renderer_kind(meridian_core::render::RendererKind::Pfa),
-                }
-                if let Ok(events) = core.request(CoreCommand::SetSceneConfig {
-                    scene: layout.scene,
-                }) {
+                let renderer = match renderer.as_str() {
+                    "flat" => RendererKind::Flat,
+                    "piano_trail_classic" | "3d" => RendererKind::PianoTrailClassic,
+                    _ => RendererKind::Pfa,
+                };
+                if let Ok(events) = bridge.set_renderer(renderer, &shared_state) {
                     apply_events_to_app(&app, &shared_state, &events);
                 }
                 app.window().request_redraw();
@@ -192,7 +146,7 @@ fn wire_callbacks(app: &App, core: &CoreHandle, shared_state: &Arc<Mutex<Option<
 fn install_viewport(
     app: &App,
     core: &CoreHandle,
-    shared_state: &Arc<Mutex<Option<StateSnapshot>>>,
+    shared_state: &Arc<Mutex<UiViewModel>>,
     pending_viewport_image: &Rc<RefCell<Option<slint::Image>>>,
     viewport_size: &Rc<RefCell<(u32, u32)>>,
     disable_wgpu: bool,
@@ -222,15 +176,15 @@ fn install_viewport(
 
 fn install_timer(
     app: &App,
-    core: &CoreHandle,
-    shared_state: &Arc<Mutex<Option<StateSnapshot>>>,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
     pending_viewport_image: &Rc<RefCell<Option<slint::Image>>>,
     viewport_size: &Rc<RefCell<(u32, u32)>>,
     disable_wgpu: bool,
 ) -> slint::Timer {
     let animation_timer = slint::Timer::default();
     let app_for_timer = app.as_weak();
-    let core_for_timer = core.clone();
+    let bridge_for_timer = bridge.clone();
     let shared_state_for_timer = Arc::clone(shared_state);
     let pending_viewport_image_for_timer = Rc::clone(pending_viewport_image);
     let viewport_size_for_timer = Rc::clone(viewport_size);
@@ -247,13 +201,14 @@ fn install_timer(
                 if let Some(image) = pending_viewport_image_for_timer.borrow_mut().take() {
                     app.set_viewport_image(image);
                 }
-                if let Ok(events) = core_for_timer.request(CoreCommand::GetState) {
-                    let playing = events.iter().find_map(|event| match event {
-                        CoreEvent::StateSnapshot { state } => Some(state.playing),
-                        _ => None,
-                    });
+                if let Ok(events) = bridge_for_timer.refresh_state(&shared_state_for_timer) {
                     apply_events_to_app(&app, &shared_state_for_timer, &events);
-                    if playing == Some(true) || disable_wgpu {
+                    let playing = shared_state_for_timer
+                        .lock()
+                        .expect("shared UI state mutex poisoned")
+                        .transport
+                        .playing;
+                    if playing || disable_wgpu {
                         app.window().request_redraw();
                     }
                 }

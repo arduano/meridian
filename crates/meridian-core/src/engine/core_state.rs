@@ -11,10 +11,10 @@ use crate::{
     audio::{AudioConfig, LiveAudioSession, MeridianAudioPlayer, PlaybackClock},
     display::LiveDisplaySession,
     midi::audio_cache::InRamAudioCache,
-    midi::MidiCacheStack,
+    midi::{MidiCacheStack, ProcessedMidi},
     protocol::{
-        AudioCacheId, AudioRenderStatus, AudioSessionId, AudioRenderJobId, CoreCommand,
-        CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId, ParsedMidiId,
+        AudioCacheId, AudioRenderJobId, AudioRenderStatus, AudioSessionId, CoreCommand,
+        CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId, ParsedMidiId, ProcessedMidiId,
         VideoRenderJobId, VideoRenderStatus,
     },
     transport::TransportState,
@@ -23,7 +23,8 @@ use crate::{
 use super::{
     CoreHandle, CoreResponse, RequestMessage,
     resource_types::{
-        AudioCacheRegistry, AudioSessionRegistry, DisplayCacheRegistry, DisplaySessionRegistry, ParsedMidiRegistry,
+        AudioCacheRegistry, AudioSessionRegistry, DisplayCacheRegistry, DisplaySessionRegistry,
+        ParsedMidiRegistry, ProcessedMidiRegistry,
     },
     support::error_event,
 };
@@ -42,13 +43,16 @@ pub(super) struct CoreState {
     pub(super) core_handle: CoreHandle,
     pub(super) subscribers: Arc<Mutex<Vec<Sender<CoreEvent>>>>,
     pub(super) midi_cache: Option<MidiCacheStack>,
+    pub(super) processed_midi: Option<Arc<ProcessedMidi>>,
     pub(super) parsed_midis: ParsedMidiRegistry,
+    pub(super) processed_midis: ProcessedMidiRegistry,
     pub(super) display_caches: DisplayCacheRegistry,
     pub(super) audio_caches: AudioCacheRegistry,
     pub(super) display_sessions: DisplaySessionRegistry,
     pub(super) audio_sessions: AudioSessionRegistry,
     pub(super) next_resource_id: u64,
     pub(super) active_parsed_midi_id: Option<ParsedMidiId>,
+    pub(super) active_processed_midi_id: Option<ProcessedMidiId>,
     pub(super) active_display_cache_id: Option<DisplayCacheId>,
     pub(super) active_audio_cache_id: Option<AudioCacheId>,
     pub(super) active_display_session_id: Option<DisplaySessionId>,
@@ -79,13 +83,16 @@ impl CoreState {
             },
             subscribers,
             midi_cache: None,
+            processed_midi: None,
             parsed_midis: HashMap::new(),
+            processed_midis: HashMap::new(),
             display_caches: HashMap::new(),
             audio_caches: HashMap::new(),
             display_sessions: HashMap::new(),
             audio_sessions: HashMap::new(),
             next_resource_id: 1,
             active_parsed_midi_id: None,
+            active_processed_midi_id: None,
             active_display_cache_id: None,
             active_audio_cache_id: None,
             active_display_session_id: None,
@@ -143,6 +150,17 @@ impl CoreState {
                 state: self.snapshot(),
             }],
             CoreCommand::LoadParsedMidi { path } => self.load_parsed_midi_resource(path),
+            CoreCommand::BuildProcessedMidi {
+                parsed_midi_id,
+                config,
+            } => self.build_processed_midi_resource(parsed_midi_id, config),
+            CoreCommand::AnalyzeActiveMidi { bucket_count } => {
+                self.analyze_active_midi(bucket_count)
+            }
+            CoreCommand::AnalyzeProcessedMidi {
+                processed_midi_id,
+                bucket_count,
+            } => self.analyze_processed_midi(processed_midi_id, bucket_count),
             CoreCommand::BuildDisplayCache { parsed_midi_id } => {
                 self.build_display_cache_resource(parsed_midi_id)
             }
@@ -157,6 +175,9 @@ impl CoreState {
             }
             CoreCommand::AttachDisplayCache { display_cache_id } => {
                 self.attach_display_cache_resource(display_cache_id)
+            }
+            CoreCommand::AttachProcessedMidi { processed_midi_id } => {
+                self.attach_processed_midi_resource(processed_midi_id)
             }
             CoreCommand::AttachAudioCache { audio_cache_id } => {
                 self.attach_audio_cache_resource(audio_cache_id)

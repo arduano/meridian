@@ -5,11 +5,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     audio::{AudioConfig, AudioRenderConfig},
+    midi::MidiProcessingConfig,
     render::SceneConfig,
 };
 
 use super::{
-    ids::{AudioCacheId, AudioSessionId, DisplayCacheId, DisplaySessionId, ParsedMidiId},
+    ids::{
+        AudioCacheId, AudioSessionId, DisplayCacheId, DisplaySessionId, ParsedMidiId,
+        ProcessedMidiId,
+    },
     render::VideoRenderConfig,
 };
 
@@ -17,31 +21,87 @@ use super::{
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CoreCommand {
     GetState,
-    LoadParsedMidi { path: PathBuf },
-    BuildDisplayCache { parsed_midi_id: ParsedMidiId },
-    BuildAudioCache { parsed_midi_id: ParsedMidiId },
-    CreateDisplaySession { display_cache_id: DisplayCacheId },
-    CreateAudioSession { audio_cache_id: AudioCacheId },
-    AttachDisplayCache { display_cache_id: DisplayCacheId },
-    AttachAudioCache { audio_cache_id: AudioCacheId },
-    AttachDisplaySession { display_session_id: DisplaySessionId },
-    AttachAudioSession { audio_session_id: AudioSessionId },
-    LoadMidi { path: PathBuf },
-    SetAudioConfig { config: AudioConfig },
+    LoadParsedMidi {
+        path: PathBuf,
+    },
+    BuildProcessedMidi {
+        parsed_midi_id: ParsedMidiId,
+        config: MidiProcessingConfig,
+    },
+    AnalyzeActiveMidi {
+        bucket_count: Option<usize>,
+    },
+    AnalyzeProcessedMidi {
+        processed_midi_id: ProcessedMidiId,
+        bucket_count: Option<usize>,
+    },
+    BuildDisplayCache {
+        parsed_midi_id: ParsedMidiId,
+    },
+    BuildAudioCache {
+        parsed_midi_id: ParsedMidiId,
+    },
+    CreateDisplaySession {
+        display_cache_id: DisplayCacheId,
+    },
+    CreateAudioSession {
+        audio_cache_id: AudioCacheId,
+    },
+    AttachDisplayCache {
+        display_cache_id: DisplayCacheId,
+    },
+    AttachProcessedMidi {
+        processed_midi_id: ProcessedMidiId,
+    },
+    AttachAudioCache {
+        audio_cache_id: AudioCacheId,
+    },
+    AttachDisplaySession {
+        display_session_id: DisplaySessionId,
+    },
+    AttachAudioSession {
+        audio_session_id: AudioSessionId,
+    },
+    LoadMidi {
+        path: PathBuf,
+    },
+    SetAudioConfig {
+        config: AudioConfig,
+    },
     GetAudioStatus,
-    StartRenderAudio { config: AudioRenderConfig },
+    StartRenderAudio {
+        config: AudioRenderConfig,
+    },
     CancelRenderAudio,
     GetRenderAudioStatus,
-    SetTime { time: f64 },
-    TickProjectorPhysics { delta_seconds: f64 },
+    SetTime {
+        time: f64,
+    },
+    TickProjectorPhysics {
+        delta_seconds: f64,
+    },
     ResetProjectorPhysics,
-    StepTime { delta: f64 },
-    SetPlaying { playing: bool },
+    StepTime {
+        delta: f64,
+    },
+    SetPlaying {
+        playing: bool,
+    },
     TogglePlaying,
-    SetSceneConfig { scene: SceneConfig },
-    SetViewRange { seconds: f64 },
-    SetKeyRange { first_key: u8, last_key: u8 },
-    SetViewport { width: u32, height: u32 },
+    SetSceneConfig {
+        scene: SceneConfig,
+    },
+    SetViewRange {
+        seconds: f64,
+    },
+    SetKeyRange {
+        first_key: u8,
+        last_key: u8,
+    },
+    SetViewport {
+        width: u32,
+        height: u32,
+    },
     RenderFrame {
         viewport_width: Option<u32>,
         viewport_height: Option<u32>,
@@ -52,7 +112,9 @@ pub enum CoreCommand {
         viewport_width: Option<u32>,
         viewport_height: Option<u32>,
     },
-    StartRenderVideo { config: VideoRenderConfig },
+    StartRenderVideo {
+        config: VideoRenderConfig,
+    },
     CancelRenderVideo,
     GetRenderVideoStatus,
     Shutdown,

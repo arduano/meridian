@@ -69,6 +69,7 @@ impl CoreState {
         let transport = self.transport.snapshot();
         StateSnapshot {
             active_parsed_midi_id: self.active_parsed_midi_id,
+            active_processed_midi_id: self.active_processed_midi_id,
             active_display_cache_id: self.active_display_cache_id,
             active_audio_cache_id: self.active_audio_cache_id,
             active_display_session_id: self.active_display_session_id,

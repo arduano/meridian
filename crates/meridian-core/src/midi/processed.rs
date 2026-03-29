@@ -1,0 +1,425 @@
+use std::{collections::VecDeque, sync::Arc};
+
+use midi_toolkit::{
+    events::{Event, MIDIEventEnum, TextEventKind},
+    pipe,
+    sequence::{
+        TimeCaster,
+        event::{Delta, Track, cancel_tempo_events, scale_event_time},
+        unwrap_items,
+    },
+};
+use rustc_hash::FxHashMap;
+
+use crate::{
+    error::MeridianError,
+    midi::{
+        MIDIColor, MIDIColorPair, MIDIFileUniqueSignature, TrackAndChannel,
+        audio_cache::{CompressedAudio, InRamAudioCache},
+        display_cache::DisplayMidiCache,
+        parsed::ParsedMidiFile,
+        processing::{MidiProcessingConfig, ZeroVelocityNoteOnMode},
+        ram::block::InRamNoteBlock,
+    },
+};
+
+#[derive(Clone)]
+pub struct ProcessedMidi {
+    display: Arc<DisplayMidiCache>,
+    audio: Arc<InRamAudioCache>,
+    signature: MIDIFileUniqueSignature,
+    config: MidiProcessingConfig,
+    midi_length: f64,
+    total_notes: u64,
+    total_audio_events: usize,
+    track_count: usize,
+}
+
+impl ProcessedMidi {
+    pub fn from_parsed(
+        parsed: &ParsedMidiFile,
+        config: &MidiProcessingConfig,
+    ) -> Result<Self, MeridianError> {
+        build_processed_midi(parsed, config)
+    }
+
+    pub fn display_cache(&self) -> Arc<DisplayMidiCache> {
+        Arc::clone(&self.display)
+    }
+
+    pub fn audio_cache(&self) -> Arc<InRamAudioCache> {
+        Arc::clone(&self.audio)
+    }
+
+    pub fn signature(&self) -> &MIDIFileUniqueSignature {
+        &self.signature
+    }
+
+    pub fn config(&self) -> &MidiProcessingConfig {
+        &self.config
+    }
+
+    pub fn midi_length(&self) -> f64 {
+        self.midi_length
+    }
+
+    pub fn total_notes(&self) -> u64 {
+        self.total_notes
+    }
+
+    pub fn total_audio_events(&self) -> usize {
+        self.total_audio_events
+    }
+
+    pub fn track_count(&self) -> usize {
+        self.track_count
+    }
+}
+
+#[derive(Clone)]
+struct OpenNote {
+    start: f64,
+    track_chan: TrackAndChannel,
+    explicit_colors: Option<MIDIColorPair>,
+}
+
+#[derive(Clone)]
+struct FinishedNote {
+    start: f64,
+    end: f64,
+    track_chan: TrackAndChannel,
+    explicit_colors: Option<MIDIColorPair>,
+}
+
+fn build_processed_midi(
+    parsed: &ParsedMidiFile,
+    config: &MidiProcessingConfig,
+) -> Result<ProcessedMidi, MeridianError> {
+    let midi = parsed.midi();
+    let ppq = midi.ppq();
+    if (ppq & 0x8000) != 0 {
+        return Err(MeridianError::InvalidMidi(
+            "timecode MIDI files are not supported yet".into(),
+        ));
+    }
+
+    let merged = pipe!(
+        midi.iter_all_track_events_merged()
+        |>TimeCaster::<f64>::cast_event_delta()
+        |>cancel_tempo_events(250000)
+        |>scale_event_time(1.0 / ppq as f64)
+        |>unwrap_items()
+    );
+
+    let track_count = midi.track_count().max(1);
+    let mut time = 0.0;
+    let mut current_colors = vec![None; track_count * 16];
+    let mut open_notes: FxHashMap<(u8, TrackAndChannel), VecDeque<OpenNote>> = FxHashMap::default();
+    let mut finished_notes = vec![Vec::<FinishedNote>::new(); 256];
+
+    let mut current_audio_time = 0.0;
+    let mut current_audio_data = Vec::new();
+    let mut current_audio_control = Vec::new();
+    let mut audio_blocks = Vec::new();
+
+    type ToolkitEvent = Delta<f64, Track<Event>>;
+    for event in merged {
+        let event: ToolkitEvent = event;
+        time += event.delta;
+        let output_time = (time + config.time.offset_seconds).max(0.0);
+        flush_audio_block(
+            &mut audio_blocks,
+            &mut current_audio_time,
+            &mut current_audio_data,
+            &mut current_audio_control,
+            output_time,
+        );
+
+        let track = event.track;
+        match event.as_event() {
+            Event::NoteOn(note_on) => {
+                let velocity = config.notes.map_velocity(note_on.velocity);
+                let is_note_off = velocity == 0
+                    && matches!(
+                        config.zero_velocity_note_on,
+                        ZeroVelocityNoteOnMode::NoteOff
+                    );
+                if is_note_off {
+                    end_note(
+                        &mut open_notes,
+                        &mut finished_notes,
+                        output_time,
+                        note_on.key,
+                        note_on.channel,
+                        track,
+                        config,
+                    );
+                    continue;
+                }
+                if !config.events.notes {
+                    continue;
+                }
+                let Some(key) = config.notes.map_key(note_on.key) else {
+                    continue;
+                };
+                let track_chan = TrackAndChannel::new(track, note_on.channel);
+                open_notes
+                    .entry((key, track_chan))
+                    .or_default()
+                    .push_back(OpenNote {
+                        start: output_time,
+                        track_chan,
+                        explicit_colors: current_colors[track_chan.as_usize()],
+                    });
+                current_audio_data.extend_from_slice(&[0x90 | note_on.channel, key, velocity]);
+            }
+            Event::NoteOff(note_off) => {
+                end_note(
+                    &mut open_notes,
+                    &mut finished_notes,
+                    output_time,
+                    note_off.key,
+                    note_off.channel,
+                    track,
+                    config,
+                );
+                if config.events.notes {
+                    if let Some(key) = config.notes.map_key(note_off.key) {
+                        current_audio_data.extend_from_slice(&[0x80 | note_off.channel, key]);
+                    }
+                }
+            }
+            Event::PolyphonicKeyPressure(event) => {
+                if !config.events.polyphonic_pressure {
+                    continue;
+                }
+                if let Some(key) = config.notes.map_key(event.key) {
+                    current_audio_data.extend_from_slice(&[
+                        0xA0 | event.channel,
+                        key,
+                        config.notes.map_velocity(event.velocity),
+                    ]);
+                }
+            }
+            Event::ControlChange(event) => {
+                if !config.events.channel_controls {
+                    continue;
+                }
+                let bytes = [0xB0 | event.channel, event.controller, event.value];
+                current_audio_data.extend_from_slice(&bytes);
+                current_audio_control.extend_from_slice(&bytes);
+            }
+            Event::ProgramChange(event) => {
+                if !config.events.program_changes {
+                    continue;
+                }
+                let program = if config.piano_only { 0 } else { event.program };
+                let bytes = [0xC0 | event.channel, program];
+                current_audio_data.extend_from_slice(&bytes);
+                current_audio_control.extend_from_slice(&bytes);
+            }
+            Event::ChannelPressure(event) => {
+                if !config.events.channel_pressure {
+                    continue;
+                }
+                let bytes = [0xD0 | event.channel, event.pressure];
+                current_audio_data.extend_from_slice(&bytes);
+                current_audio_control.extend_from_slice(&bytes);
+            }
+            Event::PitchWheelChange(event) => {
+                if !config.events.pitch_bend {
+                    continue;
+                }
+                let value = event.pitch + 8192;
+                let bytes = [
+                    0xE0 | event.channel,
+                    (value & 0x7F) as u8,
+                    ((value >> 7) & 0x7F) as u8,
+                ];
+                current_audio_data.extend_from_slice(&bytes);
+                current_audio_control.extend_from_slice(&bytes);
+            }
+            Event::Text(text) if text.kind == TextEventKind::Undefined => {
+                if let Some((channel, pair)) = parse_color_event(&text.bytes) {
+                    let track = track as usize;
+                    match channel {
+                        Some(channel) => {
+                            let index = track * 16 + channel as usize;
+                            if index < current_colors.len() {
+                                current_colors[index] = Some(pair);
+                            }
+                        }
+                        None => {
+                            let start = track * 16;
+                            let end = (start + 16).min(current_colors.len());
+                            current_colors[start..end].fill(Some(pair));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    for ((key, _track_chan), queue) in &mut open_notes {
+        while let Some(note) = queue.pop_front() {
+            finished_notes[*key as usize].push(FinishedNote {
+                start: note.start,
+                end: current_audio_time.max(note.start),
+                track_chan: note.track_chan,
+                explicit_colors: note.explicit_colors,
+            });
+        }
+    }
+    flush_final_audio_block(
+        &mut audio_blocks,
+        &mut current_audio_data,
+        &mut current_audio_control,
+        current_audio_time,
+    );
+
+    let mut note_count = 0_u64;
+    let columns = finished_notes
+        .into_iter()
+        .map(|mut key_notes| {
+            key_notes.sort_by(|a, b| a.start.total_cmp(&b.start));
+            note_count += key_notes.len() as u64;
+            Arc::<[InRamNoteBlock]>::from(notes_to_blocks(key_notes))
+        })
+        .collect::<Vec<_>>();
+
+    let midi_length = audio_blocks
+        .last()
+        .map(|event| event.time)
+        .unwrap_or_else(|| columns_length(&columns));
+    let display = Arc::new(DisplayMidiCache::new(
+        columns,
+        midi_length,
+        note_count,
+        parsed.signature().clone(),
+        track_count,
+    ));
+    let total_audio_events = audio_blocks.len();
+    let audio = Arc::new(InRamAudioCache::new(audio_blocks));
+
+    Ok(ProcessedMidi {
+        display,
+        audio,
+        signature: parsed.signature().clone(),
+        config: config.clone(),
+        midi_length,
+        total_notes: note_count,
+        total_audio_events,
+        track_count,
+    })
+}
+
+fn end_note(
+    open_notes: &mut FxHashMap<(u8, TrackAndChannel), VecDeque<OpenNote>>,
+    finished_notes: &mut [Vec<FinishedNote>],
+    output_time: f64,
+    source_key: u8,
+    channel: u8,
+    track: u32,
+    config: &MidiProcessingConfig,
+) {
+    let Some(key) = config.notes.map_key(source_key) else {
+        return;
+    };
+    let track_chan = TrackAndChannel::new(track, channel);
+    let Some(note) = open_notes
+        .get_mut(&(key, track_chan))
+        .and_then(|queue| queue.pop_front())
+    else {
+        return;
+    };
+    if output_time >= note.start {
+        finished_notes[key as usize].push(FinishedNote {
+            start: note.start,
+            end: output_time,
+            track_chan: note.track_chan,
+            explicit_colors: note.explicit_colors,
+        });
+    }
+}
+
+fn notes_to_blocks(notes: Vec<FinishedNote>) -> Vec<InRamNoteBlock> {
+    let mut blocks = Vec::new();
+    let mut index = 0;
+    while index < notes.len() {
+        let start = notes[index].start;
+        let end = notes.partition_point(|note| note.start <= start);
+        let mut block = InRamNoteBlock::new_from_notes(
+            start,
+            notes[index..end]
+                .iter()
+                .map(|note| (note.track_chan, note.explicit_colors)),
+        );
+        for (note_index, note) in notes[index..end].iter().enumerate() {
+            block.set_note_end_time(note_index, note.end);
+        }
+        blocks.push(block);
+        index = end;
+    }
+    blocks
+}
+
+fn flush_audio_block(
+    audio_blocks: &mut Vec<CompressedAudio>,
+    current_time: &mut f64,
+    current_data: &mut Vec<u8>,
+    current_control: &mut Vec<u8>,
+    next_time: f64,
+) {
+    if next_time > *current_time && !current_data.is_empty() {
+        audio_blocks.push(CompressedAudio::from_parts(
+            *current_time,
+            std::mem::take(current_data),
+            (!current_control.is_empty()).then(|| std::mem::take(current_control)),
+        ));
+    }
+    if next_time > *current_time {
+        *current_time = next_time;
+    }
+}
+
+fn flush_final_audio_block(
+    audio_blocks: &mut Vec<CompressedAudio>,
+    current_data: &mut Vec<u8>,
+    current_control: &mut Vec<u8>,
+    current_time: f64,
+) {
+    if !current_data.is_empty() {
+        audio_blocks.push(CompressedAudio::from_parts(
+            current_time,
+            std::mem::take(current_data),
+            (!current_control.is_empty()).then(|| std::mem::take(current_control)),
+        ));
+    }
+}
+
+fn columns_length(columns: &[Arc<[InRamNoteBlock]>]) -> f64 {
+    columns
+        .iter()
+        .flat_map(|column| column.iter())
+        .map(InRamNoteBlock::max_end)
+        .fold(0.0, f64::max)
+}
+
+fn parse_color_event(data: &[u8]) -> Option<(Option<u8>, MIDIColorPair)> {
+    if !(data.len() == 8 || data.len() == 12) || data[0] != 0x00 || data[1] != 0x0F {
+        return None;
+    }
+    let channel = match data[2] {
+        0x00..=0x0F => Some(data[2]),
+        0x7F => None,
+        _ => return None,
+    };
+    let left = MIDIColor::new(data[4], data[5], data[6]);
+    let right = if data.len() == 12 {
+        MIDIColor::new(data[8], data[9], data[10])
+    } else {
+        left
+    };
+    Some((channel, MIDIColorPair::new(left, right)))
+}

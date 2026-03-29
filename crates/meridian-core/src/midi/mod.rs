@@ -1,23 +1,29 @@
+pub mod analysis;
 pub mod audio_cache;
 pub mod backend;
 pub mod cache;
 pub mod colors;
 pub mod display_cache;
 pub mod parsed;
+pub mod processed;
+pub mod processing;
 pub mod ram;
 pub mod views;
 
 use std::{fs::File, path::PathBuf, time::UNIX_EPOCH};
 
 use enum_dispatch::enum_dispatch;
+use serde::{Deserialize, Serialize};
 
 use crate::error::MeridianError;
 pub use cache::MidiCacheStack;
 pub use colors::{MIDIColor, MIDIColorPair};
+pub use processed::ProcessedMidi;
+pub use processing::MidiProcessingConfig;
 
 pub const MIDI_KEY_COUNT: usize = 256;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct MIDIAnalysisSummary {
     pub total_blocks: u64,
     pub keys_with_notes: usize,
