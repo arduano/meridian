@@ -5,7 +5,8 @@ use meridian_core::{
     protocol::{CoreCommand, ImageOutputFormat},
     render::{
         RendererKind, SceneLayout,
-        pfa::wgpu::{encode_rgba_to_png, encode_rgba_to_ppm, render_scene_headless_to_rgba},
+        headless::render_scene_headless_to_rgba,
+        pfa::wgpu::{encode_rgba_to_png, encode_rgba_to_ppm},
     },
     spawn_core,
 };
@@ -41,7 +42,7 @@ pub fn run(
     core.request(CoreCommand::SetTime { time })?;
 
     let frame = core.render_frame(Some(width), Some(height))?;
-    let rgba = render_scene_headless_to_rgba(width, height, &frame.scene)?;
+    let rgba = render_scene_headless_to_rgba(width, height, &frame.layout, &frame.scene)?;
     let bytes = match format {
         ImageOutputFormat::Rgba => rgba,
         ImageOutputFormat::Ppm => encode_rgba_to_ppm(width, height, &rgba),

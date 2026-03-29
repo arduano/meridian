@@ -3,7 +3,7 @@ use std::time::Instant;
 use meridian_core::{
     MeridianError,
     midi::backend::MIDIFileUnion,
-    render::{RendererKind, SceneLayout, pfa::wgpu::HeadlessRenderSession, project_scene},
+    render::{RendererKind, SceneLayout, headless::HeadlessRenderSession, project_scene},
 };
 use serde::Serialize;
 
@@ -62,11 +62,11 @@ pub fn run(
 
     let midi_path = midi.to_path_buf();
     let mut midi = MIDIFileUnion::load_ram(midi)?;
-    let mut session = HeadlessRenderSession::new(width, height)?;
+    let mut session = HeadlessRenderSession::new(&layout, width, height)?;
 
     for _ in 0..warmup {
         let scene = project_scene(&mut midi, time, &layout);
-        session.render_blocking(&scene)?;
+        session.render(&layout, &scene);
     }
 
     let mut projection_ms = Vec::with_capacity(iterations as usize);
@@ -82,7 +82,7 @@ pub fn run(
         let projection_elapsed = projection_start.elapsed().as_secs_f64() * 1_000.0;
 
         let gpu_start = Instant::now();
-        session.render_blocking(&scene)?;
+        session.render(&layout, &scene);
         let gpu_elapsed = gpu_start.elapsed().as_secs_f64() * 1_000.0;
 
         projection_ms.push(projection_elapsed);

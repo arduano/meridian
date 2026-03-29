@@ -42,6 +42,17 @@ impl HeadlessRenderSession {
     }
 }
 
+pub fn render_scene_headless_to_rgba(
+    width: u32,
+    height: u32,
+    layout: &SceneLayout,
+    scene: &ProjectedScene,
+) -> Result<Vec<u8>, MeridianError> {
+    let mut session = HeadlessRenderSession::new(layout, width, height)?;
+    session.render(layout, scene);
+    session.readback_rgba()
+}
+
 pub fn save_scene_headless(
     width: u32,
     height: u32,

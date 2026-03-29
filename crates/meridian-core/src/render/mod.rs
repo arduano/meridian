@@ -1,16 +1,20 @@
 pub mod flat;
+pub mod headless;
+pub mod miditrail;
 pub mod pfa;
 pub mod shared;
 
 pub use shared::{
     FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardHeightSpec,
-    KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig, PfaKeyboardProjectorConfig,
-    PfaNoteProjectorConfig, PfaTopColor, ProjectedScene, RendererKind, SceneConfig, SceneLayer,
-    SceneLayout, SceneQuad, ThreeDSceneConfig, TwoDSceneConfig, ZenithPaletteSpec,
+    KeyboardProjectorConfig, MiditrailAuraImage, MiditrailSceneConfig, NotePaletteConfig,
+    NoteProjectorConfig, PfaKeyboardProjectorConfig, PfaNoteProjectorConfig, PfaTopColor,
+    ProjectedScene, RendererKind, SceneConfig, SceneLayer, SceneLayout, SceneQuad,
+    ThreeDSceneConfig, TwoDSceneConfig, ZenithPaletteSpec,
 };
 
 use crate::midi::{backend::MIDIFileUnion, views::MIDIFileViewsUnion};
 use flat::{FlatKeyboardProjector, FlatNoteProjector};
+use miditrail::project_miditrail_scene;
 use pfa::{PfaKeyboardProjector, PfaNoteProjector};
 use shared::{
     KeyboardProjectorConfig as KeyboardConfig, NoteProjectorConfig as NoteConfig, SceneConfig::*,
@@ -76,7 +80,9 @@ pub fn project_scene_views_into(
                 }
             }
         }
-        ThreeD(_) => {}
+        ThreeD(ThreeDSceneConfig::Miditrail(config)) => {
+            project_miditrail_scene(config, views, layout, scene)
+        }
     }
 }
 

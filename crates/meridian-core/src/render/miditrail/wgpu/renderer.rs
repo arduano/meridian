@@ -1,10 +1,10 @@
 use glam::{Mat4, Vec3};
-use wgpu::util::DeviceExt;
 
 use super::pipeline::{MiditrailPipelines, Uniforms, VIEWPORT_FORMAT};
+use super::streaming::StreamingVertexBuffer;
 use crate::render::{
     SceneLayout,
-    miditrail::model::{MiditrailAuraVertex, MiditrailScene, MiditrailVertex},
+    miditrail::model::{MiditrailQuadInstance, MiditrailScene},
     shared::{MiditrailSceneConfig, ThreeDSceneConfig},
 };
 
@@ -18,6 +18,10 @@ const OPENGL_TO_WGPU: Mat4 = Mat4::from_cols_array(&[
 pub struct MiditrailRenderer {
     pipelines: MiditrailPipelines,
     depth: wgpu::Texture,
+    note_quads: StreamingVertexBuffer<MiditrailQuadInstance>,
+    white_key_quads: StreamingVertexBuffer<MiditrailQuadInstance>,
+    black_key_quads: StreamingVertexBuffer<MiditrailQuadInstance>,
+    aura_quads: StreamingVertexBuffer<MiditrailQuadInstance>,
 }
 
 impl MiditrailRenderer {
@@ -25,6 +29,10 @@ impl MiditrailRenderer {
         Self {
             pipelines: MiditrailPipelines::new(device),
             depth: create_depth_texture(device, width, height),
+            note_quads: StreamingVertexBuffer::new(device, "MiditrailNoteQuads"),
+            white_key_quads: StreamingVertexBuffer::new(device, "MiditrailWhiteKeyQuads"),
+            black_key_quads: StreamingVertexBuffer::new(device, "MiditrailBlackKeyQuads"),
+            aura_quads: StreamingVertexBuffer::new(device, "MiditrailAuraQuads"),
         }
     }
 
@@ -87,52 +95,66 @@ impl MiditrailRenderer {
                 multiview_mask: None,
             });
             pass.set_bind_group(0, &self.pipelines.bind_group, &[]);
-            draw_color(
+            draw_color_chunks(
                 device,
+                queue,
+                &mut self.note_quads,
                 &mut pass,
                 &self.pipelines.color_always,
-                &scene.note_vertices,
+                &scene.note_quads,
             );
 
             let aura_before_keys = (!config.vertical_notes && config.view_offset < 0.0)
                 || (config.vertical_notes && config.view_height < 0.025);
             if aura_before_keys {
-                draw_aura(
+                draw_aura_chunks(
                     device,
+                    queue,
+                    &mut self.aura_quads,
                     &mut pass,
                     &self.pipelines.aura_always,
-                    &scene.aura_vertices,
+                    &scene.aura_quads,
                 );
-                draw_color(
+                draw_color_chunks(
                     device,
+                    queue,
+                    &mut self.white_key_quads,
                     &mut pass,
                     &self.pipelines.color_less,
-                    &scene.white_key_vertices,
+                    &scene.white_key_quads,
                 );
-                draw_color(
+                draw_color_chunks(
                     device,
+                    queue,
+                    &mut self.black_key_quads,
                     &mut pass,
                     &self.pipelines.color_less,
-                    &scene.black_key_vertices,
+                    &scene.black_key_quads,
                 );
             } else {
-                draw_color(
+                draw_color_chunks(
                     device,
+                    queue,
+                    &mut self.white_key_quads,
                     &mut pass,
                     &self.pipelines.color_less,
-                    &scene.white_key_vertices,
+                    &scene.white_key_quads,
                 );
-                draw_color(
+                draw_color_chunks(
                     device,
+                    queue,
+                    &mut self.black_key_quads,
                     &mut pass,
                     &self.pipelines.color_less,
-                    &scene.black_key_vertices,
+                    &scene.black_key_quads,
                 );
-                draw_aura(
+                draw_aura_chunks(
                     device,
+                    queue,
+                    &mut self.aura_quads,
                     &mut pass,
                     &self.pipelines.aura_always,
-                    &scene.aura_vertices,
+                    &scene.aura_quads,
                 );
             }
         }
@@ -140,42 +162,42 @@ impl MiditrailRenderer {
     }
 }
 
-fn draw_color(
+fn draw_color_chunks(
     device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    buffer: &mut StreamingVertexBuffer<MiditrailQuadInstance>,
     pass: &mut wgpu::RenderPass<'_>,
     pipeline: &wgpu::RenderPipeline,
-    vertices: &[MiditrailVertex],
+    quads: &[MiditrailQuadInstance],
 ) {
-    if vertices.is_empty() {
+    if quads.is_empty() {
         return;
     }
-    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("MiditrailColorVertices"),
-        contents: bytemuck::cast_slice(vertices),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
     pass.set_pipeline(pipeline);
-    pass.set_vertex_buffer(0, buffer.slice(..));
-    pass.draw(0..vertices.len() as u32, 0..1);
+    for chunk in quads.chunks(StreamingVertexBuffer::<MiditrailQuadInstance>::max_chunk_len()) {
+        buffer.write(device, queue, chunk);
+        pass.set_vertex_buffer(0, buffer.slice());
+        pass.draw(0..6, 0..chunk.len() as u32);
+    }
 }
 
-fn draw_aura(
+fn draw_aura_chunks(
     device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    buffer: &mut StreamingVertexBuffer<MiditrailQuadInstance>,
     pass: &mut wgpu::RenderPass<'_>,
     pipeline: &wgpu::RenderPipeline,
-    vertices: &[MiditrailAuraVertex],
+    quads: &[MiditrailQuadInstance],
 ) {
-    if vertices.is_empty() {
+    if quads.is_empty() {
         return;
     }
-    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("MiditrailAuraVertices"),
-        contents: bytemuck::cast_slice(vertices),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
     pass.set_pipeline(pipeline);
-    pass.set_vertex_buffer(0, buffer.slice(..));
-    pass.draw(0..vertices.len() as u32, 0..1);
+    for chunk in quads.chunks(StreamingVertexBuffer::<MiditrailQuadInstance>::max_chunk_len()) {
+        buffer.write(device, queue, chunk);
+        pass.set_vertex_buffer(0, buffer.slice());
+        pass.draw(0..6, 0..chunk.len() as u32);
+    }
 }
 
 fn build_mvp(config: &MiditrailSceneConfig, aspect: f32) -> Mat4 {
@@ -191,7 +213,7 @@ fn build_mvp(config: &MiditrailSceneConfig, aspect: f32) -> Mat4 {
         * Mat4::from_translation(Vec3::new(
             config.view_pan,
             -config.view_height,
-            -config.view_offset,
+            config.view_offset,
         ))
         * model
 }

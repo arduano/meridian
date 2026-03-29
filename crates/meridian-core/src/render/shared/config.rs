@@ -9,6 +9,7 @@ pub const DEFAULT_PFA_KEYBOARD_ASPECT_RATIO: f32 = 0.084_937_5;
 pub enum RendererKind {
     Flat,
     Pfa,
+    Miditrail,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -364,14 +365,20 @@ impl SceneLayout {
     }
 
     pub fn set_renderer_kind(&mut self, renderer: RendererKind) {
-        self.scene = SceneConfig::TwoD(match renderer {
-            RendererKind::Flat => TwoDSceneConfig {
+        self.scene = match renderer {
+            RendererKind::Flat => SceneConfig::TwoD(TwoDSceneConfig {
                 keyboard_height: KeyboardHeightSpec::default(),
                 notes: NoteProjectorConfig::Flat(FlatNoteProjectorConfig::default()),
                 keyboard: KeyboardProjectorConfig::Flat(FlatKeyboardProjectorConfig),
-            },
-            RendererKind::Pfa => TwoDSceneConfig::default(),
-        });
+            }),
+            RendererKind::Pfa => SceneConfig::TwoD(TwoDSceneConfig::default()),
+            RendererKind::Miditrail => {
+                SceneConfig::ThreeD(ThreeDSceneConfig::Miditrail(MiditrailSceneConfig {
+                box_notes: true,
+                ..MiditrailSceneConfig::default()
+                }))
+            }
+        };
     }
 }
 

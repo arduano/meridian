@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 
 use super::shaders::{AURA_SHADER, COLOR_SHADER};
-use crate::render::miditrail::model::{MiditrailAuraVertex, MiditrailVertex};
+use crate::render::miditrail::model::MiditrailQuadInstance;
 
 pub const VIEWPORT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
@@ -89,9 +89,18 @@ fn create_color_pipeline(
             entry_point: Some("vs_main"),
             compilation_options: Default::default(),
             buffers: &[wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<MiditrailVertex>() as u64,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4],
+                array_stride: std::mem::size_of::<MiditrailQuadInstance>() as u64,
+                step_mode: wgpu::VertexStepMode::Instance,
+                attributes: &wgpu::vertex_attr_array![
+                    0 => Float32x3,
+                    1 => Float32x3,
+                    2 => Float32x3,
+                    3 => Float32x3,
+                    4 => Float32x4,
+                    5 => Float32x4,
+                    6 => Float32x4,
+                    7 => Float32x4
+                ],
             }],
         },
         fragment: Some(wgpu::FragmentState {
@@ -134,9 +143,18 @@ fn create_aura_pipeline(
             entry_point: Some("vs_main"),
             compilation_options: Default::default(),
             buffers: &[wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<MiditrailAuraVertex>() as u64,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4, 2 => Float32x2],
+                array_stride: std::mem::size_of::<MiditrailQuadInstance>() as u64,
+                step_mode: wgpu::VertexStepMode::Instance,
+                attributes: &wgpu::vertex_attr_array![
+                    0 => Float32x3,
+                    1 => Float32x3,
+                    2 => Float32x3,
+                    3 => Float32x3,
+                    4 => Float32x4,
+                    5 => Float32x4,
+                    6 => Float32x4,
+                    7 => Float32x4
+                ],
             }],
         },
         fragment: Some(wgpu::FragmentState {

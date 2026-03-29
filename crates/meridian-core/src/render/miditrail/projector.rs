@@ -1,5 +1,3 @@
-use glam::{Mat4, Vec3};
-
 use crate::{
     midi::views::MIDIFileViewsUnion,
     render::{
@@ -10,11 +8,12 @@ use crate::{
 
 use super::{
     layout::MiditrailLayout,
-    model::{MiditrailAuraVertex, MiditrailScene, MiditrailVertex},
+    model::{MiditrailQuadInstance, MiditrailScene},
 };
 
 const WHITE_KEY_LEN: f32 = 5.0;
 const BLACK_KEY_LEN: f32 = 6.9;
+const WHITE_KEY_LENFAC: f32 = 0.69;
 #[derive(Clone, Copy)]
 struct VisibleNote {
     key: usize,
@@ -66,7 +65,7 @@ pub fn project_miditrail_scene(
     for &key in &key_order {
         let notes = &notes_by_key[key - key_layout.first_key];
         if config.box_notes {
-            for note in notes.iter().rev() {
+            for note in notes {
                 emit_note_cap(
                     &mut miditrail,
                     &key_layout,
@@ -75,7 +74,7 @@ pub fn project_miditrail_scene(
                     *note,
                 );
             }
-            for note in notes {
+            for note in notes.iter().rev() {
                 emit_note_side(
                     &mut miditrail,
                     &key_layout,
@@ -85,7 +84,7 @@ pub fn project_miditrail_scene(
                 );
             }
         }
-        for note in notes {
+        for note in notes.iter().rev() {
             emit_note_front(
                 &mut miditrail,
                 &key_layout,
@@ -144,48 +143,33 @@ fn collect_visible_notes(
             });
         });
     }
-    for key_notes in &mut notes {
-        key_notes.sort_by(|a, b| {
-            a.start
-                .total_cmp(&b.start)
-                .then_with(|| a.end.total_cmp(&b.end))
-        });
-    }
     notes
 }
 
 fn key_render_order(config: &MiditrailSceneConfig, key_layout: &MiditrailLayout) -> Vec<usize> {
-    let model = if config.vertical_notes {
-        Mat4::from_rotation_x(-std::f32::consts::FRAC_PI_2)
-    } else {
-        Mat4::IDENTITY
-    };
-    let view = Mat4::from_rotation_x(config.cam_ang)
-        * Mat4::from_rotation_y(config.cam_rot)
-        * Mat4::from_rotation_z(config.cam_spin)
-        * Mat4::from_scale(Vec3::new(1.0, 1.0, -1.0))
-        * Mat4::from_translation(Vec3::new(
-            config.view_pan,
-            -config.view_height,
-            -config.view_offset,
-        ))
-        * model;
-    let mut keys: Vec<_> = (key_layout.first_key..key_layout.last_key_exclusive).collect();
-    keys.sort_by(|&a, &b| {
-        let av = view.transform_point3(Vec3::new(
-            key_layout.key_x1(a) + key_layout.key_width(a) * 0.5,
-            0.0,
-            0.0,
-        ));
-        let bv = view.transform_point3(Vec3::new(
-            key_layout.key_x1(b) + key_layout.key_width(b) * 0.5,
-            0.0,
-            0.0,
-        ));
-        let ad = av.length_squared();
-        let bd = bv.length_squared();
-        bd.total_cmp(&ad)
-    });
+    let count = key_layout.last_key_exclusive.saturating_sub(key_layout.first_key);
+    let mut keys = Vec::with_capacity(count);
+    if count == 0 {
+        return keys;
+    }
+
+    let mut left = key_layout.first_key;
+    let mut right = key_layout.last_key_exclusive - 1;
+    while left <= right {
+        let left_x = key_layout.key_x1(left) + key_layout.key_width(left) * 0.5 + config.view_pan;
+        let right_x =
+            key_layout.key_x1(right) + key_layout.key_width(right) * 0.5 + config.view_pan;
+        if left_x.abs() >= right_x.abs() {
+            keys.push(left);
+            left += 1;
+        } else {
+            keys.push(right);
+            if right == 0 {
+                break;
+            }
+            right -= 1;
+        }
+    }
     keys
 }
 
@@ -198,7 +182,6 @@ fn emit_note_side(
 ) {
     let base_x1 = key_layout.key_x1(note.key);
     let width = key_layout.key_width(note.key);
-    let base_x2 = base_x1 + width;
     let z1 = note.end * (config.viewdist / view_range.max(0.0001));
     let z2 = note.start * (config.viewdist / view_range.max(0.0001));
 
@@ -227,8 +210,8 @@ fn emit_note_side(
     }
     let side_left = shaded(note.left, side_shade);
     let side_right = shaded(note.right, side_shade);
-    push_quad(
-        &mut scene.note_vertices,
+    push_quad_instance(
+        &mut scene.note_quads,
         [side_x, 0.0, z2],
         [side_x, 0.0, z1],
         [side_x, -width, z1],
@@ -261,8 +244,8 @@ fn emit_note_cap(
     }
     let cap_left = shaded(note.left, cap_shade - 0.2);
     let cap_right = shaded(note.right, cap_shade - 0.2);
-    push_quad(
-        &mut scene.note_vertices,
+    push_quad_instance(
+        &mut scene.note_quads,
         [cap_x2, -width, cap_z],
         [cap_x2, 0.0, cap_z],
         [cap_x1, 0.0, cap_z],
@@ -290,8 +273,8 @@ fn emit_note_front(
         cap_or_front_shape(base_x1, base_x2, width, note, config);
     let front_left = shaded(note.left, front_shade);
     let front_right = shaded(note.right, front_shade);
-    push_quad(
-        &mut scene.note_vertices,
+    push_quad_instance(
+        &mut scene.note_quads,
         [front_x2, 0.0, z2],
         [front_x2, 0.0, z1],
         [front_x1, 0.0, z1],
@@ -352,57 +335,22 @@ fn emit_keyboard(
             [1.0, 1.0, 1.0, 1.0]
         };
         let base_right = base_left;
-        let blend = 0.8 * key_state[key].left[3].max(key_state[key].right[3]);
-        let left = mix(base_left, key_state[key].left, blend);
-        let right = mix(base_right, key_state[key].right, blend);
-        let press_y = if config.tilt_keys {
-            0.0
-        } else if is_black_key(key as u8) {
-            -key_state[key].press / 1.2
-        } else {
-            -key_state[key].press / 2.0
-        };
-
+        let tint_strength = key_state[key].press.clamp(0.0, 1.0) * 0.8;
+        let left = mix(base_left, key_state[key].left, tint_strength);
+        let right = mix(base_right, key_state[key].right, tint_strength);
         if is_black_key(key as u8) {
-            let x1 = key_layout.key_x1(key);
-            let x2 = x1 + key_layout.key_width(key);
-            let top_y = 1.2 + press_y;
-            push_box(
-                &mut scene.black_key_vertices,
-                x1,
-                x2,
-                0.0 + press_y,
-                top_y,
-                -BLACK_KEY_LEN,
-                0.0,
-                left,
-                right,
-            );
-            *keyboard_quads += 6;
+            emit_black_key(&mut scene.black_key_quads, key_layout, config, key, left, right);
+            *keyboard_quads += 8;
         } else {
-            let (x1, x2) = if config.same_width_notes {
-                key_layout.expanded_white_key_span(key)
-            } else {
-                let x1 = key_layout.key_x1(key);
-                (x1, x1 + key_layout.key_width(key))
-            };
-            let back_scale = if config.same_width_notes {
-                key_layout.key_width(key) * 2.0
-            } else {
-                x2 - x1
-            };
-            push_box(
-                &mut scene.white_key_vertices,
-                x1,
-                x2,
-                -0.3 + press_y,
-                0.6 + press_y,
-                -back_scale * WHITE_KEY_LEN * 0.95,
-                0.0,
+            emit_white_key(
+                &mut scene.white_key_quads,
+                key_layout,
+                config,
+                key,
                 left,
                 right,
             );
-            *keyboard_quads += 6;
+            *keyboard_quads += 13;
         }
     }
 }
@@ -444,87 +392,175 @@ fn emit_aura(
     }
 }
 
-fn push_box(
-    out: &mut Vec<MiditrailVertex>,
-    x1: f32,
-    x2: f32,
-    y1: f32,
-    y2: f32,
-    z1: f32,
-    z2: f32,
+fn emit_white_key(
+    out: &mut Vec<MiditrailQuadInstance>,
+    key_layout: &MiditrailLayout,
+    config: &MiditrailSceneConfig,
+    key: usize,
     left: [f32; 4],
     right: [f32; 4],
 ) {
-    push_quad(
-        out,
-        [x1, y1, z1],
-        [x1, y2, z1],
-        [x2, y2, z1],
-        [x2, y1, z1],
-        left,
-        left,
-        right,
-        right,
-    );
-    push_quad(
-        out,
-        [x1, y2, z1],
-        [x1, y2, z2],
-        [x2, y2, z2],
-        [x2, y2, z1],
-        dim(left, 1.0),
-        left,
-        right,
-        dim(right, 1.0),
-    );
-    push_quad(
-        out,
-        [x1, y1, z2],
-        [x1, y1, z1],
-        [x1, y2, z1],
-        [x1, y2, z2],
-        dim(left, 0.8),
-        dim(left, 0.8),
-        left,
-        dim(left, 0.8),
-    );
-    push_quad(
-        out,
-        [x2, y1, z2],
-        [x2, y1, z1],
-        [x2, y2, z1],
-        [x2, y2, z2],
-        dim(right, 0.8),
-        dim(right, 0.8),
-        right,
-        dim(right, 0.8),
-    );
-    push_quad(
-        out,
-        [x1, y1, z2],
-        [x1, y2, z2],
-        [x2, y2, z2],
-        [x2, y1, z2],
-        dim(left, 0.9),
-        left,
-        right,
-        dim(right, 0.9),
-    );
-    push_quad(
-        out,
-        [x1, y1, z1],
-        [x1, y1, z2],
-        [x2, y1, z2],
-        [x2, y1, z1],
-        dim(left, 0.8),
-        dim(left, 0.8),
-        dim(right, 0.8),
-        dim(right, 0.8),
-    );
+    let pitch = white_pitch_index(key as u8);
+    let (offset_left, offset_right) = white_key_offsets(key_layout, key, pitch);
+    let (base_x, base_x2) = if config.same_width_notes {
+        key_layout.expanded_white_key_span(key)
+    } else {
+        let x1 = key_layout.key_x1(key);
+        (x1, x1 + key_layout.key_width(key))
+    };
+    let width = base_x2 - base_x;
+    let width2 = width;
+    let scale_x = width * 0.95;
+    let scale_y = if config.same_width_notes { width2 * 0.9 } else { width2 };
+    let scale_z = if config.same_width_notes { width2 * 1.01 } else { width2 };
+    let black_end = WHITE_KEY_LEN * WHITE_KEY_LENFAC;
+
+    let quads = [
+        ([0.0, 0.0, WHITE_KEY_LEN], [0.0, 0.7, WHITE_KEY_LEN], [1.0, 0.7, WHITE_KEY_LEN], [1.0, 0.0, WHITE_KEY_LEN], [0.7, 0.8, 0.8, 0.7], [1.0, 1.0, 1.0, 1.0]),
+        ([0.0, 0.7, WHITE_KEY_LEN], [0.0, 1.0, WHITE_KEY_LEN], [1.0, 1.0, WHITE_KEY_LEN], [1.0, 0.7, WHITE_KEY_LEN], [0.6, 0.6, 0.6, 0.6], [1.0, 1.0, 1.0, 1.0]),
+        ([1.0, 1.0, black_end], [1.0, 1.0, WHITE_KEY_LEN], [0.0, 1.0, WHITE_KEY_LEN], [0.0, 1.0, black_end], [1.0, 1.0, 1.0, 1.0], [WHITE_KEY_LENFAC, 1.0, 1.0, WHITE_KEY_LENFAC]),
+        ([0.0, 1.0, WHITE_KEY_LEN], [0.03, 0.95, WHITE_KEY_LEN + 0.1], [0.97, 0.95, WHITE_KEY_LEN + 0.1], [1.0, 1.0, WHITE_KEY_LEN], [1.0, 0.9, 0.9, 1.0], [1.0, 1.0, 1.0, 1.0]),
+        ([0.0, 0.9, WHITE_KEY_LEN + 0.07], [0.03, 0.95, WHITE_KEY_LEN + 0.1], [0.97, 0.95, WHITE_KEY_LEN + 0.1], [1.0, 0.9, WHITE_KEY_LEN + 0.07], [0.9, 0.9, 0.9, 0.9], [1.0, 1.0, 1.0, 1.0]),
+        ([0.0, 1.0, black_end], [0.0, 1.0, WHITE_KEY_LEN], [0.0, 0.0, WHITE_KEY_LEN], [0.0, 0.0, black_end], [0.6, 0.6, 0.6, 0.6], [WHITE_KEY_LENFAC, 1.0, 1.0, WHITE_KEY_LENFAC]),
+        ([1.0, 1.0, black_end], [1.0, 1.0, WHITE_KEY_LEN], [1.0, 0.0, WHITE_KEY_LEN], [1.0, 0.0, black_end], [0.6, 0.6, 0.6, 0.6], [WHITE_KEY_LENFAC, 1.0, 1.0, WHITE_KEY_LENFAC]),
+        ([offset_left, 1.0, 0.0], [offset_left, 1.0, black_end], [offset_right, 1.0, black_end], [offset_right, 1.0, 0.0], [1.0, 1.0, 1.0, 1.0], [0.0, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, 0.0]),
+        ([offset_left, 0.0, 0.0], [offset_left, 1.0, 0.0], [offset_right, 1.0, 0.0], [offset_right, 0.0, 0.0], [0.8, 0.8, 0.8, 0.8], [0.0, 0.0, 0.0, 0.0]),
+        ([offset_left, 1.0, 0.0], [offset_left, 1.0, black_end], [offset_left, 0.0, black_end], [offset_left, 0.0, 0.0], [0.6, 0.6, 0.6, 0.6], [0.0, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, 0.0]),
+        ([offset_right, 1.0, 0.0], [offset_right, 1.0, black_end], [offset_right, 0.0, black_end], [offset_right, 0.0, 0.0], [0.6, 0.6, 0.6, 0.6], [0.0, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, 0.0]),
+        ([0.0, 1.0, black_end], [offset_left, 1.0, black_end], [offset_left, 0.0, black_end], [0.0, 0.0, black_end], [0.6, 0.6, 0.6, 0.6], [WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC]),
+        ([1.0, 1.0, black_end], [offset_right, 1.0, black_end], [offset_right, 0.0, black_end], [1.0, 0.0, black_end], [0.6, 0.6, 0.6, 0.6], [WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC]),
+    ];
+
+    for (a_pos, b_pos, c_pos, d_pos, brightness, blend) in quads {
+        let a = white_key_color(left, right, brightness[0], blend[0]);
+        let b = white_key_color(left, right, brightness[1], blend[1]);
+        let c = white_key_color(left, right, brightness[2], blend[2]);
+        let d = white_key_color(left, right, brightness[3], blend[3]);
+        push_quad_instance(
+            out,
+            transform_white_key(a_pos, base_x, scale_x, scale_y, scale_z),
+            transform_white_key(b_pos, base_x, scale_x, scale_y, scale_z),
+            transform_white_key(c_pos, base_x, scale_x, scale_y, scale_z),
+            transform_white_key(d_pos, base_x, scale_x, scale_y, scale_z),
+            a,
+            b,
+            c,
+            d,
+        );
+    }
 }
 
-fn push_quad(
-    out: &mut Vec<MiditrailVertex>,
+fn emit_black_key(
+    out: &mut Vec<MiditrailQuadInstance>,
+    key_layout: &MiditrailLayout,
+    config: &MiditrailSceneConfig,
+    key: usize,
+    left: [f32; 4],
+    right: [f32; 4],
+) {
+    let base_x = key_layout.key_x1(key);
+    let width = key_layout.key_width(key);
+    let scale_x = width * 0.95;
+    let vert_offset = if config.same_width_notes { 1.2 } else { 1.1 };
+    let scale_y = width / vert_offset;
+    let scale_z = width;
+    let quads = [
+        ([0.0, 0.0, BLACK_KEY_LEN], [0.0, 1.0, BLACK_KEY_LEN - 1.0], [1.0, 1.0, BLACK_KEY_LEN - 1.0], [1.0, 0.0, BLACK_KEY_LEN], [0.9, 0.95, 0.95, 0.9], [1.0, 1.0, 1.0, 1.0]),
+        ([0.0, 1.0, BLACK_KEY_LEN - 1.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [1.0, 1.0, BLACK_KEY_LEN - 1.0], [1.0, 0.94, 0.94, 1.0], [1.0, 0.0, 0.0, 1.0]),
+        ([0.0, 0.0, 0.0], [0.0, 0.0, BLACK_KEY_LEN], [0.0, 1.0, BLACK_KEY_LEN - 1.0], [0.0, 1.0, 0.0], [0.8, 0.8, 0.9, 0.8], [0.0, 1.0, 1.0, 0.0]),
+        ([1.0, 0.0, 0.0], [1.0, 0.0, BLACK_KEY_LEN], [1.0, 1.0, BLACK_KEY_LEN - 1.0], [1.0, 1.0, 0.0], [0.8, 0.8, 0.9, 0.8], [0.0, 1.0, 1.0, 0.0]),
+        ([0.0, -1.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [1.0, -1.0, 0.0], [0.9, 0.9, 0.9, 0.9], [0.0, 0.0, 0.0, 0.0]),
+        ([0.0, 0.0, 0.0], [0.0, 0.0, BLACK_KEY_LEN], [0.0, -1.0, BLACK_KEY_LEN], [0.0, -1.0, 0.0], [0.8, 0.8, 0.8, 0.8], [0.0, 1.0, 1.0, 0.0]),
+        ([1.0, 0.0, 0.0], [1.0, 0.0, BLACK_KEY_LEN], [1.0, -1.0, BLACK_KEY_LEN], [1.0, -1.0, 0.0], [0.8, 0.8, 0.8, 0.8], [0.0, 1.0, 1.0, 0.0]),
+        ([0.0, 0.0, BLACK_KEY_LEN], [0.0, -1.0, BLACK_KEY_LEN], [1.0, -1.0, BLACK_KEY_LEN], [1.0, 0.0, BLACK_KEY_LEN], [0.9, 1.0, 1.0, 0.9], [1.0, 1.0, 1.0, 1.0]),
+    ];
+
+    for (a_pos, b_pos, c_pos, d_pos, brightness, blend) in quads {
+        let a = black_key_color(left, right, brightness[0], blend[0]);
+        let b = black_key_color(left, right, brightness[1], blend[1]);
+        let c = black_key_color(left, right, brightness[2], blend[2]);
+        let d = black_key_color(left, right, brightness[3], blend[3]);
+        push_quad_instance(
+            out,
+            transform_black_key(a_pos, base_x, scale_x, scale_y, scale_z, vert_offset),
+            transform_black_key(b_pos, base_x, scale_x, scale_y, scale_z, vert_offset),
+            transform_black_key(c_pos, base_x, scale_x, scale_y, scale_z, vert_offset),
+            transform_black_key(d_pos, base_x, scale_x, scale_y, scale_z, vert_offset),
+            a,
+            b,
+            c,
+            d,
+        );
+    }
+}
+
+fn white_key_offsets(key_layout: &MiditrailLayout, key: usize, pitch: usize) -> (f32, f32) {
+    let offsets = [
+        (0.0, 0.6),
+        (0.2, 0.8),
+        (0.4, 1.0),
+        (0.0, 0.55),
+        (0.15, 0.7),
+        (0.3, 0.85),
+        (0.45, 1.0),
+    ];
+    let (mut left, mut right) = offsets[pitch];
+    if key == key_layout.first_key {
+        left = 0.0;
+    }
+    if key + 1 == key_layout.last_key_exclusive {
+        right = 1.0;
+    }
+    (left, right)
+}
+
+fn white_pitch_index(key: u8) -> usize {
+    match key % 12 {
+        0 => 0,
+        2 => 1,
+        4 => 2,
+        5 => 3,
+        7 => 4,
+        9 => 5,
+        11 => 6,
+        _ => 0,
+    }
+}
+
+fn transform_white_key(position: [f32; 3], base_x: f32, scale_x: f32, scale_y: f32, scale_z: f32) -> [f32; 3] {
+    [base_x + position[0] * scale_x, -0.035 + position[1] * scale_y, -position[2] * scale_z]
+}
+
+fn transform_black_key(position: [f32; 3], base_x: f32, scale_x: f32, scale_y: f32, scale_z: f32, _vert_offset: f32) -> [f32; 3] {
+    [base_x + position[0] * scale_x, -0.01 + position[1] * scale_y, -position[2] * scale_z]
+}
+
+fn white_key_color(left: [f32; 4], right: [f32; 4], brightness: f32, blend: f32) -> [f32; 4] {
+    [
+        (left[0] * blend + right[0] * (1.0 - blend)) * brightness,
+        (left[1] * blend + right[1] * (1.0 - blend)) * brightness,
+        (left[2] * blend + right[2] * (1.0 - blend)) * brightness,
+        1.0,
+    ]
+}
+
+fn black_key_color(left: [f32; 4], right: [f32; 4], brightness: f32, blend: f32) -> [f32; 4] {
+    let tint = [
+        left[0] * blend + right[0] * (1.0 - blend),
+        left[1] * blend + right[1] * (1.0 - blend),
+        left[2] * blend + right[2] * (1.0 - blend),
+    ];
+    [
+        (1.0 - brightness + tint[0] * brightness).clamp(0.0, 1.0),
+        (1.0 - brightness + tint[1] * brightness).clamp(0.0, 1.0),
+        (1.0 - brightness + tint[2] * brightness).clamp(0.0, 1.0),
+        1.0,
+    ]
+}
+
+
+fn push_quad_instance(
+    out: &mut Vec<MiditrailQuadInstance>,
     a: [f32; 3],
     b: [f32; 3],
     c: [f32; 3],
@@ -534,32 +570,10 @@ fn push_quad(
     cc: [f32; 4],
     cd: [f32; 4],
 ) {
-    out.extend_from_slice(&[
-        MiditrailVertex {
-            position: a,
-            color: ca,
-        },
-        MiditrailVertex {
-            position: b,
-            color: cb,
-        },
-        MiditrailVertex {
-            position: c,
-            color: cc,
-        },
-        MiditrailVertex {
-            position: a,
-            color: ca,
-        },
-        MiditrailVertex {
-            position: c,
-            color: cc,
-        },
-        MiditrailVertex {
-            position: d,
-            color: cd,
-        },
-    ]);
+    out.push(MiditrailQuadInstance {
+        positions: [a, b, c, d],
+        colors: [ca, cb, cc, cd],
+    });
 }
 
 fn push_aura_quad(
@@ -571,44 +585,10 @@ fn push_aura_quad(
     left: [f32; 4],
     right: [f32; 4],
 ) {
-    scene.aura_vertices.extend_from_slice(&[
-        MiditrailAuraVertex {
-            position: a,
-            color: left,
-            uv: [0.0, 0.0],
-            _padding: [0.0; 2],
-        },
-        MiditrailAuraVertex {
-            position: b,
-            color: left,
-            uv: [0.0, 1.0],
-            _padding: [0.0; 2],
-        },
-        MiditrailAuraVertex {
-            position: c,
-            color: right,
-            uv: [1.0, 1.0],
-            _padding: [0.0; 2],
-        },
-        MiditrailAuraVertex {
-            position: a,
-            color: left,
-            uv: [0.0, 0.0],
-            _padding: [0.0; 2],
-        },
-        MiditrailAuraVertex {
-            position: c,
-            color: right,
-            uv: [1.0, 1.0],
-            _padding: [0.0; 2],
-        },
-        MiditrailAuraVertex {
-            position: d,
-            color: right,
-            uv: [1.0, 0.0],
-            _padding: [0.0; 2],
-        },
-    ]);
+    scene.aura_quads.push(MiditrailQuadInstance {
+        positions: [a, b, c, d],
+        colors: [left, left, right, right],
+    });
 }
 
 fn mix(base: [f32; 4], tint: [f32; 4], amount: f32) -> [f32; 4] {
