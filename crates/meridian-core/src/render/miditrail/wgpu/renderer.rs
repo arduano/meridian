@@ -5,7 +5,10 @@ use super::streaming::StreamingBufferPool;
 use crate::render::{
     SceneLayout,
     miditrail::model::{MiditrailQuadInstance, MiditrailScene},
-    shared::{MiditrailSceneConfig, ThreeDSceneConfig},
+    shared::{
+        BuiltinProjectorImage, LoadedProjectorImage, MiditrailSceneConfig, ProjectorImageConfig,
+        ThreeDSceneConfig, load_projector_image,
+    },
 };
 
 const OPENGL_TO_WGPU: Mat4 = Mat4::from_cols_array(&[
@@ -22,6 +25,14 @@ pub struct MiditrailRenderer {
     white_key_quads: StreamingBufferPool<MiditrailQuadInstance>,
     black_key_quads: StreamingBufferPool<MiditrailQuadInstance>,
     aura_quads: StreamingBufferPool<MiditrailQuadInstance>,
+    aura_texture: Option<AuraTextureState>,
+}
+
+struct AuraTextureState {
+    selection: ProjectorImageConfig,
+    _texture: wgpu::Texture,
+    _sampler: wgpu::Sampler,
+    bind_group: wgpu::BindGroup,
 }
 
 impl MiditrailRenderer {
@@ -33,6 +44,7 @@ impl MiditrailRenderer {
             white_key_quads: StreamingBufferPool::new("MiditrailWhiteKeyQuads"),
             black_key_quads: StreamingBufferPool::new("MiditrailBlackKeyQuads"),
             aura_quads: StreamingBufferPool::new("MiditrailAuraQuads"),
+            aura_texture: None,
         }
     }
 
@@ -59,6 +71,7 @@ impl MiditrailRenderer {
                 mvp: (OPENGL_TO_WGPU * mvp).to_cols_array_2d(),
             }),
         );
+        self.ensure_aura_texture(device, queue, &config.aura_image);
 
         let target_view = target.create_view(&Default::default());
         let depth_view = self.depth.create_view(&Default::default());
@@ -94,7 +107,7 @@ impl MiditrailRenderer {
                 timestamp_writes: None,
                 multiview_mask: None,
             });
-            pass.set_bind_group(0, &self.pipelines.bind_group, &[]);
+            pass.set_bind_group(0, &self.pipelines.color_bind_group, &[]);
             draw_color_chunks(
                 device,
                 queue,
@@ -107,6 +120,9 @@ impl MiditrailRenderer {
             let aura_before_keys = (!config.vertical_notes && config.view_offset < 0.0)
                 || (config.vertical_notes && config.view_height < 0.025);
             if aura_before_keys {
+                if let Some(aura_texture) = &self.aura_texture {
+                    pass.set_bind_group(0, &aura_texture.bind_group, &[]);
+                }
                 draw_aura_chunks(
                     device,
                     queue,
@@ -115,6 +131,7 @@ impl MiditrailRenderer {
                     &self.pipelines.aura_less,
                     &scene.aura_quads,
                 );
+                pass.set_bind_group(0, &self.pipelines.color_bind_group, &[]);
                 draw_color_chunks(
                     device,
                     queue,
@@ -148,6 +165,9 @@ impl MiditrailRenderer {
                     &self.pipelines.color_less,
                     &scene.black_key_quads,
                 );
+                if let Some(aura_texture) = &self.aura_texture {
+                    pass.set_bind_group(0, &aura_texture.bind_group, &[]);
+                }
                 draw_aura_chunks(
                     device,
                     queue,
@@ -159,6 +179,128 @@ impl MiditrailRenderer {
             }
         }
         queue.submit(Some(encoder.finish()));
+    }
+
+    fn ensure_aura_texture(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        selection: &ProjectorImageConfig,
+    ) {
+        if self
+            .aura_texture
+            .as_ref()
+            .is_some_and(|state| &state.selection == selection)
+        {
+            return;
+        }
+        let loaded = match load_projector_image(selection, miditrail_aura_builtins()) {
+            Ok(image) => image,
+            Err(error) => {
+                eprintln!(
+                    "failed to load aura image {selection:?}: {error}; falling back to builtin ring"
+                );
+                load_projector_image(&default_miditrail_aura_image(), miditrail_aura_builtins())
+                    .expect("builtin ring aura should load")
+            }
+        };
+        self.aura_texture = Some(create_aura_texture_state(
+            device,
+            queue,
+            &self.pipelines,
+            selection.clone(),
+            loaded,
+        ));
+    }
+}
+
+fn create_aura_texture_state(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    pipelines: &MiditrailPipelines,
+    selection: ProjectorImageConfig,
+    loaded: LoadedProjectorImage,
+) -> AuraTextureState {
+    let size = wgpu::Extent3d {
+        width: loaded.width.max(1),
+        height: loaded.height.max(1),
+        depth_or_array_layers: 1,
+    };
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("MiditrailAuraTexture"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: VIEWPORT_FORMAT,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &loaded.rgba,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(loaded.width * 4),
+            rows_per_image: Some(loaded.height),
+        },
+        size,
+    );
+    let texture_view = texture.create_view(&Default::default());
+    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("MiditrailAuraSampler"),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
+        ..Default::default()
+    });
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("MiditrailAuraBindGroup"),
+        layout: &pipelines.aura_bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: pipelines.uniform_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(&texture_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::Sampler(&sampler),
+            },
+        ],
+    });
+    AuraTextureState {
+        selection,
+        _texture: texture,
+        _sampler: sampler,
+        bind_group,
+    }
+}
+
+fn miditrail_aura_builtins() -> &'static [BuiltinProjectorImage] {
+    &[BuiltinProjectorImage {
+        name: "ring",
+        png_bytes: include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/miditrail/aura_ring.png"
+        )),
+    }]
+}
+
+fn default_miditrail_aura_image() -> ProjectorImageConfig {
+    ProjectorImageConfig::Builtin {
+        name: "ring".to_string(),
     }
 }
 

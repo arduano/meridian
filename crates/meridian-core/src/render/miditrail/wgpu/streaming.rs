@@ -75,8 +75,9 @@ impl<T: Pod> StreamingBufferPool<T> {
         vertices: &[T],
     ) {
         if self.buffers.len() <= chunk_index {
-            self.buffers
-                .resize_with(chunk_index + 1, || StreamingVertexBuffer::new(device, self.label));
+            self.buffers.resize_with(chunk_index + 1, || {
+                StreamingVertexBuffer::new(device, self.label)
+            });
         }
         self.buffers[chunk_index].write(device, queue, vertices);
     }
@@ -90,7 +91,11 @@ impl<T: Pod> StreamingBufferPool<T> {
     }
 }
 
-fn create_buffer<T: Pod>(device: &wgpu::Device, label: &'static str, capacity: usize) -> wgpu::Buffer {
+fn create_buffer<T: Pod>(
+    device: &wgpu::Device,
+    label: &'static str,
+    capacity: usize,
+) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
         label: Some(label),
         size: (capacity * std::mem::size_of::<T>()) as u64,

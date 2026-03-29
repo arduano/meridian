@@ -21,14 +21,18 @@ const WHITE_KEY_LENFAC: f32 = 0.69;
 const KEY_X_SQUEEZE: f32 = 0.95;
 const WHITE_KEY_Y_DROP: f32 = 0.3;
 const BLACK_KEY_Y_LIFT: f32 = 1.2;
+const AURA_REFERENCE_FPS: f32 = 60.0;
+const AURA_MAX_SECONDS: f32 = 1.0;
 #[derive(Clone, Copy)]
 struct VisibleNote {
     key: usize,
     start: f32,
     end: f32,
+    unclamped_end: f32,
     left: [f32; 4],
     right: [f32; 4],
     active: bool,
+    has_ended: bool,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -69,7 +73,7 @@ pub fn project_miditrail_scene(
                 let state = &mut key_state[note.key];
                 state.left = alpha_blend(state.left, note.left);
                 state.right = alpha_blend(state.right, note.right);
-                state.aura = state.aura.max(0.5);
+                state.aura = state.aura.max(aura_size(*note));
             }
         }
     }
@@ -144,7 +148,8 @@ fn collect_visible_notes(
             let mut notes = Vec::with_capacity(iter.len());
             for note in iter {
                 let start = note.start;
-                let mut end = start + note.len;
+                let unclamped_end = start + note.len;
+                let mut end = unclamped_end;
                 if end < render_start || start >= view_range {
                     continue;
                 }
@@ -157,9 +162,11 @@ fn collect_visible_notes(
                     key,
                     start: clamped_start,
                     end: end.min(view_range),
+                    unclamped_end,
                     left: note.color.left.to_rgba(1.0),
                     right: note.color.right.to_rgba(1.0),
                     active: note.start <= 0.0 && end > 0.0,
+                    has_ended: unclamped_end <= view_range,
                 });
             }
             notes
@@ -186,7 +193,7 @@ fn key_render_order(config: &MiditrailSceneConfig, key_layout: &MiditrailLayout)
                     .partial_cmp(&a_view.x.abs())
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
-        });
+    });
     keys
 }
 
@@ -336,6 +343,22 @@ fn active_factor(note: VisibleNote, config: &MiditrailSceneConfig) -> f32 {
     config.note_down_speed.clamp(0.0, 1.0) * 0.5
 }
 
+fn aura_size(note: VisibleNote) -> f32 {
+    if !note.active {
+        return 0.0;
+    }
+    let frames_since_start = (-note.start).max(0.0) * AURA_REFERENCE_FPS;
+    let burst = (10.0 - frames_since_start).max(0.0).powi(2) / 600.0;
+    let base = if note.has_ended {
+        let len = (note.unclamped_end - note.start).clamp(1.0e-6, AURA_MAX_SECONDS);
+        let offset = note.unclamped_end.clamp(0.0, AURA_MAX_SECONDS);
+        0.5 * (offset / len).powf(0.3)
+    } else {
+        0.5
+    };
+    base + burst
+}
+
 fn cap_or_front_shape(
     base_x1: f32,
     base_x2: f32,
@@ -467,24 +490,133 @@ fn emit_white_key(
         width
     };
     let scale_x = width;
-    let scale_y = if config.same_width_notes { width2 * 0.9 } else { width2 };
-    let scale_z = if config.same_width_notes { width2 * 1.01 } else { width2 };
+    let scale_y = if config.same_width_notes {
+        width2 * 0.9
+    } else {
+        width2
+    };
+    let scale_z = if config.same_width_notes {
+        width2 * 1.01
+    } else {
+        width2
+    };
     let black_end = WHITE_KEY_LEN * WHITE_KEY_LENFAC;
 
     let quads = [
-        ([0.0, 0.0, WHITE_KEY_LEN], [0.0, 0.7, WHITE_KEY_LEN], [1.0, 0.7, WHITE_KEY_LEN], [1.0, 0.0, WHITE_KEY_LEN], [0.7, 0.8, 0.8, 0.7], [1.0, 1.0, 1.0, 1.0]),
-        ([0.0, 0.7, WHITE_KEY_LEN], [0.0, 1.0, WHITE_KEY_LEN], [1.0, 1.0, WHITE_KEY_LEN], [1.0, 0.7, WHITE_KEY_LEN], [0.6, 0.6, 0.6, 0.6], [1.0, 1.0, 1.0, 1.0]),
-        ([1.0, 1.0, black_end], [1.0, 1.0, WHITE_KEY_LEN], [0.0, 1.0, WHITE_KEY_LEN], [0.0, 1.0, black_end], [1.0, 1.0, 1.0, 1.0], [WHITE_KEY_LENFAC, 1.0, 1.0, WHITE_KEY_LENFAC]),
-        ([0.0, 1.0, WHITE_KEY_LEN], [0.03, 0.95, WHITE_KEY_LEN + 0.1], [0.97, 0.95, WHITE_KEY_LEN + 0.1], [1.0, 1.0, WHITE_KEY_LEN], [1.0, 0.9, 0.9, 1.0], [1.0, 1.0, 1.0, 1.0]),
-        ([0.0, 0.9, WHITE_KEY_LEN + 0.07], [0.03, 0.95, WHITE_KEY_LEN + 0.1], [0.97, 0.95, WHITE_KEY_LEN + 0.1], [1.0, 0.9, WHITE_KEY_LEN + 0.07], [0.9, 0.9, 0.9, 0.9], [1.0, 1.0, 1.0, 1.0]),
-        ([0.0, 1.0, black_end], [0.0, 1.0, WHITE_KEY_LEN], [0.0, 0.0, WHITE_KEY_LEN], [0.0, 0.0, black_end], [0.6, 0.6, 0.6, 0.6], [WHITE_KEY_LENFAC, 1.0, 1.0, WHITE_KEY_LENFAC]),
-        ([1.0, 1.0, black_end], [1.0, 1.0, WHITE_KEY_LEN], [1.0, 0.0, WHITE_KEY_LEN], [1.0, 0.0, black_end], [0.6, 0.6, 0.6, 0.6], [WHITE_KEY_LENFAC, 1.0, 1.0, WHITE_KEY_LENFAC]),
-        ([offset_left, 1.0, 0.0], [offset_left, 1.0, black_end], [offset_right, 1.0, black_end], [offset_right, 1.0, 0.0], [1.0, 1.0, 1.0, 1.0], [0.0, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, 0.0]),
-        ([offset_left, 0.0, 0.0], [offset_left, 1.0, 0.0], [offset_right, 1.0, 0.0], [offset_right, 0.0, 0.0], [0.8, 0.8, 0.8, 0.8], [0.0, 0.0, 0.0, 0.0]),
-        ([offset_left, 1.0, 0.0], [offset_left, 1.0, black_end], [offset_left, 0.0, black_end], [offset_left, 0.0, 0.0], [0.6, 0.6, 0.6, 0.6], [0.0, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, 0.0]),
-        ([offset_right, 1.0, 0.0], [offset_right, 1.0, black_end], [offset_right, 0.0, black_end], [offset_right, 0.0, 0.0], [0.6, 0.6, 0.6, 0.6], [0.0, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, 0.0]),
-        ([0.0, 1.0, black_end], [offset_left, 1.0, black_end], [offset_left, 0.0, black_end], [0.0, 0.0, black_end], [0.6, 0.6, 0.6, 0.6], [WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC]),
-        ([1.0, 1.0, black_end], [offset_right, 1.0, black_end], [offset_right, 0.0, black_end], [1.0, 0.0, black_end], [0.6, 0.6, 0.6, 0.6], [WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC]),
+        (
+            [0.0, 0.0, WHITE_KEY_LEN],
+            [0.0, 0.7, WHITE_KEY_LEN],
+            [1.0, 0.7, WHITE_KEY_LEN],
+            [1.0, 0.0, WHITE_KEY_LEN],
+            [0.7, 0.8, 0.8, 0.7],
+            [1.0, 1.0, 1.0, 1.0],
+        ),
+        (
+            [0.0, 0.7, WHITE_KEY_LEN],
+            [0.0, 1.0, WHITE_KEY_LEN],
+            [1.0, 1.0, WHITE_KEY_LEN],
+            [1.0, 0.7, WHITE_KEY_LEN],
+            [0.6, 0.6, 0.6, 0.6],
+            [1.0, 1.0, 1.0, 1.0],
+        ),
+        (
+            [1.0, 1.0, black_end],
+            [1.0, 1.0, WHITE_KEY_LEN],
+            [0.0, 1.0, WHITE_KEY_LEN],
+            [0.0, 1.0, black_end],
+            [1.0, 1.0, 1.0, 1.0],
+            [WHITE_KEY_LENFAC, 1.0, 1.0, WHITE_KEY_LENFAC],
+        ),
+        (
+            [0.0, 1.0, WHITE_KEY_LEN],
+            [0.03, 0.95, WHITE_KEY_LEN + 0.1],
+            [0.97, 0.95, WHITE_KEY_LEN + 0.1],
+            [1.0, 1.0, WHITE_KEY_LEN],
+            [1.0, 0.9, 0.9, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+        ),
+        (
+            [0.0, 0.9, WHITE_KEY_LEN + 0.07],
+            [0.03, 0.95, WHITE_KEY_LEN + 0.1],
+            [0.97, 0.95, WHITE_KEY_LEN + 0.1],
+            [1.0, 0.9, WHITE_KEY_LEN + 0.07],
+            [0.9, 0.9, 0.9, 0.9],
+            [1.0, 1.0, 1.0, 1.0],
+        ),
+        (
+            [0.0, 1.0, black_end],
+            [0.0, 1.0, WHITE_KEY_LEN],
+            [0.0, 0.0, WHITE_KEY_LEN],
+            [0.0, 0.0, black_end],
+            [0.6, 0.6, 0.6, 0.6],
+            [WHITE_KEY_LENFAC, 1.0, 1.0, WHITE_KEY_LENFAC],
+        ),
+        (
+            [1.0, 1.0, black_end],
+            [1.0, 1.0, WHITE_KEY_LEN],
+            [1.0, 0.0, WHITE_KEY_LEN],
+            [1.0, 0.0, black_end],
+            [0.6, 0.6, 0.6, 0.6],
+            [WHITE_KEY_LENFAC, 1.0, 1.0, WHITE_KEY_LENFAC],
+        ),
+        (
+            [offset_left, 1.0, 0.0],
+            [offset_left, 1.0, black_end],
+            [offset_right, 1.0, black_end],
+            [offset_right, 1.0, 0.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [0.0, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, 0.0],
+        ),
+        (
+            [offset_left, 0.0, 0.0],
+            [offset_left, 1.0, 0.0],
+            [offset_right, 1.0, 0.0],
+            [offset_right, 0.0, 0.0],
+            [0.8, 0.8, 0.8, 0.8],
+            [0.0, 0.0, 0.0, 0.0],
+        ),
+        (
+            [offset_left, 1.0, 0.0],
+            [offset_left, 1.0, black_end],
+            [offset_left, 0.0, black_end],
+            [offset_left, 0.0, 0.0],
+            [0.6, 0.6, 0.6, 0.6],
+            [0.0, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, 0.0],
+        ),
+        (
+            [offset_right, 1.0, 0.0],
+            [offset_right, 1.0, black_end],
+            [offset_right, 0.0, black_end],
+            [offset_right, 0.0, 0.0],
+            [0.6, 0.6, 0.6, 0.6],
+            [0.0, WHITE_KEY_LENFAC, WHITE_KEY_LENFAC, 0.0],
+        ),
+        (
+            [0.0, 1.0, black_end],
+            [offset_left, 1.0, black_end],
+            [offset_left, 0.0, black_end],
+            [0.0, 0.0, black_end],
+            [0.6, 0.6, 0.6, 0.6],
+            [
+                WHITE_KEY_LENFAC,
+                WHITE_KEY_LENFAC,
+                WHITE_KEY_LENFAC,
+                WHITE_KEY_LENFAC,
+            ],
+        ),
+        (
+            [1.0, 1.0, black_end],
+            [offset_right, 1.0, black_end],
+            [offset_right, 0.0, black_end],
+            [1.0, 0.0, black_end],
+            [0.6, 0.6, 0.6, 0.6],
+            [
+                WHITE_KEY_LENFAC,
+                WHITE_KEY_LENFAC,
+                WHITE_KEY_LENFAC,
+                WHITE_KEY_LENFAC,
+            ],
+        ),
     ];
 
     for (a_pos, b_pos, c_pos, d_pos, brightness, blend) in quads {
@@ -494,10 +626,42 @@ fn emit_white_key(
         let d = white_key_color(left, right, brightness[3], blend[3]);
         push_quad_instance(
             out,
-            transform_white_key(a_pos, base_x, scale_x, scale_y, scale_z, press, config.tilt_keys),
-            transform_white_key(b_pos, base_x, scale_x, scale_y, scale_z, press, config.tilt_keys),
-            transform_white_key(c_pos, base_x, scale_x, scale_y, scale_z, press, config.tilt_keys),
-            transform_white_key(d_pos, base_x, scale_x, scale_y, scale_z, press, config.tilt_keys),
+            transform_white_key(
+                a_pos,
+                base_x,
+                scale_x,
+                scale_y,
+                scale_z,
+                press,
+                config.tilt_keys,
+            ),
+            transform_white_key(
+                b_pos,
+                base_x,
+                scale_x,
+                scale_y,
+                scale_z,
+                press,
+                config.tilt_keys,
+            ),
+            transform_white_key(
+                c_pos,
+                base_x,
+                scale_x,
+                scale_y,
+                scale_z,
+                press,
+                config.tilt_keys,
+            ),
+            transform_white_key(
+                d_pos,
+                base_x,
+                scale_x,
+                scale_y,
+                scale_z,
+                press,
+                config.tilt_keys,
+            ),
             a,
             b,
             c,
@@ -522,14 +686,70 @@ fn emit_black_key(
     let scale_y = width / vert_offset;
     let scale_z = width;
     let quads = [
-        ([0.0, 0.0, BLACK_KEY_LEN], [0.0, 1.0, BLACK_KEY_LEN - 1.0], [1.0, 1.0, BLACK_KEY_LEN - 1.0], [1.0, 0.0, BLACK_KEY_LEN], [0.9, 0.95, 0.95, 0.9], [1.0, 1.0, 1.0, 1.0]),
-        ([0.0, 1.0, BLACK_KEY_LEN - 1.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [1.0, 1.0, BLACK_KEY_LEN - 1.0], [1.0, 0.94, 0.94, 1.0], [1.0, 0.0, 0.0, 1.0]),
-        ([0.0, 0.0, 0.0], [0.0, 0.0, BLACK_KEY_LEN], [0.0, 1.0, BLACK_KEY_LEN - 1.0], [0.0, 1.0, 0.0], [0.8, 0.8, 0.9, 0.8], [0.0, 1.0, 1.0, 0.0]),
-        ([1.0, 0.0, 0.0], [1.0, 0.0, BLACK_KEY_LEN], [1.0, 1.0, BLACK_KEY_LEN - 1.0], [1.0, 1.0, 0.0], [0.8, 0.8, 0.9, 0.8], [0.0, 1.0, 1.0, 0.0]),
-        ([0.0, -1.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [1.0, -1.0, 0.0], [0.9, 0.9, 0.9, 0.9], [0.0, 0.0, 0.0, 0.0]),
-        ([0.0, 0.0, 0.0], [0.0, 0.0, BLACK_KEY_LEN], [0.0, -1.0, BLACK_KEY_LEN], [0.0, -1.0, 0.0], [0.8, 0.8, 0.8, 0.8], [0.0, 1.0, 1.0, 0.0]),
-        ([1.0, 0.0, 0.0], [1.0, 0.0, BLACK_KEY_LEN], [1.0, -1.0, BLACK_KEY_LEN], [1.0, -1.0, 0.0], [0.8, 0.8, 0.8, 0.8], [0.0, 1.0, 1.0, 0.0]),
-        ([0.0, 0.0, BLACK_KEY_LEN], [0.0, -1.0, BLACK_KEY_LEN], [1.0, -1.0, BLACK_KEY_LEN], [1.0, 0.0, BLACK_KEY_LEN], [0.9, 1.0, 1.0, 0.9], [1.0, 1.0, 1.0, 1.0]),
+        (
+            [0.0, 0.0, BLACK_KEY_LEN],
+            [0.0, 1.0, BLACK_KEY_LEN - 1.0],
+            [1.0, 1.0, BLACK_KEY_LEN - 1.0],
+            [1.0, 0.0, BLACK_KEY_LEN],
+            [0.9, 0.95, 0.95, 0.9],
+            [1.0, 1.0, 1.0, 1.0],
+        ),
+        (
+            [0.0, 1.0, BLACK_KEY_LEN - 1.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 1.0, BLACK_KEY_LEN - 1.0],
+            [1.0, 0.94, 0.94, 1.0],
+            [1.0, 0.0, 0.0, 1.0],
+        ),
+        (
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, BLACK_KEY_LEN],
+            [0.0, 1.0, BLACK_KEY_LEN - 1.0],
+            [0.0, 1.0, 0.0],
+            [0.8, 0.8, 0.9, 0.8],
+            [0.0, 1.0, 1.0, 0.0],
+        ),
+        (
+            [1.0, 0.0, 0.0],
+            [1.0, 0.0, BLACK_KEY_LEN],
+            [1.0, 1.0, BLACK_KEY_LEN - 1.0],
+            [1.0, 1.0, 0.0],
+            [0.8, 0.8, 0.9, 0.8],
+            [0.0, 1.0, 1.0, 0.0],
+        ),
+        (
+            [0.0, -1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [1.0, -1.0, 0.0],
+            [0.9, 0.9, 0.9, 0.9],
+            [0.0, 0.0, 0.0, 0.0],
+        ),
+        (
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, BLACK_KEY_LEN],
+            [0.0, -1.0, BLACK_KEY_LEN],
+            [0.0, -1.0, 0.0],
+            [0.8, 0.8, 0.8, 0.8],
+            [0.0, 1.0, 1.0, 0.0],
+        ),
+        (
+            [1.0, 0.0, 0.0],
+            [1.0, 0.0, BLACK_KEY_LEN],
+            [1.0, -1.0, BLACK_KEY_LEN],
+            [1.0, -1.0, 0.0],
+            [0.8, 0.8, 0.8, 0.8],
+            [0.0, 1.0, 1.0, 0.0],
+        ),
+        (
+            [0.0, 0.0, BLACK_KEY_LEN],
+            [0.0, -1.0, BLACK_KEY_LEN],
+            [1.0, -1.0, BLACK_KEY_LEN],
+            [1.0, 0.0, BLACK_KEY_LEN],
+            [0.9, 1.0, 1.0, 0.9],
+            [1.0, 1.0, 1.0, 1.0],
+        ),
     ];
 
     for (a_pos, b_pos, c_pos, d_pos, brightness, blend) in quads {
@@ -716,7 +936,6 @@ fn black_key_color(left: [f32; 4], right: [f32; 4], brightness: f32, blend: f32)
         1.0,
     ]
 }
-
 
 fn push_quad_instance(
     out: &mut Vec<MiditrailQuadInstance>,

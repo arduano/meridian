@@ -1,7 +1,5 @@
 use crate::{
-    midi::MIDI_KEY_COUNT,
-    midi::views::MIDIFileViewsUnion,
-    render::shared::MiditrailSceneConfig,
+    midi::MIDI_KEY_COUNT, midi::views::MIDIFileViewsUnion, render::shared::MiditrailSceneConfig,
 };
 
 #[derive(Clone, Debug)]

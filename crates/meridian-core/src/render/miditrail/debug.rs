@@ -58,7 +58,10 @@ pub fn dump_miditrail_geometry(
     let first = first_key.min(last_key) as usize;
     let last_exclusive = first_key.max(last_key) as usize + 1;
     let layout = MiditrailLayout::new(first, last_exclusive, config);
-    let mvp = build_mvp(config, viewport_width as f32 / viewport_height.max(1) as f32);
+    let mvp = build_mvp(
+        config,
+        viewport_width as f32 / viewport_height.max(1) as f32,
+    );
     let mut keys = Vec::with_capacity(last_exclusive.saturating_sub(first));
     for key in first..last_exclusive {
         let note_x1 = layout.key_x1(key);
@@ -66,53 +69,66 @@ pub fn dump_miditrail_geometry(
         let note_center = (note_x1 + note_x2) * 0.5;
         let note_center_ndc_x = project_ndc_x(mvp, [note_center, 0.0, 0.0]);
         let is_black = is_black_key(key as u8);
-        let (keyboard_x1, keyboard_x2, keyboard_anchor_ndc_x, scale_x, scale_yz, slot_left, slot_right) =
-            if is_black {
-                let base_x = layout.key_x1(key);
-                let width = layout.key_width(key);
-                let scale_x = width;
-                let scale_yz = width;
-                let anchor_world = [base_x + scale_x * 0.5, BLACK_KEY_Y_LIFT * (width / 1.2), 0.0];
-                (
-                    base_x + scale_x * (1.0 - KEY_X_SQUEEZE) * 0.5,
-                    base_x + scale_x * (1.0 + KEY_X_SQUEEZE) * 0.5,
-                    project_ndc_x(mvp, anchor_world),
-                    scale_x,
-                    scale_yz,
-                    None,
-                    None,
-                )
+        let (
+            keyboard_x1,
+            keyboard_x2,
+            keyboard_anchor_ndc_x,
+            scale_x,
+            scale_yz,
+            slot_left,
+            slot_right,
+        ) = if is_black {
+            let base_x = layout.key_x1(key);
+            let width = layout.key_width(key);
+            let scale_x = width;
+            let scale_yz = width;
+            let anchor_world = [
+                base_x + scale_x * 0.5,
+                BLACK_KEY_Y_LIFT * (width / 1.2),
+                0.0,
+            ];
+            (
+                base_x + scale_x * (1.0 - KEY_X_SQUEEZE) * 0.5,
+                base_x + scale_x * (1.0 + KEY_X_SQUEEZE) * 0.5,
+                project_ndc_x(mvp, anchor_world),
+                scale_x,
+                scale_yz,
+                None,
+                None,
+            )
+        } else {
+            let (base_x, base_x2) = if config.same_width_notes {
+                layout.expanded_white_key_span(key)
             } else {
-                let (base_x, base_x2) = if config.same_width_notes {
-                    layout.expanded_white_key_span(key)
-                } else {
-                    let x1 = layout.key_x1(key);
-                    (x1, x1 + layout.key_width(key))
-                };
-                let width = base_x2 - base_x;
-                let scale_x = width;
-                let scale_yz = if config.same_width_notes {
-                    layout.key_width(layout.first_key) * 2.0
-                } else {
-                    width
-                };
-                let (offset_left, offset_right) = white_key_offsets(&layout, key, white_pitch_index(key as u8));
-                let squeezed_x1 = base_x + scale_x * (1.0 - KEY_X_SQUEEZE) * 0.5;
-                let squeezed_x2 = base_x + scale_x * (1.0 + KEY_X_SQUEEZE) * 0.5;
-                let slot_left = base_x + ((offset_left - 0.5) * KEY_X_SQUEEZE + 0.5) * scale_x;
-                let slot_right = base_x + ((offset_right - 0.5) * KEY_X_SQUEEZE + 0.5) * scale_x;
-                let slot_center = base_x + ((((offset_left + offset_right) * 0.5) - 0.5) * KEY_X_SQUEEZE + 0.5) * scale_x;
-                let anchor_world = [slot_center, (0.5 - WHITE_KEY_Y_DROP) * scale_yz, 0.0];
-                (
-                    squeezed_x1,
-                    squeezed_x2,
-                    project_ndc_x(mvp, anchor_world),
-                    scale_x,
-                    scale_yz,
-                    Some(slot_left),
-                    Some(slot_right),
-                )
+                let x1 = layout.key_x1(key);
+                (x1, x1 + layout.key_width(key))
             };
+            let width = base_x2 - base_x;
+            let scale_x = width;
+            let scale_yz = if config.same_width_notes {
+                layout.key_width(layout.first_key) * 2.0
+            } else {
+                width
+            };
+            let (offset_left, offset_right) =
+                white_key_offsets(&layout, key, white_pitch_index(key as u8));
+            let squeezed_x1 = base_x + scale_x * (1.0 - KEY_X_SQUEEZE) * 0.5;
+            let squeezed_x2 = base_x + scale_x * (1.0 + KEY_X_SQUEEZE) * 0.5;
+            let slot_left = base_x + ((offset_left - 0.5) * KEY_X_SQUEEZE + 0.5) * scale_x;
+            let slot_right = base_x + ((offset_right - 0.5) * KEY_X_SQUEEZE + 0.5) * scale_x;
+            let slot_center = base_x
+                + ((((offset_left + offset_right) * 0.5) - 0.5) * KEY_X_SQUEEZE + 0.5) * scale_x;
+            let anchor_world = [slot_center, (0.5 - WHITE_KEY_Y_DROP) * scale_yz, 0.0];
+            (
+                squeezed_x1,
+                squeezed_x2,
+                project_ndc_x(mvp, anchor_world),
+                scale_x,
+                scale_yz,
+                Some(slot_left),
+                Some(slot_right),
+            )
+        };
         keys.push(MiditrailKeyGeometry {
             key: key as u8,
             is_black,

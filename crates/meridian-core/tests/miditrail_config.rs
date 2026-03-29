@@ -1,5 +1,5 @@
 use meridian_core::render::{
-    MiditrailAuraImage, MiditrailSceneConfig, SceneConfig, ThreeDSceneConfig,
+    MiditrailSceneConfig, ProjectorImageConfig, SceneConfig, ThreeDSceneConfig,
 };
 
 #[test]
@@ -18,7 +18,12 @@ fn miditrail_defaults_match_zenith_master() {
     assert!(config.tilt_keys);
     assert!(config.aura_enabled);
     assert!(config.notes_change_tint);
-    assert_eq!(config.aura_image, MiditrailAuraImage::Ring);
+    assert_eq!(
+        config.aura_image,
+        ProjectorImageConfig::Builtin {
+            name: "ring".to_string(),
+        }
+    );
 }
 
 #[test]

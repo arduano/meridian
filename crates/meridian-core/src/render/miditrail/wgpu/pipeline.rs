@@ -13,7 +13,8 @@ pub struct Uniforms {
 
 pub struct MiditrailPipelines {
     pub uniform_buffer: wgpu::Buffer,
-    pub bind_group: wgpu::BindGroup,
+    pub color_bind_group: wgpu::BindGroup,
+    pub aura_bind_group_layout: wgpu::BindGroupLayout,
     pub color_always: wgpu::RenderPipeline,
     pub color_less: wgpu::RenderPipeline,
     pub aura_less: wgpu::RenderPipeline,
@@ -27,47 +28,87 @@ impl MiditrailPipelines {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("MiditrailBindGroupLayout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("MiditrailBindGroup"),
-            layout: &bind_group_layout,
+        let color_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("MiditrailColorBindGroupLayout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+        let color_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("MiditrailColorBindGroup"),
+            layout: &color_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: uniform_buffer.as_entire_binding(),
             }],
         });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("MiditrailPipelineLayout"),
-            bind_group_layouts: &[&bind_group_layout],
+        let color_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("MiditrailColorPipelineLayout"),
+                bind_group_layouts: &[&color_bind_group_layout],
+                immediate_size: 0,
+            });
+        let aura_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("MiditrailAuraBindGroupLayout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+        let aura_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("MiditrailAuraPipelineLayout"),
+            bind_group_layouts: &[&aura_bind_group_layout],
             immediate_size: 0,
         });
 
         Self {
             uniform_buffer,
-            bind_group,
+            color_bind_group,
+            aura_bind_group_layout,
             color_always: create_color_pipeline(
                 device,
-                &pipeline_layout,
+                &color_pipeline_layout,
                 wgpu::CompareFunction::Always,
             ),
             color_less: create_color_pipeline(
                 device,
-                &pipeline_layout,
+                &color_pipeline_layout,
                 wgpu::CompareFunction::Less,
             ),
-            aura_less: create_aura_pipeline(device, &pipeline_layout),
+            aura_less: create_aura_pipeline(device, &aura_pipeline_layout),
         }
     }
 }

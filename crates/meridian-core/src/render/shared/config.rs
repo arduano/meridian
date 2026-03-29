@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::NotePaletteConfig;
+use super::{NotePaletteConfig, ProjectorImageConfig};
 
 pub const DEFAULT_PFA_KEYBOARD_ASPECT_RATIO: f32 = 0.084_937_5;
 
@@ -83,12 +83,6 @@ pub struct TwoDSceneConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MiditrailAuraImage {
-    Ring,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MiditrailSceneConfig {
     #[serde(default = "default_miditrail_same_width_notes")]
     pub same_width_notes: bool,
@@ -138,8 +132,8 @@ pub struct MiditrailSceneConfig {
     pub use_vel: bool,
     #[serde(default)]
     pub palette: NotePaletteConfig,
-    #[serde(default)]
-    pub aura_image: MiditrailAuraImage,
+    #[serde(default = "default_miditrail_aura_image")]
+    pub aura_image: ProjectorImageConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -282,12 +276,6 @@ impl Default for PfaTopColor {
     }
 }
 
-impl Default for MiditrailAuraImage {
-    fn default() -> Self {
-        Self::Ring
-    }
-}
-
 impl Default for MiditrailSceneConfig {
     fn default() -> Self {
         Self {
@@ -315,7 +303,7 @@ impl Default for MiditrailSceneConfig {
             notes_change_tint: default_miditrail_notes_change_tint(),
             use_vel: false,
             palette: NotePaletteConfig::default(),
-            aura_image: MiditrailAuraImage::default(),
+            aura_image: default_miditrail_aura_image(),
         }
     }
 }
@@ -374,8 +362,8 @@ impl SceneLayout {
             RendererKind::Pfa => SceneConfig::TwoD(TwoDSceneConfig::default()),
             RendererKind::Miditrail => {
                 SceneConfig::ThreeD(ThreeDSceneConfig::Miditrail(MiditrailSceneConfig {
-                box_notes: true,
-                ..MiditrailSceneConfig::default()
+                    box_notes: true,
+                    ..MiditrailSceneConfig::default()
                 }))
             }
         };
@@ -461,4 +449,10 @@ const fn default_miditrail_aura_enabled() -> bool {
 
 const fn default_miditrail_notes_change_tint() -> bool {
     true
+}
+
+fn default_miditrail_aura_image() -> ProjectorImageConfig {
+    ProjectorImageConfig::Builtin {
+        name: "ring".to_string(),
+    }
 }

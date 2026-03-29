@@ -2,7 +2,10 @@ use std::io::{self, Write};
 
 use meridian_core::{
     MeridianError,
-    render::{SceneConfig, ThreeDSceneConfig, shared::MiditrailSceneConfig, miditrail::debug::dump_miditrail_geometry},
+    render::{
+        SceneConfig, ThreeDSceneConfig, miditrail::debug::dump_miditrail_geometry,
+        shared::MiditrailSceneConfig,
+    },
 };
 
 pub fn run(
@@ -14,12 +17,13 @@ pub fn run(
 ) -> Result<(), MeridianError> {
     let config = match scene_json {
         Some(raw) => match serde_json::from_str::<SceneConfig>(raw)
-            .map_err(|err| MeridianError::Platform(format!("invalid scene json: {err}")))? {
+            .map_err(|err| MeridianError::Platform(format!("invalid scene json: {err}")))?
+        {
             SceneConfig::ThreeD(ThreeDSceneConfig::Miditrail(config)) => config,
             _ => {
                 return Err(MeridianError::Platform(
                     "scene json must be a three_d miditrail scene".to_string(),
-                ))
+                ));
             }
         },
         None => MiditrailSceneConfig::default(),

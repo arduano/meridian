@@ -144,7 +144,10 @@ impl CoreState {
         self.last_tick = Some(now);
     }
 
-    pub(super) fn tick_projector_physics(&mut self, delta_seconds: f64) -> Result<(), MeridianError> {
+    pub(super) fn tick_projector_physics(
+        &mut self,
+        delta_seconds: f64,
+    ) -> Result<(), MeridianError> {
         let Some(midi) = self.midi.as_mut() else {
             return Ok(());
         };

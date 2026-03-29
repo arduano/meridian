@@ -57,6 +57,10 @@ struct Uniforms {
 
 @group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
+@group(0) @binding(1)
+var aura_texture: texture_2d<f32>;
+@group(0) @binding(2)
+var aura_sampler: sampler;
 
 struct VertexIn {
     @location(0) position0: vec3<f32>,
@@ -109,9 +113,7 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32, input: VertexIn) -> VertexO
 
 @fragment
 fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
-    let centered = input.uv * 2.0 - vec2<f32>(1.0, 1.0);
-    let dist = length(centered);
-    let alpha = smoothstep(1.0, 0.0, dist) * input.color.a;
-    return vec4<f32>(input.color.rgb, alpha);
+    let texel = textureSample(aura_texture, aura_sampler, input.uv);
+    return vec4<f32>(texel.rgb * input.color.rgb, texel.a * input.color.a);
 }
 "#;
