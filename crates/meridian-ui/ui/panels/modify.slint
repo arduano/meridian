@@ -1,0 +1,98 @@
+// Modify profile sidebar (profile 3).
+// Renderer, time space, stats, and inspector.
+
+import { SectionHeader, Separator, FieldRow, ToggleButton, InspectorLine } from "../primitives.slint";
+import { InspectorRow } from "../structs.slint";
+
+export component ModifyPanel inherits Rectangle {
+    // Bindings pushed down from App
+    in property <string> current-renderer-text;
+    in property <string> time-space-text;
+    in property <string> note-count-text;
+    in property <string> visible-note-count-text;
+    in property <string> active-keys-text;
+    in property <string> viewport-text;
+    in property <string> fps-text;
+    in property <[InspectorRow]> inspector-items;
+
+    // Callbacks forwarded up to App
+    callback select-renderer(string);
+    callback select-time-space(string);
+
+    VerticalLayout {
+        padding: 16px;
+        padding-left: 20px;
+        spacing: 16px;
+        alignment: start;
+
+        // ── Renderer ──
+        VerticalLayout {
+            spacing: 8px;
+            SectionHeader { title: "RENDERER"; }
+            HorizontalLayout {
+                spacing: 4px;
+                ToggleButton { label: "PFA";      active: root.current-renderer-text == "pfa";  pressed => { root.select-renderer("pfa"); } }
+                ToggleButton { label: "Flat";     active: root.current-renderer-text == "flat"; pressed => { root.select-renderer("flat"); } }
+                ToggleButton { label: "3D Trail"; active: root.current-renderer-text == "3d";   pressed => { root.select-renderer("3d"); } }
+            }
+        }
+
+        Separator { }
+
+        // ── Time space ──
+        VerticalLayout {
+            spacing: 8px;
+            SectionHeader { title: "TIME SPACE"; }
+            HorizontalLayout {
+                spacing: 4px;
+                ToggleButton { label: "Time"; active: root.time-space-text == "time"; pressed => { root.select-time-space("time"); } }
+                ToggleButton { label: "Tick"; active: root.time-space-text == "tick"; pressed => { root.select-time-space("tick"); } }
+            }
+        }
+
+        Separator { }
+
+        // ── Stats ──
+        VerticalLayout {
+            spacing: 4px;
+            SectionHeader { title: "STATS"; }
+            FieldRow { label: "Total notes"; value: root.note-count-text; }
+            FieldRow { label: "Visible";     value: root.visible-note-count-text; }
+            FieldRow { label: "Active keys"; value: root.active-keys-text; }
+            FieldRow { label: "Viewport";    value: root.viewport-text; }
+            FieldRow { label: "FPS";         value: root.fps-text; }
+        }
+
+        Separator { }
+
+        // ── Inspector ──
+        VerticalLayout {
+            spacing: 8px;
+            vertical-stretch: 1;
+
+            SectionHeader { title: "INSPECTOR"; }
+
+            Rectangle {
+                vertical-stretch: 1;
+                clip: true;
+
+                Flickable {
+                    width: parent.width;
+                    height: parent.height;
+                    viewport-height: root.inspector-items.length * 34px;
+
+                    VerticalLayout {
+                        width: parent.width;
+                        spacing: 2px;
+
+                        for row in root.inspector-items : InspectorLine {
+                            section: row.section;
+                            label: row.label;
+                            value: row.value;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

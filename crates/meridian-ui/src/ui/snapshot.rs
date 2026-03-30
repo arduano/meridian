@@ -12,7 +12,10 @@ use meridian_core::{
 };
 use slint::{ComponentHandle, Image, PhysicalSize, Rgba8Pixel, SharedPixelBuffer};
 
-use super::{runtime::initialize_core, state::UiOptions, view::App};
+use super::{
+    core_bridge::UiCoreBridge, runtime::initialize_core, state::UiOptions, view::App,
+    view_model::UiViewModel,
+};
 
 pub fn write_debug_snapshot(
     options: UiOptions,
@@ -37,10 +40,10 @@ pub fn write_debug_snapshot(
     app.window()
         .set_size(PhysicalSize::new(window_width.max(1), window_height.max(1)));
 
-    let core = spawn_core();
-    let shared_state = Arc::new(Mutex::new(None));
-    initialize_core(&core, &options, &app, &shared_state)?;
-    inject_headless_viewport(&app, &core)?;
+    let bridge = UiCoreBridge::new(spawn_core());
+    let shared_state = Arc::new(Mutex::new(UiViewModel::default()));
+    initialize_core(&bridge, &options, &app, &shared_state)?;
+    inject_headless_viewport(&app, bridge.core())?;
 
     let output = output.to_path_buf();
     schedule_snapshot(app.as_weak(), output);

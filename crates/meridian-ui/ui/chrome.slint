@@ -1,0 +1,123 @@
+// ═══════════════════════════════════════════════════════════
+//  Chrome — structural components for the app shell.
+//  Profile tabs, transport controls, scrubber.
+// ═══════════════════════════════════════════════════════════
+
+
+// ── ProfileTab ─────────────────────────────────────────────
+// Tab in the profile bar. Blue underline when active.
+
+export component ProfileTab inherits Rectangle {
+    in property <string> label;
+    in property <bool> active: false;
+    callback pressed;
+
+    min-width: 72px;
+    height: 36px;
+    background: transparent;
+
+    Text {
+        text: root.label;
+        color: root.active ? #e0eaf6 : touch.has-hover ? #8899b0 : #4d6580;
+        font-size: 12px;
+        font-weight: root.active ? 700 : 500;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    Rectangle {
+        y: parent.height - 2px;
+        height: 2px;
+        background: root.active ? rgb(37, 99, 235) : transparent;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.pressed(); }
+    }
+}
+
+
+// ── TransportButton ────────────────────────────────────────
+// 32×32 icon button for play/pause, zoom ±.
+
+export component TransportButton inherits Rectangle {
+    in property <string> icon;
+    in property <bool> active: false;
+    callback pressed;
+
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: touch.has-hover ? #1a2b40 : root.active ? #162638 : transparent;
+
+    Text {
+        text: root.icon;
+        color: root.active ? #60a5fa : #8899b0;
+        font-size: 14px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.pressed(); }
+    }
+}
+
+
+// ── TimeScrubber ───────────────────────────────────────────
+// Horizontal seek bar. Thin track, blue fill, round thumb.
+
+export component TimeScrubber inherits Rectangle {
+    in property <float> value: 0;
+    in property <float> maximum: 1;
+    callback scrubbed(float);
+
+    private property <float> clamped-value: value < 0 ? 0 : value > maximum ? maximum : value;
+    private property <float> fill-ratio: maximum <= 0 ? 0 : clamped-value / maximum;
+
+    height: 32px;
+    background: transparent;
+
+    // Track
+    Rectangle {
+        y: parent.height / 2 - 2px;
+        width: parent.width;
+        height: 4px;
+        border-radius: 2px;
+        background: #141e2e;
+    }
+    // Fill
+    Rectangle {
+        y: parent.height / 2 - 2px;
+        width: parent.width * root.fill-ratio;
+        height: 4px;
+        border-radius: 2px;
+        background: rgb(37, 99, 235);
+    }
+    // Thumb
+    Rectangle {
+        x: parent.width * root.fill-ratio - 6px;
+        y: parent.height / 2 - 6px;
+        width: 12px;
+        height: 12px;
+        border-radius: 6px;
+        background: touch.has-hover || touch.pressed ? #f0f4fa : #c0cce0;
+        drop-shadow-blur: 3px;
+        drop-shadow-color: #00000030;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        moved => {
+            if (self.pressed) {
+                root.scrubbed(maximum * max(0, min(1, self.mouse-x / max(1px, parent.width))));
+            }
+        }
+        clicked => {
+            root.scrubbed(maximum * max(0, min(1, self.mouse-x / max(1px, parent.width))));
+        }
+    }
+}

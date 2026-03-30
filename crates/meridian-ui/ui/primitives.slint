@@ -1,0 +1,197 @@
+// ═══════════════════════════════════════════════════════════
+//  Primitives — reusable building blocks for all panels.
+//
+//  A backend developer only needs these to compose a settings
+//  panel. See the UI spec for composition patterns.
+// ═══════════════════════════════════════════════════════════
+
+
+// ── SectionHeader ──────────────────────────────────────────
+// Uppercase dim label used to title a group of controls.
+// Usage:  SectionHeader { title: "OUTPUT"; }
+
+export component SectionHeader inherits Text {
+    in property <string> title;
+
+    text: root.title;
+    color: #4d6580;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+}
+
+
+// ── Separator ──────────────────────────────────────────────
+// 1px horizontal line. No configuration needed.
+// Usage:  Separator { }
+
+export component Separator inherits Rectangle {
+    height: 1px;
+    background: #111a28;
+}
+
+
+// ── FieldRow ───────────────────────────────────────────────
+// Key-value pair displayed as a single row.
+// Usage:  FieldRow { label: "Resolution"; value: "1920×1080"; }
+
+export component FieldRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+
+    height: 26px;
+    background: transparent;
+
+    HorizontalLayout {
+        Text {
+            text: root.label;
+            color: #4d6580;
+            font-size: 11px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        Text {
+            text: root.value;
+            color: #b0c0d4;
+            font-family: "monospace";
+            font-size: 11px;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+}
+
+
+// ── ToggleButton ───────────────────────────────────────────
+// A segmented-style toggle. Place inside a HorizontalLayout.
+// Usage:  ToggleButton { label: "PFA"; active: true; pressed => { … } }
+
+export component ToggleButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> active: false;
+    callback pressed;
+
+    horizontal-stretch: 1;
+    height: 30px;
+    border-radius: 6px;
+    background: root.active ? #1a2d4d : touch.has-hover ? #111c2e : transparent;
+
+    Text {
+        text: root.label;
+        color: root.active ? #60a5fa : #6b7d94;
+        font-size: 12px;
+        font-weight: root.active ? 700 : 500;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.pressed(); }
+    }
+}
+
+
+// ── PrimaryButton ──────────────────────────────────────────
+// Full-width accent action button.
+// Usage:  PrimaryButton { label: "Start Render"; enabled: true; pressed => { … } }
+
+export component PrimaryButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback pressed;
+
+    height: 36px;
+    border-radius: 8px;
+    background: root.enabled
+        ? (touch.has-hover ? rgb(45, 112, 255) : rgb(37, 99, 235))
+        : #1a2538;
+
+    Text {
+        text: root.label;
+        color: root.enabled ? #f0f4ff : #3d5068;
+        font-size: 13px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { if (root.enabled) { root.pressed(); } }
+    }
+}
+
+
+// ── ProgressBar ────────────────────────────────────────────
+// Horizontal fill bar (0.0–1.0).
+// Usage:  ProgressBar { progress: 0.42; }
+
+export component ProgressBar inherits Rectangle {
+    in property <float> progress: 0;
+
+    height: 6px;
+    border-radius: 3px;
+    background: #111a28;
+
+    Rectangle {
+        width: parent.width * max(0.0, min(1.0, root.progress));
+        height: parent.height;
+        border-radius: 3px;
+        background: rgb(37, 99, 235);
+    }
+}
+
+
+// ── InspectorLine ──────────────────────────────────────────
+// Badge + label + value row for the config inspector.
+// Usage:  InspectorLine { section: "Scene"; label: "FOV"; value: "60.00"; }
+
+import { InspectorRow } from "structs.slint";
+
+export component InspectorLine inherits Rectangle {
+    in property <string> section;
+    in property <string> label;
+    in property <string> value;
+
+    height: 32px;
+    background: transparent;
+
+    HorizontalLayout {
+        spacing: 8px;
+        padding-left: 2px;
+        padding-right: 2px;
+
+        Rectangle {
+            width: 52px;
+            height: 20px;
+            border-radius: 3px;
+            background: #0f1822;
+
+            Text {
+                text: root.section;
+                color: #4d6580;
+                font-size: 9px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        Text {
+            text: root.label;
+            color: #7d8fa8;
+            font-size: 11px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+
+        Text {
+            text: root.value;
+            color: #b0c0d4;
+            font-family: "monospace";
+            font-size: 10px;
+            vertical-alignment: center;
+        }
+    }
+}

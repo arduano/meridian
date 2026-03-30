@@ -1,0 +1,88 @@
+// Render profile settings panel (profile 1).
+// Video output configuration, scene overrides, codec, render action + progress.
+
+import { SectionHeader, Separator, FieldRow, ToggleButton, PrimaryButton, ProgressBar } from "../primitives.slint";
+
+export component RenderPanel inherits Rectangle {
+    // Bindings pushed down from App
+    in property <string> current-renderer-text;
+    in property <string> time-space-text;
+    in property <string> view-range-text;
+    in property <string> scene-summary-text;
+    in property <string> midi-path-text;
+
+    // Callbacks forwarded up to App
+    callback select-renderer(string);
+    callback select-time-space(string);
+
+    clip: true;
+
+    Flickable {
+        width: parent.width;
+        height: parent.height;
+
+        VerticalLayout {
+            padding: 20px;
+            padding-right: 24px;
+            spacing: 6px;
+
+            SectionHeader { title: "OUTPUT"; }
+            Rectangle { height: 4px; }
+            FieldRow { label: "Resolution";  value: "1920 × 1080"; }
+            FieldRow { label: "Frame Rate";  value: "60 fps"; }
+            FieldRow { label: "Output Path"; value: "output.mp4"; }
+
+            Rectangle { height: 8px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+            SectionHeader { title: "SCENE"; }
+            Rectangle { height: 4px; }
+            HorizontalLayout {
+                spacing: 4px;
+                ToggleButton { label: "PFA";      active: root.current-renderer-text == "pfa";  pressed => { root.select-renderer("pfa"); } }
+                ToggleButton { label: "Flat";     active: root.current-renderer-text == "flat"; pressed => { root.select-renderer("flat"); } }
+                ToggleButton { label: "3D Trail"; active: root.current-renderer-text == "3d";   pressed => { root.select-renderer("3d"); } }
+            }
+            HorizontalLayout {
+                spacing: 4px;
+                ToggleButton { label: "Time"; active: root.time-space-text == "time"; pressed => { root.select-time-space("time"); } }
+                ToggleButton { label: "Tick"; active: root.time-space-text == "tick"; pressed => { root.select-time-space("tick"); } }
+            }
+            FieldRow { label: "View Range"; value: root.view-range-text; }
+            FieldRow { label: "Scene";      value: root.scene-summary-text; }
+
+            Rectangle { height: 8px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+            SectionHeader { title: "CODEC"; }
+            Rectangle { height: 4px; }
+            FieldRow { label: "Container";   value: "MP4"; }
+            FieldRow { label: "Video Codec"; value: "libx264"; }
+            FieldRow { label: "Audio Codec"; value: "aac"; }
+            FieldRow { label: "Extra Args";  value: "(none)"; }
+
+            Rectangle { height: 8px; }
+            Separator { }
+            Rectangle { height: 12px; }
+
+            PrimaryButton {
+                label: "Start Render";
+                enabled: root.midi-path-text != "No MIDI loaded";
+            }
+
+            Rectangle { height: 8px; }
+            SectionHeader { title: "PROGRESS"; }
+            Rectangle { height: 4px; }
+            ProgressBar { progress: 0.0; }
+            Rectangle { height: 4px; }
+            FieldRow { label: "Status";   value: "Idle"; }
+            FieldRow { label: "Frames";   value: "—"; }
+            FieldRow { label: "Avg. FPS"; value: "—"; }
+            FieldRow { label: "Elapsed";  value: "—"; }
+
+            Rectangle { height: 20px; }
+        }
+    }
+}

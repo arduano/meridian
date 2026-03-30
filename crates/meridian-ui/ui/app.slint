@@ -1,0 +1,319 @@
+// ═══════════════════════════════════════════════════════════
+//  Meridian — main application window.
+//
+//  Imports components from:
+//   - structs.slint      (InspectorRow)
+//   - primitives.slint   (SectionHeader, FieldRow, …)
+//   - chrome.slint       (ProfileTab, TransportButton, TimeScrubber)
+//   - panels/*.slint     (RenderPanel, ModifyPanel, PlaceholderPanel)
+// ═══════════════════════════════════════════════════════════
+
+import { InspectorRow } from "structs.slint";
+import { SectionHeader, FieldRow } from "primitives.slint";
+import { ProfileTab, TransportButton, TimeScrubber } from "chrome.slint";
+import { RenderPanel } from "panels/render.slint";
+import { ModifyPanel } from "panels/modify.slint";
+import { PlaceholderPanel } from "panels/placeholder.slint";
+
+export { InspectorRow }
+
+export component App inherits Window {
+
+    // ── Viewport texture ──
+    in-out property <image> viewport-image;
+
+    // ── Shared state (stable API — do not rename) ──
+    in-out property <string> midi-path-text: "No MIDI loaded";
+    in-out property <string> status-text: "Waiting for MIDI";
+    in-out property <string> time-text: "0.000 s";
+    in-out property <string> length-text: "0.000 s";
+    in-out property <string> note-count-text: "0";
+    in-out property <string> visible-note-count-text: "0";
+    in-out property <string> active-keys-text: "0";
+    in-out property <string> view-range-text: "8.0 s";
+    in-out property <string> play-label: "Play";
+    in-out property <string> fps-text: "--";
+    in-out property <string> scene-summary-text: "2D / PFA notes / PFA keyboard";
+    in-out property <string> viewport-text: "1280 x 720";
+    in-out property <string> current-renderer-text: "pfa";
+    in-out property <string> time-space-text: "time";
+    in-out property <float> current-time-seconds: 0;
+    in-out property <float> midi-length-seconds: 1;
+    in-out property <[InspectorRow]> inspector-items;
+
+    // ── Profile (0=Preview 1=Render 2=Audio 3=Modify 4=Analysis) ──
+    in-out property <int> active-profile: 0;
+
+    // ── Derived layout flags ──
+    private property <bool> compact-viewport:
+        root.active-profile == 1 || root.active-profile == 2 || root.active-profile == 4;
+    private property <bool> full-viewport:
+        root.active-profile == 0 || root.active-profile == 3;
+
+    // ── Viewport pixel dimensions (consumed by Rust) ──
+    out property <float> viewport-px-width:  viewport-box.width  / 1px;
+    out property <float> viewport-px-height: viewport-box.height / 1px;
+
+    // ── Callbacks (stable API — do not rename) ──
+    callback step-time(float);
+    callback zoom(float);
+    callback toggle-play();
+    callback seek-time(float);
+    callback select-renderer(string);
+    callback select-time-space(string);
+
+    title: "Meridian";
+    preferred-width: 1540px;
+    preferred-height: 940px;
+    background: #060a11;
+
+    VerticalLayout {
+        spacing: 0px;
+
+        // ══════════════════════════════════════════
+        //  TOP CHROME
+        // ══════════════════════════════════════════
+
+        Rectangle {
+            background: #0a1018;
+            min-height: 84px;
+            max-height: 84px;
+
+            VerticalLayout {
+                spacing: 0px;
+
+                // ── Profile tabs ──
+                Rectangle {
+                    height: 36px;
+
+                    HorizontalLayout {
+                        padding-left: 16px;
+                        padding-right: 16px;
+                        spacing: 4px;
+
+                        ProfileTab { label: "Preview";  active: root.active-profile == 0; pressed => { root.active-profile = 0; } }
+                        ProfileTab { label: "Render";   active: root.active-profile == 1; pressed => { root.active-profile = 1; } }
+                        ProfileTab { label: "Audio";    active: root.active-profile == 2; pressed => { root.active-profile = 2; } }
+                        ProfileTab { label: "Modify";   active: root.active-profile == 3; pressed => { root.active-profile = 3; } }
+                        ProfileTab { label: "Analysis"; active: root.active-profile == 4; pressed => { root.active-profile = 4; } }
+
+                        Rectangle { horizontal-stretch: 1; }
+
+                        Text { text: "Meridian"; color: #2d3d52; font-size: 12px; font-weight: 600; vertical-alignment: center; }
+                    }
+
+                    Rectangle { y: parent.height - 1px; height: 1px; background: #141e2e; }
+                }
+
+                // ── Transport rail ──
+                Rectangle {
+                    height: 48px;
+
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 16px;
+                        spacing: 6px;
+
+                        TransportButton {
+                            icon: root.play-label == "Pause" ? "⏸" : "▶";
+                            active: root.play-label == "Pause";
+                            pressed => { root.toggle-play(); }
+                        }
+
+                        TimeScrubber {
+                            horizontal-stretch: 1;
+                            min-width: 200px;
+                            value: root.current-time-seconds;
+                            maximum: root.midi-length-seconds;
+                            scrubbed(v) => { root.seek-time(v); }
+                        }
+
+                        // Time readout
+                        Text { text: root.time-text;   color: #b0c0d4; font-family: "monospace"; font-size: 11px; font-weight: 600; vertical-alignment: center; min-width: 58px; horizontal-alignment: right; }
+                        Text { text: "/";              color: #2d3d52; font-size: 11px; vertical-alignment: center; }
+                        Text { text: root.length-text; color: #4d6580; font-family: "monospace"; font-size: 11px; vertical-alignment: center; min-width: 58px; }
+
+                        Rectangle { width: 1px; background: #1a2740; }
+
+                        TransportButton { icon: "−"; pressed => { root.zoom(-1.0); } }
+                        TransportButton { icon: "+"; pressed => { root.zoom(1.0); } }
+
+                        Text { text: root.view-range-text; color: #6b7d94; font-family: "monospace"; font-size: 11px; font-weight: 600; vertical-alignment: center; min-width: 42px; horizontal-alignment: right; }
+                    }
+                }
+            }
+        }
+
+
+        // ══════════════════════════════════════════
+        //  CONTENT AREA
+        // ══════════════════════════════════════════
+
+        HorizontalLayout {
+            spacing: 0px;
+            vertical-stretch: 1;
+
+            // ──────────────────────────────────────
+            //  LEFT: Settings panel
+            //  (visible in Render / Audio / Analysis)
+            // ──────────────────────────────────────
+            Rectangle {
+                visible: root.compact-viewport;
+                horizontal-stretch: root.compact-viewport ? 1 : 0;
+                background: #0a1018;
+
+                // Right-edge separator
+                Rectangle { x: parent.width - 1px; width: 1px; height: parent.height; background: #141e2e; }
+
+                // ─── RENDER ─── (profile 1)
+                RenderPanel {
+                    visible: root.active-profile == 1;
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    current-renderer-text: root.current-renderer-text;
+                    time-space-text:       root.time-space-text;
+                    view-range-text:       root.view-range-text;
+                    scene-summary-text:    root.scene-summary-text;
+                    midi-path-text:        root.midi-path-text;
+                    select-renderer(r)     => { root.select-renderer(r); }
+                    select-time-space(ts)  => { root.select-time-space(ts); }
+                }
+
+                // ─── AUDIO ─── (profile 2)
+                PlaceholderPanel {
+                    visible: root.active-profile == 2;
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    panel-title: "Audio";
+                    panel-description: "Audio backend, soundfont management, XSynth settings, and offline WAV render.";
+                }
+
+                // ─── ANALYSIS ─── (profile 4)
+                PlaceholderPanel {
+                    visible: root.active-profile == 4;
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    panel-title: "Analysis";
+                    panel-description: "MIDI analysis, note density, key distribution, and performance statistics.";
+                }
+            }
+
+
+            // ──────────────────────────────────────
+            //  CENTER: Viewport column
+            // ──────────────────────────────────────
+            VerticalLayout {
+                horizontal-stretch: root.full-viewport ? 1 : 0;
+                spacing: 0px;
+
+                viewport-box := Rectangle {
+                    horizontal-stretch: root.full-viewport ? 1 : 0;
+                    vertical-stretch:   root.full-viewport ? 1 : 0;
+                    min-width:  root.compact-viewport ? 460px    : 100px;
+                    max-width:  root.compact-viewport ? 460px    : 100000px;
+                    min-height: root.compact-viewport ? 259px    : 100px;
+                    max-height: root.compact-viewport ? 259px    : 100000px;
+                    background: #050810;
+
+                    Image {
+                        source: root.viewport-image;
+                        width: parent.width;
+                        height: parent.height;
+                        image-fit: fill;
+                    }
+
+                    // FPS overlay (top-right)
+                    Rectangle {
+                        x: parent.width - 76px;
+                        y: 8px;
+                        width: 68px;
+                        height: 22px;
+                        border-radius: 4px;
+                        background: #06091180;
+
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 4px;
+                            alignment: center;
+
+                            Text { text: root.fps-text; color: #4d6580; font-family: "monospace"; font-size: 10px; vertical-alignment: center; }
+                            Text { text: "fps";         color: #2d3d52; font-size: 9px;           vertical-alignment: center; }
+                        }
+                    }
+
+                    // MIDI path overlay (Preview only, bottom-left)
+                    Rectangle {
+                        visible: root.active-profile == 0 && root.midi-path-text != "No MIDI loaded";
+                        x: 12px;
+                        y: parent.height - 38px;
+                        width: 400px;
+                        height: 26px;
+                        border-radius: 5px;
+                        background: #06091180;
+
+                        Text {
+                            x: 10px;
+                            width: parent.width - 20px;
+                            text: root.midi-path-text;
+                            color: #4d6580;
+                            font-size: 11px;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+                }
+
+                // ── Info pane below compact viewport ──
+                Rectangle {
+                    visible: root.compact-viewport;
+                    vertical-stretch: root.compact-viewport ? 1 : 0;
+                    background: #080d16;
+
+                    Rectangle { y: 0; height: 1px; width: parent.width; background: #141e2e; }
+
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 4px;
+                        alignment: start;
+
+                        SectionHeader { title: "PREVIEW"; }
+                        Rectangle { height: 4px; }
+                        FieldRow { label: "MIDI";        value: root.midi-path-text; }
+                        FieldRow { label: "Total Notes"; value: root.note-count-text; }
+                        FieldRow { label: "Visible";     value: root.visible-note-count-text; }
+                        FieldRow { label: "Active Keys"; value: root.active-keys-text; }
+                        FieldRow { label: "Viewport";    value: root.viewport-text; }
+                        FieldRow { label: "FPS";         value: root.fps-text; }
+                        Rectangle { height: 8px; }
+                        Text { text: root.scene-summary-text; color: #2d3d52; font-size: 10px; overflow: elide; }
+                    }
+                }
+            }
+
+
+            // ──────────────────────────────────────
+            //  RIGHT: Modify sidebar (profile 3)
+            // ──────────────────────────────────────
+            Rectangle {
+                width: root.active-profile == 3 ? 340px : 0px;
+                background: #0a1018;
+
+                // Left-edge separator
+                Rectangle { visible: root.active-profile == 3; width: 1px; height: parent.height; background: #141e2e; }
+
+                ModifyPanel {
+                    visible: root.active-profile == 3;
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    current-renderer-text:    root.current-renderer-text;
+                    time-space-text:          root.time-space-text;
+                    note-count-text:          root.note-count-text;
+                    visible-note-count-text:  root.visible-note-count-text;
+                    active-keys-text:         root.active-keys-text;
+                    viewport-text:            root.viewport-text;
+                    fps-text:                 root.fps-text;
+                    inspector-items:          root.inspector-items;
+                    select-renderer(r)        => { root.select-renderer(r); }
+                    select-time-space(ts)     => { root.select-time-space(ts); }
+                }
+            }
+        }
+    }
+}
