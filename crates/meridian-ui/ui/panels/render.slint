@@ -55,15 +55,17 @@ export component RenderPanel inherits Rectangle {
         height: parent.height;
 
         VerticalLayout {
+            width: parent.width;
             padding: 20px;
             padding-right: 24px;
             spacing: 6px;
+            alignment: start;
 
             // ── MIDI FILE ──
             MidiStateSection {
                 midi-state: root.midi-state;
                 file-name: root.selected-midi-name;
-                load-description: "Builds display + audio caches for video rendering.";
+                load-description: "Builds the display cache only. Use Preview for synced playback or Audio for sound/export.";
                 load-label: "Load for Render";
                 mode-label: "render";
                 loading-status: root.loading-status;

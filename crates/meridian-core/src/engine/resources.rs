@@ -18,8 +18,24 @@ use super::{
 };
 
 impl CoreState {
+    fn broadcast_midi_load_progress(&self, path: &std::path::Path, progress: f32, status: &str) {
+        self.broadcast(CoreEvent::MidiLoadProgress {
+            path: path.to_path_buf(),
+            progress,
+            status: status.into(),
+        });
+    }
+
     pub(super) fn load_parsed_midi_resource(&mut self, path: PathBuf) -> Vec<CoreEvent> {
-        match MidiCacheStack::load(&path) {
+        self.load_parsed_midi_resource_with_progress(path, |_| {})
+    }
+
+    pub(super) fn load_parsed_midi_resource_with_progress(
+        &mut self,
+        path: PathBuf,
+        progress: impl FnMut(f32),
+    ) -> Vec<CoreEvent> {
+        match MidiCacheStack::load_with_progress(&path, progress) {
             Ok(cache_stack) => {
                 let parsed_midi_id = self.next_parsed_midi_id();
                 self.parsed_midis.insert(
@@ -33,6 +49,40 @@ impl CoreState {
                     parsed_midi_id,
                     path,
                 }]
+            }
+            Err(error) => vec![error_event(CoreErrorCode::Internal, error.to_string())],
+        }
+    }
+
+    pub(super) fn build_display_cache_resource_with_progress(
+        &mut self,
+        parsed_midi_id: ParsedMidiId,
+        progress: impl FnMut(f32),
+    ) -> Vec<CoreEvent> {
+        let Some(parsed) = self.parsed_midis.get(&parsed_midi_id) else {
+            return vec![error_event(
+                CoreErrorCode::InvalidCommand,
+                format!("unknown parsed_midi_id {}", parsed_midi_id.0),
+            )];
+        };
+        match parsed.cache_stack.display_cache_with_progress(progress) {
+            Ok(cache_stack) => {
+                let display_cache_id = self.next_display_cache_id();
+                let event = CoreEvent::DisplayCacheBuilt {
+                    parsed_midi_id,
+                    display_cache_id,
+                    midi_length: cache_stack.length(),
+                    total_notes: cache_stack.note_count(),
+                    track_count: cache_stack.track_count(),
+                };
+                self.display_caches.insert(
+                    display_cache_id,
+                    DisplayCacheResource {
+                        parsed_midi_id,
+                        cache: cache_stack,
+                    },
+                );
+                vec![event]
             }
             Err(error) => vec![error_event(CoreErrorCode::Internal, error.to_string())],
         }
@@ -75,13 +125,21 @@ impl CoreState {
         &mut self,
         parsed_midi_id: ParsedMidiId,
     ) -> Vec<CoreEvent> {
+        self.build_audio_cache_resource_with_progress(parsed_midi_id, |_| {})
+    }
+
+    pub(super) fn build_audio_cache_resource_with_progress(
+        &mut self,
+        parsed_midi_id: ParsedMidiId,
+        progress: impl FnMut(f32),
+    ) -> Vec<CoreEvent> {
         let Some(parsed) = self.parsed_midis.get(&parsed_midi_id) else {
             return vec![error_event(
                 CoreErrorCode::InvalidCommand,
                 format!("unknown parsed_midi_id {}", parsed_midi_id.0),
             )];
         };
-        match parsed.cache_stack.audio_cache() {
+        match parsed.cache_stack.audio_cache_with_progress(progress) {
             Ok(cache) => {
                 let audio_cache_id = self.next_audio_cache_id();
                 let total_events = cache.events().len();
@@ -123,7 +181,6 @@ impl CoreState {
         let parsed_path = parsed.path.clone();
         let parsed_stack = parsed.cache_stack.clone();
 
-        self.audio_session = None;
         self.processed_midi = None;
         self.midi_cache = Some(parsed_stack);
         self.active_parsed_midi_id = Some(parsed_midi_id);
@@ -175,6 +232,7 @@ impl CoreState {
         self.active_processed_midi_id = None;
         self.active_audio_cache_id = Some(audio_cache_id);
         self.active_audio_session_id = None;
+        self.midi_path = Some(parsed.path.clone());
         self.current_audio_cache = Some(audio_cache);
         self.restart_audio_session();
         vec![CoreEvent::AudioCacheAttached {
@@ -183,26 +241,186 @@ impl CoreState {
         }]
     }
 
+    pub(super) fn unload_display_context(&mut self) -> Vec<CoreEvent> {
+        let now = Instant::now();
+        self.processed_midi = None;
+        self.active_processed_midi_id = None;
+        self.active_display_cache_id = None;
+        self.active_display_session_id = None;
+        self.display.unload_midi(now);
+
+        if self.active_audio_cache_id.is_none() {
+            self.midi_cache = None;
+            self.active_parsed_midi_id = None;
+            self.midi_path = None;
+            self.transport.reset(now);
+            self.audio_clock.set_time(0.0);
+            self.audio_clock.set_playing(false);
+        } else {
+            self.display.mark_physics_tick(now);
+        }
+
+        vec![CoreEvent::StateSnapshot {
+            state: self.snapshot(),
+        }]
+    }
+
+    pub(super) fn unload_audio_context(&mut self) -> Vec<CoreEvent> {
+        let now = Instant::now();
+        self.audio_session = None;
+        self.current_audio_cache = None;
+        self.active_audio_cache_id = None;
+        self.active_audio_session_id = None;
+        self.active_audio_render_job_id = None;
+        self.audio_clock.set_playing(false);
+        self.audio_player.reset();
+
+        if self.active_display_cache_id.is_none() {
+            self.midi_cache = None;
+            self.active_parsed_midi_id = None;
+            self.midi_path = None;
+            self.transport.reset(now);
+            self.audio_clock.set_time(0.0);
+        }
+
+        vec![CoreEvent::StateSnapshot {
+            state: self.snapshot(),
+        }]
+    }
+
+    pub(super) fn unload_render_context(&mut self) -> Vec<CoreEvent> {
+        let now = Instant::now();
+        self.audio_session = None;
+        self.processed_midi = None;
+        self.midi_cache = None;
+        self.current_audio_cache = None;
+        self.active_parsed_midi_id = None;
+        self.active_processed_midi_id = None;
+        self.active_display_cache_id = None;
+        self.active_audio_cache_id = None;
+        self.active_display_session_id = None;
+        self.active_audio_session_id = None;
+        self.active_video_render_job_id = None;
+        self.active_audio_render_job_id = None;
+        self.midi_path = None;
+        self.transport.reset(now);
+        self.audio_clock.set_time(0.0);
+        self.audio_clock.set_playing(false);
+        self.audio_player.reset();
+        self.display.unload_midi(now);
+        vec![CoreEvent::StateSnapshot {
+            state: self.snapshot(),
+        }]
+    }
+
+    pub(super) fn load_display_midi(&mut self, path: PathBuf) -> Vec<CoreEvent> {
+        self.broadcast_midi_load_progress(&path, 0.0, "Opening MIDI file for display…");
+        let parsed_midi_id = match self.ensure_parsed_midi_for_path(&path, 0.22, "Reading MIDI file…") {
+            Ok(parsed_midi_id) => parsed_midi_id,
+            Err(events) => return events,
+        };
+
+        let display_cache_id = match self.ensure_display_cache_for_path(parsed_midi_id, &path, 0.22, 0.94) {
+            Ok(display_cache_id) => display_cache_id,
+            Err(events) => return events,
+        };
+
+        self.broadcast_midi_load_progress(&path, 0.94, "Attaching display cache…");
+        let attach_events = self.attach_display_cache_resource(display_cache_id);
+        if !matches!(attach_events.as_slice(), [CoreEvent::DisplayCacheAttached { .. }]) {
+            return attach_events;
+        }
+
+        self.broadcast_midi_load_progress(&path, 0.995, "Finalizing display load…");
+        vec![CoreEvent::MidiLoaded {
+            path,
+            state: self.snapshot(),
+        }]
+    }
+
+    pub(super) fn load_audio_midi(&mut self, path: PathBuf) -> Vec<CoreEvent> {
+        self.broadcast_midi_load_progress(&path, 0.0, "Opening MIDI file for audio…");
+        let parsed_midi_id = match self.ensure_parsed_midi_for_path(&path, 0.25, "Reading MIDI file…") {
+            Ok(parsed_midi_id) => parsed_midi_id,
+            Err(events) => return events,
+        };
+
+        let audio_cache_id = match self.ensure_audio_cache_for_path(parsed_midi_id, &path, 0.25, 0.94) {
+            Ok(audio_cache_id) => audio_cache_id,
+            Err(events) => return events,
+        };
+
+        self.broadcast_midi_load_progress(&path, 0.94, "Attaching audio cache…");
+        let attach_events = self.attach_audio_cache_resource(audio_cache_id);
+        if !matches!(attach_events.as_slice(), [CoreEvent::AudioCacheAttached { .. }]) {
+            return attach_events;
+        }
+
+        self.broadcast_midi_load_progress(&path, 0.995, "Finalizing audio load…");
+        vec![CoreEvent::MidiLoaded {
+            path,
+            state: self.snapshot(),
+        }]
+    }
+
     pub(super) fn load_midi_legacy(&mut self, path: PathBuf) -> Vec<CoreEvent> {
-        let parsed_events = self.load_parsed_midi_resource(path.clone());
+        self.broadcast_midi_load_progress(&path, 0.0, "Opening MIDI file…");
+        let subscribers = Arc::clone(&self.subscribers);
+        let parsed_progress_path = path.clone();
+        let parsed_events = self.load_parsed_midi_resource_with_progress(path.clone(), move |phase| {
+            broadcast_progress_to_subscribers(
+                &subscribers,
+                &parsed_progress_path,
+                (phase * 0.12).clamp(0.0, 0.12),
+                "Reading MIDI file…",
+            );
+        });
         let parsed_midi_id = match parsed_events.as_slice() {
-            [CoreEvent::ParsedMidiLoaded { parsed_midi_id, .. }] => *parsed_midi_id,
+            [event @ CoreEvent::ParsedMidiLoaded { parsed_midi_id, .. }] => {
+                self.broadcast(event.clone());
+                self.broadcast_midi_load_progress(&path, 0.12, "Building display cache…");
+                *parsed_midi_id
+            }
             _ => return parsed_events,
         };
 
-        let display_events = self.build_display_cache_resource(parsed_midi_id);
+        let subscribers = Arc::clone(&self.subscribers);
+        let display_progress_path = path.clone();
+        let display_events =
+            self.build_display_cache_resource_with_progress(parsed_midi_id, move |phase| {
+                broadcast_progress_to_subscribers(
+                    &subscribers,
+                    &display_progress_path,
+                    (0.12 + phase * 0.58).clamp(0.12, 0.70),
+                    "Building display cache…",
+                );
+            });
         let display_cache_id = match display_events.as_slice() {
-            [
-                CoreEvent::DisplayCacheBuilt {
-                    display_cache_id, ..
-                },
-            ] => *display_cache_id,
+            [event @ CoreEvent::DisplayCacheBuilt { display_cache_id, .. }] => {
+                self.broadcast(event.clone());
+                self.broadcast_midi_load_progress(&path, 0.70, "Building audio cache…");
+                *display_cache_id
+            }
             _ => return display_events,
         };
 
-        let audio_events = self.build_audio_cache_resource(parsed_midi_id);
+        let subscribers = Arc::clone(&self.subscribers);
+        let audio_progress_path = path.clone();
+        let audio_events =
+            self.build_audio_cache_resource_with_progress(parsed_midi_id, move |phase| {
+                broadcast_progress_to_subscribers(
+                    &subscribers,
+                    &audio_progress_path,
+                    (0.70 + phase * 0.24).clamp(0.70, 0.94),
+                    "Building audio cache…",
+                );
+            });
         let audio_cache_id = match audio_events.as_slice() {
-            [CoreEvent::AudioCacheBuilt { audio_cache_id, .. }] => *audio_cache_id,
+            [event @ CoreEvent::AudioCacheBuilt { audio_cache_id, .. }] => {
+                self.broadcast(event.clone());
+                self.broadcast_midi_load_progress(&path, 0.94, "Attaching display cache…");
+                *audio_cache_id
+            }
             _ => return audio_events,
         };
 
@@ -213,6 +431,8 @@ impl CoreState {
         ) {
             return display_attach_events;
         }
+        self.broadcast(display_attach_events[0].clone());
+        self.broadcast_midi_load_progress(&path, 0.97, "Attaching audio cache…");
 
         let audio_attach_events = self.attach_audio_cache_resource(audio_cache_id);
         if !matches!(
@@ -221,6 +441,8 @@ impl CoreState {
         ) {
             return audio_attach_events;
         }
+        self.broadcast(audio_attach_events[0].clone());
+        self.broadcast_midi_load_progress(&path, 0.995, "Finalizing MIDI load…");
 
         vec![CoreEvent::MidiLoaded {
             path,
@@ -493,5 +715,129 @@ impl CoreState {
         let id = AudioSessionId(self.next_resource_id);
         self.next_resource_id += 1;
         id
+    }
+
+    fn ensure_parsed_midi_for_path(
+        &mut self,
+        path: &std::path::Path,
+        progress_end: f32,
+        status: &str,
+    ) -> Result<ParsedMidiId, Vec<CoreEvent>> {
+        if let Some(parsed_midi_id) = self
+            .parsed_midis
+            .iter()
+            .find_map(|(id, resource)| (resource.path == path).then_some(*id))
+        {
+            self.broadcast_midi_load_progress(path, progress_end, status);
+            return Ok(parsed_midi_id);
+        }
+
+        let subscribers = Arc::clone(&self.subscribers);
+        let progress_path = path.to_path_buf();
+        let events = self.load_parsed_midi_resource_with_progress(path.to_path_buf(), move |phase| {
+            broadcast_progress_to_subscribers(
+                &subscribers,
+                &progress_path,
+                (phase * progress_end).clamp(0.0, progress_end),
+                status,
+            );
+        });
+        match events.as_slice() {
+            [event @ CoreEvent::ParsedMidiLoaded { parsed_midi_id, .. }] => {
+                self.broadcast(event.clone());
+                Ok(*parsed_midi_id)
+            }
+            _ => Err(events),
+        }
+    }
+
+    fn ensure_display_cache_for_path(
+        &mut self,
+        parsed_midi_id: ParsedMidiId,
+        path: &std::path::Path,
+        progress_start: f32,
+        progress_end: f32,
+    ) -> Result<DisplayCacheId, Vec<CoreEvent>> {
+        if let Some(display_cache_id) = self
+            .display_caches
+            .iter()
+            .find_map(|(id, resource)| (resource.parsed_midi_id == parsed_midi_id).then_some(*id))
+        {
+            self.broadcast_midi_load_progress(path, progress_end, "Building display cache…");
+            return Ok(display_cache_id);
+        }
+
+        let subscribers = Arc::clone(&self.subscribers);
+        let progress_path = path.to_path_buf();
+        let events =
+            self.build_display_cache_resource_with_progress(parsed_midi_id, move |phase| {
+                broadcast_progress_to_subscribers(
+                    &subscribers,
+                    &progress_path,
+                    (progress_start + phase * (progress_end - progress_start))
+                        .clamp(progress_start, progress_end),
+                    "Building display cache…",
+                );
+            });
+        match events.as_slice() {
+            [event @ CoreEvent::DisplayCacheBuilt { display_cache_id, .. }] => {
+                self.broadcast(event.clone());
+                Ok(*display_cache_id)
+            }
+            _ => Err(events),
+        }
+    }
+
+    fn ensure_audio_cache_for_path(
+        &mut self,
+        parsed_midi_id: ParsedMidiId,
+        path: &std::path::Path,
+        progress_start: f32,
+        progress_end: f32,
+    ) -> Result<AudioCacheId, Vec<CoreEvent>> {
+        if let Some(audio_cache_id) = self
+            .audio_caches
+            .iter()
+            .find_map(|(id, resource)| (resource.parsed_midi_id == parsed_midi_id).then_some(*id))
+        {
+            self.broadcast_midi_load_progress(path, progress_end, "Building audio cache…");
+            return Ok(audio_cache_id);
+        }
+
+        let subscribers = Arc::clone(&self.subscribers);
+        let progress_path = path.to_path_buf();
+        let events =
+            self.build_audio_cache_resource_with_progress(parsed_midi_id, move |phase| {
+                broadcast_progress_to_subscribers(
+                    &subscribers,
+                    &progress_path,
+                    (progress_start + phase * (progress_end - progress_start))
+                        .clamp(progress_start, progress_end),
+                    "Building audio cache…",
+                );
+            });
+        match events.as_slice() {
+            [event @ CoreEvent::AudioCacheBuilt { audio_cache_id, .. }] => {
+                self.broadcast(event.clone());
+                Ok(*audio_cache_id)
+            }
+            _ => Err(events),
+        }
+    }
+}
+
+fn broadcast_progress_to_subscribers(
+    subscribers: &Arc<std::sync::Mutex<Vec<flume::Sender<CoreEvent>>>>,
+    path: &std::path::Path,
+    progress: f32,
+    status: &str,
+) {
+    let event = CoreEvent::MidiLoadProgress {
+        path: path.to_path_buf(),
+        progress,
+        status: status.into(),
+    };
+    if let Ok(mut subscribers) = subscribers.lock() {
+        subscribers.retain(|sender| sender.send(event.clone()).is_ok());
     }
 }

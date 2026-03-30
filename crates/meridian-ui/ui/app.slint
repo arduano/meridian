@@ -24,6 +24,7 @@ export component App inherits Window {
 
     // ── Viewport texture ──
     in-out property <image> viewport-image;
+    in-out property <string> window-title: "Meridian";
 
     // ══════════════════════════════════════════
     //  MIDI FILE STATE
@@ -34,12 +35,19 @@ export component App inherits Window {
 
     // Per-mode load states (Rust sets these based on pipeline progress)
     in-out property <MidiLoadState> render-load-state:   no-midi;
+    in-out property <MidiLoadState> audio-load-state:    no-midi;
     in-out property <MidiLoadState> analysis-load-state:  no-midi;
 
-    // Loading progress (shared — only one load at a time)
-    in-out property <string> loading-status: "";
-    in-out property <float> loading-progress: 0;
-    in-out property <string> load-error: "";
+    // Per-context loading progress
+    in-out property <string> render-loading-status: "";
+    in-out property <float> render-loading-progress: 0;
+    in-out property <string> render-load-error: "";
+    in-out property <string> audio-loading-status: "";
+    in-out property <float> audio-loading-progress: 0;
+    in-out property <string> audio-load-error: "";
+    in-out property <string> analysis-loading-status: "";
+    in-out property <float> analysis-loading-progress: 0;
+    in-out property <string> analysis-load-error: "";
 
     // Drag-and-drop state (set by Rust via winit events)
     in-out property <bool> drop-hovering: false;
@@ -47,12 +55,21 @@ export component App inherits Window {
     // MIDI file callbacks
     callback select-midi-file;                  // open file picker
     callback drop-midi-file(string);            // file dropped (path from Rust)
+    callback load-for-preview;                  // load MIDI for preview playback (display + audio)
     callback load-for-render;                   // load MIDI for render/audio mode
+    callback load-for-audio;                    // load MIDI for audio-only mode
     callback load-for-analysis;                 // load MIDI for modify/analysis mode
-    callback cancel-load;                       // cancel active loading
+    callback cancel-load-preview;               // cancel preview loading
+    callback cancel-load-render;                // cancel render-context loading
+    callback cancel-load-audio;                 // cancel audio-context loading
+    callback cancel-load-analysis;              // cancel analysis-context loading
+    callback unload-preview;                    // unload preview display + audio
     callback unload-render;                     // unload from render/audio mode
+    callback unload-audio;                      // unload from audio mode
     callback unload-analysis;                   // unload from modify/analysis mode
+    callback retry-load-preview;                // retry failed preview load
     callback retry-load-render;                 // retry failed render load
+    callback retry-load-audio;                  // retry failed audio load
     callback retry-load-analysis;               // retry failed analysis load
 
 
@@ -77,6 +94,14 @@ export component App inherits Window {
     in-out property <float> current-time-seconds: 0;
     in-out property <float> midi-length-seconds: 1;
     in-out property <[InspectorRow]> inspector-items;
+    in-out property <string> analysis-note-count-text: "—";
+    in-out property <string> analysis-track-count-text: "—";
+    in-out property <string> analysis-midi-length-text: "—";
+    in-out property <string> analysis-tempo-text: "—";
+    in-out property <string> analysis-time-signature-text: "—";
+    in-out property <string> analysis-key-range-text: "—";
+    in-out property <string> analysis-avg-velocity-text: "—";
+    in-out property <string> analysis-note-density-text: "—";
 
 
     // ── Profile (0=Preview 1=Render 2=Audio 3=Modify 4=Analysis) ──
@@ -97,8 +122,36 @@ export component App inherits Window {
         root.active-profile == 3 || root.active-profile == 4;
 
     // Whether the Preview page shows the welcome hero (no MIDI loaded)
+    private property <MidiLoadState> preview-load-state:
+        root.render-load-state == MidiLoadState.loading || root.audio-load-state == MidiLoadState.loading
+            ? MidiLoadState.loading
+            : root.render-load-state == MidiLoadState.error || root.audio-load-state == MidiLoadState.error
+                ? MidiLoadState.error
+                : root.render-load-state == MidiLoadState.loaded && root.audio-load-state == MidiLoadState.loaded
+                    ? MidiLoadState.loaded
+                    : root.selected-midi-name != ""
+                        ? MidiLoadState.selected
+                        : MidiLoadState.no-midi;
+    private property <string> preview-loading-status:
+        root.render-load-state == MidiLoadState.loading
+            ? root.render-loading-status
+            : root.audio-load-state == MidiLoadState.loading
+                ? root.audio-loading-status
+                : "";
+    private property <float> preview-loading-progress:
+        root.render-load-state == MidiLoadState.loading
+            ? root.render-loading-progress
+            : root.audio-load-state == MidiLoadState.loading
+                ? root.audio-loading-progress
+                : 0;
+    private property <string> preview-load-error:
+        root.render-load-state == MidiLoadState.error
+            ? root.render-load-error
+            : root.audio-load-state == MidiLoadState.error
+                ? root.audio-load-error
+                : "";
     private property <bool> show-preview-welcome:
-        root.active-profile == 0 && root.render-load-state != MidiLoadState.loaded;
+        root.active-profile == 0 && root.preview-load-state != MidiLoadState.loaded;
 
     // ── Viewport pixel dimensions (consumed by Rust) ──
     out property <float> viewport-px-width:  viewport-box.width  / 1px;
@@ -116,7 +169,7 @@ export component App inherits Window {
     callback start-audio-render;
     callback cancel-audio-render;
 
-    title: "Meridian";
+    title: root.window-title;
     preferred-width: 1540px;
     preferred-height: 940px;
     background: #060a11;
@@ -163,36 +216,44 @@ export component App inherits Window {
                 Rectangle {
                     height: 48px;
 
-                    HorizontalLayout {
-                        padding-left: 12px;
-                        padding-right: 16px;
-                        spacing: 6px;
+                    VerticalLayout {
+                        alignment: center;
 
-                        TransportButton {
-                            icon: root.play-label == "Pause" ? "⏸" : "▶";
-                            active: root.play-label == "Pause";
-                            pressed => { root.toggle-play(); }
+                        HorizontalLayout {
+                            padding-left: 12px;
+                            padding-right: 16px;
+                            spacing: 6px;
+
+                            HorizontalLayout {
+                                spacing: 6px;
+
+                                TransportButton {
+                                    icon: root.play-label == "Pause" ? "⏸" : "▶";
+                                    active: root.play-label == "Pause";
+                                    pressed => { root.toggle-play(); }
+                                }
+
+                                TimeScrubber {
+                                    horizontal-stretch: 1;
+                                    min-width: 200px;
+                                    value: root.current-time-seconds;
+                                    maximum: root.midi-length-seconds;
+                                    scrubbed(v) => { root.seek-time(v); }
+                                }
+                            }
+
+                            // Time readout
+                            Text { text: root.time-text;   color: #b0c0d4; font-family: "monospace"; font-size: 11px; font-weight: 600; vertical-alignment: center; min-width: 58px; horizontal-alignment: right; }
+                            Text { text: "/";              color: #2d3d52; font-size: 11px; vertical-alignment: center; }
+                            Text { text: root.length-text; color: #4d6580; font-family: "monospace"; font-size: 11px; vertical-alignment: center; min-width: 58px; }
+
+                            Rectangle { width: 1px; background: #1a2740; }
+
+                            TransportButton { icon: "−"; pressed => { root.zoom(-1.0); } }
+                            TransportButton { icon: "+"; pressed => { root.zoom(1.0); } }
+
+                            Text { text: root.view-range-text; color: #6b7d94; font-family: "monospace"; font-size: 11px; font-weight: 600; vertical-alignment: center; min-width: 42px; horizontal-alignment: right; }
                         }
-
-                        TimeScrubber {
-                            horizontal-stretch: 1;
-                            min-width: 200px;
-                            value: root.current-time-seconds;
-                            maximum: root.midi-length-seconds;
-                            scrubbed(v) => { root.seek-time(v); }
-                        }
-
-                        // Time readout
-                        Text { text: root.time-text;   color: #b0c0d4; font-family: "monospace"; font-size: 11px; font-weight: 600; vertical-alignment: center; min-width: 58px; horizontal-alignment: right; }
-                        Text { text: "/";              color: #2d3d52; font-size: 11px; vertical-alignment: center; }
-                        Text { text: root.length-text; color: #4d6580; font-family: "monospace"; font-size: 11px; vertical-alignment: center; min-width: 58px; }
-
-                        Rectangle { width: 1px; background: #1a2740; }
-
-                        TransportButton { icon: "−"; pressed => { root.zoom(-1.0); } }
-                        TransportButton { icon: "+"; pressed => { root.zoom(1.0); } }
-
-                        Text { text: root.view-range-text; color: #6b7d94; font-family: "monospace"; font-size: 11px; font-weight: 600; vertical-alignment: center; min-width: 42px; horizontal-alignment: right; }
                     }
                 }
             }
@@ -217,6 +278,8 @@ export component App inherits Window {
             Rectangle {
                 visible: root.compact-viewport;
                 horizontal-stretch: root.compact-viewport ? 1 : 0;
+                min-width: root.compact-viewport ? 100px : 0px;
+                max-width: root.compact-viewport ? 100000px : 0px;
                 background: #0a1018;
 
                 // Right-edge separator
@@ -228,12 +291,12 @@ export component App inherits Window {
 
                     midi-state:            root.render-load-state;
                     selected-midi-name:    root.selected-midi-name;
-                    loading-status:        root.loading-status;
-                    loading-progress:      root.loading-progress;
-                    load-error:            root.load-error;
+                    loading-status:        root.render-loading-status;
+                    loading-progress:      root.render-loading-progress;
+                    load-error:            root.render-load-error;
                     select-file            => { root.select-midi-file(); }
                     load-midi              => { root.load-for-render(); }
-                    cancel-load            => { root.cancel-load(); }
+                    cancel-load            => { root.cancel-load-render(); }
                     unload-midi            => { root.unload-render(); }
                     retry-load             => { root.retry-load-render(); }
 
@@ -251,16 +314,16 @@ export component App inherits Window {
                     visible: root.active-profile == 2;
                     x: 0; y: 0; width: parent.width; height: parent.height;
 
-                    midi-state:            root.render-load-state;
+                    midi-state:            root.audio-load-state;
                     selected-midi-name:    root.selected-midi-name;
-                    loading-status:        root.loading-status;
-                    loading-progress:      root.loading-progress;
-                    load-error:            root.load-error;
+                    loading-status:        root.audio-loading-status;
+                    loading-progress:      root.audio-loading-progress;
+                    load-error:            root.audio-load-error;
                     select-file            => { root.select-midi-file(); }
-                    load-midi              => { root.load-for-render(); }
-                    cancel-load            => { root.cancel-load(); }
-                    unload-midi            => { root.unload-render(); }
-                    retry-load             => { root.retry-load-render(); }
+                    load-midi              => { root.load-for-audio(); }
+                    cancel-load            => { root.cancel-load-audio(); }
+                    unload-midi            => { root.unload-audio(); }
+                    retry-load             => { root.retry-load-audio(); }
 
                     start-audio-render     => { root.start-audio-render(); }
                     cancel-audio-render    => { root.cancel-audio-render(); }
@@ -275,6 +338,9 @@ export component App inherits Window {
             VerticalLayout {
                 visible: root.has-viewport;
                 horizontal-stretch: root.full-viewport ? 1 : 0;
+                vertical-stretch: root.has-viewport ? 1 : 0;
+                min-width: root.has-viewport ? 100px : 0px;
+                max-width: root.has-viewport ? 100000px : 0px;
                 spacing: 0px;
 
                 viewport-box := Rectangle {
@@ -314,43 +380,22 @@ export component App inherits Window {
                         }
                     }
 
-                    // MIDI path overlay (Preview only when loaded, bottom-left)
-                    Rectangle {
-                        visible: root.active-profile == 0 && root.render-load-state == MidiLoadState.loaded;
-                        x: 12px;
-                        y: parent.height - 38px;
-                        width: 400px;
-                        height: 26px;
-                        border-radius: 5px;
-                        background: #06091180;
-
-                        Text {
-                            x: 10px;
-                            width: parent.width - 20px;
-                            text: root.selected-midi-name;
-                            color: #4d6580;
-                            font-size: 11px;
-                            vertical-alignment: center;
-                            overflow: elide;
-                        }
-                    }
-
                     // ── Preview Welcome overlay ──
                     PreviewWelcome {
                         visible: root.show-preview-welcome;
                         x: 0; y: 0; width: parent.width; height: parent.height;
 
-                        midi-state:         root.render-load-state;
+                        midi-state:         root.preview-load-state;
                         selected-midi-name: root.selected-midi-name;
-                        loading-status:     root.loading-status;
-                        loading-progress:   root.loading-progress;
-                        load-error:         root.load-error;
+                        loading-status:     root.preview-loading-status;
+                        loading-progress:   root.preview-loading-progress;
+                        load-error:         root.preview-load-error;
                         drop-hovering:      root.drop-hovering;
                         select-file         => { root.select-midi-file(); }
-                        load-midi           => { root.load-for-render(); }
-                        cancel-load         => { root.cancel-load(); }
-                        unload-midi         => { root.unload-render(); }
-                        retry-load          => { root.retry-load-render(); }
+                        load-midi           => { root.load-for-preview(); }
+                        cancel-load         => { root.cancel-load-preview(); }
+                        unload-midi         => { root.unload-preview(); }
+                        retry-load          => { root.retry-load-preview(); }
                     }
                 }
 
@@ -358,6 +403,8 @@ export component App inherits Window {
                 Rectangle {
                     visible: root.compact-viewport;
                     vertical-stretch: root.compact-viewport ? 1 : 0;
+                    min-height: root.compact-viewport ? 100px : 0px;
+                    max-height: root.compact-viewport ? 100000px : 0px;
                     background: #080d16;
 
                     Rectangle { y: 0; height: 1px; width: parent.width; background: #141e2e; }
@@ -389,6 +436,8 @@ export component App inherits Window {
             Rectangle {
                 visible: root.panel-only;
                 horizontal-stretch: root.panel-only ? 1 : 0;
+                min-width: root.panel-only ? 100px : 0px;
+                max-width: root.panel-only ? 100000px : 0px;
                 background: #0a1018;
 
                 ModifyPanel {
@@ -397,12 +446,12 @@ export component App inherits Window {
 
                     midi-state:               root.analysis-load-state;
                     selected-midi-name:       root.selected-midi-name;
-                    loading-status:           root.loading-status;
-                    loading-progress:         root.loading-progress;
-                    load-error:               root.load-error;
+                    loading-status:           root.analysis-loading-status;
+                    loading-progress:         root.analysis-loading-progress;
+                    load-error:               root.analysis-load-error;
                     select-file               => { root.select-midi-file(); }
                     load-midi                 => { root.load-for-analysis(); }
-                    cancel-load               => { root.cancel-load(); }
+                    cancel-load               => { root.cancel-load-analysis(); }
                     unload-midi               => { root.unload-analysis(); }
                     retry-load                => { root.retry-load-analysis(); }
 
@@ -424,16 +473,23 @@ export component App inherits Window {
 
                     midi-state:            root.analysis-load-state;
                     selected-midi-name:    root.selected-midi-name;
-                    loading-status:        root.loading-status;
-                    loading-progress:      root.loading-progress;
-                    load-error:            root.load-error;
+                    loading-status:        root.analysis-loading-status;
+                    loading-progress:      root.analysis-loading-progress;
+                    load-error:            root.analysis-load-error;
                     select-file            => { root.select-midi-file(); }
                     load-midi              => { root.load-for-analysis(); }
-                    cancel-load            => { root.cancel-load(); }
+                    cancel-load            => { root.cancel-load-analysis(); }
                     unload-midi            => { root.unload-analysis(); }
                     retry-load             => { root.retry-load-analysis(); }
 
-                    note-count-text:       root.note-count-text;
+                    note-count-text:       root.analysis-note-count-text;
+                    track-count-text:      root.analysis-track-count-text;
+                    midi-length-text:      root.analysis-midi-length-text;
+                    tempo-text:            root.analysis-tempo-text;
+                    time-signature-text:   root.analysis-time-signature-text;
+                    key-range-text:        root.analysis-key-range-text;
+                    avg-velocity-text:     root.analysis-avg-velocity-text;
+                    note-density-text:     root.analysis-note-density-text;
                 }
             }
         }

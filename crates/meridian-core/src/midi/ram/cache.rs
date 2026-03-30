@@ -39,6 +39,13 @@ impl InRamMidiCache {
         super::parse::build_in_ram_cache(parsed)
     }
 
+    pub fn from_parsed_with_progress(
+        parsed: &ParsedMidiFile,
+        progress: impl FnMut(f32),
+    ) -> Result<Self, MeridianError> {
+        super::parse::build_in_ram_cache_with_progress(parsed, progress)
+    }
+
     pub fn instantiate(self: &Arc<Self>) -> InRamMIDIFile {
         InRamMIDIFile::from_cache(Arc::clone(self))
     }

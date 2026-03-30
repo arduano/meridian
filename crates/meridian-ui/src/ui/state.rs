@@ -5,7 +5,7 @@ use std::{
 };
 
 use meridian_core::{
-    protocol::{CoreEvent, StateSnapshot},
+    protocol::{CoreEvent, MidiAnalysisData, StateSnapshot},
     render::{
         KeyboardHeightSpec, KeyboardProjectorConfig, NoteProjectorConfig, RendererKind,
         SceneConfig, ThreeDSceneConfig,
@@ -98,6 +98,19 @@ fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: &StateSnaps
             app.set_visible_note_count_text("0".into());
             app.set_active_keys_text("0".into());
         }
+        CoreEvent::ProcessedMidiBuilt {
+            midi_length,
+            total_notes,
+            track_count,
+            ..
+        } => {
+            app.set_analysis_note_count_text(total_notes.to_string().into());
+            app.set_analysis_track_count_text(track_count.to_string().into());
+            app.set_analysis_midi_length_text(format!("{:.3} s", midi_length).into());
+        }
+        CoreEvent::MidiAnalysis { analysis, .. } => {
+            apply_analysis_to_app(app, analysis);
+        }
         CoreEvent::FrameProjected { stats, .. } => {
             app.set_visible_note_count_text(stats.visible_notes.to_string().into());
             app.set_active_keys_text(stats.active_keys.to_string().into());
@@ -111,9 +124,8 @@ fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: &StateSnaps
         | CoreEvent::AudioRender { .. }
         | CoreEvent::AudioRenderStatus { .. }
         | CoreEvent::AudioStatus { .. }
-        | CoreEvent::MidiAnalysis { .. }
+        | CoreEvent::MidiLoadProgress { .. }
         | CoreEvent::ParsedMidiLoaded { .. }
-        | CoreEvent::ProcessedMidiBuilt { .. }
         | CoreEvent::DisplayCacheBuilt { .. }
         | CoreEvent::AudioCacheBuilt { .. }
         | CoreEvent::DisplaySessionCreated { .. }
@@ -219,4 +231,45 @@ fn renderer_summary(scene: &SceneConfig) -> &'static str {
         },
         SceneConfig::ThreeD(_) => "3d",
     }
+}
+
+fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
+    app.set_analysis_note_count_text(analysis.total_notes.to_string().into());
+    app.set_analysis_midi_length_text(format!("{:.3} s", analysis.midi_length).into());
+
+    let first_key = analysis
+        .key_note_counts
+        .iter()
+        .position(|count| *count > 0)
+        .unwrap_or(0);
+    let last_key = analysis
+        .key_note_counts
+        .iter()
+        .rposition(|count| *count > 0)
+        .unwrap_or(0);
+    app.set_analysis_key_range_text(format!("{first_key}..{last_key}").into());
+
+    let bucket_width = if analysis.buckets.len() > 1 {
+        analysis.buckets[1].time_seconds - analysis.buckets[0].time_seconds
+    } else {
+        analysis.midi_length.max(0.5)
+    }
+    .max(0.001);
+    let peak_nps = analysis
+        .buckets
+        .iter()
+        .map(|bucket| bucket.note_starts as f64 / bucket_width)
+        .fold(0.0, f64::max);
+    let avg_nps = if analysis.midi_length > 0.0 {
+        analysis.total_notes as f64 / analysis.midi_length
+    } else {
+        analysis.total_notes as f64
+    };
+    app.set_analysis_note_density_text(
+        format!("avg {:.1}/s peak {:.1}/s", avg_nps, peak_nps).into(),
+    );
+
+    app.set_analysis_tempo_text("From bucketed analysis".into());
+    app.set_analysis_time_signature_text("Not computed".into());
+    app.set_analysis_avg_velocity_text("Not computed".into());
 }

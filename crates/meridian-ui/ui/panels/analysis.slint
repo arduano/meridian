@@ -44,9 +44,11 @@ export component AnalysisPanel inherits Rectangle {
         height: parent.height;
 
         VerticalLayout {
+            width: parent.width;
             padding: 20px;
             padding-right: 24px;
             spacing: 6px;
+            alignment: start;
 
             // ── MIDI FILE ──
             MidiStateSection {
@@ -55,6 +57,7 @@ export component AnalysisPanel inherits Rectangle {
                 load-description: "Parses MIDI for structural analysis. No rendering caches needed.";
                 load-label: "Load for Analysis";
                 mode-label: "analysis";
+                show-unload: false;
                 loading-status: root.loading-status;
                 loading-progress: root.loading-progress;
                 error-message: root.load-error;

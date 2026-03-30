@@ -92,6 +92,11 @@ pub enum CoreEvent {
     StateSnapshot {
         state: StateSnapshot,
     },
+    MidiLoadProgress {
+        path: PathBuf,
+        progress: f32,
+        status: String,
+    },
     MidiLoaded {
         path: PathBuf,
         state: StateSnapshot,

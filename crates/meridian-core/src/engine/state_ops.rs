@@ -58,11 +58,25 @@ impl CoreState {
     }
 
     pub(super) fn midi_length(&self) -> f64 {
-        self.display.midi_length()
+        self.processed_midi
+            .as_ref()
+            .map(|midi| midi.midi_length())
+            .or_else(|| {
+                if self.display.midi_loaded() {
+                    Some(self.display.midi_length())
+                } else {
+                    None
+                }
+            })
+            .or_else(|| self.current_audio_cache.as_ref().map(|cache| cache.length()))
+            .unwrap_or(0.0)
     }
 
     pub(super) fn total_notes(&self) -> u64 {
-        self.display.total_notes()
+        self.processed_midi
+            .as_ref()
+            .map(|midi| midi.total_notes())
+            .unwrap_or_else(|| self.display.total_notes())
     }
 
     pub(super) fn snapshot(&self) -> StateSnapshot {

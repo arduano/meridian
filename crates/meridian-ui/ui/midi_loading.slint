@@ -33,49 +33,57 @@ export component MidiFileBar inherits Rectangle {
     border-radius: 8px;
     background: #0f1822;
 
-    HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 8px;
-        spacing: 8px;
+    VerticalLayout {
+        alignment: center;
 
-        // File icon
-        Text {
-            text: "♪";
-            color: root.has-file ? rgb(37, 99, 235) : #2d3d52;
-            font-size: 14px;
-            vertical-alignment: center;
-        }
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 8px;
+            spacing: 8px;
 
-        // File name / placeholder
-        Text {
-            text: root.file-name;
-            color: root.has-file ? #b0c0d4 : #3d5068;
-            font-size: 12px;
-            font-weight: root.has-file ? 500 : 400;
-            vertical-alignment: center;
-            horizontal-stretch: 1;
-            overflow: elide;
-        }
-
-        // Browse button
-        Rectangle {
-            width: 64px;
-            height: 28px;
-            border-radius: 6px;
-            background: browse-touch.has-hover ? #1a2b40 : #141e2e;
-
+            // File icon
             Text {
-                text: root.has-file ? "Change" : "Browse";
-                color: #8899b0;
-                font-size: 11px;
-                font-weight: 600;
-                horizontal-alignment: center;
+                text: "♪";
+                color: root.has-file ? rgb(37, 99, 235) : #2d3d52;
+                font-size: 14px;
                 vertical-alignment: center;
             }
 
-            browse-touch := TouchArea {
-                mouse-cursor: pointer;
-                clicked => { root.select-file(); }
+            // File name / placeholder
+            Text {
+                text: root.file-name;
+                color: root.has-file ? #b0c0d4 : #3d5068;
+                font-size: 12px;
+                font-weight: root.has-file ? 500 : 400;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+
+            // Browse button
+            Rectangle {
+                width: 64px;
+                height: 28px;
+                border-radius: 6px;
+                background: browse-touch.has-hover ? #1a2b40 : #141e2e;
+
+                VerticalLayout {
+                    alignment: center;
+
+                    Text {
+                        text: root.has-file ? "Change" : "Browse";
+                        color: #8899b0;
+                        font-size: 11px;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+
+                browse-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.select-file(); }
+                }
             }
         }
     }
@@ -142,13 +150,17 @@ export component MidiLoadPrompt inherits Rectangle {
             border-radius: 8px;
             background: load-touch.has-hover ? rgb(45, 112, 255) : rgb(37, 99, 235);
 
-            Text {
-                text: root.load-label;
-                color: #f0f4ff;
-                font-size: 13px;
-                font-weight: 700;
-                horizontal-alignment: center;
-                vertical-alignment: center;
+            VerticalLayout {
+                alignment: center;
+
+                Text {
+                    text: root.load-label;
+                    color: #f0f4ff;
+                    font-size: 13px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
             }
 
             load-touch := TouchArea {
@@ -204,13 +216,17 @@ export component MidiLoadingBar inherits Rectangle {
                 border-radius: 6px;
                 background: cancel-touch.has-hover ? #2a1520 : #1a1218;
 
-                Text {
-                    text: "Cancel";
-                    color: #e05555;
-                    font-size: 11px;
-                    font-weight: 600;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
+                VerticalLayout {
+                    alignment: center;
+
+                    Text {
+                        text: "Cancel";
+                        color: #e05555;
+                        font-size: 11px;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
                 }
 
                 cancel-touch := TouchArea {
@@ -239,56 +255,65 @@ export component MidiLoadingBar inherits Rectangle {
 export component MidiLoadedBar inherits Rectangle {
     in property <string> file-name;
     in property <string> mode-label: "this mode";
+    in property <bool> show-unload: true;
     callback unload;
 
     height: 36px;
     border-radius: 8px;
     background: #0c1a12;
 
-    HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 8px;
-        spacing: 8px;
+    VerticalLayout {
+        alignment: center;
 
-        // Check icon
-        Text {
-            text: "✓";
-            color: #38a169;
-            font-size: 13px;
-            font-weight: 700;
-            vertical-alignment: center;
-        }
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 8px;
+            spacing: 8px;
 
-        // File name
-        Text {
-            text: root.file-name;
-            color: #8cc8a0;
-            font-size: 12px;
-            font-weight: 500;
-            vertical-alignment: center;
-            horizontal-stretch: 1;
-            overflow: elide;
-        }
-
-        // Unload button
-        Rectangle {
-            width: 60px;
-            height: 24px;
-            border-radius: 5px;
-            background: unload-touch.has-hover ? #1a2218 : transparent;
-
+            // Check icon
             Text {
-                text: "Unload";
-                color: #4d6580;
-                font-size: 10px;
-                font-weight: 600;
-                horizontal-alignment: center;
+                text: "✓";
+                color: #38a169;
+                font-size: 13px;
+                font-weight: 700;
                 vertical-alignment: center;
             }
 
-            unload-touch := TouchArea {
-                mouse-cursor: pointer;
-                clicked => { root.unload(); }
+            // File name
+            Text {
+                text: root.file-name;
+                color: #8cc8a0;
+                font-size: 12px;
+                font-weight: 500;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+
+            // Unload button
+            if root.show-unload : Rectangle {
+                width: 60px;
+                height: 24px;
+                border-radius: 5px;
+                background: unload-touch.has-hover ? #1a2218 : transparent;
+
+                VerticalLayout {
+                    alignment: center;
+
+                    Text {
+                        text: "Unload";
+                        color: #4d6580;
+                        font-size: 10px;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+
+                unload-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.unload(); }
+                }
             }
         }
     }
@@ -343,13 +368,17 @@ export component MidiErrorBar inherits Rectangle {
                 border-radius: 6px;
                 background: retry-touch.has-hover ? #2a1520 : #1a1218;
 
-                Text {
-                    text: "Retry";
-                    color: #e07070;
-                    font-size: 11px;
-                    font-weight: 600;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
+                VerticalLayout {
+                    alignment: center;
+
+                    Text {
+                        text: "Retry";
+                        color: #e07070;
+                        font-size: 11px;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
                 }
 
                 retry-touch := TouchArea {
@@ -396,6 +425,7 @@ export component MidiStateSection inherits VerticalLayout {
     in property <string> load-description: "Load this file to continue.";
     in property <string> load-label: "Load";
     in property <string> mode-label: "this mode";
+    in property <bool> show-unload: true;
     in property <string> loading-status: "Loading…";
     in property <float> loading-progress: 0;
     in property <string> error-message: "";
@@ -435,6 +465,7 @@ export component MidiStateSection inherits VerticalLayout {
     if root.midi-state == MidiLoadState.loaded : MidiLoadedBar {
         file-name: root.file-name;
         mode-label: root.mode-label;
+        show-unload: root.show-unload;
         unload => { root.unload(); }
     }
 

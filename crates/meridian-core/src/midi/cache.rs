@@ -27,8 +27,15 @@ impl Clone for MidiCacheStack {
 
 impl MidiCacheStack {
     pub fn load(path: impl Into<std::path::PathBuf>) -> Result<Self, MeridianError> {
+        Self::load_with_progress(path, |_| {})
+    }
+
+    pub fn load_with_progress(
+        path: impl Into<std::path::PathBuf>,
+        progress: impl FnMut(f32),
+    ) -> Result<Self, MeridianError> {
         Ok(Self {
-            parsed: Arc::new(ParsedMidiFile::load_from_file(path)?),
+            parsed: Arc::new(ParsedMidiFile::load_from_file_with_progress(path, progress)?),
             display: Mutex::new(None),
             audio: Mutex::new(None),
         })
@@ -39,6 +46,13 @@ impl MidiCacheStack {
     }
 
     pub fn display_cache(&self) -> Result<Arc<DisplayMidiCache>, MeridianError> {
+        self.display_cache_with_progress(|_| {})
+    }
+
+    pub fn display_cache_with_progress(
+        &self,
+        progress: impl FnMut(f32),
+    ) -> Result<Arc<DisplayMidiCache>, MeridianError> {
         let mut display = self
             .display
             .lock()
@@ -47,7 +61,10 @@ impl MidiCacheStack {
             return Ok(Arc::clone(cache));
         }
 
-        let cache = Arc::new(DisplayMidiCache::from_parsed(self.parsed())?);
+        let cache = Arc::new(DisplayMidiCache::from_parsed_with_progress(
+            self.parsed(),
+            progress,
+        )?);
         *display = Some(Arc::clone(&cache));
         Ok(cache)
     }
@@ -65,6 +82,13 @@ impl MidiCacheStack {
     }
 
     pub fn audio_cache(&self) -> Result<Arc<InRamAudioCache>, MeridianError> {
+        self.audio_cache_with_progress(|_| {})
+    }
+
+    pub fn audio_cache_with_progress(
+        &self,
+        progress: impl FnMut(f32),
+    ) -> Result<Arc<InRamAudioCache>, MeridianError> {
         let mut audio = self
             .audio
             .lock()
@@ -73,7 +97,10 @@ impl MidiCacheStack {
             return Ok(Arc::clone(cache));
         }
 
-        let cache = Arc::new(InRamAudioCache::from_parsed(self.parsed())?);
+        let cache = Arc::new(InRamAudioCache::from_parsed_with_progress(
+            self.parsed(),
+            progress,
+        )?);
         *audio = Some(Arc::clone(&cache));
         Ok(cache)
     }

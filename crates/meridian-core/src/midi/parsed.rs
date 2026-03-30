@@ -1,6 +1,13 @@
-use std::path::PathBuf;
+use std::{
+    fs::File,
+    io::{Read, Seek, SeekFrom},
+    path::PathBuf,
+};
 
-use midi_toolkit::io::{DiskReader, MIDIFile as TKMIDIFile};
+use midi_toolkit::{
+    io::{DiskReader, MIDIFile as TKMIDIFile},
+    sequence::event::get_channels_array_statistics,
+};
 
 use crate::error::MeridianError;
 
@@ -11,14 +18,37 @@ pub type ToolkitMidiFile = TKMIDIFile<DiskReader>;
 pub struct ParsedMidiFile {
     midi: ToolkitMidiFile,
     signature: MIDIFileUniqueSignature,
+    total_event_count: u64,
 }
 
 impl ParsedMidiFile {
     pub fn load_from_file(path: impl Into<PathBuf>) -> Result<Self, MeridianError> {
-        let (file, signature) = open_file_and_signature(path)?;
-        let midi = ToolkitMidiFile::open_from_stream(file, None)
+        Self::load_from_file_with_progress(path, |_| {})
+    }
+
+    pub fn load_from_file_with_progress(
+        path: impl Into<PathBuf>,
+        mut progress: impl FnMut(f32),
+    ) -> Result<Self, MeridianError> {
+        let (mut file, signature) = open_file_and_signature(path)?;
+        let declared_track_count = read_declared_track_count(&mut file)?.max(1);
+        file.seek(SeekFrom::Start(0))?;
+        let mut read_progress = |tracks_done: u32| {
+            progress((tracks_done as f32 / declared_track_count as f32).clamp(0.0, 1.0));
+        };
+        let midi = ToolkitMidiFile::open_from_stream(file, Some(&mut read_progress))
             .map_err(|e| MeridianError::MidiLoad(format!("{e:?}")))?;
-        Ok(Self { midi, signature })
+        progress(1.0);
+
+        let stats = get_channels_array_statistics(midi.iter_all_tracks().collect())
+            .map_err(|e| MeridianError::MidiLoad(format!("{e:?}")))?;
+        let total_event_count = stats.total_event_count();
+
+        Ok(Self {
+            midi,
+            signature,
+            total_event_count,
+        })
     }
 
     pub fn midi(&self) -> &ToolkitMidiFile {
@@ -28,4 +58,20 @@ impl ParsedMidiFile {
     pub fn signature(&self) -> &MIDIFileUniqueSignature {
         &self.signature
     }
+
+    pub fn total_event_count(&self) -> u64 {
+        self.total_event_count
+    }
+}
+
+fn read_declared_track_count(file: &mut File) -> Result<u32, MeridianError> {
+    let mut header = [0_u8; 14];
+    file.seek(SeekFrom::Start(0))?;
+    file.read_exact(&mut header)?;
+    if &header[0..4] != b"MThd" {
+        return Err(MeridianError::InvalidMidi(
+            "missing MIDI header chunk".into(),
+        ));
+    }
+    Ok(u16::from_be_bytes([header[10], header[11]]) as u32)
 }

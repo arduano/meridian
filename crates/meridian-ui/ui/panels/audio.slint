@@ -50,15 +50,17 @@ export component AudioPanel inherits Rectangle {
         height: parent.height;
 
         VerticalLayout {
+            width: parent.width;
             padding: 20px;
             padding-right: 24px;
             spacing: 6px;
+            alignment: start;
 
             // ── MIDI FILE ──
             MidiStateSection {
                 midi-state: root.midi-state;
                 file-name: root.selected-midi-name;
-                load-description: "Builds audio caches for playback and WAV export.";
+                load-description: "Builds the audio cache only. Use Preview for visuals plus playback or Render for video-only prep.";
                 load-label: "Load for Audio";
                 mode-label: "audio";
                 loading-status: root.loading-status;

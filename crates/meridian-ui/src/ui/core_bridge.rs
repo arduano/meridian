@@ -6,8 +6,9 @@ use std::{
 use meridian_core::{
     CoreHandle, MeridianError,
     audio::{AudioBackend, AudioConfig},
-    protocol::{CoreCommand, CoreEvent},
+    protocol::{CoreCommand, CoreEvent, ParsedMidiId, ProcessedMidiId},
     render::{DisplayTimeSpace, RendererKind, SceneLayout},
+    midi::MidiProcessingConfig,
 };
 
 use super::{state::UiOptions, view_model::UiViewModel};
@@ -93,6 +94,81 @@ impl UiCoreBridge {
         self.request(CoreCommand::LoadMidi { path }, model)
     }
 
+    pub fn load_display_midi(
+        &self,
+        path: PathBuf,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::LoadDisplayMidi { path }, model)
+    }
+
+    pub fn load_audio_midi(
+        &self,
+        path: PathBuf,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::LoadAudioMidi { path }, model)
+    }
+
+    pub fn unload_display_context(
+        &self,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::UnloadDisplayContext, model)
+    }
+
+    pub fn unload_audio_context(
+        &self,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::UnloadAudioContext, model)
+    }
+
+    pub fn unload_render_context(
+        &self,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::UnloadRenderContext, model)
+    }
+
+    pub fn load_parsed_midi(
+        &self,
+        path: PathBuf,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::LoadParsedMidi { path }, model)
+    }
+
+    pub fn build_processed_midi(
+        &self,
+        parsed_midi_id: ParsedMidiId,
+        config: MidiProcessingConfig,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(
+            CoreCommand::BuildProcessedMidi {
+                parsed_midi_id,
+                config,
+            },
+            model,
+        )
+    }
+
+    pub fn analyze_processed_midi(
+        &self,
+        processed_midi_id: ProcessedMidiId,
+        bucket_count: Option<usize>,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(
+            CoreCommand::AnalyzeProcessedMidi {
+                processed_midi_id,
+                bucket_count,
+            },
+            model,
+        )
+    }
+
     pub fn step_time(
         &self,
         delta: f64,
@@ -125,6 +201,14 @@ impl UiCoreBridge {
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
         self.request(CoreCommand::TogglePlaying, model)
+    }
+
+    pub fn set_playing(
+        &self,
+        playing: bool,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::SetPlaying { playing }, model)
     }
 
     pub fn seek_time(

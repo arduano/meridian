@@ -94,6 +94,13 @@ impl KeyBuilder {
 }
 
 pub(super) fn build_in_ram_cache(parsed: &ParsedMidiFile) -> Result<InRamMidiCache, MeridianError> {
+    build_in_ram_cache_with_progress(parsed, |_| {})
+}
+
+pub(super) fn build_in_ram_cache_with_progress(
+    parsed: &ParsedMidiFile,
+    mut progress: impl FnMut(f32),
+) -> Result<InRamMidiCache, MeridianError> {
     let midi = parsed.midi();
     let ppq = midi.ppq();
     if (ppq & 0x8000) != 0 {
@@ -111,10 +118,15 @@ pub(super) fn build_in_ram_cache(parsed: &ParsedMidiFile) -> Result<InRamMidiCac
     let mut current_colors = vec![None; midi.track_count().max(1) * 16];
     let mut tempo_map = TempoMap::new(ppq);
     let mut micros_per_quarter = 500_000_u32;
+    let total_events = parsed.total_event_count().max(1);
+    let mut processed_events = 0_u64;
+    let progress_stride = (total_events / 200).max(1);
+    progress(0.0);
 
     type ToolkitEvent = Delta<u64, Track<Event>>;
     for event in merged {
         let event: ToolkitEvent = event;
+        processed_events += 1;
         if event.delta > 0 {
             for key in &mut keys {
                 key.flush(time_seconds, time_ticks);
@@ -165,12 +177,20 @@ pub(super) fn build_in_ram_cache(parsed: &ParsedMidiFile) -> Result<InRamMidiCac
             }
             _ => {}
         }
+
+        if processed_events == 1
+            || processed_events >= total_events
+            || processed_events % progress_stride == 0
+        {
+            progress((processed_events as f32 / total_events as f32).clamp(0.0, 1.0));
+        }
     }
 
     for key in &mut keys {
         key.flush(time_seconds, time_ticks);
         key.end_all(time_seconds, time_ticks);
     }
+    progress(1.0);
 
     let columns = keys
         .into_iter()

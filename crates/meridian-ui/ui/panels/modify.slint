@@ -59,6 +59,7 @@ export component ModifyPanel inherits Rectangle {
             load-description: "Parses MIDI for scene configuration and inspection.";
             load-label: "Load for Modify";
             mode-label: "modify";
+            show-unload: false;
             loading-status: root.loading-status;
             loading-progress: root.loading-progress;
             error-message: root.load-error;
@@ -127,6 +128,7 @@ export component ModifyPanel inherits Rectangle {
                     VerticalLayout {
                         width: parent.width;
                         spacing: 2px;
+                        alignment: start;
 
                         for row in root.inspector-items : InspectorLine {
                             section: row.section;

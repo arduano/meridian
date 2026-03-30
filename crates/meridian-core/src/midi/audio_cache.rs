@@ -35,6 +35,13 @@ impl InRamAudioCache {
     }
 
     pub fn from_parsed(parsed: &ParsedMidiFile) -> Result<Self, MeridianError> {
+        Self::from_parsed_with_progress(parsed, |_| {})
+    }
+
+    pub fn from_parsed_with_progress(
+        parsed: &ParsedMidiFile,
+        mut progress: impl FnMut(f32),
+    ) -> Result<Self, MeridianError> {
         let midi = parsed.midi();
         let ppq = midi.ppq();
         if (ppq & 0x8000) != 0 {
@@ -54,12 +61,18 @@ impl InRamAudioCache {
         type Ev = Delta<f64, Track<EventBatch<Event>>>;
         let mut time = 0.0;
         let mut out = Vec::new();
+        let total_events = parsed.total_event_count().max(1);
+        let mut processed_events = 0_u64;
+        let progress_stride = (total_events / 200).max(1);
+        progress(0.0);
 
         for block in merged {
             let block: Ev = block;
             time += block.delta;
             let mut data = Vec::with_capacity(block.count() * 3);
             let mut control = Vec::new();
+            let block_event_count = block.count() as u64;
+            processed_events += block.count() as u64;
 
             for event in block.iter_events() {
                 match event.as_event() {
@@ -104,12 +117,24 @@ impl InRamAudioCache {
                 data,
                 control_only_data: (!control.is_empty()).then_some(control),
             });
+
+            if processed_events == block_event_count
+                || processed_events >= total_events
+                || processed_events % progress_stride <= block_event_count
+            {
+                progress((processed_events as f32 / total_events as f32).clamp(0.0, 1.0));
+            }
         }
+        progress(1.0);
         Ok(Self::new(out))
     }
 
     pub fn events(&self) -> &[CompressedAudio] {
         &self.events
+    }
+
+    pub fn length(&self) -> f64 {
+        self.events.last().map(|event| event.time).unwrap_or(0.0)
     }
 }
 

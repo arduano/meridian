@@ -40,3 +40,6 @@ wgpu = "28.0.0"
 xsynth-core = { path = "../xsynth/core", features = ["serde"] }
 xsynth-realtime = { path = "../xsynth/realtime", features = ["serde"] }
 xsynth-render = { path = "../xsynth/render" }
+
+[profile.dev]
+opt-level = 2

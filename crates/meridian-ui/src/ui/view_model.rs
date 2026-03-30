@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use meridian_core::{
     audio::AudioStatus,
-    protocol::{AudioRenderStatus, CoreEvent, StateSnapshot, VideoRenderStatus},
+    protocol::{AudioRenderStatus, CoreEvent, MidiAnalysisData, ProcessedMidiId, StateSnapshot, VideoRenderStatus},
     render::{DisplayTimeSpace, SceneConfig},
 };
 
@@ -53,7 +53,15 @@ pub struct UiViewModel {
     pub scene: SceneViewModel,
     pub audio: AudioViewModel,
     pub render_jobs: RenderJobsViewModel,
+    pub analysis: AnalysisViewModel,
     pub snapshot: Option<StateSnapshot>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AnalysisViewModel {
+    pub processed_midi_id: Option<ProcessedMidiId>,
+    pub data: Option<MidiAnalysisData>,
+    pub track_count: Option<usize>,
 }
 
 impl UiViewModel {
@@ -94,14 +102,29 @@ impl UiViewModel {
             | CoreEvent::AudioSessionAttached { state, .. }
             | CoreEvent::FrameProjected { state, .. }
             | CoreEvent::FrameSaved { state, .. } => self.apply_snapshot(state),
+            CoreEvent::ProcessedMidiBuilt {
+                processed_midi_id,
+                track_count,
+                ..
+            } => {
+                self.analysis.processed_midi_id = Some(*processed_midi_id);
+                self.analysis.track_count = Some(*track_count);
+            }
+            CoreEvent::MidiAnalysis {
+                processed_midi_id,
+                analysis,
+                ..
+            } => {
+                self.analysis.processed_midi_id = *processed_midi_id;
+                self.analysis.data = Some(analysis.clone());
+            }
             CoreEvent::AudioStatus { status } => self.audio.status = status.clone(),
             CoreEvent::VideoRenderStatus { status } => self.render_jobs.video = status.clone(),
             CoreEvent::AudioRenderStatus { status } => self.render_jobs.audio = status.clone(),
             CoreEvent::VideoRender { .. }
             | CoreEvent::AudioRender { .. }
-            | CoreEvent::MidiAnalysis { .. }
+            | CoreEvent::MidiLoadProgress { .. }
             | CoreEvent::ParsedMidiLoaded { .. }
-            | CoreEvent::ProcessedMidiBuilt { .. }
             | CoreEvent::DisplayCacheBuilt { .. }
             | CoreEvent::AudioCacheBuilt { .. }
             | CoreEvent::DisplaySessionCreated { .. }

@@ -188,6 +188,11 @@ impl CoreState {
             CoreCommand::AttachAudioSession { audio_session_id } => {
                 self.attach_audio_session_resource(audio_session_id)
             }
+            CoreCommand::LoadDisplayMidi { path } => self.load_display_midi(path),
+            CoreCommand::LoadAudioMidi { path } => self.load_audio_midi(path),
+            CoreCommand::UnloadDisplayContext => self.unload_display_context(),
+            CoreCommand::UnloadAudioContext => self.unload_audio_context(),
+            CoreCommand::UnloadRenderContext => self.unload_render_context(),
             CoreCommand::LoadMidi { path } => self.load_midi_legacy(path),
             CoreCommand::SetAudioConfig { config } => {
                 self.audio_config = config;

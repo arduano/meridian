@@ -83,6 +83,7 @@ export component TimeScrubber inherits Rectangle {
 
     // Track
     Rectangle {
+        x: 0px;
         y: parent.height / 2 - 2px;
         width: parent.width;
         height: 4px;
@@ -91,6 +92,7 @@ export component TimeScrubber inherits Rectangle {
     }
     // Fill
     Rectangle {
+        x: 0px;
         y: parent.height / 2 - 2px;
         width: parent.width * root.fill-ratio;
         height: 4px;
@@ -99,7 +101,7 @@ export component TimeScrubber inherits Rectangle {
     }
     // Thumb
     Rectangle {
-        x: parent.width * root.fill-ratio - 6px;
+        x: max(0px, min(parent.width - self.width, parent.width * root.fill-ratio - self.width / 2));
         y: parent.height / 2 - 6px;
         width: 12px;
         height: 12px;

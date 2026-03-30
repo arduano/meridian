@@ -19,7 +19,7 @@ use slint::wgpu_28::wgpu;
 
 use super::{
     state::{UiFrameUpdate, apply_frame_update_to_app},
-    view::App,
+    view::{App, MidiLoadState},
     view_model::UiViewModel,
 };
 
@@ -96,6 +96,14 @@ impl ViewportRenderer {
     }
 
     fn render(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        if let Some(app) = self.app.upgrade() {
+            let loading = app.get_render_load_state() == MidiLoadState::Loading
+                || app.get_analysis_load_state() == MidiLoadState::Loading;
+            if loading {
+                return;
+            }
+        }
+
         let (width, height) = *self.viewport_size.borrow();
         let Ok(frame) = self.core.render_frame(Some(width), Some(height)) else {
             return;

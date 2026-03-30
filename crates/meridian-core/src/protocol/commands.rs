@@ -62,6 +62,15 @@ pub enum CoreCommand {
     AttachAudioSession {
         audio_session_id: AudioSessionId,
     },
+    LoadDisplayMidi {
+        path: PathBuf,
+    },
+    LoadAudioMidi {
+        path: PathBuf,
+    },
+    UnloadDisplayContext,
+    UnloadAudioContext,
+    UnloadRenderContext,
     LoadMidi {
         path: PathBuf,
     },

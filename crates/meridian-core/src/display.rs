@@ -41,6 +41,12 @@ impl LiveDisplaySession {
         self.last_physics_tick = Some(now);
     }
 
+    pub fn unload_midi(&mut self, now: Instant) {
+        self.midi = None;
+        self.scene_physics.reset(&self.layout.scene);
+        self.last_physics_tick = Some(now);
+    }
+
     pub fn midi_loaded(&self) -> bool {
         self.midi.is_some()
     }

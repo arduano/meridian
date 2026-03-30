@@ -91,7 +91,7 @@ export component PreviewWelcome inherits Rectangle {
                     Text {
                         text: root.drop-hovering
                             ? "Release to load this file"
-                            : "Drag and drop a .mid file here, or browse to select one.";
+                            : "Drag and drop a .mid file here, or browse to select one. Preview loads visuals and audio together, then starts playback.";
                         color: #4d6580;
                         font-size: 12px;
                         horizontal-alignment: center;
@@ -146,8 +146,19 @@ export component PreviewWelcome inherits Rectangle {
                     // ── Selected file hint (when in selected state) ──
                     if root.midi-state == MidiLoadState.selected : VerticalLayout {
                         spacing: 0px;
+                        alignment: center;
 
                         Rectangle { height: 16px; }
+
+                        Text {
+                            text: "Preview loads display + audio together and jumps straight into playback.";
+                            color: #4d6580;
+                            font-size: 11px;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                        }
+
+                        Rectangle { height: 12px; }
 
                         Rectangle {
                             height: 34px;
@@ -176,25 +187,30 @@ export component PreviewWelcome inherits Rectangle {
                                     overflow: elide;
                                 }
 
-                                // Quick load hint
-                                Rectangle {
-                                    width: 40px;
-                                    height: 22px;
-                                    border-radius: 5px;
-                                    background: load-touch.has-hover ? rgb(45, 112, 255) : rgb(37, 99, 235);
+                                VerticalLayout {
+                                    spacing: 0px;
+                                    alignment: center;
 
-                                    Text {
-                                        text: "Load";
-                                        color: #f0f4ff;
-                                        font-size: 10px;
-                                        font-weight: 700;
-                                        horizontal-alignment: center;
-                                        vertical-alignment: center;
-                                    }
+                                    // Quick load hint
+                                    Rectangle {
+                                        width: 40px;
+                                        height: 22px;
+                                        border-radius: 5px;
+                                        background: load-touch.has-hover ? rgb(45, 112, 255) : rgb(37, 99, 235);
 
-                                    load-touch := TouchArea {
-                                        mouse-cursor: pointer;
-                                        clicked => { root.load-midi(); }
+                                        Text {
+                                            text: "Load";
+                                            color: #f0f4ff;
+                                            font-size: 10px;
+                                            font-weight: 700;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+
+                                        load-touch := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { root.load-midi(); }
+                                        }
                                     }
                                 }
                             }
