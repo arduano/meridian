@@ -1,0 +1,278 @@
+// ═══════════════════════════════════════════════════════════
+//  Preview Welcome — hero UX for opening a MIDI file.
+//
+//  Shown on the Preview tab when no MIDI is loaded. Features
+//  a large centered drop zone with a browse button. This is
+//  the fanciest and most welcoming entry point.
+// ═══════════════════════════════════════════════════════════
+
+import { MidiLoadState } from "../structs.slint";
+import { MidiLoadingBar, MidiLoadedBar, MidiErrorBar } from "../midi_loading.slint";
+
+export component PreviewWelcome inherits Rectangle {
+    in property <MidiLoadState> midi-state: no-midi;
+    in property <string> selected-midi-name: "";
+    in property <string> loading-status: "Loading…";
+    in property <float> loading-progress: 0;
+    in property <string> load-error: "";
+    in property <bool> drop-hovering: false;
+
+    callback select-file;
+    callback load-midi;
+    callback cancel-load;
+    callback unload-midi;
+    callback retry-load;
+
+    background: transparent;
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 0px;
+
+        // Centered card
+        HorizontalLayout {
+            alignment: center;
+
+            Rectangle {
+                width: 420px;
+                border-radius: 16px;
+                background: #0a1220;
+                border-width: root.drop-hovering ? 2px : 1px;
+                border-color: root.drop-hovering ? rgb(37, 99, 235) : #141e2e;
+
+                drop-shadow-blur: root.drop-hovering ? 40px : 0px;
+                drop-shadow-color: root.drop-hovering ? #1a3a6040 : transparent;
+
+                VerticalLayout {
+                    padding: 40px;
+                    padding-top: 48px;
+                    padding-bottom: 40px;
+                    spacing: 0px;
+                    alignment: center;
+
+                    // ── Icon ──
+                    HorizontalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 72px;
+                            height: 72px;
+                            border-radius: 36px;
+                            background: root.drop-hovering ? #0f1e38 : #0c1525;
+
+                            Text {
+                                text: "♪";
+                                color: root.drop-hovering ? rgb(96, 165, 250) : #2d3d52;
+                                font-size: root.drop-hovering ? 34px : 30px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+
+                                animate color { duration: 150ms; }
+                                animate font-size { duration: 150ms; }
+                            }
+                        }
+                    }
+
+                    Rectangle { height: 20px; }
+
+                    // ── Title ──
+                    Text {
+                        text: root.drop-hovering ? "Drop to open" : "Open a MIDI file";
+                        color: root.drop-hovering ? rgb(96, 165, 250) : #b0c0d4;
+                        font-size: 18px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+
+                        animate color { duration: 150ms; }
+                    }
+
+                    Rectangle { height: 8px; }
+
+                    // ── Subtitle ──
+                    Text {
+                        text: root.drop-hovering
+                            ? "Release to load this file"
+                            : "Drag and drop a .mid file here, or browse to select one.";
+                        color: #4d6580;
+                        font-size: 12px;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+
+                    Rectangle { height: 24px; }
+
+                    // ── State-dependent content ──
+                    if root.midi-state == MidiLoadState.no-midi || root.midi-state == MidiLoadState.selected : HorizontalLayout {
+                        alignment: center;
+                        // Browse button
+                        Rectangle {
+                            width: 160px;
+                            height: 40px;
+                            border-radius: 10px;
+                            background: browse-touch.has-hover ? rgb(45, 112, 255) : rgb(37, 99, 235);
+
+                            Text {
+                                text: "Browse Files";
+                                color: #f0f4ff;
+                                font-size: 14px;
+                                font-weight: 700;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+
+                            browse-touch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { root.select-file(); }
+                            }
+                        }
+                    }
+
+                    if root.midi-state == MidiLoadState.loading : MidiLoadingBar {
+                        status: root.loading-status;
+                        progress: root.loading-progress;
+                        cancel => { root.cancel-load(); }
+                    }
+
+                    if root.midi-state == MidiLoadState.loaded : MidiLoadedBar {
+                        file-name: root.selected-midi-name;
+                        mode-label: "preview";
+                        unload => { root.unload-midi(); }
+                    }
+
+                    if root.midi-state == MidiLoadState.error : MidiErrorBar {
+                        error-message: root.load-error;
+                        retry => { root.retry-load(); }
+                    }
+
+                    // ── Selected file hint (when in selected state) ──
+                    if root.midi-state == MidiLoadState.selected : VerticalLayout {
+                        spacing: 0px;
+
+                        Rectangle { height: 16px; }
+
+                        Rectangle {
+                            height: 34px;
+                            border-radius: 8px;
+                            background: #0c1525;
+
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 8px;
+
+                                Text {
+                                    text: "♪";
+                                    color: rgb(37, 99, 235);
+                                    font-size: 12px;
+                                    vertical-alignment: center;
+                                }
+
+                                Text {
+                                    text: root.selected-midi-name;
+                                    color: #8899b0;
+                                    font-size: 12px;
+                                    font-weight: 500;
+                                    vertical-alignment: center;
+                                    horizontal-stretch: 1;
+                                    overflow: elide;
+                                }
+
+                                // Quick load hint
+                                Rectangle {
+                                    width: 40px;
+                                    height: 22px;
+                                    border-radius: 5px;
+                                    background: load-touch.has-hover ? rgb(45, 112, 255) : rgb(37, 99, 235);
+
+                                    Text {
+                                        text: "Load";
+                                        color: #f0f4ff;
+                                        font-size: 10px;
+                                        font-weight: 700;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+
+                                    load-touch := TouchArea {
+                                        mouse-cursor: pointer;
+                                        clicked => { root.load-midi(); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// ── DropOverlay ────────────────────────────────────────────
+// Full-window overlay shown when a file is being dragged over
+// the application. Semi-transparent with pulsing border.
+// Place as the last child of the root layout so it's on top.
+
+export component DropOverlay inherits Rectangle {
+    in property <bool> visible-when: false;
+
+    visible: root.visible-when;
+    background: #060a11c0;
+
+    // Border glow
+    Rectangle {
+        x: 6px;
+        y: 6px;
+        width: parent.width - 12px;
+        height: parent.height - 12px;
+        border-radius: 12px;
+        border-width: 2px;
+        border-color: rgb(37, 99, 235);
+        background: transparent;
+    }
+
+    // Center content
+    VerticalLayout {
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+
+            VerticalLayout {
+                spacing: 12px;
+                alignment: center;
+
+                HorizontalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 56px;
+                        height: 56px;
+                        border-radius: 28px;
+                        background: #0f1e38;
+
+                        Text {
+                            text: "♪";
+                            color: rgb(96, 165, 250);
+                            font-size: 26px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                Text {
+                    text: "Drop MIDI file to open";
+                    color: rgb(96, 165, 250);
+                    font-size: 16px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: "Release to load this file into Meridian";
+                    color: #4d6580;
+                    font-size: 12px;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,445 @@
+// ═══════════════════════════════════════════════════════════
+//  MIDI Loading — reusable components for MIDI file state.
+//
+//  These components handle the full lifecycle:
+//    selected file display → load prompt → loading progress →
+//    loaded state → unload → error display
+//
+//  Each tab integrates these as needed. Render/Audio use the
+//  full pipeline; Modify/Analysis use analysis-only loading.
+// ═══════════════════════════════════════════════════════════
+
+import { MidiLoadState } from "structs.slint";
+import { SectionHeader, Separator, FieldRow, PrimaryButton, ProgressBar } from "primitives.slint";
+
+
+// ── MidiFileBar ────────────────────────────────────────────
+// Shows the currently selected MIDI file name with a subtle
+// background. Always visible when a file is selected.
+//
+// Usage:
+//   MidiFileBar {
+//       file-name: "song.mid";
+//       has-file: true;
+//       select-file => { /* open file picker */ }
+//   }
+
+export component MidiFileBar inherits Rectangle {
+    in property <string> file-name: "No file selected";
+    in property <bool> has-file: false;
+    callback select-file;
+
+    height: 40px;
+    border-radius: 8px;
+    background: #0f1822;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 8px;
+        spacing: 8px;
+
+        // File icon
+        Text {
+            text: "♪";
+            color: root.has-file ? rgb(37, 99, 235) : #2d3d52;
+            font-size: 14px;
+            vertical-alignment: center;
+        }
+
+        // File name / placeholder
+        Text {
+            text: root.file-name;
+            color: root.has-file ? #b0c0d4 : #3d5068;
+            font-size: 12px;
+            font-weight: root.has-file ? 500 : 400;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+
+        // Browse button
+        Rectangle {
+            width: 64px;
+            height: 28px;
+            border-radius: 6px;
+            background: browse-touch.has-hover ? #1a2b40 : #141e2e;
+
+            Text {
+                text: root.has-file ? "Change" : "Browse";
+                color: #8899b0;
+                font-size: 11px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            browse-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.select-file(); }
+            }
+        }
+    }
+}
+
+
+// ── MidiLoadPrompt ─────────────────────────────────────────
+// Shown when a MIDI is selected but not loaded for this tab's
+// mode. Offers a "Load" button with a short explanation of
+// what loading means for this context.
+//
+// Usage:
+//   MidiLoadPrompt {
+//       file-name: "song.mid";
+//       description: "Load for video rendering (builds display + audio caches)";
+//       load-label: "Load for Render";
+//       load => { /* trigger loading */ }
+//   }
+
+export component MidiLoadPrompt inherits Rectangle {
+    in property <string> file-name;
+    in property <string> description: "Load this file to continue.";
+    in property <string> load-label: "Load";
+    callback load;
+
+    border-radius: 8px;
+    background: #0c1420;
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 10px;
+
+        // Title
+        Text {
+            text: "MIDI file selected";
+            color: #4d6580;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+        }
+
+        // File name
+        Text {
+            text: root.file-name;
+            color: #b0c0d4;
+            font-size: 13px;
+            font-weight: 600;
+            overflow: elide;
+        }
+
+        // Description
+        Text {
+            text: root.description;
+            color: #4d6580;
+            font-size: 11px;
+            wrap: word-wrap;
+        }
+
+        Rectangle { height: 2px; }
+
+        // Load button
+        Rectangle {
+            height: 36px;
+            border-radius: 8px;
+            background: load-touch.has-hover ? rgb(45, 112, 255) : rgb(37, 99, 235);
+
+            Text {
+                text: root.load-label;
+                color: #f0f4ff;
+                font-size: 13px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            load-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.load(); }
+            }
+        }
+    }
+}
+
+
+// ── MidiLoadingBar ─────────────────────────────────────────
+// Compact inline loading indicator. Shows a progress bar,
+// a status message, and a cancel button.
+//
+// Usage:
+//   MidiLoadingBar {
+//       status: "Building display cache…";
+//       progress: 0.45;
+//       cancel => { /* cancel loading */ }
+//   }
+
+export component MidiLoadingBar inherits Rectangle {
+    in property <string> status: "Loading…";
+    in property <float> progress: 0;
+    callback cancel;
+
+    border-radius: 8px;
+    background: #0c1420;
+
+    VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+
+        HorizontalLayout {
+            spacing: 8px;
+
+            // Status text
+            Text {
+                text: root.status;
+                color: #8899b0;
+                font-size: 12px;
+                font-weight: 500;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+
+            // Cancel button
+            Rectangle {
+                width: 60px;
+                height: 26px;
+                border-radius: 6px;
+                background: cancel-touch.has-hover ? #2a1520 : #1a1218;
+
+                Text {
+                    text: "Cancel";
+                    color: #e05555;
+                    font-size: 11px;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                cancel-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.cancel(); }
+                }
+            }
+        }
+
+        ProgressBar { progress: root.progress; }
+    }
+}
+
+
+// ── MidiLoadedBar ──────────────────────────────────────────
+// Compact indicator shown when the MIDI is fully loaded for
+// this mode. Includes a file name badge and an unload button.
+//
+// Usage:
+//   MidiLoadedBar {
+//       file-name: "song.mid";
+//       mode-label: "render";
+//       unload => { /* unload from this mode */ }
+//   }
+
+export component MidiLoadedBar inherits Rectangle {
+    in property <string> file-name;
+    in property <string> mode-label: "this mode";
+    callback unload;
+
+    height: 36px;
+    border-radius: 8px;
+    background: #0c1a12;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 8px;
+        spacing: 8px;
+
+        // Check icon
+        Text {
+            text: "✓";
+            color: #38a169;
+            font-size: 13px;
+            font-weight: 700;
+            vertical-alignment: center;
+        }
+
+        // File name
+        Text {
+            text: root.file-name;
+            color: #8cc8a0;
+            font-size: 12px;
+            font-weight: 500;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+
+        // Unload button
+        Rectangle {
+            width: 60px;
+            height: 24px;
+            border-radius: 5px;
+            background: unload-touch.has-hover ? #1a2218 : transparent;
+
+            Text {
+                text: "Unload";
+                color: #4d6580;
+                font-size: 10px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            unload-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.unload(); }
+            }
+        }
+    }
+}
+
+
+// ── MidiErrorBar ───────────────────────────────────────────
+// Shown when loading failed. Shows the error message and a
+// retry button.
+//
+// Usage:
+//   MidiErrorBar {
+//       error-message: "Unsupported MIDI format";
+//       retry => { /* retry loading */ }
+//   }
+
+export component MidiErrorBar inherits Rectangle {
+    in property <string> error-message: "An error occurred while loading.";
+    callback retry;
+
+    border-radius: 8px;
+    background: #1a0c0c;
+
+    VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+
+        HorizontalLayout {
+            spacing: 8px;
+
+            Text {
+                text: "✕";
+                color: #e05555;
+                font-size: 13px;
+                font-weight: 700;
+                vertical-alignment: center;
+            }
+
+            Text {
+                text: "Load failed";
+                color: #e05555;
+                font-size: 12px;
+                font-weight: 600;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+
+            // Retry button
+            Rectangle {
+                width: 54px;
+                height: 26px;
+                border-radius: 6px;
+                background: retry-touch.has-hover ? #2a1520 : #1a1218;
+
+                Text {
+                    text: "Retry";
+                    color: #e07070;
+                    font-size: 11px;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                retry-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.retry(); }
+                }
+            }
+        }
+
+        Text {
+            text: root.error-message;
+            color: #7d4444;
+            font-size: 11px;
+            wrap: word-wrap;
+        }
+    }
+}
+
+
+// ── MidiStateSection ───────────────────────────────────────
+// Convenience wrapper that shows the correct component based
+// on the current MidiLoadState. Drop this into any panel.
+//
+// Usage:
+//   MidiStateSection {
+//       midi-state: render-load-state;
+//       file-name: selected-midi-name;
+//       load-description: "Builds display + audio caches for rendering.";
+//       load-label: "Load for Render";
+//       mode-label: "render";
+//       loading-status: "Building display cache…";
+//       loading-progress: 0.45;
+//       error-message: "";
+//       select-file => { /* file picker */ }
+//       load => { /* start load */ }
+//       cancel-load => { /* cancel */ }
+//       unload => { /* unload */ }
+//       retry-load => { /* retry */ }
+//   }
+
+export component MidiStateSection inherits VerticalLayout {
+    in property <MidiLoadState> midi-state: no-midi;
+    in property <string> file-name: "";
+    in property <string> load-description: "Load this file to continue.";
+    in property <string> load-label: "Load";
+    in property <string> mode-label: "this mode";
+    in property <string> loading-status: "Loading…";
+    in property <float> loading-progress: 0;
+    in property <string> error-message: "";
+
+    callback select-file;
+    callback load;
+    callback cancel-load;
+    callback unload;
+    callback retry-load;
+
+    spacing: 8px;
+
+    SectionHeader { title: "MIDI FILE"; }
+    Rectangle { height: 2px; }
+
+    // File selector — always present (unless no-midi and compact context)
+    MidiFileBar {
+        file-name: root.file-name != "" ? root.file-name : "No file selected";
+        has-file: root.midi-state != MidiLoadState.no-midi;
+        select-file => { root.select-file(); }
+    }
+
+    // State-dependent content
+    if root.midi-state == MidiLoadState.selected : MidiLoadPrompt {
+        file-name: root.file-name;
+        description: root.load-description;
+        load-label: root.load-label;
+        load => { root.load(); }
+    }
+
+    if root.midi-state == MidiLoadState.loading : MidiLoadingBar {
+        status: root.loading-status;
+        progress: root.loading-progress;
+        cancel => { root.cancel-load(); }
+    }
+
+    if root.midi-state == MidiLoadState.loaded : MidiLoadedBar {
+        file-name: root.file-name;
+        mode-label: root.mode-label;
+        unload => { root.unload(); }
+    }
+
+    if root.midi-state == MidiLoadState.error : MidiErrorBar {
+        error-message: root.error-message;
+        retry => { root.retry-load(); }
+    }
+}

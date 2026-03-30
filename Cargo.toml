@@ -4,10 +4,7 @@ members = [
     "crates/meridian-stdio",
     "crates/meridian-ui",
 ]
-default-members = [
-    "crates/meridian-stdio",
-    "crates/meridian-ui",
-]
+default-members = ["crates/meridian-stdio", "crates/meridian-ui"]
 resolver = "3"
 
 [workspace.package]
@@ -25,16 +22,18 @@ midly = "0.5.3"
 png = "0.18.0"
 pollster = "0.4.0"
 rayon = "1.10"
+rfd = "0.15"
 rustc-hash = "2.0.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 slint = { version = "~1.15", features = [
-  "unstable-wgpu-28",
-  "backend-winit-x11",
-  "backend-winit-wayland",
-  "renderer-femtovg",
-  "renderer-skia",
-  "renderer-software",
+    "unstable-wgpu-28",
+    "unstable-winit-030",
+    "backend-winit-x11",
+    "backend-winit-wayland",
+    "renderer-femtovg",
+    "renderer-skia",
+    "renderer-software",
 ] }
 thiserror = "2.0.12"
 wgpu = "28.0.0"

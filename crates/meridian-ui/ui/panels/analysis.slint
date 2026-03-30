@@ -1,0 +1,103 @@
+// ═══════════════════════════════════════════════════════════
+//  Analysis panel (profile 4).
+//
+//  MIDI analysis: note density, key distribution, track
+//  breakdown, and performance statistics.
+//
+//  Uses the *analysis* MIDI loading mode (parsed + processed
+//  MIDI only — no display/audio caches needed).
+// ═══════════════════════════════════════════════════════════
+
+import { MidiLoadState } from "../structs.slint";
+import { SectionHeader, Separator, FieldRow } from "../primitives.slint";
+import { MidiStateSection } from "../midi_loading.slint";
+
+export component AnalysisPanel inherits Rectangle {
+    // ── MIDI state bindings ──
+    in property <MidiLoadState> midi-state: no-midi;
+    in property <string> selected-midi-name: "";
+    in property <string> loading-status: "Loading…";
+    in property <float> loading-progress: 0;
+    in property <string> load-error: "";
+
+    // ── MIDI state callbacks ──
+    callback select-file;
+    callback load-midi;
+    callback cancel-load;
+    callback unload-midi;
+    callback retry-load;
+
+    // ── Analysis data bindings ──
+    in property <string> note-count-text: "—";
+    in property <string> track-count-text: "—";
+    in property <string> midi-length-text: "—";
+    in property <string> tempo-text: "—";
+    in property <string> time-signature-text: "—";
+    in property <string> key-range-text: "—";
+    in property <string> avg-velocity-text: "—";
+    in property <string> note-density-text: "—";
+
+    clip: true;
+
+    Flickable {
+        width: parent.width;
+        height: parent.height;
+
+        VerticalLayout {
+            padding: 20px;
+            padding-right: 24px;
+            spacing: 6px;
+
+            // ── MIDI FILE ──
+            MidiStateSection {
+                midi-state: root.midi-state;
+                file-name: root.selected-midi-name;
+                load-description: "Parses MIDI for structural analysis. No rendering caches needed.";
+                load-label: "Load for Analysis";
+                mode-label: "analysis";
+                loading-status: root.loading-status;
+                loading-progress: root.loading-progress;
+                error-message: root.load-error;
+                select-file => { root.select-file(); }
+                load => { root.load-midi(); }
+                cancel-load => { root.cancel-load(); }
+                unload => { root.unload-midi(); }
+                retry-load => { root.retry-load(); }
+            }
+
+            Rectangle { height: 8px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+            // ── OVERVIEW ──
+            SectionHeader { title: "OVERVIEW"; }
+            Rectangle { height: 4px; }
+            FieldRow { label: "Total Notes";    value: root.note-count-text; }
+            FieldRow { label: "Tracks";         value: root.track-count-text; }
+            FieldRow { label: "Duration";       value: root.midi-length-text; }
+            FieldRow { label: "Key Range";      value: root.key-range-text; }
+
+            Rectangle { height: 8px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+            // ── TEMPO ──
+            SectionHeader { title: "TEMPO"; }
+            Rectangle { height: 4px; }
+            FieldRow { label: "Tempo";          value: root.tempo-text; }
+            FieldRow { label: "Time Signature"; value: root.time-signature-text; }
+
+            Rectangle { height: 8px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+            // ── NOTE STATISTICS ──
+            SectionHeader { title: "NOTE STATISTICS"; }
+            Rectangle { height: 4px; }
+            FieldRow { label: "Avg. Velocity";  value: root.avg-velocity-text; }
+            FieldRow { label: "Note Density";   value: root.note-density-text; }
+
+            Rectangle { height: 20px; }
+        }
+    }
+}

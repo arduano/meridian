@@ -1,19 +1,52 @@
-// Render profile settings panel (profile 1).
-// Video output configuration, scene overrides, codec, render action + progress.
+// ═══════════════════════════════════════════════════════════
+//  Render panel (profile 1).
+//
+//  Video output configuration, scene overrides, codec, render
+//  action + progress. Includes full MIDI loading lifecycle.
+//
+//  The render tab loads MIDI for *video rendering* (display +
+//  audio caches, display session). If the user switches here
+//  with a selected but not-yet-loaded file, a load prompt is
+//  shown.
+// ═══════════════════════════════════════════════════════════
 
+import { MidiLoadState } from "../structs.slint";
 import { SectionHeader, Separator, FieldRow, ToggleButton, PrimaryButton, ProgressBar } from "../primitives.slint";
+import { MidiStateSection } from "../midi_loading.slint";
 
 export component RenderPanel inherits Rectangle {
-    // Bindings pushed down from App
+    // ── MIDI state bindings ──
+    in property <MidiLoadState> midi-state: no-midi;
+    in property <string> selected-midi-name: "";
+    in property <string> loading-status: "Loading…";
+    in property <float> loading-progress: 0;
+    in property <string> load-error: "";
+
+    // ── MIDI state callbacks ──
+    callback select-file;
+    callback load-midi;
+    callback cancel-load;
+    callback unload-midi;
+    callback retry-load;
+
+    // ── Scene bindings (only relevant when loaded) ──
     in property <string> current-renderer-text;
     in property <string> time-space-text;
     in property <string> view-range-text;
     in property <string> scene-summary-text;
-    in property <string> midi-path-text;
 
-    // Callbacks forwarded up to App
+    // ── Render job bindings ──
+    in property <float> render-progress: 0;
+    in property <string> render-status: "Idle";
+    in property <string> render-frames: "—";
+    in property <string> render-avg-fps: "—";
+    in property <string> render-elapsed: "—";
+
+    // ── Callbacks forwarded up to App ──
     callback select-renderer(string);
     callback select-time-space(string);
+    callback start-render;
+    callback cancel-render;
 
     clip: true;
 
@@ -26,6 +59,28 @@ export component RenderPanel inherits Rectangle {
             padding-right: 24px;
             spacing: 6px;
 
+            // ── MIDI FILE ──
+            MidiStateSection {
+                midi-state: root.midi-state;
+                file-name: root.selected-midi-name;
+                load-description: "Builds display + audio caches for video rendering.";
+                load-label: "Load for Render";
+                mode-label: "render";
+                loading-status: root.loading-status;
+                loading-progress: root.loading-progress;
+                error-message: root.load-error;
+                select-file => { root.select-file(); }
+                load => { root.load-midi(); }
+                cancel-load => { root.cancel-load(); }
+                unload => { root.unload-midi(); }
+                retry-load => { root.retry-load(); }
+            }
+
+            Rectangle { height: 8px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+            // ── OUTPUT ── (only show when loaded)
             SectionHeader { title: "OUTPUT"; }
             Rectangle { height: 4px; }
             FieldRow { label: "Resolution";  value: "1920 × 1080"; }
@@ -36,6 +91,7 @@ export component RenderPanel inherits Rectangle {
             Separator { }
             Rectangle { height: 8px; }
 
+            // ── SCENE ──
             SectionHeader { title: "SCENE"; }
             Rectangle { height: 4px; }
             HorizontalLayout {
@@ -56,6 +112,7 @@ export component RenderPanel inherits Rectangle {
             Separator { }
             Rectangle { height: 8px; }
 
+            // ── CODEC ──
             SectionHeader { title: "CODEC"; }
             Rectangle { height: 4px; }
             FieldRow { label: "Container";   value: "MP4"; }
@@ -67,20 +124,22 @@ export component RenderPanel inherits Rectangle {
             Separator { }
             Rectangle { height: 12px; }
 
+            // ── RENDER ACTION ──
             PrimaryButton {
                 label: "Start Render";
-                enabled: root.midi-path-text != "No MIDI loaded";
+                enabled: root.midi-state == MidiLoadState.loaded;
+                pressed => { root.start-render(); }
             }
 
             Rectangle { height: 8px; }
             SectionHeader { title: "PROGRESS"; }
             Rectangle { height: 4px; }
-            ProgressBar { progress: 0.0; }
+            ProgressBar { progress: root.render-progress; }
             Rectangle { height: 4px; }
-            FieldRow { label: "Status";   value: "Idle"; }
-            FieldRow { label: "Frames";   value: "—"; }
-            FieldRow { label: "Avg. FPS"; value: "—"; }
-            FieldRow { label: "Elapsed";  value: "—"; }
+            FieldRow { label: "Status";   value: root.render-status; }
+            FieldRow { label: "Frames";   value: root.render-frames; }
+            FieldRow { label: "Avg. FPS"; value: root.render-avg-fps; }
+            FieldRow { label: "Elapsed";  value: root.render-elapsed; }
 
             Rectangle { height: 20px; }
         }

@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    path::PathBuf,
     rc::Rc,
     sync::{Arc, Mutex},
     time::Duration,
@@ -11,11 +12,12 @@ use meridian_core::{
     spawn_core,
 };
 use slint::ComponentHandle;
+use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
 
 use super::{
     core_bridge::UiCoreBridge,
     state::{UiOptions, apply_events_to_app},
-    view::App,
+    view::{App, MidiLoadState},
     view_model::UiViewModel,
     viewport::ViewportRenderer,
 };
@@ -40,6 +42,7 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let viewport_size = Rc::new(RefCell::new((1280_u32, 720_u32)));
     initialize_core(&bridge, &options, &app, &shared_state)?;
     wire_callbacks(&app, &bridge, &shared_state);
+    install_drag_drop(&app);
     install_viewport(
         &app,
         bridge.core(),
@@ -75,6 +78,15 @@ pub(crate) fn initialize_core(
 }
 
 fn wire_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mutex<UiViewModel>>) {
+    wire_transport_callbacks(app, bridge, shared_state);
+    wire_midi_callbacks(app, bridge, shared_state);
+}
+
+fn wire_transport_callbacks(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+) {
     {
         let bridge = bridge.clone();
         let app_weak = app.as_weak();
@@ -162,6 +174,224 @@ fn wire_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mutex<UiV
             }
         });
     }
+}
+
+/// Wire MIDI file selection, loading, unloading, and drag-drop callbacks.
+fn wire_midi_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mutex<UiViewModel>>) {
+    // ── Browse button (open native file dialog) ──
+    {
+        let app_weak = app.as_weak();
+        app.on_select_midi_file(move || {
+            let app_weak = app_weak.clone();
+            // rfd's async dialog won't block the event loop on supported platforms
+            std::thread::spawn(move || {
+                let file = rfd::FileDialog::new()
+                    .add_filter("MIDI files", &["mid", "midi", "MID", "MIDI"])
+                    .add_filter("All files", &["*"])
+                    .pick_file();
+                if let Some(path) = file {
+                    let name: slint::SharedString = path.display().to_string().into();
+                    let _ = app_weak.upgrade_in_event_loop(move |app| {
+                        app.set_selected_midi_name(name);
+                        app.set_render_load_state(MidiLoadState::Selected);
+                        app.set_analysis_load_state(MidiLoadState::Selected);
+                        app.set_load_error(Default::default());
+                    });
+                }
+            });
+        });
+    }
+
+    // ── File dropped from OS ──
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_drop_midi_file(move |path| {
+            if let Some(app) = app_weak.upgrade() {
+                app.set_selected_midi_name(path.clone());
+                app.set_render_load_state(MidiLoadState::Selected);
+                app.set_analysis_load_state(MidiLoadState::Selected);
+                app.set_load_error(Default::default());
+                // Auto-load for the current profile context
+                let profile = app.get_active_profile();
+                if profile == 0 || profile == 1 || profile == 2 {
+                    load_midi_for_render(&app, &bridge, &shared_state, &path);
+                } else {
+                    load_midi_for_render(&app, &bridge, &shared_state, &path);
+                }
+            }
+        });
+    }
+
+    // ── Load for render / preview / audio ──
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_load_for_render(move || {
+            if let Some(app) = app_weak.upgrade() {
+                let midi_name = app.get_selected_midi_name();
+                if !midi_name.is_empty() {
+                    load_midi_for_render(&app, &bridge, &shared_state, &midi_name);
+                }
+            }
+        });
+    }
+
+    // ── Load for analysis / modify ──
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_load_for_analysis(move || {
+            if let Some(app) = app_weak.upgrade() {
+                let midi_name = app.get_selected_midi_name();
+                if !midi_name.is_empty() {
+                    load_midi_for_render(&app, &bridge, &shared_state, &midi_name);
+                }
+            }
+        });
+    }
+
+    // ── Cancel load ──
+    {
+        let app_weak = app.as_weak();
+        app.on_cancel_load(move || {
+            if let Some(app) = app_weak.upgrade() {
+                // Revert to "selected" state (we don't have a real cancel mechanism in
+                // the core yet, but the UI state should reflect the intent)
+                if app.get_render_load_state() == MidiLoadState::Loading {
+                    app.set_render_load_state(MidiLoadState::Selected);
+                }
+                if app.get_analysis_load_state() == MidiLoadState::Loading {
+                    app.set_analysis_load_state(MidiLoadState::Selected);
+                }
+                app.set_loading_progress(0.0);
+                app.set_loading_status(Default::default());
+            }
+        });
+    }
+
+    // ── Unload render ──
+    {
+        let app_weak = app.as_weak();
+        app.on_unload_render(move || {
+            if let Some(app) = app_weak.upgrade() {
+                app.set_render_load_state(MidiLoadState::NoMidi);
+                app.set_selected_midi_name(Default::default());
+                app.set_loading_progress(0.0);
+                app.set_loading_status(Default::default());
+            }
+        });
+    }
+
+    // ── Unload analysis ──
+    {
+        let app_weak = app.as_weak();
+        app.on_unload_analysis(move || {
+            if let Some(app) = app_weak.upgrade() {
+                app.set_analysis_load_state(MidiLoadState::NoMidi);
+                app.set_selected_midi_name(Default::default());
+                app.set_loading_progress(0.0);
+                app.set_loading_status(Default::default());
+            }
+        });
+    }
+
+    // ── Retry load render ──
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_retry_load_render(move || {
+            if let Some(app) = app_weak.upgrade() {
+                let midi_name = app.get_selected_midi_name();
+                if !midi_name.is_empty() {
+                    load_midi_for_render(&app, &bridge, &shared_state, &midi_name);
+                }
+            }
+        });
+    }
+
+    // ── Retry load analysis ──
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_retry_load_analysis(move || {
+            if let Some(app) = app_weak.upgrade() {
+                let midi_name = app.get_selected_midi_name();
+                if !midi_name.is_empty() {
+                    load_midi_for_render(&app, &bridge, &shared_state, &midi_name);
+                }
+            }
+        });
+    }
+}
+
+/// Actually load a MIDI file through the core bridge and update UI state.
+fn load_midi_for_render(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    midi_path: &str,
+) {
+    app.set_render_load_state(MidiLoadState::Loading);
+    app.set_analysis_load_state(MidiLoadState::Loading);
+    app.set_loading_status("Loading MIDI…".into());
+    app.set_loading_progress(0.0);
+    app.set_load_error(Default::default());
+
+    let path = PathBuf::from(midi_path.to_string());
+    match bridge.load_midi(path, shared_state) {
+        Ok(events) => {
+            apply_events_to_app(app, shared_state, &events);
+            app.set_render_load_state(MidiLoadState::Loaded);
+            app.set_analysis_load_state(MidiLoadState::Loaded);
+            app.set_loading_progress(1.0);
+            app.set_loading_status("Loaded".into());
+        }
+        Err(e) => {
+            app.set_render_load_state(MidiLoadState::Error);
+            app.set_analysis_load_state(MidiLoadState::Error);
+            app.set_load_error(e.to_string().into());
+            app.set_loading_status(Default::default());
+        }
+    }
+    app.window().request_redraw();
+}
+
+/// Install the winit window event handler for OS file drag-and-drop.
+fn install_drag_drop(app: &App) {
+    let app_weak = app.as_weak();
+    app.window()
+        .on_winit_window_event(move |_slint_window, event| match event {
+            winit::event::WindowEvent::HoveredFile(_path) => {
+                if let Some(app) = app_weak.upgrade() {
+                    app.set_drop_hovering(true);
+                    app.window().request_redraw();
+                }
+                EventResult::Propagate
+            }
+            winit::event::WindowEvent::DroppedFile(path) => {
+                if let Some(app) = app_weak.upgrade() {
+                    app.set_drop_hovering(false);
+                    let path_str: slint::SharedString = path.display().to_string().into();
+                    app.invoke_drop_midi_file(path_str);
+                    app.window().request_redraw();
+                }
+                EventResult::Propagate
+            }
+            winit::event::WindowEvent::HoveredFileCancelled => {
+                if let Some(app) = app_weak.upgrade() {
+                    app.set_drop_hovering(false);
+                    app.window().request_redraw();
+                }
+                EventResult::Propagate
+            }
+            _ => EventResult::Propagate,
+        });
 }
 
 fn install_viewport(

@@ -2,27 +2,64 @@
 //  Meridian — main application window.
 //
 //  Imports components from:
-//   - structs.slint      (InspectorRow)
-//   - primitives.slint   (SectionHeader, FieldRow, …)
-//   - chrome.slint       (ProfileTab, TransportButton, TimeScrubber)
-//   - panels/*.slint     (RenderPanel, ModifyPanel, PlaceholderPanel)
+//   - structs.slint        (InspectorRow, MidiLoadState)
+//   - primitives.slint     (SectionHeader, FieldRow, …)
+//   - chrome.slint         (ProfileTab, TransportButton, TimeScrubber)
+//   - midi_loading.slint   (MidiStateSection, MidiFileBar, …)
+//   - panels/*.slint       (PreviewWelcome, DropOverlay, RenderPanel, …)
 // ═══════════════════════════════════════════════════════════
 
-import { InspectorRow } from "structs.slint";
+import { InspectorRow, MidiLoadState } from "structs.slint";
 import { SectionHeader, FieldRow } from "primitives.slint";
 import { ProfileTab, TransportButton, TimeScrubber } from "chrome.slint";
+import { PreviewWelcome, DropOverlay } from "panels/preview.slint";
 import { RenderPanel } from "panels/render.slint";
+import { AudioPanel } from "panels/audio.slint";
 import { ModifyPanel } from "panels/modify.slint";
-import { PlaceholderPanel } from "panels/placeholder.slint";
+import { AnalysisPanel } from "panels/analysis.slint";
 
-export { InspectorRow }
+export { InspectorRow, MidiLoadState }
 
 export component App inherits Window {
 
     // ── Viewport texture ──
     in-out property <image> viewport-image;
 
-    // ── Shared state (stable API — do not rename) ──
+    // ══════════════════════════════════════════
+    //  MIDI FILE STATE
+    // ══════════════════════════════════════════
+
+    // Global selection (shared across all tabs)
+    in-out property <string> selected-midi-name: "";
+
+    // Per-mode load states (Rust sets these based on pipeline progress)
+    in-out property <MidiLoadState> render-load-state:   no-midi;
+    in-out property <MidiLoadState> analysis-load-state:  no-midi;
+
+    // Loading progress (shared — only one load at a time)
+    in-out property <string> loading-status: "";
+    in-out property <float> loading-progress: 0;
+    in-out property <string> load-error: "";
+
+    // Drag-and-drop state (set by Rust via winit events)
+    in-out property <bool> drop-hovering: false;
+
+    // MIDI file callbacks
+    callback select-midi-file;                  // open file picker
+    callback drop-midi-file(string);            // file dropped (path from Rust)
+    callback load-for-render;                   // load MIDI for render/audio mode
+    callback load-for-analysis;                 // load MIDI for modify/analysis mode
+    callback cancel-load;                       // cancel active loading
+    callback unload-render;                     // unload from render/audio mode
+    callback unload-analysis;                   // unload from modify/analysis mode
+    callback retry-load-render;                 // retry failed render load
+    callback retry-load-analysis;               // retry failed analysis load
+
+
+    // ══════════════════════════════════════════
+    //  SHARED STATE (stable API — do not rename)
+    // ══════════════════════════════════════════
+
     in-out property <string> midi-path-text: "No MIDI loaded";
     in-out property <string> status-text: "Waiting for MIDI";
     in-out property <string> time-text: "0.000 s";
@@ -41,14 +78,27 @@ export component App inherits Window {
     in-out property <float> midi-length-seconds: 1;
     in-out property <[InspectorRow]> inspector-items;
 
+
     // ── Profile (0=Preview 1=Render 2=Audio 3=Modify 4=Analysis) ──
     in-out property <int> active-profile: 0;
 
     // ── Derived layout flags ──
+    //   has-viewport:     profiles that show the wgpu viewport (Preview, Render, Audio)
+    //   compact-viewport: viewport is small with a settings panel beside it
+    //   full-viewport:    viewport fills the content area
+    //   panel-only:       no viewport at all, just a full-width panel
+    private property <bool> has-viewport:
+        root.active-profile == 0 || root.active-profile == 1 || root.active-profile == 2;
     private property <bool> compact-viewport:
-        root.active-profile == 1 || root.active-profile == 2 || root.active-profile == 4;
+        root.active-profile == 1 || root.active-profile == 2;
     private property <bool> full-viewport:
-        root.active-profile == 0 || root.active-profile == 3;
+        root.active-profile == 0;
+    private property <bool> panel-only:
+        root.active-profile == 3 || root.active-profile == 4;
+
+    // Whether the Preview page shows the welcome hero (no MIDI loaded)
+    private property <bool> show-preview-welcome:
+        root.active-profile == 0 && root.render-load-state != MidiLoadState.loaded;
 
     // ── Viewport pixel dimensions (consumed by Rust) ──
     out property <float> viewport-px-width:  viewport-box.width  / 1px;
@@ -61,6 +111,10 @@ export component App inherits Window {
     callback seek-time(float);
     callback select-renderer(string);
     callback select-time-space(string);
+    callback start-render;
+    callback cancel-render;
+    callback start-audio-render;
+    callback cancel-audio-render;
 
     title: "Meridian";
     preferred-width: 1540px;
@@ -147,6 +201,10 @@ export component App inherits Window {
 
         // ══════════════════════════════════════════
         //  CONTENT AREA
+        //
+        //  No `if` conditionals here — all branches use
+        //  `visible:` so that `viewport-box :=` always
+        //  exists and Rust can read its pixel dimensions.
         // ══════════════════════════════════════════
 
         HorizontalLayout {
@@ -154,8 +212,7 @@ export component App inherits Window {
             vertical-stretch: 1;
 
             // ──────────────────────────────────────
-            //  LEFT: Settings panel
-            //  (visible in Render / Audio / Analysis)
+            //  LEFT: Settings panel (Render / Audio)
             // ──────────────────────────────────────
             Rectangle {
                 visible: root.compact-viewport;
@@ -165,41 +222,58 @@ export component App inherits Window {
                 // Right-edge separator
                 Rectangle { x: parent.width - 1px; width: 1px; height: parent.height; background: #141e2e; }
 
-                // ─── RENDER ─── (profile 1)
                 RenderPanel {
                     visible: root.active-profile == 1;
                     x: 0; y: 0; width: parent.width; height: parent.height;
+
+                    midi-state:            root.render-load-state;
+                    selected-midi-name:    root.selected-midi-name;
+                    loading-status:        root.loading-status;
+                    loading-progress:      root.loading-progress;
+                    load-error:            root.load-error;
+                    select-file            => { root.select-midi-file(); }
+                    load-midi              => { root.load-for-render(); }
+                    cancel-load            => { root.cancel-load(); }
+                    unload-midi            => { root.unload-render(); }
+                    retry-load             => { root.retry-load-render(); }
+
                     current-renderer-text: root.current-renderer-text;
                     time-space-text:       root.time-space-text;
                     view-range-text:       root.view-range-text;
                     scene-summary-text:    root.scene-summary-text;
-                    midi-path-text:        root.midi-path-text;
                     select-renderer(r)     => { root.select-renderer(r); }
                     select-time-space(ts)  => { root.select-time-space(ts); }
+                    start-render           => { root.start-render(); }
+                    cancel-render          => { root.cancel-render(); }
                 }
 
-                // ─── AUDIO ─── (profile 2)
-                PlaceholderPanel {
+                AudioPanel {
                     visible: root.active-profile == 2;
                     x: 0; y: 0; width: parent.width; height: parent.height;
-                    panel-title: "Audio";
-                    panel-description: "Audio backend, soundfont management, XSynth settings, and offline WAV render.";
-                }
 
-                // ─── ANALYSIS ─── (profile 4)
-                PlaceholderPanel {
-                    visible: root.active-profile == 4;
-                    x: 0; y: 0; width: parent.width; height: parent.height;
-                    panel-title: "Analysis";
-                    panel-description: "MIDI analysis, note density, key distribution, and performance statistics.";
+                    midi-state:            root.render-load-state;
+                    selected-midi-name:    root.selected-midi-name;
+                    loading-status:        root.loading-status;
+                    loading-progress:      root.loading-progress;
+                    load-error:            root.load-error;
+                    select-file            => { root.select-midi-file(); }
+                    load-midi              => { root.load-for-render(); }
+                    cancel-load            => { root.cancel-load(); }
+                    unload-midi            => { root.unload-render(); }
+                    retry-load             => { root.retry-load-render(); }
+
+                    start-audio-render     => { root.start-audio-render(); }
+                    cancel-audio-render    => { root.cancel-audio-render(); }
                 }
             }
 
 
             // ──────────────────────────────────────
             //  CENTER: Viewport column
+            //  (Preview / Render / Audio)
             // ──────────────────────────────────────
             VerticalLayout {
+                visible: root.has-viewport;
                 horizontal-stretch: root.full-viewport ? 1 : 0;
                 spacing: 0px;
 
@@ -221,6 +295,7 @@ export component App inherits Window {
 
                     // FPS overlay (top-right)
                     Rectangle {
+                        visible: root.render-load-state == MidiLoadState.loaded;
                         x: parent.width - 76px;
                         y: 8px;
                         width: 68px;
@@ -239,9 +314,9 @@ export component App inherits Window {
                         }
                     }
 
-                    // MIDI path overlay (Preview only, bottom-left)
+                    // MIDI path overlay (Preview only when loaded, bottom-left)
                     Rectangle {
-                        visible: root.active-profile == 0 && root.midi-path-text != "No MIDI loaded";
+                        visible: root.active-profile == 0 && root.render-load-state == MidiLoadState.loaded;
                         x: 12px;
                         y: parent.height - 38px;
                         width: 400px;
@@ -252,12 +327,30 @@ export component App inherits Window {
                         Text {
                             x: 10px;
                             width: parent.width - 20px;
-                            text: root.midi-path-text;
+                            text: root.selected-midi-name;
                             color: #4d6580;
                             font-size: 11px;
                             vertical-alignment: center;
                             overflow: elide;
                         }
+                    }
+
+                    // ── Preview Welcome overlay ──
+                    PreviewWelcome {
+                        visible: root.show-preview-welcome;
+                        x: 0; y: 0; width: parent.width; height: parent.height;
+
+                        midi-state:         root.render-load-state;
+                        selected-midi-name: root.selected-midi-name;
+                        loading-status:     root.loading-status;
+                        loading-progress:   root.loading-progress;
+                        load-error:         root.load-error;
+                        drop-hovering:      root.drop-hovering;
+                        select-file         => { root.select-midi-file(); }
+                        load-midi           => { root.load-for-render(); }
+                        cancel-load         => { root.cancel-load(); }
+                        unload-midi         => { root.unload-render(); }
+                        retry-load          => { root.retry-load-render(); }
                     }
                 }
 
@@ -276,7 +369,7 @@ export component App inherits Window {
 
                         SectionHeader { title: "PREVIEW"; }
                         Rectangle { height: 4px; }
-                        FieldRow { label: "MIDI";        value: root.midi-path-text; }
+                        FieldRow { label: "MIDI";        value: root.selected-midi-name != "" ? root.selected-midi-name : "No file selected"; }
                         FieldRow { label: "Total Notes"; value: root.note-count-text; }
                         FieldRow { label: "Visible";     value: root.visible-note-count-text; }
                         FieldRow { label: "Active Keys"; value: root.active-keys-text; }
@@ -290,18 +383,29 @@ export component App inherits Window {
 
 
             // ──────────────────────────────────────
-            //  RIGHT: Modify sidebar (profile 3)
+            //  FULL-WIDTH: Panel-only profiles
+            //  (Modify / Analysis — no viewport)
             // ──────────────────────────────────────
             Rectangle {
-                width: root.active-profile == 3 ? 340px : 0px;
+                visible: root.panel-only;
+                horizontal-stretch: root.panel-only ? 1 : 0;
                 background: #0a1018;
-
-                // Left-edge separator
-                Rectangle { visible: root.active-profile == 3; width: 1px; height: parent.height; background: #141e2e; }
 
                 ModifyPanel {
                     visible: root.active-profile == 3;
                     x: 0; y: 0; width: parent.width; height: parent.height;
+
+                    midi-state:               root.analysis-load-state;
+                    selected-midi-name:       root.selected-midi-name;
+                    loading-status:           root.loading-status;
+                    loading-progress:         root.loading-progress;
+                    load-error:               root.load-error;
+                    select-file               => { root.select-midi-file(); }
+                    load-midi                 => { root.load-for-analysis(); }
+                    cancel-load               => { root.cancel-load(); }
+                    unload-midi               => { root.unload-analysis(); }
+                    retry-load                => { root.retry-load-analysis(); }
+
                     current-renderer-text:    root.current-renderer-text;
                     time-space-text:          root.time-space-text;
                     note-count-text:          root.note-count-text;
@@ -313,7 +417,35 @@ export component App inherits Window {
                     select-renderer(r)        => { root.select-renderer(r); }
                     select-time-space(ts)     => { root.select-time-space(ts); }
                 }
+
+                AnalysisPanel {
+                    visible: root.active-profile == 4;
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+
+                    midi-state:            root.analysis-load-state;
+                    selected-midi-name:    root.selected-midi-name;
+                    loading-status:        root.loading-status;
+                    loading-progress:      root.loading-progress;
+                    load-error:            root.load-error;
+                    select-file            => { root.select-midi-file(); }
+                    load-midi              => { root.load-for-analysis(); }
+                    cancel-load            => { root.cancel-load(); }
+                    unload-midi            => { root.unload-analysis(); }
+                    retry-load             => { root.retry-load-analysis(); }
+
+                    note-count-text:       root.note-count-text;
+                }
             }
         }
+    }
+
+    // ══════════════════════════════════════════
+    //  DROP OVERLAY (topmost layer)
+    // ══════════════════════════════════════════
+    DropOverlay {
+        visible-when: root.drop-hovering && root.active-profile != 0;
+        x: 0; y: 0;
+        width: root.width;
+        height: root.height;
     }
 }

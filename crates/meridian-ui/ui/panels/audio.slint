@@ -1,0 +1,130 @@
+// ═══════════════════════════════════════════════════════════
+//  Audio panel (profile 2).
+//
+//  Audio backend, soundfont management, XSynth settings,
+//  and offline WAV render.
+//
+//  The audio tab also loads MIDI for *video rendering* (same
+//  pipeline as Render tab — display + audio caches).
+// ═══════════════════════════════════════════════════════════
+
+import { MidiLoadState } from "../structs.slint";
+import { SectionHeader, Separator, FieldRow, ToggleButton, PrimaryButton, ProgressBar } from "../primitives.slint";
+import { MidiStateSection } from "../midi_loading.slint";
+
+export component AudioPanel inherits Rectangle {
+    // ── MIDI state bindings ──
+    in property <MidiLoadState> midi-state: no-midi;
+    in property <string> selected-midi-name: "";
+    in property <string> loading-status: "Loading…";
+    in property <float> loading-progress: 0;
+    in property <string> load-error: "";
+
+    // ── MIDI state callbacks ──
+    callback select-file;
+    callback load-midi;
+    callback cancel-load;
+    callback unload-midi;
+    callback retry-load;
+
+    // ── Audio config bindings ──
+    in property <string> audio-backend-text: "xsynth";
+    in property <string> soundfont-text: "(default)";
+    in property <string> sample-rate-text: "48000 Hz";
+    in property <string> buffer-size-text: "512";
+    in property <string> audio-status-text: "Idle";
+
+    // ── Audio render bindings ──
+    in property <float> audio-render-progress: 0;
+    in property <string> audio-render-status: "Idle";
+    in property <string> audio-render-elapsed: "—";
+
+    // ── Callbacks ──
+    callback start-audio-render;
+    callback cancel-audio-render;
+
+    clip: true;
+
+    Flickable {
+        width: parent.width;
+        height: parent.height;
+
+        VerticalLayout {
+            padding: 20px;
+            padding-right: 24px;
+            spacing: 6px;
+
+            // ── MIDI FILE ──
+            MidiStateSection {
+                midi-state: root.midi-state;
+                file-name: root.selected-midi-name;
+                load-description: "Builds audio caches for playback and WAV export.";
+                load-label: "Load for Audio";
+                mode-label: "audio";
+                loading-status: root.loading-status;
+                loading-progress: root.loading-progress;
+                error-message: root.load-error;
+                select-file => { root.select-file(); }
+                load => { root.load-midi(); }
+                cancel-load => { root.cancel-load(); }
+                unload => { root.unload-midi(); }
+                retry-load => { root.retry-load(); }
+            }
+
+            Rectangle { height: 8px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+            // ── BACKEND ──
+            SectionHeader { title: "BACKEND"; }
+            Rectangle { height: 4px; }
+            HorizontalLayout {
+                spacing: 4px;
+                ToggleButton { label: "XSynth"; active: root.audio-backend-text == "xsynth"; }
+            }
+            FieldRow { label: "Status"; value: root.audio-status-text; }
+
+            Rectangle { height: 8px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+            // ── SOUNDFONT ──
+            SectionHeader { title: "SOUNDFONT"; }
+            Rectangle { height: 4px; }
+            FieldRow { label: "Active";      value: root.soundfont-text; }
+            FieldRow { label: "Sample Rate"; value: root.sample-rate-text; }
+            FieldRow { label: "Buffer Size"; value: root.buffer-size-text; }
+
+            Rectangle { height: 8px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+            // ── LIVE PLAYBACK ──
+            SectionHeader { title: "LIVE PLAYBACK"; }
+            Rectangle { height: 4px; }
+            FieldRow { label: "Latency"; value: "~10 ms"; }
+            FieldRow { label: "Voices";  value: "—"; }
+
+            Rectangle { height: 8px; }
+            Separator { }
+            Rectangle { height: 12px; }
+
+            // ── WAV RENDER ──
+            PrimaryButton {
+                label: "Export WAV";
+                enabled: root.midi-state == MidiLoadState.loaded;
+                pressed => { root.start-audio-render(); }
+            }
+
+            Rectangle { height: 8px; }
+            SectionHeader { title: "RENDER PROGRESS"; }
+            Rectangle { height: 4px; }
+            ProgressBar { progress: root.audio-render-progress; }
+            Rectangle { height: 4px; }
+            FieldRow { label: "Status";  value: root.audio-render-status; }
+            FieldRow { label: "Elapsed"; value: root.audio-render-elapsed; }
+
+            Rectangle { height: 20px; }
+        }
+    }
+}

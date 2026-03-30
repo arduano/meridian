@@ -1,7 +1,35 @@
-// Exported data structs shared between Slint and Rust.
+// ═══════════════════════════════════════════════════════════
+//  Structs — exported data types shared between Slint and Rust.
+//
+//  These are the *only* Slint structs that cross the FFI boundary.
+//  Add new shared data types here.
+// ═══════════════════════════════════════════════════════════
+
+
+// ── InspectorRow ───────────────────────────────────────────
+// One row in the scene-config inspector list.
 
 export struct InspectorRow {
     section: string,
     label: string,
     value: string,
+}
+
+
+// ── MidiLoadState ──────────────────────────────────────────
+// Describes the loading state for a particular tab mode.
+//
+// Rust maps these integer values:
+//   0 = no-midi     — no MIDI file has been selected at all
+//   1 = selected    — a file is selected but not loaded for this mode
+//   2 = loading     — actively loading / building caches
+//   3 = loaded      — fully loaded and ready for this mode
+//   4 = error       — loading failed
+
+export enum MidiLoadState {
+    no-midi,
+    selected,
+    loading,
+    loaded,
+    error,
 }

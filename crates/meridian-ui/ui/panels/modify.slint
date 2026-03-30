@@ -1,31 +1,77 @@
-// Modify profile sidebar (profile 3).
-// Renderer, time space, stats, and inspector.
+// ═══════════════════════════════════════════════════════════
+//  Modify panel (profile 3) — right sidebar.
+//
+//  Scene configuration and real-time inspector. Uses the
+//  *analysis* MIDI loading mode (no display/audio caches,
+//  just parsed + processed MIDI).
+//
+//  This panel is for tweaking scene parameters and inspecting
+//  the current configuration — not for rendering.
+// ═══════════════════════════════════════════════════════════
 
+import { MidiLoadState, InspectorRow } from "../structs.slint";
 import { SectionHeader, Separator, FieldRow, ToggleButton, InspectorLine } from "../primitives.slint";
-import { InspectorRow } from "../structs.slint";
+import { MidiStateSection } from "../midi_loading.slint";
 
 export component ModifyPanel inherits Rectangle {
-    // Bindings pushed down from App
+    // ── MIDI state bindings ──
+    in property <MidiLoadState> midi-state: no-midi;
+    in property <string> selected-midi-name: "";
+    in property <string> loading-status: "Loading…";
+    in property <float> loading-progress: 0;
+    in property <string> load-error: "";
+
+    // ── MIDI state callbacks ──
+    callback select-file;
+    callback load-midi;
+    callback cancel-load;
+    callback unload-midi;
+    callback retry-load;
+
+    // ── Scene config bindings ──
     in property <string> current-renderer-text;
     in property <string> time-space-text;
+
+    // ── Stats bindings ──
     in property <string> note-count-text;
     in property <string> visible-note-count-text;
     in property <string> active-keys-text;
     in property <string> viewport-text;
     in property <string> fps-text;
+
+    // ── Inspector ──
     in property <[InspectorRow]> inspector-items;
 
-    // Callbacks forwarded up to App
+    // ── Callbacks ──
     callback select-renderer(string);
     callback select-time-space(string);
 
     VerticalLayout {
         padding: 16px;
         padding-left: 20px;
-        spacing: 16px;
+        spacing: 12px;
         alignment: start;
 
-        // ── Renderer ──
+        // ── MIDI FILE ──
+        MidiStateSection {
+            midi-state: root.midi-state;
+            file-name: root.selected-midi-name;
+            load-description: "Parses MIDI for scene configuration and inspection.";
+            load-label: "Load for Modify";
+            mode-label: "modify";
+            loading-status: root.loading-status;
+            loading-progress: root.loading-progress;
+            error-message: root.load-error;
+            select-file => { root.select-file(); }
+            load => { root.load-midi(); }
+            cancel-load => { root.cancel-load(); }
+            unload => { root.unload-midi(); }
+            retry-load => { root.retry-load(); }
+        }
+
+        Separator { }
+
+        // ── Scene config ──
         VerticalLayout {
             spacing: 8px;
             SectionHeader { title: "RENDERER"; }
@@ -37,9 +83,6 @@ export component ModifyPanel inherits Rectangle {
             }
         }
 
-        Separator { }
-
-        // ── Time space ──
         VerticalLayout {
             spacing: 8px;
             SectionHeader { title: "TIME SPACE"; }
