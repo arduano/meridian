@@ -2,6 +2,7 @@ use std::{
     fs::File,
     io::{Read, Seek, SeekFrom},
     path::PathBuf,
+    sync::OnceLock,
 };
 
 use midi_toolkit::{
@@ -11,14 +12,23 @@ use midi_toolkit::{
 
 use crate::error::MeridianError;
 
-use super::{MIDIFileUniqueSignature, open_file_and_signature};
+use super::{MIDIFileUniqueSignature, analysis::gzip_size_for_path, open_file_and_signature};
 
 pub type ToolkitMidiFile = TKMIDIFile<DiskReader>;
+
+#[derive(Debug, Clone, Copy)]
+pub struct ParsedMidiHeader {
+    pub format: u16,
+    pub declared_track_count: u16,
+    pub time_division: u16,
+}
 
 pub struct ParsedMidiFile {
     midi: ToolkitMidiFile,
     signature: MIDIFileUniqueSignature,
+    header: ParsedMidiHeader,
     total_event_count: u64,
+    gzip_size: OnceLock<u64>,
 }
 
 impl ParsedMidiFile {
@@ -31,7 +41,8 @@ impl ParsedMidiFile {
         mut progress: impl FnMut(f32),
     ) -> Result<Self, MeridianError> {
         let (mut file, signature) = open_file_and_signature(path)?;
-        let declared_track_count = read_declared_track_count(&mut file)?.max(1);
+        let header = read_header(&mut file)?;
+        let declared_track_count = header.declared_track_count.max(1);
         file.seek(SeekFrom::Start(0))?;
         let mut read_progress = |tracks_done: u32| {
             progress((tracks_done as f32 / declared_track_count as f32).clamp(0.0, 1.0));
@@ -47,7 +58,9 @@ impl ParsedMidiFile {
         Ok(Self {
             midi,
             signature,
+            header,
             total_event_count,
+            gzip_size: OnceLock::new(),
         })
     }
 
@@ -59,12 +72,26 @@ impl ParsedMidiFile {
         &self.signature
     }
 
+    pub fn header(&self) -> ParsedMidiHeader {
+        self.header
+    }
+
     pub fn total_event_count(&self) -> u64 {
         self.total_event_count
     }
+
+    pub fn cached_gzip_size(&self) -> std::io::Result<u64> {
+        if let Some(size) = self.gzip_size.get() {
+            return Ok(*size);
+        }
+
+        let size = gzip_size_for_path(&self.signature.filepath)?;
+        let _ = self.gzip_size.set(size);
+        Ok(*self.gzip_size.get().unwrap_or(&size))
+    }
 }
 
-fn read_declared_track_count(file: &mut File) -> Result<u32, MeridianError> {
+fn read_header(file: &mut File) -> Result<ParsedMidiHeader, MeridianError> {
     let mut header = [0_u8; 14];
     file.seek(SeekFrom::Start(0))?;
     file.read_exact(&mut header)?;
@@ -73,5 +100,9 @@ fn read_declared_track_count(file: &mut File) -> Result<u32, MeridianError> {
             "missing MIDI header chunk".into(),
         ));
     }
-    Ok(u16::from_be_bytes([header[10], header[11]]) as u32)
+    Ok(ParsedMidiHeader {
+        format: u16::from_be_bytes([header[8], header[9]]),
+        declared_track_count: u16::from_be_bytes([header[10], header[11]]),
+        time_division: u16::from_be_bytes([header[12], header[13]]),
+    })
 }

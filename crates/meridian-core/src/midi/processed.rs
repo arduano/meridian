@@ -15,6 +15,7 @@ use crate::{
     error::MeridianError,
     midi::{
         MIDIColor, MIDIColorPair, MIDIFileUniqueSignature, TrackAndChannel,
+        analysis::{CachedMidiAnalysis, MidiAnalysisAccumulator},
         audio_cache::{CompressedAudio, InRamAudioCache},
         display_cache::DisplayMidiCache,
         parsed::ParsedMidiFile,
@@ -27,6 +28,7 @@ use crate::{
 #[derive(Clone)]
 pub struct ProcessedMidi {
     display: Arc<DisplayMidiCache>,
+    analysis: Arc<CachedMidiAnalysis>,
     audio: Arc<InRamAudioCache>,
     signature: MIDIFileUniqueSignature,
     config: MidiProcessingConfig,
@@ -50,6 +52,10 @@ impl ProcessedMidi {
 
     pub fn audio_cache(&self) -> Arc<InRamAudioCache> {
         Arc::clone(&self.audio)
+    }
+
+    pub fn analysis_cache(&self) -> Arc<CachedMidiAnalysis> {
+        Arc::clone(&self.analysis)
     }
 
     pub fn signature(&self) -> &MIDIFileUniqueSignature {
@@ -117,6 +123,7 @@ fn build_processed_midi(
     let mut current_colors = vec![None; track_count * 16];
     let mut open_notes: FxHashMap<(u8, TrackAndChannel), VecDeque<OpenNote>> = FxHashMap::default();
     let mut finished_notes = vec![Vec::<FinishedNote>::new(); 256];
+    let mut analysis = MidiAnalysisAccumulator::new(track_count);
 
     let mut current_audio_time = 0.0;
     let mut current_audio_data = Vec::new();
@@ -128,6 +135,7 @@ fn build_processed_midi(
         let event: ToolkitEvent = event;
         time += event.delta;
         let output_time = (time + config.time.offset_seconds).max(0.0);
+        analysis.observe_time_advance(output_time);
         flush_audio_block(
             &mut audio_blocks,
             &mut current_audio_time,
@@ -137,8 +145,10 @@ fn build_processed_midi(
         );
 
         let track = event.track;
+        analysis.observe_event(event.as_event(), output_time);
         match event.as_event() {
             Event::NoteOn(note_on) => {
+                analysis.observe_note_on_velocity(note_on.velocity);
                 let velocity = config.notes.map_velocity(note_on.velocity);
                 let is_note_off = velocity == 0
                     && matches!(
@@ -164,6 +174,7 @@ fn build_processed_midi(
                     continue;
                 };
                 let track_chan = TrackAndChannel::new(track, note_on.channel);
+                analysis.observe_note_start(output_time, key as usize, track_chan);
                 open_notes
                     .entry((key, track_chan))
                     .or_default()
@@ -175,6 +186,7 @@ fn build_processed_midi(
                 current_audio_data.extend_from_slice(&[0x90 | note_on.channel, key, velocity]);
             }
             Event::NoteOff(note_off) => {
+                analysis.observe_note_off();
                 end_note(
                     &mut open_notes,
                     &mut finished_notes,
@@ -282,10 +294,11 @@ fn build_processed_midi(
     let mut note_count = 0_u64;
     let columns = finished_notes
         .into_iter()
-        .map(|mut key_notes| {
+        .enumerate()
+        .map(|(key, mut key_notes)| {
             key_notes.sort_by(|a, b| a.start.total_cmp(&b.start));
             note_count += key_notes.len() as u64;
-            Arc::<[InRamNoteBlock]>::from(notes_to_blocks(key_notes))
+            Arc::<[InRamNoteBlock]>::from(notes_to_blocks(key, key_notes, &mut analysis))
         })
         .collect::<Vec<_>>();
 
@@ -293,6 +306,7 @@ fn build_processed_midi(
         .last()
         .map(|event| event.time)
         .unwrap_or_else(|| columns_length(&columns));
+    let analysis_cache = Arc::new(analysis.finalize(midi_length, note_count));
     let display = Arc::new(DisplayMidiCache::new(
         columns,
         midi_length,
@@ -306,6 +320,7 @@ fn build_processed_midi(
 
     Ok(ProcessedMidi {
         display,
+        analysis: analysis_cache,
         audio,
         signature: parsed.signature().clone(),
         config: config.clone(),
@@ -336,6 +351,7 @@ fn end_note(
         return;
     };
     if output_time >= note.start {
+        // Duration stats are updated when the completed note is materialized.
         finished_notes[key as usize].push(FinishedNote {
             start: note.start,
             end: output_time,
@@ -345,12 +361,17 @@ fn end_note(
     }
 }
 
-fn notes_to_blocks(notes: Vec<FinishedNote>) -> Vec<InRamNoteBlock> {
+fn notes_to_blocks(
+    key: usize,
+    notes: Vec<FinishedNote>,
+    analysis: &mut MidiAnalysisAccumulator,
+) -> Vec<InRamNoteBlock> {
     let mut blocks = Vec::new();
     let mut index = 0;
     while index < notes.len() {
         let start = notes[index].start;
         let end = notes.partition_point(|note| note.start <= start);
+        analysis.observe_block(key, end - index);
         let mut block = InRamNoteBlock::new_from_notes(
             start,
             0,
@@ -360,6 +381,7 @@ fn notes_to_blocks(notes: Vec<FinishedNote>) -> Vec<InRamNoteBlock> {
         );
         for (note_index, note) in notes[index..end].iter().enumerate() {
             block.set_note_end_time(note_index, note.end, 0);
+            analysis.observe_note_end((note.end - note.start).max(0.0));
         }
         blocks.push(block);
         index = end;

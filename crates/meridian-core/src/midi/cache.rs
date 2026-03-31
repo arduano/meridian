@@ -3,23 +3,26 @@ use std::sync::{Arc, Mutex};
 use crate::error::MeridianError;
 
 use super::{
-    MIDIFileUnion, audio_cache::InRamAudioCache, display_cache::DisplayMidiCache,
-    parsed::ParsedMidiFile,
+    MIDIFileUnion, analysis::CachedMidiAnalysis, audio_cache::InRamAudioCache,
+    display_cache::DisplayMidiCache, parsed::ParsedMidiFile,
 };
 
 pub struct MidiCacheStack {
     parsed: Arc<ParsedMidiFile>,
     display: Mutex<Option<Arc<DisplayMidiCache>>>,
+    analysis: Mutex<Option<Arc<CachedMidiAnalysis>>>,
     audio: Mutex<Option<Arc<InRamAudioCache>>>,
 }
 
 impl Clone for MidiCacheStack {
     fn clone(&self) -> Self {
         let display = self.display.lock().ok().and_then(|cache| cache.clone());
+        let analysis = self.analysis.lock().ok().and_then(|cache| cache.clone());
         let audio = self.audio.lock().ok().and_then(|cache| cache.clone());
         Self {
             parsed: Arc::clone(&self.parsed),
             display: Mutex::new(display),
+            analysis: Mutex::new(analysis),
             audio: Mutex::new(audio),
         }
     }
@@ -35,8 +38,11 @@ impl MidiCacheStack {
         progress: impl FnMut(f32),
     ) -> Result<Self, MeridianError> {
         Ok(Self {
-            parsed: Arc::new(ParsedMidiFile::load_from_file_with_progress(path, progress)?),
+            parsed: Arc::new(ParsedMidiFile::load_from_file_with_progress(
+                path, progress,
+            )?),
             display: Mutex::new(None),
+            analysis: Mutex::new(None),
             audio: Mutex::new(None),
         })
     }
@@ -53,20 +59,7 @@ impl MidiCacheStack {
         &self,
         progress: impl FnMut(f32),
     ) -> Result<Arc<DisplayMidiCache>, MeridianError> {
-        let mut display = self
-            .display
-            .lock()
-            .map_err(|_| MeridianError::InvalidMidi("display cache lock poisoned".into()))?;
-        if let Some(cache) = &*display {
-            return Ok(Arc::clone(cache));
-        }
-
-        let cache = Arc::new(DisplayMidiCache::from_parsed_with_progress(
-            self.parsed(),
-            progress,
-        )?);
-        *display = Some(Arc::clone(&cache));
-        Ok(cache)
+        Ok(self.display_and_analysis_with_progress(progress)?.0)
     }
 
     pub fn instantiate_display_in_ram(&self) -> Result<MIDIFileUnion, MeridianError> {
@@ -79,6 +72,17 @@ impl MidiCacheStack {
 
     pub fn instantiate_in_ram(&self) -> Result<MIDIFileUnion, MeridianError> {
         self.instantiate_display_in_ram()
+    }
+
+    pub fn analysis_cache(&self) -> Result<Arc<CachedMidiAnalysis>, MeridianError> {
+        self.analysis_cache_with_progress(|_| {})
+    }
+
+    pub fn analysis_cache_with_progress(
+        &self,
+        progress: impl FnMut(f32),
+    ) -> Result<Arc<CachedMidiAnalysis>, MeridianError> {
+        Ok(self.display_and_analysis_with_progress(progress)?.1)
     }
 
     pub fn audio_cache(&self) -> Result<Arc<InRamAudioCache>, MeridianError> {
@@ -103,5 +107,30 @@ impl MidiCacheStack {
         )?);
         *audio = Some(Arc::clone(&cache));
         Ok(cache)
+    }
+
+    fn display_and_analysis_with_progress(
+        &self,
+        progress: impl FnMut(f32),
+    ) -> Result<(Arc<DisplayMidiCache>, Arc<CachedMidiAnalysis>), MeridianError> {
+        let mut display = self
+            .display
+            .lock()
+            .map_err(|_| MeridianError::InvalidMidi("display cache lock poisoned".into()))?;
+        let mut analysis = self
+            .analysis
+            .lock()
+            .map_err(|_| MeridianError::InvalidMidi("analysis cache lock poisoned".into()))?;
+        if let (Some(display), Some(analysis)) = (&*display, &*analysis) {
+            return Ok((Arc::clone(display), Arc::clone(analysis)));
+        }
+
+        let (built_display, built_analysis) =
+            super::ram::parse::build_in_ram_cache_with_progress(self.parsed(), progress)?;
+        let display_arc = Arc::new(built_display);
+        let analysis_arc = Arc::new(built_analysis);
+        *display = Some(Arc::clone(&display_arc));
+        *analysis = Some(Arc::clone(&analysis_arc));
+        Ok((display_arc, analysis_arc))
     }
 }

@@ -1,7 +1,7 @@
 pub mod block;
 mod cache;
 pub mod column;
-mod parse;
+pub(crate) mod parse;
 pub mod view;
 
 pub use cache::InRamMidiCache;
