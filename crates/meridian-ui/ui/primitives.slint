@@ -1,8 +1,42 @@
 // ═══════════════════════════════════════════════════════════
 //  Primitives — reusable building blocks for all panels.
 //
-//  A backend developer only needs these to compose a settings
-//  panel. See the UI spec for composition patterns.
+//  Quick reference for backend developers:
+//
+//  LAYOUT STRUCTURE:
+//    SectionHeader { title: "SECTION"; }     // section title
+//    Separator { }                            // horizontal rule
+//    Rectangle { height: Npx; }               // vertical spacing
+//
+//  READ-ONLY DISPLAY:
+//    FieldRow { label: "Key"; value: "val"; }  // label: value pair
+//    StatusBadge { label: "Running"; active: true; }
+//
+//  OPTION SELECTION (pick one from preset list):
+//    InlineOptionRow {
+//        label: "Sample Rate";
+//        OptionChip { label: "48k"; active: x == "48000"; pressed => { … } }
+//        OptionChip { label: "96k"; active: x == "96000"; pressed => { … } }
+//    }
+//
+//  OPTION + CUSTOM VALUE (presets with a free-form input fallback):
+//    InlineCustomRow {
+//        label: "Layer Limit";
+//        value: current-layer-text;          // live value from backend
+//        is-preset: val == "4" || …;         // true when value matches a child chip
+//        custom-submitted(v) => { … }        // fired when user types + applies
+//        OptionChip { label: "4"; active: …; pressed => { … } }
+//        OptionChip { label: "Off"; active: …; pressed => { … } }
+//    }
+//
+//  FILE SELECTION:
+//    FilePicker {
+//        file-name: "font.sf2"; enabled: true;
+//        browse => { … } reset => { … }
+//    }
+//
+//  ACTIONS:
+//    PrimaryButton { label: "Go"; enabled: true; pressed => { … } }
 // ═══════════════════════════════════════════════════════════
 
 
@@ -191,6 +225,433 @@ export component InspectorLine inherits Rectangle {
             color: #b0c0d4;
             font-family: "monospace";
             font-size: 10px;
+            vertical-alignment: center;
+        }
+    }
+}
+
+
+// ── OptionChip ─────────────────────────────────────────────
+// A compact pill-shaped toggle for use inside InlineOptionRow
+// or InlineCustomRow. Place several in a row; set `active`
+// on the one matching the current value.
+//
+// Usage:  OptionChip { label: "48k"; active: rate == "48000"; pressed => { set_rate("48000"); } }
+
+export component OptionChip inherits Rectangle {
+    in property <string> label;
+    in property <bool> active: false;
+    callback pressed;
+
+    min-width: 40px;
+    height: 26px;
+    border-radius: 5px;
+    background: root.active ? #1a2d4d : touch.has-hover ? #111c2e : #0a1018;
+    border-width: 1px;
+    border-color: root.active ? #1e3a5f : #111a28;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        alignment: center;
+
+        Text {
+            text: root.label;
+            color: root.active ? #60a5fa : #6b7d94;
+            font-size: 11px;
+            font-weight: root.active ? 700 : 500;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.pressed(); }
+    }
+}
+
+
+// ── InlineOptionRow ────────────────────────────────────────
+// Label on the left, OptionChips on the right — single row.
+// This is the most common control for fixed-set options.
+//
+// Usage:
+//   InlineOptionRow {
+//       label: "Channels";
+//       OptionChip { label: "Mono";   active: ch == "mono";   pressed => { set("mono"); } }
+//       OptionChip { label: "Stereo"; active: ch == "stereo"; pressed => { set("stereo"); } }
+//   }
+
+export component InlineOptionRow inherits Rectangle {
+    in property <string> label;
+
+    height: 34px;
+    background: transparent;
+
+    HorizontalLayout {
+        spacing: 0px;
+
+        // Label
+        Text {
+            text: root.label;
+            color: #7d8fa8;
+            font-size: 11px;
+            vertical-alignment: center;
+            min-width: 90px;
+        }
+
+        // Chips (children go here)
+        HorizontalLayout {
+            spacing: 4px;
+            alignment: end;
+            horizontal-stretch: 1;
+
+            @children
+        }
+    }
+}
+
+
+// ── InlineCustomRow ────────────────────────────────────────
+// Like InlineOptionRow but adds a built-in "Custom" chip that
+// expands a text input for free-form numeric entry. The
+// component manages its own editing state — no private
+// properties needed in the parent.
+//
+// Required properties:
+//   label         — row label ("Layer Limit")
+//   value         — current live value string from backend
+//   is-preset     — true when `value` matches one of the
+//                   child OptionChips. Set this to a simple
+//                   boolean expression, e.g.:
+//                     is-preset: val == "4" || val == "off";
+//   custom-display — text shown on the chip when a custom
+//                   value is active. Defaults to `value`.
+//                   Override for formatting, e.g. "< 24".
+//
+// Usage:
+//   InlineCustomRow {
+//       label: "Layer Limit";
+//       value: layer-limit-text;
+//       is-preset: layer-limit-text == "4" || layer-limit-text == "off";
+//       custom-submitted(v) => { select-layer-limit(v); }
+//       OptionChip { label: "4";   active: t == "4";   pressed => { … } }
+//       OptionChip { label: "Off"; active: t == "off"; pressed => { … } }
+//   }
+
+export component InlineCustomRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <bool> is-preset: true;
+    in property <string> custom-display: root.value;
+    callback custom-submitted(string);
+
+    // ── internal state ──
+    private property <bool> editing: false;
+    private property <string> draft: "";
+    private property <bool> has-custom-value: !root.is-preset;
+
+    height: root.editing ? 68px : 34px;
+    background: transparent;
+
+    // Auto-close: when is-preset becomes true (user clicked a
+    // preset chip), we clear editing. We detect this by checking
+    // is-preset every frame via the binding — if is-preset is
+    // true while editing is true, we know a preset was just selected.
+    changed is-preset => {
+        if (root.is-preset && root.editing) {
+            root.editing = false;
+        }
+    }
+
+    VerticalLayout {
+        spacing: 4px;
+
+        HorizontalLayout {
+            spacing: 0px;
+            height: 34px;
+
+            // Row label
+            Text {
+                text: root.label;
+                color: #7d8fa8;
+                font-size: 11px;
+                vertical-alignment: center;
+                min-width: 90px;
+            }
+
+            // Preset chips from children + built-in Custom chip
+            HorizontalLayout {
+                spacing: 4px;
+                alignment: end;
+                horizontal-stretch: 1;
+
+                @children
+
+                // ── Built-in Custom chip ──
+                // Visually distinct from preset OptionChips:
+                //   • Amber accent + dot when holding a custom value
+                //   • Blue accent only while actively editing
+                Rectangle {
+                    min-width: 40px;
+                    height: 26px;
+                    border-radius: 5px;
+                    background: root.editing
+                        ? #1a2d4d
+                        : root.has-custom-value
+                            ? #2a2210
+                            : custom-touch.has-hover ? #111c2e : #0a1018;
+                    border-width: 1px;
+                    border-color: root.editing
+                        ? #1e3a5f
+                        : root.has-custom-value
+                            ? #4a3820
+                            : #111a28;
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 4px;
+                        alignment: center;
+
+                        VerticalLayout {
+                            alignment: center;
+
+                            // Colored dot indicator for custom values
+                            if root.has-custom-value && !root.editing : Rectangle {
+                                width: 6px;
+                                height: 6px;
+                                border-radius: 3px;
+                                background: #f59e0b;
+                            }
+                        }
+
+                        Text {
+                            text: root.has-custom-value && !root.editing
+                                ? root.custom-display
+                                : "Custom";
+                            color: root.editing
+                                ? #60a5fa
+                                : root.has-custom-value
+                                    ? #f59e0b
+                                    : #6b7d94;
+                            font-size: 11px;
+                            font-weight: root.editing || root.has-custom-value ? 700 : 500;
+                            font-family: root.has-custom-value && !root.editing
+                                ? "monospace" : "";
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    custom-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.editing = !root.editing;
+                            if (root.editing) {
+                                root.draft = "";
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Inline text input (visible while editing) ──
+        if root.editing : HorizontalLayout {
+            spacing: 6px;
+            height: 28px;
+
+            Rectangle {
+                horizontal-stretch: 1;
+                height: 28px;
+                border-radius: 5px;
+                background: #0a1018;
+                border-width: 1px;
+                border-color: custom-input.has-focus ? #2563eb : #1a2740;
+
+                custom-input := TextInput {
+                    text: root.draft;
+                    color: #b0c0d4;
+                    font-size: 11px;
+                    font-family: "monospace";
+                    horizontal-alignment: left;
+                    vertical-alignment: center;
+                    x: 8px;
+                    width: parent.width - 16px;
+                    height: parent.height;
+                    accepted => {
+                        root.custom-submitted(self.text);
+                        root.editing = false;
+                    }
+                    edited => {
+                        root.draft = self.text;
+                    }
+                }
+            }
+
+            // Apply button
+            Rectangle {
+                width: 48px;
+                height: 28px;
+                border-radius: 5px;
+                background: apply-touch.has-hover ? #1e3a5f : #1a2d4d;
+
+                Text {
+                    text: "Apply";
+                    color: #60a5fa;
+                    font-size: 10px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                apply-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.custom-submitted(root.draft);
+                        root.editing = false;
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// ── FilePicker ─────────────────────────────────────────────
+// File path display with Browse / Reset action buttons.
+// Visually distinct from chip toggles — looks like a file row.
+//
+// Usage:
+//   FilePicker {
+//       file-name: "piano.sf2";
+//       file-label: "1 loaded";    // optional secondary line
+//       enabled: soundfont-on;
+//       browse => { open-file-dialog(); }
+//       reset  => { restore-default(); }
+//   }
+
+export component FilePicker inherits Rectangle {
+    in property <string> file-label: "";
+    in property <string> file-name: "(default)";
+    in property <bool> enabled: true;
+    callback browse;
+    callback reset;
+    callback toggle-enabled;
+
+    height: 56px;
+    border-radius: 8px;
+    background: #0c1420;
+
+    VerticalLayout {
+        alignment: center;
+
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 8px;
+            spacing: 8px;
+
+            // Icon
+            Text {
+                text: "🎵";
+                font-size: 14px;
+                vertical-alignment: center;
+            }
+
+            // Name + label
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                spacing: 1px;
+
+                Text {
+                    text: root.file-name;
+                    color: root.enabled ? #b0c0d4 : #3d5068;
+                    font-size: 11px;
+                    font-weight: 600;
+                    overflow: elide;
+                }
+                Text {
+                    text: root.file-label;
+                    color: #3d5068;
+                    font-size: 9px;
+                    visible: root.file-label != "";
+                }
+            }
+
+            // Action buttons
+            Rectangle {
+                width: 56px;
+                height: 28px;
+                border-radius: 5px;
+                background: browse-touch.has-hover ? #1a2b40 : #141e2e;
+
+                Text {
+                    text: "Browse";
+                    color: #8899b0;
+                    font-size: 10px;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                browse-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.browse(); }
+                }
+            }
+
+            Rectangle {
+                width: 40px;
+                height: 28px;
+                border-radius: 5px;
+                background: reset-touch.has-hover ? #1a2b40 : #141e2e;
+
+                Text {
+                    text: "Reset";
+                    color: #6b7d94;
+                    font-size: 10px;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                reset-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.reset(); }
+                }
+            }
+        }
+    }
+}
+
+
+// ── StatusBadge ────────────────────────────────────────────
+// Small colored badge for engine/process status.
+// Green when active, dim when idle.
+//
+// Usage:  StatusBadge { label: "Running"; active: engine-on; }
+
+export component StatusBadge inherits Rectangle {
+    in property <string> label;
+    in property <bool> active: false;
+
+    height: 22px;
+    border-radius: 4px;
+    background: root.active ? #0c2a1a : #0f1822;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        alignment: center;
+
+        Text {
+            text: root.label;
+            color: root.active ? #34d399 : #4d6580;
+            font-size: 10px;
+            font-weight: 600;
             vertical-alignment: center;
         }
     }

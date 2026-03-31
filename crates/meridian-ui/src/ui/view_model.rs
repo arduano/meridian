@@ -132,6 +132,11 @@ impl UiViewModel {
             | CoreEvent::AudioCacheBuilt { .. }
             | CoreEvent::DisplaySessionCreated { .. }
             | CoreEvent::AudioSessionCreated { .. }
+            | CoreEvent::MidiAnalysisJob { .. }
+            | CoreEvent::MidiAnalysisJobStatus { .. }
+            | CoreEvent::MidiFilesProcessed { .. }
+            | CoreEvent::MidiProcess { .. }
+            | CoreEvent::MidiProcessStatus { .. }
             | CoreEvent::Error { .. }
             | CoreEvent::ShutdownComplete => {}
         }

@@ -53,26 +53,16 @@ export component PreviewWelcome inherits Rectangle {
                     // ── Icon ──
                     HorizontalLayout {
                         alignment: center;
-                        Rectangle {
-                            width: 72px;
-                            height: 72px;
-                            border-radius: 36px;
-                            background: root.drop-hovering ? #0f1e38 : #0c1525;
-                            clip: true;
+                        Image {
+                            width: root.drop-hovering ? 72px : 64px;
+                            height: root.drop-hovering ? 72px : 64px;
+                            source: @image-url("../../../../assets/icons/meridian.png");
+                            image-fit: contain;
+                            opacity: root.drop-hovering ? 1 : 0.9;
 
-                            Image {
-                                width: root.drop-hovering ? 48px : 44px;
-                                height: root.drop-hovering ? 48px : 44px;
-                                x: parent.width / 2 - self.width / 2;
-                                y: parent.height / 2 - self.height / 2;
-                                source: @image-url("../../../../assets/icons/meridian.png");
-                                image-fit: contain;
-                                opacity: root.drop-hovering ? 1 : 0.9;
-
-                                animate width { duration: 150ms; }
-                                animate height { duration: 150ms; }
-                                animate opacity { duration: 150ms; }
-                            }
+                            animate width { duration: 150ms; }
+                            animate height { duration: 150ms; }
+                            animate opacity { duration: 150ms; }
                         }
                     }
 

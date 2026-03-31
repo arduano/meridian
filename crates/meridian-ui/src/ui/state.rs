@@ -131,7 +131,12 @@ fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: &StateSnaps
         | CoreEvent::DisplayCacheBuilt { .. }
         | CoreEvent::AudioCacheBuilt { .. }
         | CoreEvent::DisplaySessionCreated { .. }
-        | CoreEvent::AudioSessionCreated { .. } => {}
+        | CoreEvent::AudioSessionCreated { .. }
+        | CoreEvent::MidiAnalysisJob { .. }
+        | CoreEvent::MidiAnalysisJobStatus { .. }
+        | CoreEvent::MidiFilesProcessed { .. }
+        | CoreEvent::MidiProcess { .. }
+        | CoreEvent::MidiProcessStatus { .. } => {}
         CoreEvent::DisplaySessionAttached { .. } | CoreEvent::AudioSessionAttached { .. } => {
             app.set_status_text(status_text(state).into());
         }

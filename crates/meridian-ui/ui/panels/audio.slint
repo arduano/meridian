@@ -1,15 +1,18 @@
 // ═══════════════════════════════════════════════════════════
 //  Audio panel (profile 2).
 //
-//  Soundfont, realtime engine, and offline WAV export.
+//  Live realtime synth configuration. Tune playback parameters
+//  on the fly — sample rate, soundfont, voice shaping, engine
+//  threading, envelope curves.
 //
-//  This tab loads the audio pipeline only. It intentionally
-//  skips display/video caches to keep RAM usage lower on
-//  large MIDIs.
+//  WAV export is out of scope for this page.
 // ═══════════════════════════════════════════════════════════
 
 import { MidiLoadState } from "../structs.slint";
-import { SectionHeader, Separator, FieldRow, ToggleButton } from "../primitives.slint";
+import {
+    SectionHeader, Separator, FieldRow, OptionChip,
+    InlineOptionRow, InlineCustomRow, FilePicker, StatusBadge
+} from "../primitives.slint";
 import { MidiStateSection } from "../midi_loading.slint";
 
 export component AudioPanel inherits Rectangle {
@@ -75,6 +78,21 @@ export component AudioPanel inherits Rectangle {
     callback select-decay-curve(string);
     callback select-release-curve(string);
 
+    // ── Local state for custom rows ──
+    // (InlineCustomRow manages its own editing state internally;
+    //  we only need the is-preset derivations here.)
+    private property <bool> layer-is-preset:
+        root.audio-layer-limit-text == "4" || root.audio-layer-limit-text == "8"
+        || root.audio-layer-limit-text == "16" || root.audio-layer-limit-text == "off";
+
+    private property <bool> vel-is-preset:
+        root.audio-ignore-range-text == "off" || root.audio-ignore-range-text == "8"
+        || root.audio-ignore-range-text == "16";
+
+    private property <bool> rw-is-preset:
+        root.audio-render-window-text == "5.0 ms" || root.audio-render-window-text == "10.0 ms"
+        || root.audio-render-window-text == "20.0 ms";
+
     clip: true;
 
     Flickable {
@@ -85,14 +103,16 @@ export component AudioPanel inherits Rectangle {
             width: parent.width;
             padding: 20px;
             padding-right: 24px;
-            spacing: 6px;
+            spacing: 0px;
             alignment: start;
 
-            // ── MIDI FILE ──
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  MIDI FILE
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             MidiStateSection {
                 midi-state: root.midi-state;
                 file-name: root.selected-midi-name;
-                load-description: "Builds the audio cache only. Use Preview for synced playback with visuals or Render for video-only prep.";
+                load-description: "Builds the audio cache only — no video pipeline. Use Preview for synced playback with visuals.";
                 load-label: "Load for Audio";
                 mode-label: "audio";
                 loading-status: root.loading-status;
@@ -105,204 +125,402 @@ export component AudioPanel inherits Rectangle {
                 retry-load => { root.retry-load(); }
             }
 
-            Rectangle { height: 2px; }
-            Text {
-                text: "Audio mode keeps the session lean by skipping display caches. Use it for realtime playback tuning and live synth configuration without loading the video pipeline.";
-                color: #4d6580;
-                font-size: 11px;
-                wrap: word-wrap;
-            }
-
-            Rectangle { height: 8px; }
+            Rectangle { height: 12px; }
             Separator { }
-            Rectangle { height: 8px; }
+            Rectangle { height: 16px; }
 
-            // ── BACKEND ──
-            SectionHeader { title: "BACKEND"; }
-            Rectangle { height: 4px; }
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  ENGINE STATUS
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "XSynth"; active: root.audio-backend-text == "xsynth"; }
-            }
-            Rectangle { height: 4px; }
-            Text {
-                text: "Realtime output format and stream settings. These controls only show formats the current output device actually supports.";
-                color: #4d6580;
-                font-size: 10px;
-                wrap: word-wrap;
-            }
-            Rectangle { height: 4px; }
-            FieldRow { label: "Engine";        value: root.audio-engine-status-text; }
-            FieldRow { label: "Output Stream"; value: root.audio-output-stream-text; }
-            FieldRow { label: "Render Window"; value: root.audio-render-window-text; }
+                spacing: 8px;
+                height: 26px;
 
-            Rectangle { height: 6px; }
-            SectionHeader { title: "STREAM FORMAT"; }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                if root.audio-supports-44100 : ToggleButton { label: "44.1k"; active: root.audio-sample-rate-text == "44100"; pressed => { root.select-sample-rate("44100"); } }
-                if root.audio-supports-48000 : ToggleButton { label: "48k";   active: root.audio-sample-rate-text == "48000"; pressed => { root.select-sample-rate("48000"); } }
-                if root.audio-supports-88200 : ToggleButton { label: "88.2k"; active: root.audio-sample-rate-text == "88200"; pressed => { root.select-sample-rate("88200"); } }
-                if root.audio-supports-96000 : ToggleButton { label: "96k";   active: root.audio-sample-rate-text == "96000"; pressed => { root.select-sample-rate("96000"); } }
-            }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                if root.audio-supports-176400 : ToggleButton { label: "176.4k"; active: root.audio-sample-rate-text == "176400"; pressed => { root.select-sample-rate("176400"); } }
-                if root.audio-supports-192000 : ToggleButton { label: "192k";   active: root.audio-sample-rate-text == "192000"; pressed => { root.select-sample-rate("192000"); } }
-            }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                if root.audio-supports-mono : ToggleButton { label: "Mono";   active: root.audio-channel-count-text == "mono";   pressed => { root.select-channel-count("mono"); } }
-                if root.audio-supports-stereo : ToggleButton { label: "Stereo"; active: root.audio-channel-count-text == "stereo"; pressed => { root.select-channel-count("stereo"); } }
-            }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "5 ms";  active: root.audio-render-window-text == "5.0 ms";  pressed => { root.select-render-window("5"); } }
-                ToggleButton { label: "10 ms"; active: root.audio-render-window-text == "10.0 ms"; pressed => { root.select-render-window("10"); } }
-                ToggleButton { label: "20 ms"; active: root.audio-render-window-text == "20.0 ms"; pressed => { root.select-render-window("20"); } }
-            }
+                Text {
+                    text: "Engine";
+                    color: #4d6580;
+                    font-size: 10px;
+                    font-weight: 700;
+                    letter-spacing: 0.8px;
+                    vertical-alignment: center;
+                }
 
-            Rectangle { height: 8px; }
-            Separator { }
-            Rectangle { height: 8px; }
+                StatusBadge {
+                    label: root.audio-engine-status-text;
+                    active: root.audio-engine-status-text == "Running";
+                }
 
-            // ── SOUND SOURCE ──
-            SectionHeader { title: "SOUND SOURCE"; }
-            Rectangle { height: 4px; }
-            Text {
-                text: "Primary soundfont selection and voicing controls for realtime playback. These settings update the live synth directly.";
-                color: #4d6580;
-                font-size: 10px;
-                wrap: word-wrap;
-            }
-            Rectangle { height: 4px; }
-            FieldRow { label: "Primary Font"; value: root.soundfont-text; }
-            FieldRow { label: "Loaded Fonts"; value: root.soundfont-count-text; }
-            FieldRow { label: "Status"; value: root.audio-soundfont-enabled ? "Enabled" : "Disabled"; }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "Change"; active: false; pressed => { root.select-soundfont(); } }
-                ToggleButton { label: "Default"; active: false; pressed => { root.reset-soundfont(); } }
-                ToggleButton {
-                    label: root.audio-soundfont-enabled ? "Disable" : "Enable";
-                    active: false;
-                    pressed => { root.toggle-soundfont-enabled(); }
+                Rectangle { horizontal-stretch: 1; }
+
+                Text {
+                    text: root.audio-output-stream-text;
+                    color: #4d6580;
+                    font-family: "monospace";
+                    font-size: 10px;
+                    vertical-alignment: center;
                 }
             }
 
-            Rectangle { height: 6px; }
-            SectionHeader { title: "VOICE SHAPING"; }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "Nearest"; active: root.audio-interpolation-text == "nearest"; pressed => { root.select-interpolation("nearest"); } }
-                ToggleButton { label: "Linear";  active: root.audio-interpolation-text == "linear";  pressed => { root.select-interpolation("linear"); } }
-            }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "FX Off"; active: root.audio-effects-text == "off"; pressed => { root.select-effects("off"); } }
-                ToggleButton { label: "FX On";  active: root.audio-effects-text == "on";  pressed => { root.select-effects("on"); } }
+            Rectangle { height: 14px; }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  STREAM FORMAT
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            SectionHeader { title: "STREAM FORMAT"; }
+            Rectangle { height: 8px; }
+
+            // Sample Rate
+            InlineOptionRow {
+                label: "Sample Rate";
+
+                if root.audio-supports-44100 : OptionChip {
+                    label: "44.1k";
+                    active: root.audio-sample-rate-text == "44100";
+                    pressed => { root.select-sample-rate("44100"); }
+                }
+                if root.audio-supports-48000 : OptionChip {
+                    label: "48k";
+                    active: root.audio-sample-rate-text == "48000";
+                    pressed => { root.select-sample-rate("48000"); }
+                }
+                if root.audio-supports-88200 : OptionChip {
+                    label: "88.2k";
+                    active: root.audio-sample-rate-text == "88200";
+                    pressed => { root.select-sample-rate("88200"); }
+                }
+                if root.audio-supports-96000 : OptionChip {
+                    label: "96k";
+                    active: root.audio-sample-rate-text == "96000";
+                    pressed => { root.select-sample-rate("96000"); }
+                }
+                if root.audio-supports-176400 : OptionChip {
+                    label: "176.4k";
+                    active: root.audio-sample-rate-text == "176400";
+                    pressed => { root.select-sample-rate("176400"); }
+                }
+                if root.audio-supports-192000 : OptionChip {
+                    label: "192k";
+                    active: root.audio-sample-rate-text == "192000";
+                    pressed => { root.select-sample-rate("192000"); }
+                }
             }
 
-            Rectangle { height: 8px; }
+            Rectangle { height: 4px; }
+
+            // Channels
+            InlineOptionRow {
+                label: "Channels";
+
+                if root.audio-supports-mono : OptionChip {
+                    label: "Mono";
+                    active: root.audio-channel-count-text == "mono";
+                    pressed => { root.select-channel-count("mono"); }
+                }
+                if root.audio-supports-stereo : OptionChip {
+                    label: "Stereo";
+                    active: root.audio-channel-count-text == "stereo";
+                    pressed => { root.select-channel-count("stereo"); }
+                }
+            }
+
+            Rectangle { height: 4px; }
+
+            // Render Window (with custom input)
+            InlineCustomRow {
+                label: "Buffer";
+                value: root.audio-render-window-text;
+                is-preset: root.rw-is-preset;
+                custom-submitted(val) => {
+                    root.select-render-window(val);
+                }
+
+                OptionChip {
+                    label: "5 ms";
+                    active: root.audio-render-window-text == "5.0 ms";
+                    pressed => { root.select-render-window("5"); }
+                }
+                OptionChip {
+                    label: "10 ms";
+                    active: root.audio-render-window-text == "10.0 ms";
+                    pressed => { root.select-render-window("10"); }
+                }
+                OptionChip {
+                    label: "20 ms";
+                    active: root.audio-render-window-text == "20.0 ms";
+                    pressed => { root.select-render-window("20"); }
+                }
+            }
+
+            Rectangle { height: 16px; }
             Separator { }
+            Rectangle { height: 16px; }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  SOUNDFONT
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            SectionHeader { title: "SOUNDFONT"; }
             Rectangle { height: 8px; }
 
-            // ── PLAYBACK ENGINE ──
+            FilePicker {
+                file-name: root.soundfont-text;
+                file-label: root.soundfont-count-text;
+                enabled: root.audio-soundfont-enabled;
+                browse => { root.select-soundfont(); }
+                reset => { root.reset-soundfont(); }
+                toggle-enabled => { root.toggle-soundfont-enabled(); }
+            }
+
+            Rectangle { height: 6px; }
+
+            // Enable/disable toggle inline
+            InlineOptionRow {
+                label: "Status";
+
+                OptionChip {
+                    label: "Enabled";
+                    active: root.audio-soundfont-enabled;
+                    pressed => { if (!root.audio-soundfont-enabled) { root.toggle-soundfont-enabled(); } }
+                }
+                OptionChip {
+                    label: "Disabled";
+                    active: !root.audio-soundfont-enabled;
+                    pressed => { if (root.audio-soundfont-enabled) { root.toggle-soundfont-enabled(); } }
+                }
+            }
+
+            Rectangle { height: 16px; }
+            Separator { }
+            Rectangle { height: 16px; }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  VOICE SHAPING
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            SectionHeader { title: "VOICE SHAPING"; }
+            Rectangle { height: 8px; }
+
+            // Interpolation
+            InlineOptionRow {
+                label: "Interpolation";
+
+                OptionChip {
+                    label: "Nearest";
+                    active: root.audio-interpolation-text == "nearest";
+                    pressed => { root.select-interpolation("nearest"); }
+                }
+                OptionChip {
+                    label: "Linear";
+                    active: root.audio-interpolation-text == "linear";
+                    pressed => { root.select-interpolation("linear"); }
+                }
+            }
+
+            Rectangle { height: 4px; }
+
+            // Effects
+            InlineOptionRow {
+                label: "Effects";
+
+                OptionChip {
+                    label: "Off";
+                    active: root.audio-effects-text == "off";
+                    pressed => { root.select-effects("off"); }
+                }
+                OptionChip {
+                    label: "On";
+                    active: root.audio-effects-text == "on";
+                    pressed => { root.select-effects("on"); }
+                }
+            }
+
+            Rectangle { height: 4px; }
+
+            // Limiter
+            InlineOptionRow {
+                label: "Limiter";
+
+                OptionChip {
+                    label: "Off";
+                    active: root.audio-limiter-text == "off";
+                    pressed => { root.select-limiter("off"); }
+                }
+                OptionChip {
+                    label: "On";
+                    active: root.audio-limiter-text == "on";
+                    pressed => { root.select-limiter("on"); }
+                }
+            }
+
+            Rectangle { height: 16px; }
+            Separator { }
+            Rectangle { height: 16px; }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  PLAYBACK ENGINE
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             SectionHeader { title: "PLAYBACK ENGINE"; }
             Rectangle { height: 4px; }
-            Text {
-                text: "High-signal realtime engine controls. Keep this section focused on the settings that affect day-to-day playback behavior and resource usage.";
-                color: #4d6580;
-                font-size: 10px;
-                wrap: word-wrap;
-            }
-            Rectangle { height: 4px; }
-            FieldRow { label: "Voices";       value: root.audio-voice-count-text; }
-            FieldRow { label: "Layer Limit";  value: root.audio-layer-limit-text; }
-            FieldRow { label: "Limiter";      value: root.audio-limiter-text; }
-            FieldRow { label: "Threading";   value: root.audio-threading-text; }
+
+            FieldRow { label: "Active Voices"; value: root.audio-voice-count-text; }
 
             Rectangle { height: 6px; }
-            SectionHeader { title: "ENGINE TUNING"; }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "4";    active: root.audio-layer-limit-text == "4";   pressed => { root.select-layer-limit("4"); } }
-                ToggleButton { label: "8";    active: root.audio-layer-limit-text == "8";  pressed => { root.select-layer-limit("8"); } }
-                ToggleButton { label: "16";   active: root.audio-layer-limit-text == "16"; pressed => { root.select-layer-limit("16"); } }
-                ToggleButton { label: "Off";  active: root.audio-layer-limit-text == "off"; pressed => { root.select-layer-limit("off"); } }
-            }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "Limiter Off"; active: root.audio-limiter-text == "off"; pressed => { root.select-limiter("off"); } }
-                ToggleButton { label: "Limiter On";  active: root.audio-limiter-text == "on";  pressed => { root.select-limiter("on"); } }
-            }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "Single"; active: root.audio-threading-text == "none"; pressed => { root.select-threading("none"); } }
-                ToggleButton { label: "Auto";   active: root.audio-threading-text == "auto"; pressed => { root.select-threading("auto"); } }
-                ToggleButton { label: "4 Thr";  active: root.audio-threading-text == "4";    pressed => { root.select-threading("4"); } }
+
+            // Layer Limit (with custom input)
+            InlineCustomRow {
+                label: "Layer Limit";
+                value: root.audio-layer-limit-text;
+                is-preset: root.layer-is-preset;
+                custom-submitted(val) => {
+                    root.select-layer-limit(val);
+                }
+
+                OptionChip {
+                    label: "4";
+                    active: root.audio-layer-limit-text == "4";
+                    pressed => { root.select-layer-limit("4"); }
+                }
+                OptionChip {
+                    label: "8";
+                    active: root.audio-layer-limit-text == "8";
+                    pressed => { root.select-layer-limit("8"); }
+                }
+                OptionChip {
+                    label: "16";
+                    active: root.audio-layer-limit-text == "16";
+                    pressed => { root.select-layer-limit("16"); }
+                }
+                OptionChip {
+                    label: "Off";
+                    active: root.audio-layer-limit-text == "off";
+                    pressed => { root.select-layer-limit("off"); }
+                }
             }
 
-            Rectangle { height: 8px; }
+            Rectangle { height: 4px; }
+
+            // Threading
+            InlineOptionRow {
+                label: "Threading";
+
+                OptionChip {
+                    label: "Single";
+                    active: root.audio-threading-text == "none";
+                    pressed => { root.select-threading("none"); }
+                }
+                OptionChip {
+                    label: "Auto";
+                    active: root.audio-threading-text == "auto";
+                    pressed => { root.select-threading("auto"); }
+                }
+                OptionChip {
+                    label: "4 Threads";
+                    active: root.audio-threading-text == "4";
+                    pressed => { root.select-threading("4"); }
+                }
+            }
+
+            Rectangle { height: 16px; }
             Separator { }
+            Rectangle { height: 16px; }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  ADVANCED
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            SectionHeader { title: "ADVANCED"; }
             Rectangle { height: 8px; }
 
-            // ── ADVANCED ──
-            SectionHeader { title: "ADVANCED"; }
-            Rectangle { height: 4px; }
-            Text {
-                text: "Less common synth shaping controls. Keep these available without crowding the main playback workflow.";
-                color: #4d6580;
-                font-size: 10px;
-                wrap: word-wrap;
-            }
-            Rectangle { height: 4px; }
-            FieldRow { label: "Velocity Gate"; value: root.audio-ignore-range-text; }
-            FieldRow { label: "Attack Curve";  value: root.audio-attack-curve-text; }
-            FieldRow { label: "Decay Curve";   value: root.audio-decay-curve-text; }
-            FieldRow { label: "Release Curve"; value: root.audio-release-curve-text; }
-            Rectangle { height: 6px; }
-            SectionHeader { title: "INPUT FILTER"; }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "Off";   active: root.audio-ignore-range-text == "off"; pressed => { root.select-ignore-range("off"); } }
-                ToggleButton { label: "< 8";   active: root.audio-ignore-range-text == "8";   pressed => { root.select-ignore-range("8"); } }
-                ToggleButton { label: "< 16";  active: root.audio-ignore-range-text == "16";  pressed => { root.select-ignore-range("16"); } }
-                ToggleButton { label: "< 24";  active: root.audio-ignore-range-text == "24";  pressed => { root.select-ignore-range("24"); } }
-            }
-            Rectangle { height: 6px; }
-            SectionHeader { title: "ENVELOPE CURVES"; }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "Atk Linear"; active: root.audio-attack-curve-text == "linear"; pressed => { root.select-attack-curve("linear"); } }
-                ToggleButton { label: "Atk Exp";    active: root.audio-attack-curve-text == "exponential"; pressed => { root.select-attack-curve("exponential"); } }
-            }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "Dec Linear"; active: root.audio-decay-curve-text == "linear"; pressed => { root.select-decay-curve("linear"); } }
-                ToggleButton { label: "Dec Exp";    active: root.audio-decay-curve-text == "exponential"; pressed => { root.select-decay-curve("exponential"); } }
-            }
-            Rectangle { height: 4px; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "Rel Linear"; active: root.audio-release-curve-text == "linear"; pressed => { root.select-release-curve("linear"); } }
-                ToggleButton { label: "Rel Exp";    active: root.audio-release-curve-text == "exponential"; pressed => { root.select-release-curve("exponential"); } }
+            // Velocity Gate (with custom input)
+            InlineCustomRow {
+                label: "Velocity Gate";
+                value: root.audio-ignore-range-text;
+                is-preset: root.vel-is-preset;
+                custom-display: "< " + root.audio-ignore-range-text;
+                custom-submitted(val) => {
+                    root.select-ignore-range(val);
+                }
+
+                OptionChip {
+                    label: "Off";
+                    active: root.audio-ignore-range-text == "off";
+                    pressed => { root.select-ignore-range("off"); }
+                }
+                OptionChip {
+                    label: "< 8";
+                    active: root.audio-ignore-range-text == "8";
+                    pressed => { root.select-ignore-range("8"); }
+                }
+                OptionChip {
+                    label: "< 16";
+                    active: root.audio-ignore-range-text == "16";
+                    pressed => { root.select-ignore-range("16"); }
+                }
             }
 
-            Rectangle { height: 20px; }
+            Rectangle { height: 10px; }
+
+            // ── Envelope Curves ──
+            Text {
+                text: "ENVELOPE CURVES";
+                color: #3d5068;
+                font-size: 9px;
+                font-weight: 700;
+                letter-spacing: 0.8px;
+            }
+
+            Rectangle { height: 6px; }
+
+            // Attack
+            InlineOptionRow {
+                label: "Attack";
+
+                OptionChip {
+                    label: "Linear";
+                    active: root.audio-attack-curve-text == "linear";
+                    pressed => { root.select-attack-curve("linear"); }
+                }
+                OptionChip {
+                    label: "Exponential";
+                    active: root.audio-attack-curve-text == "exponential";
+                    pressed => { root.select-attack-curve("exponential"); }
+                }
+            }
+
+            Rectangle { height: 4px; }
+
+            // Decay
+            InlineOptionRow {
+                label: "Decay";
+
+                OptionChip {
+                    label: "Linear";
+                    active: root.audio-decay-curve-text == "linear";
+                    pressed => { root.select-decay-curve("linear"); }
+                }
+                OptionChip {
+                    label: "Exponential";
+                    active: root.audio-decay-curve-text == "exponential";
+                    pressed => { root.select-decay-curve("exponential"); }
+                }
+            }
+
+            Rectangle { height: 4px; }
+
+            // Release
+            InlineOptionRow {
+                label: "Release";
+
+                OptionChip {
+                    label: "Linear";
+                    active: root.audio-release-curve-text == "linear";
+                    pressed => { root.select-release-curve("linear"); }
+                }
+                OptionChip {
+                    label: "Exponential";
+                    active: root.audio-release-curve-text == "exponential";
+                    pressed => { root.select-release-curve("exponential"); }
+                }
+            }
+
+            Rectangle { height: 24px; }
         }
     }
 }

@@ -468,24 +468,93 @@ export component App inherits Window {
                         image-fit: fill;
                     }
 
-                    // FPS overlay (top-right)
+                    // FPS overlay (top-right) — expandable stats badge
                     Rectangle {
                         visible: root.render-load-state == MidiLoadState.loaded;
-                        x: parent.width - 76px;
+                        x: parent.width - self.width - 8px;
                         y: 8px;
-                        width: 68px;
-                        height: 22px;
-                        border-radius: 4px;
-                        background: #06091180;
+                        width: stats-expanded ? 180px : 68px;
+                        height: stats-expanded ? 156px : 22px;
+                        border-radius: stats-expanded ? 8px : 4px;
+                        background: stats-touch.has-hover
+                            ? (stats-expanded ? #0a0e18e0 : #0c1220c0)
+                            : #06091180;
+                        clip: true;
 
-                        HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 4px;
-                            alignment: center;
+                        property <bool> stats-expanded: false;
 
-                            Text { text: root.fps-text; color: #4d6580; font-family: "monospace"; font-size: 10px; vertical-alignment: center; }
-                            Text { text: "fps";         color: #2d3d52; font-size: 9px;           vertical-alignment: center; }
+                        animate width { duration: 150ms; easing: ease-out; }
+                        animate height { duration: 150ms; easing: ease-out; }
+                        animate border-radius { duration: 150ms; }
+                        animate background { duration: 100ms; }
+
+                        VerticalLayout {
+                            padding: stats-expanded ? 8px : 0px;
+                            spacing: 0px;
+
+                            // Collapsed: just FPS
+                            if !stats-expanded : HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                height: 22px;
+                                spacing: 4px;
+                                alignment: center;
+
+                                Text { text: root.fps-text; color: #4d6580; font-family: "monospace"; font-size: 10px; vertical-alignment: center; }
+                                Text { text: "fps";         color: #2d3d52; font-size: 9px;           vertical-alignment: center; }
+                            }
+
+                            // Expanded: stats for nerds
+                            if stats-expanded : VerticalLayout {
+                                spacing: 2px;
+
+                                // Header row
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    height: 20px;
+
+                                    Text { text: root.fps-text; color: #60a5fa; font-family: "monospace"; font-size: 11px; font-weight: 700; vertical-alignment: center; }
+                                    Text { text: "fps";         color: #3d5068; font-size: 9px; vertical-alignment: center; }
+                                    Rectangle { horizontal-stretch: 1; }
+                                    Text { text: root.viewport-text; color: #2d3d52; font-family: "monospace"; font-size: 9px; vertical-alignment: center; }
+                                }
+
+                                // Separator
+                                Rectangle { height: 1px; background: #141e2e; }
+                                Rectangle { height: 4px; }
+
+                                // Stats rows
+                                HorizontalLayout {
+                                    height: 18px;
+                                    Text { text: "Notes"; color: #3d5068; font-size: 9px; vertical-alignment: center; min-width: 70px; }
+                                    Text { text: root.note-count-text; color: #6b7d94; font-family: "monospace"; font-size: 9px; vertical-alignment: center; }
+                                }
+                                HorizontalLayout {
+                                    height: 18px;
+                                    Text { text: "Visible"; color: #3d5068; font-size: 9px; vertical-alignment: center; min-width: 70px; }
+                                    Text { text: root.visible-note-count-text; color: #6b7d94; font-family: "monospace"; font-size: 9px; vertical-alignment: center; }
+                                }
+                                HorizontalLayout {
+                                    height: 18px;
+                                    Text { text: "Active Keys"; color: #3d5068; font-size: 9px; vertical-alignment: center; min-width: 70px; }
+                                    Text { text: root.active-keys-text; color: #6b7d94; font-family: "monospace"; font-size: 9px; vertical-alignment: center; }
+                                }
+                                HorizontalLayout {
+                                    height: 18px;
+                                    Text { text: "Voices"; color: #3d5068; font-size: 9px; vertical-alignment: center; min-width: 70px; }
+                                    Text { text: root.audio-voice-count-text; color: #6b7d94; font-family: "monospace"; font-size: 9px; vertical-alignment: center; }
+                                }
+                                HorizontalLayout {
+                                    height: 18px;
+                                    Text { text: "Stream"; color: #3d5068; font-size: 9px; vertical-alignment: center; min-width: 70px; }
+                                    Text { text: root.audio-output-stream-text; color: #6b7d94; font-family: "monospace"; font-size: 9px; vertical-alignment: center; }
+                                }
+                            }
+                        }
+
+                        stats-touch := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { parent.stats-expanded = !parent.stats-expanded; }
                         }
                     }
 
