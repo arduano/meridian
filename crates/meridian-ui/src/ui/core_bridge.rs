@@ -6,9 +6,9 @@ use std::{
 use meridian_core::{
     CoreHandle, MeridianError,
     audio::{AudioBackend, AudioConfig},
+    midi::MidiProcessingConfig,
     protocol::{CoreCommand, CoreEvent, ParsedMidiId, ProcessedMidiId},
     render::{DisplayTimeSpace, RendererKind, SceneLayout},
-    midi::MidiProcessingConfig,
 };
 
 use super::{state::UiOptions, view_model::UiViewModel};
@@ -209,6 +209,14 @@ impl UiCoreBridge {
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
         self.request(CoreCommand::SetPlaying { playing }, model)
+    }
+
+    pub fn set_audio_config(
+        &self,
+        config: AudioConfig,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::SetAudioConfig { config }, model)
     }
 
     pub fn seek_time(

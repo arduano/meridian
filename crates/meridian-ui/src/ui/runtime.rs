@@ -3,13 +3,17 @@ use std::{
     ffi::OsStr,
     path::PathBuf,
     rc::Rc,
-    sync::{Arc, Mutex},
     sync::atomic::{AtomicU64, Ordering},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
 use meridian_core::{
     CoreHandle, MeridianError,
+    audio::{
+        AudioConfig, ChannelCount, DEFAULT_SOUNDFONT, EnvelopeCurveType, Interpolator,
+        MeridianSoundfont, ThreadCount,
+    },
     midi::MidiProcessingConfig,
     protocol::{CoreEvent, ParsedMidiId, ProcessedMidiId},
     render::{DisplayTimeSpace, RendererKind},
@@ -108,6 +112,7 @@ fn wire_callbacks(
     analysis_load_generation: &Arc<AtomicU64>,
 ) {
     wire_transport_callbacks(app, bridge, shared_state);
+    wire_audio_config_callbacks(app, bridge, shared_state);
     wire_midi_callbacks(
         app,
         bridge,
@@ -131,6 +136,39 @@ fn selected_or_empty_state(app: &App) -> MidiLoadState {
     } else {
         MidiLoadState::Selected
     }
+}
+
+fn update_audio_config(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    mutate: impl FnOnce(&mut AudioConfig),
+) {
+    let Some(mut config) = shared_state
+        .lock()
+        .expect("shared UI state mutex poisoned")
+        .snapshot
+        .as_ref()
+        .map(|snapshot| snapshot.audio.clone())
+    else {
+        return;
+    };
+
+    mutate(&mut config);
+    if let Ok(events) = bridge.set_audio_config(config, shared_state) {
+        apply_events_to_app(app, shared_state, &events);
+        app.window().request_redraw();
+    }
+}
+
+fn primary_soundfont(config: &mut AudioConfig) -> &mut MeridianSoundfont {
+    if config.soundfonts.is_empty() {
+        config.soundfonts.push(MeridianSoundfont::default());
+    }
+    config
+        .soundfonts
+        .first_mut()
+        .expect("audio config must always have a primary soundfont")
 }
 
 fn set_selected_midi(app: &App, selected_midi_name: slint::SharedString) {
@@ -242,6 +280,257 @@ fn wire_transport_callbacks(
                 app.window().request_redraw();
             }
         });
+    }
+}
+
+fn wire_audio_config_callbacks(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+) {
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_sample_rate(move |rate| {
+            let Ok(sample_rate) = rate.parse::<u32>() else {
+                return;
+            };
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    config.xsynth.render.audio_params.sample_rate = sample_rate;
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_channel_count(move |channels| {
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    config.xsynth.render.audio_params.channels = if channels.as_str() == "mono" {
+                        ChannelCount::Mono
+                    } else {
+                        ChannelCount::Stereo
+                    };
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_render_window(move |window_ms| {
+            let Ok(render_window_ms) = window_ms.parse::<f64>() else {
+                return;
+            };
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    config.xsynth.config.render_window_ms = render_window_ms;
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_soundfont(move || {
+            let app_weak = app_weak.clone();
+            let bridge = bridge.clone();
+            let shared_state = Arc::clone(&shared_state);
+            std::thread::spawn(move || {
+                let file = rfd::FileDialog::new()
+                    .add_filter("Soundfonts", &["sf2", "sfz", "SF2", "SFZ"])
+                    .add_filter("All files", &["*"])
+                    .pick_file();
+                if let Some(path) = file {
+                    let _ = app_weak.upgrade_in_event_loop(move |app| {
+                        update_audio_config(&app, &bridge, &shared_state, move |config| {
+                            let soundfont = primary_soundfont(config);
+                            soundfont.path = path;
+                            soundfont.enabled = true;
+                        });
+                    });
+                }
+            });
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_reset_audio_soundfont(move || {
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    let soundfont = primary_soundfont(config);
+                    soundfont.path = PathBuf::from(DEFAULT_SOUNDFONT);
+                    soundfont.enabled = true;
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_toggle_audio_soundfont_enabled(move || {
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    let soundfont = primary_soundfont(config);
+                    soundfont.enabled = !soundfont.enabled;
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_interpolation(move |mode| {
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    for soundfont in &mut config.soundfonts {
+                        soundfont.options.interpolator = if mode.as_str() == "linear" {
+                            Interpolator::Linear
+                        } else {
+                            Interpolator::Nearest
+                        };
+                    }
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_effects(move |mode| {
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    for soundfont in &mut config.soundfonts {
+                        soundfont.options.use_effects = mode.as_str() == "on";
+                    }
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_layer_limit(move |limit| {
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    if limit.as_str() == "off" {
+                        config.xsynth.limit_layers = false;
+                    } else if let Ok(layers) = limit.parse::<usize>() {
+                        config.xsynth.limit_layers = true;
+                        config.xsynth.layers = layers;
+                    }
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_threading(move |mode| {
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    config.xsynth.config.multithreading = match mode.as_str() {
+                        "auto" => ThreadCount::Auto,
+                        "4" => ThreadCount::Manual(4),
+                        _ => ThreadCount::None,
+                    };
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_ignore_range(move |limit| {
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    config.xsynth.config.ignore_range = match limit.as_str() {
+                        "8" => 1..=8,
+                        "16" => 1..=16,
+                        "24" => 1..=24,
+                        _ => 0..=0,
+                    };
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_attack_curve(move |mode| {
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    let curve = envelope_curve_from_label(mode.as_str());
+                    for soundfont in &mut config.soundfonts {
+                        soundfont.options.vol_envelope_options.attack_curve = curve;
+                    }
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_decay_curve(move |mode| {
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    let curve = envelope_curve_from_label(mode.as_str());
+                    for soundfont in &mut config.soundfonts {
+                        soundfont.options.vol_envelope_options.decay_curve = curve;
+                    }
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_release_curve(move |mode| {
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    let curve = envelope_curve_from_label(mode.as_str());
+                    for soundfont in &mut config.soundfonts {
+                        soundfont.options.vol_envelope_options.release_curve = curve;
+                    }
+                });
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_audio_limiter(move |mode| {
+            if let Some(app) = app_weak.upgrade() {
+                update_audio_config(&app, &bridge, &shared_state, move |config| {
+                    config.xsynth.render.use_limiter = mode.as_str() == "on";
+                });
+            }
+        });
+    }
+}
+
+fn envelope_curve_from_label(label: &str) -> EnvelopeCurveType {
+    match label {
+        "linear" => EnvelopeCurveType::Linear,
+        _ => EnvelopeCurveType::Exponential,
     }
 }
 
@@ -936,14 +1225,18 @@ fn load_analysis_resource_set(
     all_events.extend(parsed_events);
 
     progress(0.55, "Building analysis model…");
-    let processed_events =
-        bridge.build_processed_midi(parsed_midi_id, MidiProcessingConfig::default(), shared_state)?;
+    let processed_events = bridge.build_processed_midi(
+        parsed_midi_id,
+        MidiProcessingConfig::default(),
+        shared_state,
+    )?;
     let (processed_midi_id, midi_length) = processed_result_from_events(&processed_events)?;
     all_events.extend(processed_events);
 
     let bucket_count = ((midi_length / 0.5).ceil() as usize).clamp(1, 8192);
     progress(0.82, "Computing bucketed note statistics…");
-    let analysis_events = bridge.analyze_processed_midi(processed_midi_id, Some(bucket_count), shared_state)?;
+    let analysis_events =
+        bridge.analyze_processed_midi(processed_midi_id, Some(bucket_count), shared_state)?;
     all_events.extend(analysis_events);
 
     Ok(all_events)

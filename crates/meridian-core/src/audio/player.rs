@@ -2,6 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 use xsynth_core::AudioStreamParams;
+use xsynth_realtime::DefaultOutputSupport;
 
 use crate::error::MeridianError;
 
@@ -31,6 +32,14 @@ pub struct AudioStatus {
     pub stream_params: Option<AudioStreamParams>,
     pub loaded_soundfonts: usize,
     pub active: bool,
+    pub supports_44100_hz: bool,
+    pub supports_48000_hz: bool,
+    pub supports_88200_hz: bool,
+    pub supports_96000_hz: bool,
+    pub supports_176400_hz: bool,
+    pub supports_192000_hz: bool,
+    pub supports_mono: bool,
+    pub supports_stereo: bool,
 }
 
 impl Default for AudioStatus {
@@ -41,6 +50,14 @@ impl Default for AudioStatus {
             stream_params: None,
             loaded_soundfonts: 0,
             active: false,
+            supports_44100_hz: false,
+            supports_48000_hz: false,
+            supports_88200_hz: false,
+            supports_96000_hz: false,
+            supports_176400_hz: false,
+            supports_192000_hz: false,
+            supports_mono: false,
+            supports_stereo: false,
         }
     }
 }
@@ -87,6 +104,10 @@ impl MeridianAudioPlayer {
             AudioBackend::None => Box::new(EmptyPlayer),
             AudioBackend::Xsynth => Box::new(XSynthPlayer::new(config)?),
         };
+        let output_support = match config.backend {
+            AudioBackend::None => DefaultOutputSupport::default(),
+            AudioBackend::Xsynth => xsynth_realtime::RealtimeSynth::default_output_support(),
+        };
         new_player.configure(config, &self.cache)?;
         let status = AudioStatus {
             backend: config.backend,
@@ -94,31 +115,53 @@ impl MeridianAudioPlayer {
             stream_params: new_player.stream_params(),
             loaded_soundfonts: config.soundfonts.iter().filter(|sf| sf.enabled).count(),
             active: !matches!(config.backend, AudioBackend::None),
+            supports_44100_hz: output_support.supports_44100_hz,
+            supports_48000_hz: output_support.supports_48000_hz,
+            supports_88200_hz: output_support.supports_88200_hz,
+            supports_96000_hz: output_support.supports_96000_hz,
+            supports_176400_hz: output_support.supports_176400_hz,
+            supports_192000_hz: output_support.supports_192000_hz,
+            supports_mono: output_support.supports_mono,
+            supports_stereo: output_support.supports_stereo,
         };
-        *self.player.write().unwrap() = new_player;
-        *self.status.write().unwrap() = status;
+        *write_lock(&self.player) = new_player;
+        *write_lock(&self.status) = status;
         Ok(())
     }
 
     pub fn push_events(&self, data: impl Iterator<Item = u32>) {
-        let mut player = self.player.write().unwrap();
+        let mut player = write_lock(&self.player);
         for event in data {
             player.push_event(event);
         }
-        self.status.write().unwrap().voice_count = player.voice_count();
+        write_lock(&self.status).voice_count = player.voice_count();
     }
 
     pub fn reset(&self) {
-        let mut player = self.player.write().unwrap();
+        let mut player = write_lock(&self.player);
         player.reset();
-        self.status.write().unwrap().voice_count = player.voice_count();
+        write_lock(&self.status).voice_count = player.voice_count();
     }
 
     pub fn status(&self) -> AudioStatus {
-        let mut status = self.status.read().unwrap().clone();
-        let player = self.player.read().unwrap();
+        let mut status = read_lock(&self.status).clone();
+        let player = read_lock(&self.player);
         status.voice_count = player.voice_count();
         status.stream_params = player.stream_params();
         status
+    }
+}
+
+fn read_lock<T>(lock: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T> {
+    match lock.read() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn write_lock<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
+    match lock.write() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
     }
 }

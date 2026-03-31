@@ -21,6 +21,7 @@ import { AnalysisPanel } from "panels/analysis.slint";
 export { InspectorRow, MidiLoadState }
 
 export component App inherits Window {
+    icon: @image-url("../../../assets/icons/meridian.png");
 
     // ── Viewport texture ──
     in-out property <image> viewport-image;
@@ -102,6 +103,39 @@ export component App inherits Window {
     in-out property <string> analysis-key-range-text: "—";
     in-out property <string> analysis-avg-velocity-text: "—";
     in-out property <string> analysis-note-density-text: "—";
+    in-out property <string> audio-backend-text: "xsynth";
+    in-out property <string> audio-engine-status-text: "Idle";
+    in-out property <string> audio-output-stream-text: "Stereo @ 48 kHz";
+    in-out property <bool> audio-supports-44100: true;
+    in-out property <bool> audio-supports-48000: true;
+    in-out property <bool> audio-supports-88200: false;
+    in-out property <bool> audio-supports-96000: false;
+    in-out property <bool> audio-supports-176400: false;
+    in-out property <bool> audio-supports-192000: false;
+    in-out property <bool> audio-supports-mono: false;
+    in-out property <bool> audio-supports-stereo: true;
+    in-out property <string> audio-sample-rate-text: "48000";
+    in-out property <string> audio-channel-count-text: "stereo";
+    in-out property <string> audio-render-window-text: "10.0 ms";
+    in-out property <string> audio-soundfont-text: "(default)";
+    in-out property <string> audio-soundfont-count-text: "1 loaded";
+    in-out property <bool> audio-soundfont-enabled: true;
+    in-out property <string> audio-engine-detail-text: "Nearest / FX on";
+    in-out property <string> audio-effects-text: "on";
+    in-out property <string> audio-interpolation-text: "nearest";
+    in-out property <string> audio-voice-count-text: "—";
+    in-out property <string> audio-layer-limit-text: "4 max";
+    in-out property <string> audio-limiter-text: "Off";
+    in-out property <string> audio-threading-text: "none";
+    in-out property <string> audio-ignore-range-text: "off";
+    in-out property <string> audio-attack-curve-text: "exponential";
+    in-out property <string> audio-decay-curve-text: "linear";
+    in-out property <string> audio-release-curve-text: "linear";
+    in-out property <string> audio-parallelism-text: "Auto / Auto";
+    in-out property <float> audio-render-progress: 0;
+    in-out property <string> audio-render-status: "Idle";
+    in-out property <string> audio-render-elapsed: "—";
+    in-out property <string> audio-render-output-text: "output.wav";
 
 
     // ── Profile (0=Preview 1=Render 2=Audio 3=Modify 4=Analysis) ──
@@ -164,6 +198,21 @@ export component App inherits Window {
     callback seek-time(float);
     callback select-renderer(string);
     callback select-time-space(string);
+    callback select-audio-sample-rate(string);
+    callback select-audio-channel-count(string);
+    callback select-audio-render-window(string);
+    callback select-audio-soundfont();
+    callback reset-audio-soundfont();
+    callback toggle-audio-soundfont-enabled();
+    callback select-audio-interpolation(string);
+    callback select-audio-effects(string);
+    callback select-audio-layer-limit(string);
+    callback select-audio-limiter(string);
+    callback select-audio-threading(string);
+    callback select-audio-ignore-range(string);
+    callback select-audio-attack-curve(string);
+    callback select-audio-decay-curve(string);
+    callback select-audio-release-curve(string);
     callback start-render;
     callback cancel-render;
     callback start-audio-render;
@@ -206,7 +255,25 @@ export component App inherits Window {
 
                         Rectangle { horizontal-stretch: 1; }
 
-                        Text { text: "Meridian"; color: #2d3d52; font-size: 12px; font-weight: 600; vertical-alignment: center; }
+
+                        VerticalLayout {
+                            alignment: center;
+
+                            HorizontalLayout {
+                                spacing: 6px;
+                                alignment: center;
+
+                                Image {
+                                    width: 16px;
+                                    height: 16px;
+                                    source: @image-url("../../../assets/icons/meridian.png");
+                                    image-fit: contain;
+                                    vertical-alignment: center;
+                                }
+
+                                Text { text: "Meridian"; color: #2d3d52; font-size: 12px; font-weight: 600; vertical-alignment: center; }
+                            }
+                        }
                     }
 
                     Rectangle { y: parent.height - 1px; height: 1px; background: #141e2e; }
@@ -325,8 +392,50 @@ export component App inherits Window {
                     unload-midi            => { root.unload-audio(); }
                     retry-load             => { root.retry-load-audio(); }
 
-                    start-audio-render     => { root.start-audio-render(); }
-                    cancel-audio-render    => { root.cancel-audio-render(); }
+                    audio-backend-text:    root.audio-backend-text;
+                    audio-engine-status-text: root.audio-engine-status-text;
+                    audio-output-stream-text: root.audio-output-stream-text;
+                    audio-supports-44100:  root.audio-supports-44100;
+                    audio-supports-48000:  root.audio-supports-48000;
+                    audio-supports-88200:  root.audio-supports-88200;
+                    audio-supports-96000:  root.audio-supports-96000;
+                    audio-supports-176400: root.audio-supports-176400;
+                    audio-supports-192000: root.audio-supports-192000;
+                    audio-supports-mono:   root.audio-supports-mono;
+                    audio-supports-stereo: root.audio-supports-stereo;
+                    audio-sample-rate-text: root.audio-sample-rate-text;
+                    audio-channel-count-text: root.audio-channel-count-text;
+                    audio-render-window-text: root.audio-render-window-text;
+                    soundfont-text:         root.audio-soundfont-text;
+                    soundfont-count-text:   root.audio-soundfont-count-text;
+                    audio-soundfont-enabled: root.audio-soundfont-enabled;
+                    audio-engine-detail-text: root.audio-engine-detail-text;
+                    audio-effects-text:    root.audio-effects-text;
+                    audio-interpolation-text: root.audio-interpolation-text;
+                    audio-voice-count-text: root.audio-voice-count-text;
+                    audio-layer-limit-text: root.audio-layer-limit-text;
+                    audio-limiter-text:     root.audio-limiter-text;
+                    audio-threading-text:  root.audio-threading-text;
+                    audio-ignore-range-text: root.audio-ignore-range-text;
+                    audio-attack-curve-text: root.audio-attack-curve-text;
+                    audio-decay-curve-text: root.audio-decay-curve-text;
+                    audio-release-curve-text: root.audio-release-curve-text;
+                    audio-parallelism-text: root.audio-parallelism-text;
+                    select-sample-rate(rate) => { root.select-audio-sample-rate(rate); }
+                    select-channel-count(channels) => { root.select-audio-channel-count(channels); }
+                    select-render-window(ms) => { root.select-audio-render-window(ms); }
+                    select-soundfont      => { root.select-audio-soundfont(); }
+                    reset-soundfont       => { root.reset-audio-soundfont(); }
+                    toggle-soundfont-enabled => { root.toggle-audio-soundfont-enabled(); }
+                    select-interpolation(mode) => { root.select-audio-interpolation(mode); }
+                    select-effects(mode)  => { root.select-audio-effects(mode); }
+                    select-layer-limit(limit) => { root.select-audio-layer-limit(limit); }
+                    select-limiter(mode) => { root.select-audio-limiter(mode); }
+                    select-threading(mode) => { root.select-audio-threading(mode); }
+                    select-ignore-range(mode) => { root.select-audio-ignore-range(mode); }
+                    select-attack-curve(mode) => { root.select-audio-attack-curve(mode); }
+                    select-decay-curve(mode) => { root.select-audio-decay-curve(mode); }
+                    select-release-curve(mode) => { root.select-audio-release-curve(mode); }
                 }
             }
 

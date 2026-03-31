@@ -41,8 +41,9 @@ pub struct XSynthPlayer {
 impl XSynthPlayer {
     pub fn new(config: &AudioConfig) -> Result<Self, MeridianError> {
         let synth = std::panic::catch_unwind(|| {
-            SendSyncSynth(RealtimeSynth::open_with_default_output(
+            SendSyncSynth(RealtimeSynth::open_with_default_output_and_params(
                 config.xsynth.config.clone(),
+                config.xsynth.render.audio_params,
             ))
         })
         .map_err(|_| {

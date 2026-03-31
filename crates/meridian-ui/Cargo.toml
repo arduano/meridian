@@ -3,6 +3,23 @@ name = "meridian-ui"
 version.workspace = true
 edition.workspace = true
 
+[package.metadata.bundle]
+name = "Meridian"
+identifier = "io.github.arduano.meridian"
+icon = [
+    "../../assets/icons/meridian-16.png",
+    "../../assets/icons/meridian-24.png",
+    "../../assets/icons/meridian-32.png",
+    "../../assets/icons/meridian-48.png",
+    "../../assets/icons/meridian-64.png",
+    "../../assets/icons/meridian-128.png",
+    "../../assets/icons/meridian-256.png",
+    "../../assets/icons/meridian-512.png",
+    "../../assets/icons/meridian-1024.png",
+]
+category = "Music"
+short_description = "Desktop MIDI visualizer frontend for Meridian"
+
 [features]
 debug-snapshots = []
 
@@ -14,3 +31,6 @@ slint.workspace = true
 
 [build-dependencies]
 slint-build = "~1.15"
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1.31"

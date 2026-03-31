@@ -2,7 +2,10 @@ use std::path::PathBuf;
 
 use meridian_core::{
     audio::AudioStatus,
-    protocol::{AudioRenderStatus, CoreEvent, MidiAnalysisData, ProcessedMidiId, StateSnapshot, VideoRenderStatus},
+    protocol::{
+        AudioRenderStatus, CoreEvent, MidiAnalysisData, ProcessedMidiId, StateSnapshot,
+        VideoRenderStatus,
+    },
     render::{DisplayTimeSpace, SceneConfig},
 };
 
