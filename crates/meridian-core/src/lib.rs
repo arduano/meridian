@@ -7,6 +7,7 @@ pub mod error;
 pub mod midi;
 pub mod protocol;
 pub mod render;
+pub mod sdk_schema;
 pub mod transport;
 pub mod video;
 

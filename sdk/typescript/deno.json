@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "tasks": {
+    "check": "deno check src/index.ts",
+    "test": "deno test --allow-env --allow-read --allow-write --allow-run tests"
+  }
+}

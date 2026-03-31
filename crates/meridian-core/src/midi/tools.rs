@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct RangeSelectTool {
     pub reset: bool,
@@ -17,7 +18,7 @@ pub struct RangeSelectTool {
     pub event_kinds: Vec<SelectableEventKind>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum SelectableEventKind {
     Note,
@@ -32,7 +33,7 @@ pub enum SelectableEventKind {
     MetaOther,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum TempoMapTool {
     Flatten { tempo: u32 },
@@ -40,37 +41,37 @@ pub enum TempoMapTool {
     Replace { points: Vec<TempoPoint> },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct TempoPoint {
     pub tick: u64,
     pub tempo: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct TimeWarpTool {
     pub points: Vec<TimeWarpPoint>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct TimeWarpPoint {
     pub source_tick: u64,
     pub dest_tick: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct ChannelRemapTool {
     pub mappings: Vec<ChannelMapEntry>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct ChannelMapEntry {
     pub from: u8,
     pub to: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum TrackRouteTool {
     Preserve,
@@ -79,13 +80,13 @@ pub enum TrackRouteTool {
     Map { mappings: Vec<TrackMapEntry> },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct TrackMapEntry {
     pub from: usize,
     pub to: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct ProgramTool {
     pub force_program: Option<u8>,
@@ -94,13 +95,13 @@ pub struct ProgramTool {
     pub keep_only_startup: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct ChannelProgram {
     pub channel: u8,
     pub program: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct ControlChangeTool {
     pub strip_controllers: Vec<u8>,
@@ -109,26 +110,26 @@ pub struct ControlChangeTool {
     pub inject_start: Vec<ControlValue>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct ControllerMapEntry {
     pub from: u8,
     pub to: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct ControllerScaleEntry {
     pub controller: u8,
     pub scale: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct ControlValue {
     pub channel: u8,
     pub controller: u8,
     pub value: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct PitchBendTool {
     pub strip: bool,
@@ -139,7 +140,7 @@ pub struct PitchBendTool {
     pub reset_at_start: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum VelocityMapTool {
     Scale { scale: f32 },
@@ -147,13 +148,13 @@ pub enum VelocityMapTool {
     Polyline { points: Vec<VelocityPoint> },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct VelocityPoint {
     pub input: u8,
     pub output: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct NoteLengthTool {
     pub min_ticks: Option<u64>,
@@ -162,14 +163,14 @@ pub struct NoteLengthTool {
     pub fixed_ticks: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct OverlapRepairTool {
     pub repeated_note_on: RepeatedNoteOnPolicy,
     pub orphan_note_offs: OrphanNoteOffPolicy,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum RepeatedNoteOnPolicy {
     Keep,
@@ -177,7 +178,7 @@ pub enum RepeatedNoteOnPolicy {
     ClosePrevious,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum OrphanNoteOffPolicy {
     Keep,
@@ -185,7 +186,7 @@ pub enum OrphanNoteOffPolicy {
     Drop,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct QuantizeTool {
     pub grid_ticks: u64,
@@ -194,7 +195,7 @@ pub struct QuantizeTool {
     pub swing: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct HumanizeTool {
     pub start_jitter: i64,
@@ -203,7 +204,7 @@ pub struct HumanizeTool {
     pub seed: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct KeyMapTool {
     pub mappings: Vec<KeyMapEntry>,
@@ -211,19 +212,19 @@ pub struct KeyMapTool {
     pub drop_unmapped: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct KeyMapEntry {
     pub from: u8,
     pub to: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct KeyRange {
     pub min: u8,
     pub max: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct DedupeTool {
     pub notes: bool,
@@ -232,7 +233,7 @@ pub struct DedupeTool {
     pub meta: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct MetaTextTool {
     pub strip_all_text: bool,
@@ -240,7 +241,7 @@ pub struct MetaTextTool {
     pub prefix_track_names: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum TextKind {
     Text,
@@ -256,14 +257,14 @@ pub enum TextKind {
     MetaEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct SysexTool {
     pub strip_all: bool,
     pub prepend: Vec<Vec<u8>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct MergeBalanceTool {
     pub deconflict_channels: bool,
@@ -271,7 +272,7 @@ pub struct MergeBalanceTool {
     pub prefer_first_tempo_map: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct AnalysisGuardTool {
     pub min_note_count: Option<u64>,
@@ -280,7 +281,7 @@ pub struct AnalysisGuardTool {
     pub max_track_count: Option<usize>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(tag = "tool", rename_all = "snake_case")]
 pub enum MidiModifierTool {
     RangeSelect(RangeSelectTool),

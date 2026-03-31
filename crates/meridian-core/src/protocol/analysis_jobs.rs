@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::midi::analysis::{MidiAnalysisData, MidiAnalysisKind};
 
 use super::ids::{AnalysisJobId, DisplayCacheId, ParsedMidiId};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MidiAnalysisJobEvent {
     Started {
@@ -28,7 +29,7 @@ pub enum MidiAnalysisJobEvent {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum MidiAnalysisJobStatus {
     Running {

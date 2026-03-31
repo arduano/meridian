@@ -7,7 +7,10 @@ use std::{
 };
 
 use crate::{
-    audio::{AudioRenderConfig, AudioRenderEvent, SoundfontCache, render_audio_from_cache},
+    audio::{
+        AudioBackend, AudioRenderConfig, AudioRenderEvent, MeridianSoundfont, SoundfontCache,
+        render_audio_from_cache,
+    },
     protocol::{AudioRenderJobId, AudioRenderStatus, CoreErrorCode, CoreEvent},
 };
 
@@ -31,10 +34,24 @@ impl CoreState {
                 "no midi loaded for audio render",
             )];
         };
-        let audio_config = config
+        let mut audio_config = config
             .audio
             .clone()
             .unwrap_or_else(|| self.audio_config.clone());
+        if matches!(audio_config.backend, AudioBackend::None) {
+            audio_config.backend = AudioBackend::Xsynth;
+        }
+        if !config.soundfonts.is_empty() {
+            audio_config.soundfonts = config
+                .soundfonts
+                .iter()
+                .cloned()
+                .map(|path| MeridianSoundfont {
+                    path,
+                    ..MeridianSoundfont::default()
+                })
+                .collect();
+        }
         let soundfont_cache = SoundfontCache::new();
         let cancel = Arc::new(AtomicBool::new(false));
         let job_id = AudioRenderJobId(self.next_resource_id);

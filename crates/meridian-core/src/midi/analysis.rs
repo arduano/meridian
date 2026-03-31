@@ -8,6 +8,7 @@ use flate2::{Compression, write::GzEncoder};
 use midi_toolkit::events::{Event, MIDIEventEnum, TextEventKind};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::midi::{
     MIDIAnalysisSummary, TrackAndChannel, display_cache::DisplayMidiCache, parsed::ParsedMidiFile,
@@ -15,14 +16,14 @@ use crate::midi::{
 
 const NOTE_START_HISTOGRAM_BINS: usize = 257;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct MidiAnalysisBucket {
     pub time_seconds: f64,
     pub note_starts: u64,
     pub active_notes: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct MidiAnalysisData {
     pub midi_length: f64,
     pub total_notes: u64,
@@ -35,7 +36,7 @@ pub struct MidiAnalysisData {
     pub tempo: MidiAnalysisTempoMetrics,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum MidiAnalysisKind {
     File,
@@ -46,7 +47,7 @@ pub enum MidiAnalysisKind {
     Buckets,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct MidiAnalysisFileMetrics {
     pub source_bytes: u64,
     pub gzip_bytes: u64,
@@ -58,7 +59,7 @@ pub struct MidiAnalysisFileMetrics {
     pub total_event_count: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 pub struct MidiAnalysisEventMetrics {
     pub note_on_events: u64,
     pub note_off_events: u64,
@@ -80,7 +81,7 @@ pub struct MidiAnalysisEventMetrics {
     pub key_signature_events: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct MidiAnalysisNoteMetrics {
     pub pitch_class_note_counts: Vec<u64>,
     pub velocity_note_on_counts: Vec<u64>,
@@ -100,7 +101,7 @@ pub struct MidiAnalysisNoteMetrics {
     pub avg_notes_per_onset: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct MidiAnalysisTempoMetrics {
     pub initial_bpm: f64,
     pub min_bpm: f64,

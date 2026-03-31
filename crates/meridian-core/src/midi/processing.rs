@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use super::tools::MidiModifierTool;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct MidiProcessingConfig {
     pub time: TimeProcessingConfig,
@@ -26,7 +27,7 @@ impl Default for MidiProcessingConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct TimeProcessingConfig {
     pub offset_seconds: f64,
@@ -40,7 +41,7 @@ impl Default for TimeProcessingConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct NoteProcessingConfig {
     pub min_key: u8,
@@ -74,7 +75,7 @@ impl NoteProcessingConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct EventFilterConfig {
     pub notes: bool,
@@ -104,14 +105,14 @@ impl Default for EventFilterConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum ZeroVelocityNoteOnMode {
     NoteOff,
     KeepAsNoteOn,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct MidiFileSelection {
     pub inputs: Vec<PathBuf>,
@@ -123,7 +124,7 @@ impl Default for MidiFileSelection {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct MidiFileProcessingConfig {
     pub time: FileTimeProcessingConfig,
@@ -153,7 +154,7 @@ impl Default for MidiFileProcessingConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct FileTimeProcessingConfig {
     pub offset_ticks: i64,
@@ -173,7 +174,7 @@ impl Default for FileTimeProcessingConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct TrimProcessingConfig {
     pub start_tick: u64,
@@ -193,7 +194,7 @@ impl Default for TrimProcessingConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct PitchProcessingConfig {
     pub bend_scale: f32,
@@ -213,7 +214,7 @@ impl Default for PitchProcessingConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct StructureProcessingConfig {
     pub split_channels: bool,
@@ -233,7 +234,7 @@ impl Default for StructureProcessingConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct MergeProcessingConfig {
     pub mode: MidiMergeMode,
@@ -247,7 +248,7 @@ impl Default for MergeProcessingConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum MidiMergeMode {
     PreserveTracks,

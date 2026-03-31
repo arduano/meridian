@@ -151,7 +151,15 @@ fn handle_input_line(
 
 fn handle_async_event(stdout: &mut impl Write, event: CoreEvent) -> Result<(), MeridianError> {
     match event {
-        CoreEvent::VideoRender { .. } | CoreEvent::VideoRenderStatus { .. } => {
+        CoreEvent::VideoRender { .. }
+        | CoreEvent::VideoRenderStatus { .. }
+        | CoreEvent::AudioRender { .. }
+        | CoreEvent::AudioRenderStatus { .. }
+        | CoreEvent::MidiAnalysisJob { .. }
+        | CoreEvent::MidiAnalysisJobStatus { .. }
+        | CoreEvent::MidiProcess { .. }
+        | CoreEvent::MidiProcessStatus { .. }
+        | CoreEvent::MidiLoadProgress { .. } => {
             write_json(
                 stdout,
                 &JsonResponse {

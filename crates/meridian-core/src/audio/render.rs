@@ -5,6 +5,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 use xsynth_core::{
     AudioStreamParams, ChannelCount,
     channel::{ChannelAudioEvent, ChannelEvent, ControlEvent},
@@ -29,6 +30,8 @@ pub struct AudioRenderConfig {
     pub sample_rate: Option<u32>,
     pub channels: Option<u16>,
     pub use_limiter: Option<bool>,
+    #[serde(default)]
+    pub soundfonts: Vec<PathBuf>,
 }
 
 impl Default for AudioRenderConfig {
@@ -40,6 +43,7 @@ impl Default for AudioRenderConfig {
             sample_rate: None,
             channels: None,
             use_limiter: None,
+            soundfonts: Vec::new(),
         }
     }
 }
@@ -94,7 +98,7 @@ pub fn render_audio_from_cache(
     })
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AudioRenderEvent {
     RenderStarted {

@@ -1,0 +1,21 @@
+{
+  "name": "@meridian/stdio-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./runtime/deno": "./src/runtime/deno.ts",
+    "./runtime/node": "./src/runtime/node.ts",
+    "./runtime/bun": "./src/runtime/bun.ts",
+    "./runtime/deno-client": "./src/runtime/deno_client.ts",
+    "./runtime/node-client": "./src/runtime/node_client.ts",
+    "./runtime/bun-client": "./src/runtime/bun_client.ts"
+  },
+  "scripts": {
+    "codegen:protocol": "cargo run -p meridian-core --example export_sdk_schema",
+    "check": "deno check src/index.ts && deno check src/runtime/deno_client.ts",
+    "test": "deno test --allow-env --allow-read --allow-write --allow-run tests"
+  },
+  "devDependencies": {}
+}

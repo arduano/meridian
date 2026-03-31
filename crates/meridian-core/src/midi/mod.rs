@@ -18,6 +18,7 @@ use std::{fs::File, path::PathBuf, time::UNIX_EPOCH};
 
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::error::MeridianError;
 use crate::render::DisplayTimeSpace;
@@ -33,7 +34,7 @@ pub use tools::*;
 
 pub const MIDI_KEY_COUNT: usize = 256;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
 pub struct MIDIAnalysisSummary {
     pub total_blocks: u64,
     pub keys_with_notes: usize,

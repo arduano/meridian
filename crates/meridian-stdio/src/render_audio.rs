@@ -44,6 +44,7 @@ pub fn run(
         sample_rate: None,
         channels: None,
         use_limiter: None,
+        soundfonts: Vec::new(),
     };
     let soundfont_cache = SoundfontCache::new();
     let mut stdout = BufWriter::new(io::stdout().lock());

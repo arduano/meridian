@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::audio::{AudioRenderEvent, AudioStatus};
 use crate::midi::analysis::MidiAnalysisData;
@@ -18,7 +19,7 @@ use super::{
     state::StateSnapshot,
 };
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum CoreErrorCode {
     InvalidJson,

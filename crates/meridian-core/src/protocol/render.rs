@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::render::{DisplayTimeSpace, ProjectedScene, SceneConfig, SceneLayout};
 
@@ -57,7 +58,7 @@ pub struct VideoRenderConfig {
     pub ffmpeg_args: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum AudioRenderStatus {
     Idle,
