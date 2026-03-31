@@ -68,7 +68,11 @@ impl CoreState {
                     None
                 }
             })
-            .or_else(|| self.current_audio_cache.as_ref().map(|cache| cache.length()))
+            .or_else(|| {
+                self.current_audio_cache
+                    .as_ref()
+                    .map(|cache| cache.length())
+            })
             .unwrap_or(0.0)
     }
 
@@ -90,6 +94,7 @@ impl CoreState {
             active_audio_session_id: self.active_audio_session_id,
             active_video_render_job_id: self.active_video_render_job_id,
             active_audio_render_job_id: self.active_audio_render_job_id,
+            active_midi_process_job_id: self.active_midi_process_job_id,
             midi_path: self.midi_path.clone(),
             midi_loaded: self.display.midi_loaded(),
             audio: self.audio_config.clone(),

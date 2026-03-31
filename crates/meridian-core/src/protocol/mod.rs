@@ -3,6 +3,7 @@ mod commands;
 mod events;
 mod ids;
 mod json;
+mod process;
 mod render;
 mod state;
 
@@ -11,9 +12,10 @@ pub use commands::{CoreCommand, ImageOutputFormat};
 pub use events::{CoreErrorCode, CoreEvent};
 pub use ids::{
     AnalysisJobId, AudioCacheId, AudioRenderJobId, AudioSessionId, DisplayCacheId,
-    DisplaySessionId, ParsedMidiId, ProcessedMidiId, VideoRenderJobId,
+    DisplaySessionId, MidiProcessJobId, ParsedMidiId, ProcessedMidiId, VideoRenderJobId,
 };
 pub use json::{JsonRequest, JsonResponse};
+pub use process::{MidiProcessEvent, MidiProcessStatus};
 pub use render::{
     AudioRenderStatus, FrameStats, RenderedFrame, VideoRenderConfig, VideoRenderEvent,
     VideoRenderStatus,

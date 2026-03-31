@@ -11,7 +11,9 @@ use meridian_core::{
         MidiFileProcessingConfig, MidiFileSelection, MidiMergeMode, StructureProcessingConfig,
         TrimProcessingConfig, analysis::MidiAnalysisKind,
     },
-    protocol::{CoreCommand, CoreEvent, JsonRequest, JsonResponse},
+    protocol::{
+        CoreCommand, CoreEvent, JsonRequest, JsonResponse, MidiProcessEvent, MidiProcessStatus,
+    },
     render::{DisplayTimeSpace, SceneLayout},
     spawn_core,
 };
@@ -461,6 +463,94 @@ fn process_midi_files_merges_trims_and_writes_output() {
     assert_eq!(seen_program, 1);
     assert_eq!(note_ons, vec![(0, 1, 77), (36, 0, 72)]);
     assert_eq!(note_offs, vec![(60, 1, 77), (144, 0, 72)]);
+}
+
+#[test]
+fn process_midi_files_job_reports_status_and_finishes() {
+    let dir = std::env::temp_dir().join(format!(
+        "meridian-core-process-job-test-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&dir).expect("create temp test dir");
+    let midi = dir.join("input.mid");
+    let output = dir.join("job_out.mid");
+    write_toolkit_midi(
+        &midi,
+        96,
+        vec![vec![
+            Event::new_delta_tempo_event(0, 500_000),
+            Event::new_delta_note_on_event(0, 0, 60, 100),
+            Event::new_delta_note_off_event(96, 0, 60),
+        ]],
+    );
+
+    let core = spawn_core();
+    let event_rx = core.subscribe_events();
+    let events = core
+        .request(CoreCommand::StartProcessMidiFiles {
+            selection: MidiFileSelection {
+                inputs: vec![midi.clone(), midi],
+            },
+            output: output.clone(),
+            config: MidiFileProcessingConfig::default(),
+        })
+        .expect("start midi process job");
+
+    assert!(matches!(
+        events.as_slice(),
+        [CoreEvent::MidiProcessStatus {
+            status: MidiProcessStatus::Running {
+                total_inputs: 2,
+                ..
+            }
+        }]
+    ));
+
+    let mut saw_progress = false;
+    let mut saw_finished = false;
+    for _ in 0..10 {
+        let event = event_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("receive job event");
+        match event {
+            CoreEvent::MidiProcess { event } => match event {
+                MidiProcessEvent::InputProgress {
+                    processed_inputs, ..
+                } => {
+                    saw_progress |= processed_inputs > 0;
+                }
+                MidiProcessEvent::ProcessFinished {
+                    output: finished_output,
+                    input_count,
+                    ..
+                } => {
+                    assert_eq!(finished_output, output);
+                    assert_eq!(input_count, 2);
+                    saw_finished = true;
+                    break;
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+
+    assert!(saw_progress);
+    assert!(saw_finished);
+    assert!(output.exists());
+
+    let status = core
+        .request(CoreCommand::GetProcessMidiStatus)
+        .expect("get midi process status");
+    assert!(matches!(
+        status.as_slice(),
+        [CoreEvent::MidiProcessStatus {
+            status: MidiProcessStatus::Idle
+        }]
+    ));
 }
 
 #[test]

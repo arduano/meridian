@@ -35,3 +35,7 @@ pub struct AudioRenderJobId(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct AnalysisJobId(pub u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct MidiProcessJobId(pub u64);

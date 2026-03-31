@@ -8,8 +8,8 @@ use crate::{
 };
 
 use super::ids::{
-    AudioCacheId, AudioRenderJobId, AudioSessionId, DisplayCacheId, DisplaySessionId, ParsedMidiId,
-    ProcessedMidiId, VideoRenderJobId,
+    AudioCacheId, AudioRenderJobId, AudioSessionId, DisplayCacheId, DisplaySessionId,
+    MidiProcessJobId, ParsedMidiId, ProcessedMidiId, VideoRenderJobId,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,6 +22,7 @@ pub struct StateSnapshot {
     pub active_audio_session_id: Option<AudioSessionId>,
     pub active_video_render_job_id: Option<VideoRenderJobId>,
     pub active_audio_render_job_id: Option<AudioRenderJobId>,
+    pub active_midi_process_job_id: Option<MidiProcessJobId>,
     pub midi_path: Option<PathBuf>,
     pub midi_loaded: bool,
     pub audio: AudioConfig,

@@ -15,9 +15,10 @@ version = "0.1.0"
 bytemuck = { version = "1.18", features = ["derive"] }
 clap = { version = "4.6.0", features = ["derive", "env"] }
 enum_dispatch = "0.3.13"
+flate2 = "1.1.4"
 flume = "0.11.1"
 glam = "0.30.8"
-midi-toolkit-rs = "0.1.0"
+midi-toolkit-rs = { path = "../midi-toolkit-rs/midi-toolkit" }
 midly = "0.5.3"
 png = "0.18.0"
 pollster = "0.4.0"

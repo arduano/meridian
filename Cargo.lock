@@ -3394,9 +3394,10 @@ dependencies = [
  "bytemuck",
  "clap 4.6.0",
  "enum_dispatch",
+ "flate2",
  "flume",
  "glam",
- "midi-toolkit-rs",
+ "midi-toolkit-rs 0.1.0",
  "midly",
  "png 0.18.1",
  "pollster",
@@ -3433,6 +3434,7 @@ dependencies = [
  "rfd",
  "slint",
  "slint-build",
+ "winresource",
 ]
 
 [[package]]
@@ -3468,14 +3470,37 @@ dependencies = [
 [[package]]
 name = "midi-toolkit-rs"
 version = "0.1.0"
+dependencies = [
+ "crossbeam-channel",
+ "midi-toolkit-rs-derive 0.1.0",
+ "num-traits",
+ "rayon",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "midi-toolkit-rs"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91fceeb7b2de9bb1833fa0fe859c7f9adf01abbe90cb5f9821c5585c0b55c77f"
 dependencies = [
  "crossbeam-channel",
- "midi-toolkit-rs-derive",
+ "midi-toolkit-rs-derive 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits",
  "rayon",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "midi-toolkit-rs-derive"
+version = "0.1.0"
+dependencies = [
+ "convert_case 0.4.0",
+ "num-traits",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -5956,6 +5981,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml"
+version = "1.0.7+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd28d57d8a6f6e458bc0b8784f8fdcc4b99a437936056fa122cb234f18656a96"
+dependencies = [
+ "indexmap 2.13.0",
+ "serde_core",
+ "serde_spanned",
+ "toml_datetime 1.0.1+spec-1.1.0",
+ "toml_parser",
+ "toml_writer",
+ "winnow 1.0.0",
+]
+
+[[package]]
 name = "toml_datetime"
 version = "0.7.5+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7428,6 +7468,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "winresource"
+version = "0.1.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0986a8b1d586b7d3e4fe3d9ea39fb451ae22869dcea4aa109d287a374d866087"
+dependencies = [
+ "toml 1.0.7+spec-1.1.0",
+ "version_check",
+]
+
+[[package]]
 name = "wit-bindgen"
 version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7681,7 +7731,7 @@ dependencies = [
  "crossbeam",
  "crossbeam-channel",
  "hound",
- "midi-toolkit-rs",
+ "midi-toolkit-rs 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon",
  "spin_sleep",
  "thiserror 1.0.69",

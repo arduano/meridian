@@ -13,6 +13,7 @@ use super::{
         AudioCacheId, AudioSessionId, DisplayCacheId, DisplaySessionId, ParsedMidiId,
         ProcessedMidiId,
     },
+    process::{MidiProcessEvent, MidiProcessStatus},
     render::{AudioRenderStatus, FrameStats, VideoRenderEvent, VideoRenderStatus},
     state::StateSnapshot,
 };
@@ -123,6 +124,12 @@ pub enum CoreEvent {
     },
     AudioRenderStatus {
         status: AudioRenderStatus,
+    },
+    MidiProcess {
+        event: MidiProcessEvent,
+    },
+    MidiProcessStatus {
+        status: MidiProcessStatus,
     },
     FrameProjected {
         state: StateSnapshot,

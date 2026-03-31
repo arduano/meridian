@@ -4,11 +4,14 @@ pub mod backend;
 pub mod cache;
 pub mod colors;
 pub mod display_cache;
+pub mod file_processing;
 pub mod parsed;
 pub mod processed;
 pub mod processing;
 pub mod ram;
 pub mod tempo_map;
+pub mod tool_pipeline;
+pub mod tools;
 pub mod views;
 
 use std::{fs::File, path::PathBuf, time::UNIX_EPOCH};
@@ -21,7 +24,12 @@ use crate::render::DisplayTimeSpace;
 pub use cache::MidiCacheStack;
 pub use colors::{MIDIColor, MIDIColorPair};
 pub use processed::ProcessedMidi;
-pub use processing::MidiProcessingConfig;
+pub use processing::{
+    EventFilterConfig, FileTimeProcessingConfig, MergeProcessingConfig, MidiFileProcessingConfig,
+    MidiFileSelection, MidiMergeMode, MidiProcessingConfig, PitchProcessingConfig,
+    StructureProcessingConfig, TrimProcessingConfig, ZeroVelocityNoteOnMode,
+};
+pub use tools::*;
 
 pub const MIDI_KEY_COUNT: usize = 256;
 
@@ -111,6 +119,14 @@ pub(crate) struct TrackAndChannel(u32);
 impl TrackAndChannel {
     pub(crate) fn new(track: u32, channel: u8) -> Self {
         Self(track * 16 + channel as u32)
+    }
+
+    pub(crate) fn track(self) -> usize {
+        (self.0 / 16) as usize
+    }
+
+    pub(crate) fn channel(self) -> usize {
+        (self.0 % 16) as usize
     }
 
     pub(crate) fn as_usize(self) -> usize {

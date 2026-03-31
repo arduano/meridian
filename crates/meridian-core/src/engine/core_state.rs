@@ -15,7 +15,8 @@ use crate::{
     protocol::{
         AnalysisJobId, AudioCacheId, AudioRenderJobId, AudioRenderStatus, AudioSessionId,
         CoreCommand, CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId,
-        MidiAnalysisJobStatus, ParsedMidiId, ProcessedMidiId, VideoRenderJobId, VideoRenderStatus,
+        MidiAnalysisJobStatus, MidiProcessJobId, MidiProcessStatus, ParsedMidiId, ProcessedMidiId,
+        VideoRenderJobId, VideoRenderStatus,
     },
     transport::TransportState,
 };
@@ -39,6 +40,11 @@ pub(super) struct AudioRenderJobState {
     pub(super) status: AudioRenderStatus,
 }
 
+pub(super) struct MidiProcessJobState {
+    pub(super) cancel: Arc<AtomicBool>,
+    pub(super) status: MidiProcessStatus,
+}
+
 pub(super) struct CoreState {
     pub(super) core_handle: CoreHandle,
     pub(super) subscribers: Arc<Mutex<Vec<Sender<CoreEvent>>>>,
@@ -59,6 +65,7 @@ pub(super) struct CoreState {
     pub(super) active_audio_session_id: Option<AudioSessionId>,
     pub(super) active_video_render_job_id: Option<VideoRenderJobId>,
     pub(super) active_audio_render_job_id: Option<AudioRenderJobId>,
+    pub(super) active_midi_process_job_id: Option<MidiProcessJobId>,
     pub(super) current_audio_cache: Option<Arc<InRamAudioCache>>,
     pub(super) analysis_jobs: HashMap<AnalysisJobId, MidiAnalysisJobStatus>,
     pub(super) display: LiveDisplaySession,
@@ -70,6 +77,7 @@ pub(super) struct CoreState {
     pub(super) transport: TransportState,
     pub(super) render_job: Option<RenderJobState>,
     pub(super) audio_render_job: Option<AudioRenderJobState>,
+    pub(super) midi_process_job: Option<MidiProcessJobState>,
 }
 
 impl CoreState {
@@ -100,6 +108,7 @@ impl CoreState {
             active_audio_session_id: None,
             active_video_render_job_id: None,
             active_audio_render_job_id: None,
+            active_midi_process_job_id: None,
             current_audio_cache: None,
             analysis_jobs: HashMap::new(),
             display: LiveDisplaySession::new(),
@@ -111,6 +120,7 @@ impl CoreState {
             transport: TransportState::new(),
             render_job: None,
             audio_render_job: None,
+            midi_process_job: None,
         }
     }
 
@@ -137,6 +147,9 @@ impl CoreState {
                 }
                 RequestMessage::AudioRenderUpdate { event } => {
                     self.handle_audio_render_update(event);
+                }
+                RequestMessage::MidiProcessUpdate { event } => {
+                    self.handle_midi_process_update(event);
                 }
                 RequestMessage::AnalysisJobUpdate { event } => {
                     self.handle_midi_analysis_job_update(event);
@@ -175,6 +188,15 @@ impl CoreState {
                 }],
                 Err(error) => vec![error_event(super::error_code(&error), error.to_string())],
             },
+            CoreCommand::StartProcessMidiFiles {
+                selection,
+                output,
+                config,
+            } => self.start_process_midi_files(selection, output, config),
+            CoreCommand::CancelProcessMidiFiles => self.cancel_process_midi_files(),
+            CoreCommand::GetProcessMidiStatus => vec![CoreEvent::MidiProcessStatus {
+                status: self.midi_process_status(),
+            }],
             CoreCommand::AnalyzeActiveMidi { bucket_count } => {
                 self.analyze_active_midi(bucket_count)
             }
@@ -366,6 +388,8 @@ impl CoreState {
             }],
             CoreCommand::Shutdown => {
                 self.audio_session = None;
+                self.midi_process_job = None;
+                self.active_midi_process_job_id = None;
                 vec![CoreEvent::ShutdownComplete]
             }
         }

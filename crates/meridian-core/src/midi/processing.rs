@@ -1,4 +1,8 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
+
+use super::tools::MidiModifierTool;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -74,6 +78,7 @@ impl NoteProcessingConfig {
 #[serde(default)]
 pub struct EventFilterConfig {
     pub notes: bool,
+    pub tempo: bool,
     pub pitch_bend: bool,
     pub channel_controls: bool,
     pub program_changes: bool,
@@ -87,6 +92,7 @@ impl Default for EventFilterConfig {
     fn default() -> Self {
         Self {
             notes: true,
+            tempo: true,
             pitch_bend: true,
             channel_controls: true,
             program_changes: true,
@@ -103,4 +109,154 @@ impl Default for EventFilterConfig {
 pub enum ZeroVelocityNoteOnMode {
     NoteOff,
     KeepAsNoteOn,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct MidiFileSelection {
+    pub inputs: Vec<PathBuf>,
+}
+
+impl Default for MidiFileSelection {
+    fn default() -> Self {
+        Self { inputs: Vec::new() }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct MidiFileProcessingConfig {
+    pub time: FileTimeProcessingConfig,
+    pub notes: NoteProcessingConfig,
+    pub pitch: PitchProcessingConfig,
+    pub events: EventFilterConfig,
+    pub structure: StructureProcessingConfig,
+    pub merge: MergeProcessingConfig,
+    pub tools: Vec<MidiModifierTool>,
+    pub piano_only: bool,
+    pub zero_velocity_note_on: ZeroVelocityNoteOnMode,
+}
+
+impl Default for MidiFileProcessingConfig {
+    fn default() -> Self {
+        Self {
+            time: FileTimeProcessingConfig::default(),
+            notes: NoteProcessingConfig::default(),
+            pitch: PitchProcessingConfig::default(),
+            events: EventFilterConfig::default(),
+            structure: StructureProcessingConfig::default(),
+            merge: MergeProcessingConfig::default(),
+            tools: Vec::new(),
+            piano_only: false,
+            zero_velocity_note_on: ZeroVelocityNoteOnMode::NoteOff,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct FileTimeProcessingConfig {
+    pub offset_ticks: i64,
+    pub ppq_override: Option<u16>,
+    pub tempo_override: Option<u32>,
+    pub trim: Option<TrimProcessingConfig>,
+}
+
+impl Default for FileTimeProcessingConfig {
+    fn default() -> Self {
+        Self {
+            offset_ticks: 0,
+            ppq_override: None,
+            tempo_override: None,
+            trim: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct TrimProcessingConfig {
+    pub start_tick: u64,
+    pub end_tick: Option<u64>,
+    pub inject_edge_state: bool,
+    pub close_open_notes_at_end: bool,
+}
+
+impl Default for TrimProcessingConfig {
+    fn default() -> Self {
+        Self {
+            start_tick: 0,
+            end_tick: None,
+            inject_edge_state: true,
+            close_open_notes_at_end: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct PitchProcessingConfig {
+    pub bend_scale: f32,
+    pub bend_offset: i16,
+    pub min_bend: i16,
+    pub max_bend: i16,
+}
+
+impl Default for PitchProcessingConfig {
+    fn default() -> Self {
+        Self {
+            bend_scale: 1.0,
+            bend_offset: 0,
+            min_bend: -8192,
+            max_bend: 8191,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct StructureProcessingConfig {
+    pub split_channels: bool,
+    pub collapse_tracks: bool,
+    pub remove_empty_tracks: bool,
+    pub drop_orphan_note_offs: bool,
+}
+
+impl Default for StructureProcessingConfig {
+    fn default() -> Self {
+        Self {
+            split_channels: false,
+            collapse_tracks: false,
+            remove_empty_tracks: true,
+            drop_orphan_note_offs: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct MergeProcessingConfig {
+    pub mode: MidiMergeMode,
+}
+
+impl Default for MergeProcessingConfig {
+    fn default() -> Self {
+        Self {
+            mode: MidiMergeMode::PreserveTracks,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MidiMergeMode {
+    PreserveTracks,
+    FlattenToSingleTrack,
+    MergeByTrackIndex,
+}
+
+impl Default for MidiMergeMode {
+    fn default() -> Self {
+        Self::PreserveTracks
+    }
 }

@@ -36,6 +36,13 @@ pub enum CoreCommand {
         output: PathBuf,
         config: MidiFileProcessingConfig,
     },
+    StartProcessMidiFiles {
+        selection: MidiFileSelection,
+        output: PathBuf,
+        config: MidiFileProcessingConfig,
+    },
+    CancelProcessMidiFiles,
+    GetProcessMidiStatus,
     AnalyzeActiveMidi {
         bucket_count: Option<usize>,
     },
