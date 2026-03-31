@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     audio::{AudioConfig, AudioRenderConfig},
-    midi::MidiProcessingConfig,
+    midi::{
+        MidiFileProcessingConfig, MidiFileSelection, MidiProcessingConfig,
+        analysis::MidiAnalysisKind,
+    },
     render::{DisplayTimeSpace, SceneConfig},
 };
 
@@ -28,12 +31,29 @@ pub enum CoreCommand {
         parsed_midi_id: ParsedMidiId,
         config: MidiProcessingConfig,
     },
+    ProcessMidiFiles {
+        selection: MidiFileSelection,
+        output: PathBuf,
+        config: MidiFileProcessingConfig,
+    },
     AnalyzeActiveMidi {
         bucket_count: Option<usize>,
     },
     AnalyzeProcessedMidi {
         processed_midi_id: ProcessedMidiId,
         bucket_count: Option<usize>,
+    },
+    StartMidiAnalysisJob {
+        parsed_midi_id: ParsedMidiId,
+        #[serde(default)]
+        display_cache_id: Option<DisplayCacheId>,
+        #[serde(default)]
+        kinds: Vec<MidiAnalysisKind>,
+        #[serde(default)]
+        bucket_count: Option<usize>,
+    },
+    GetMidiAnalysisJobStatus {
+        job_id: super::ids::AnalysisJobId,
     },
     BuildDisplayCache {
         parsed_midi_id: ParsedMidiId,

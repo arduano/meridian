@@ -1,10 +1,12 @@
 use std::{
+    collections::VecDeque,
     fs::File,
     io::{Read, Write},
 };
 
 use flate2::{Compression, write::GzEncoder};
-use midi_toolkit::events::{Event, TextEventKind};
+use midi_toolkit::events::{Event, MIDIEventEnum, TextEventKind};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::midi::{
@@ -31,6 +33,17 @@ pub struct MidiAnalysisData {
     pub events: MidiAnalysisEventMetrics,
     pub notes: MidiAnalysisNoteMetrics,
     pub tempo: MidiAnalysisTempoMetrics,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum MidiAnalysisKind {
+    File,
+    Summary,
+    Events,
+    Notes,
+    Tempo,
+    Buckets,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,6 +110,9 @@ pub struct MidiAnalysisTempoMetrics {
 
 #[derive(Debug, Clone)]
 pub struct CachedMidiAnalysis {
+    midi_length: f64,
+    total_notes: u64,
+    actual_track_count: usize,
     key_note_counts: Vec<u64>,
     summary: MIDIAnalysisSummary,
     events: MidiAnalysisEventMetrics,
@@ -105,6 +121,18 @@ pub struct CachedMidiAnalysis {
 }
 
 impl CachedMidiAnalysis {
+    pub fn midi_length(&self) -> f64 {
+        self.midi_length
+    }
+
+    pub fn total_notes(&self) -> u64 {
+        self.total_notes
+    }
+
+    pub fn actual_track_count(&self) -> usize {
+        self.actual_track_count
+    }
+
     pub fn key_note_counts(&self) -> &[u64] {
         &self.key_note_counts
     }
@@ -132,6 +160,63 @@ impl CachedMidiAnalysis {
         midi_length: f64,
     ) -> Vec<MidiAnalysisBucket> {
         build_buckets_from_display_cache(cache, bucket_count, midi_length)
+    }
+}
+
+struct AnalysisKeyState {
+    block_size: usize,
+    open_notes: FxHashMap<TrackAndChannel, VecDeque<f64>>,
+}
+
+impl AnalysisKeyState {
+    fn new() -> Self {
+        Self {
+            block_size: 0,
+            open_notes: FxHashMap::default(),
+        }
+    }
+
+    fn add_note(&mut self, track_chan: TrackAndChannel, start_seconds: f64) {
+        self.block_size += 1;
+        self.open_notes
+            .entry(track_chan)
+            .or_default()
+            .push_back(start_seconds);
+    }
+
+    fn end_note(
+        &mut self,
+        key_index: usize,
+        track_chan: TrackAndChannel,
+        end_seconds: f64,
+        analysis: &mut MidiAnalysisAccumulator,
+    ) {
+        let Some(queue) = self.open_notes.get_mut(&track_chan) else {
+            return;
+        };
+        let Some(start_seconds) = queue.pop_front() else {
+            return;
+        };
+        if queue.is_empty() {
+            self.open_notes.remove(&track_chan);
+        }
+        let _ = key_index;
+        analysis.observe_note_end((end_seconds - start_seconds).max(0.0));
+    }
+
+    fn flush_block(&mut self, key_index: usize, analysis: &mut MidiAnalysisAccumulator) {
+        if self.block_size > 0 {
+            analysis.observe_block(key_index, self.block_size);
+            self.block_size = 0;
+        }
+    }
+
+    fn end_all(&mut self, end_seconds: f64, analysis: &mut MidiAnalysisAccumulator) {
+        for (_, mut queue) in self.open_notes.drain() {
+            for start_seconds in queue.drain(..) {
+                analysis.observe_note_end((end_seconds - start_seconds).max(0.0));
+            }
+        }
     }
 }
 
@@ -327,7 +412,12 @@ impl MidiAnalysisAccumulator {
         }
     }
 
-    pub fn finalize(mut self, midi_length: f64, total_notes: u64) -> CachedMidiAnalysis {
+    pub fn finalize(
+        mut self,
+        midi_length: f64,
+        total_notes: u64,
+        actual_track_count: usize,
+    ) -> CachedMidiAnalysis {
         self.flush_pending_onset();
         let trailing_span = (midi_length - self.last_tempo_seconds).max(0.0);
         self.weighted_bpm_sum += self.current_bpm * trailing_span;
@@ -356,6 +446,9 @@ impl MidiAnalysisAccumulator {
         };
 
         CachedMidiAnalysis {
+            midi_length,
+            total_notes,
+            actual_track_count,
             key_note_counts: self.key_note_counts.clone(),
             summary: MIDIAnalysisSummary {
                 total_blocks: self.total_blocks,
@@ -400,14 +493,227 @@ impl MidiAnalysisAccumulator {
             },
         }
     }
+}
 
-    pub fn into_note_metrics_only(
-        mut self,
-        midi_length: f64,
-        total_notes: u64,
-    ) -> CachedMidiAnalysis {
-        self.events = MidiAnalysisEventMetrics::default();
-        self.finalize(midi_length, total_notes)
+pub fn build_cached_midi_analysis_with_progress(
+    parsed: &ParsedMidiFile,
+    mut progress: impl FnMut(f32),
+) -> Result<CachedMidiAnalysis, crate::error::MeridianError> {
+    use midi_toolkit::{
+        pipe,
+        sequence::{
+            event::{Delta, Track},
+            unwrap_items,
+        },
+    };
+
+    let midi = parsed.midi();
+    let ppq = midi.ppq();
+    if (ppq & 0x8000) != 0 {
+        return Err(crate::error::MeridianError::InvalidMidi(
+            "timecode MIDI files are not supported yet".into(),
+        ));
+    }
+
+    let merged = pipe!(midi.iter_all_track_events_merged() |> unwrap_items());
+    let track_count = midi.track_count().max(1);
+    let mut keys: Vec<AnalysisKeyState> = (0..256).map(|_| AnalysisKeyState::new()).collect();
+    let mut time_seconds = 0.0;
+    let mut micros_per_quarter = 500_000_u32;
+    let mut total_notes = 0_u64;
+    let mut analysis = MidiAnalysisAccumulator::new(track_count);
+    let total_events = parsed.total_event_count().max(1);
+    let progress_stride = (total_events / 200).max(1);
+    let mut processed_events = 0_u64;
+    progress(0.0);
+
+    type ToolkitEvent = Delta<u64, Track<Event>>;
+    for event in merged {
+        let event: ToolkitEvent = event;
+        processed_events += 1;
+        if event.delta > 0 {
+            analysis.flush_pending_onset();
+            for (key_index, key) in keys.iter_mut().enumerate() {
+                key.flush_block(key_index, &mut analysis);
+            }
+            time_seconds +=
+                event.delta as f64 * micros_per_quarter as f64 / 1_000_000.0 / ppq as f64;
+        }
+        analysis.observe_time_advance(time_seconds);
+
+        let track = event.track;
+        analysis.observe_event(event.as_event(), time_seconds);
+        match event.as_event() {
+            Event::Tempo(tempo) => {
+                micros_per_quarter = tempo.tempo;
+            }
+            Event::NoteOn(note_on) => {
+                analysis.observe_note_on_velocity(note_on.velocity);
+                let key_index = note_on.key as usize;
+                if key_index < 256 {
+                    let track_chan = TrackAndChannel::new(track, note_on.channel);
+                    keys[key_index].add_note(track_chan, time_seconds);
+                    analysis.observe_note_start(time_seconds, key_index, track_chan);
+                    total_notes += 1;
+                }
+            }
+            Event::NoteOff(note_off) => {
+                analysis.observe_note_off();
+                let key_index = note_off.key as usize;
+                if key_index < 256 {
+                    keys[key_index].end_note(
+                        key_index,
+                        TrackAndChannel::new(track, note_off.channel),
+                        time_seconds,
+                        &mut analysis,
+                    );
+                }
+            }
+            _ => {}
+        }
+
+        if processed_events == 1
+            || processed_events >= total_events
+            || processed_events % progress_stride == 0
+        {
+            progress((processed_events as f32 / total_events as f32).clamp(0.0, 1.0));
+        }
+    }
+
+    analysis.flush_pending_onset();
+    for (key_index, key) in keys.iter_mut().enumerate() {
+        key.flush_block(key_index, &mut analysis);
+        key.end_all(time_seconds, &mut analysis);
+    }
+    progress(1.0);
+
+    Ok(analysis.finalize(time_seconds, total_notes, track_count))
+}
+
+pub fn build_buckets_from_parsed_with_progress(
+    parsed: &ParsedMidiFile,
+    bucket_count: usize,
+    midi_length: f64,
+    mut progress: impl FnMut(f32),
+) -> Result<Vec<MidiAnalysisBucket>, crate::error::MeridianError> {
+    use midi_toolkit::{
+        pipe,
+        sequence::{
+            event::{Delta, Track},
+            unwrap_items,
+        },
+    };
+
+    let bucket_count = bucket_count.clamp(1, 8192);
+    if midi_length <= 0.0 {
+        return Ok(vec![MidiAnalysisBucket {
+            time_seconds: 0.0,
+            note_starts: 0,
+            active_notes: 0,
+        }]);
+    }
+
+    let midi = parsed.midi();
+    let ppq = midi.ppq();
+    if (ppq & 0x8000) != 0 {
+        return Err(crate::error::MeridianError::InvalidMidi(
+            "timecode MIDI files are not supported yet".into(),
+        ));
+    }
+
+    let merged = pipe!(midi.iter_all_track_events_merged() |> unwrap_items());
+    let total_events = parsed.total_event_count().max(1);
+    let progress_stride = (total_events / 200).max(1);
+    let bucket_width = midi_length / bucket_count as f64;
+    let mut note_starts = vec![0_u64; bucket_count];
+    let mut active_deltas = vec![0_i64; bucket_count + 1];
+    let mut open_notes: FxHashMap<(u8, TrackAndChannel), VecDeque<f64>> = FxHashMap::default();
+    let mut micros_per_quarter = 500_000_u32;
+    let mut time_seconds = 0.0;
+    let mut processed_events = 0_u64;
+    progress(0.0);
+
+    type ToolkitEvent = Delta<u64, Track<Event>>;
+    for event in merged {
+        let event: ToolkitEvent = event;
+        processed_events += 1;
+        if event.delta > 0 {
+            time_seconds +=
+                event.delta as f64 * micros_per_quarter as f64 / 1_000_000.0 / ppq as f64;
+        }
+
+        let track = event.track;
+        match event.as_event() {
+            Event::Tempo(tempo) => {
+                micros_per_quarter = tempo.tempo;
+            }
+            Event::NoteOn(note_on) => {
+                let start_bucket = bucket_index(time_seconds, bucket_width, bucket_count);
+                note_starts[start_bucket] += 1;
+                active_deltas[start_bucket] += 1;
+                open_notes
+                    .entry((note_on.key, TrackAndChannel::new(track, note_on.channel)))
+                    .or_default()
+                    .push_back(time_seconds);
+            }
+            Event::NoteOff(note_off) => {
+                let key = (note_off.key, TrackAndChannel::new(track, note_off.channel));
+                if let Some(queue) = open_notes.get_mut(&key) {
+                    let _ = queue.pop_front();
+                    if queue.is_empty() {
+                        open_notes.remove(&key);
+                    }
+                }
+                let end_bucket = end_bucket_index(time_seconds, bucket_width, bucket_count);
+                active_deltas[end_bucket] -= 1;
+            }
+            _ => {}
+        }
+
+        if processed_events == 1
+            || processed_events >= total_events
+            || processed_events % progress_stride == 0
+        {
+            progress((processed_events as f32 / total_events as f32).clamp(0.0, 1.0));
+        }
+    }
+
+    let end_bucket = end_bucket_index(midi_length, bucket_width, bucket_count);
+    for (_, mut queue) in open_notes.drain() {
+        while queue.pop_front().is_some() {
+            active_deltas[end_bucket] -= 1;
+        }
+    }
+    progress(1.0);
+
+    let mut active = 0_i64;
+    let mut buckets = Vec::with_capacity(bucket_count);
+    for index in 0..bucket_count {
+        active += active_deltas[index];
+        buckets.push(MidiAnalysisBucket {
+            time_seconds: index as f64 * bucket_width,
+            note_starts: note_starts[index],
+            active_notes: active.max(0) as u64,
+        });
+    }
+    Ok(buckets)
+}
+
+pub fn analyze_cached_midi(
+    parsed: &ParsedMidiFile,
+    cached: &CachedMidiAnalysis,
+    buckets: Vec<MidiAnalysisBucket>,
+) -> MidiAnalysisData {
+    MidiAnalysisData {
+        midi_length: cached.midi_length(),
+        total_notes: cached.total_notes(),
+        key_note_counts: cached.key_note_counts().to_vec(),
+        summary: cached.summary(),
+        buckets,
+        file: analyze_file_metrics(parsed, cached.actual_track_count()),
+        events: cached.events().clone(),
+        notes: cached.notes().clone(),
+        tempo: cached.tempo().clone(),
     }
 }
 
@@ -418,19 +724,108 @@ pub fn analyze_midi(
     bucket_count: usize,
 ) -> MidiAnalysisData {
     let bucket_count = bucket_count.clamp(1, 8192);
-    let midi_length = cache.length().max(0.0);
-    let total_notes = cache.note_count();
+    analyze_cached_midi(
+        parsed,
+        cached,
+        cached.build_buckets(cache, bucket_count, cached.midi_length()),
+    )
+}
 
-    MidiAnalysisData {
-        midi_length,
-        total_notes,
-        key_note_counts: cached.key_note_counts().to_vec(),
-        summary: cached.summary(),
-        buckets: cached.build_buckets(cache, bucket_count, midi_length),
-        file: analyze_file_metrics(parsed, cache.track_count()),
-        events: cached.events().clone(),
-        notes: cached.notes().clone(),
-        tempo: cached.tempo().clone(),
+pub fn analyze_parsed_midi_with_progress(
+    parsed: &ParsedMidiFile,
+    cached: &CachedMidiAnalysis,
+    bucket_count: usize,
+    progress: impl FnMut(f32),
+) -> Result<MidiAnalysisData, crate::error::MeridianError> {
+    let buckets = build_buckets_from_parsed_with_progress(
+        parsed,
+        bucket_count,
+        cached.midi_length(),
+        progress,
+    )?;
+    Ok(analyze_cached_midi(parsed, cached, buckets))
+}
+
+pub fn select_analysis_kinds(
+    mut analysis: MidiAnalysisData,
+    kinds: &[MidiAnalysisKind],
+) -> MidiAnalysisData {
+    let has = |kind| kinds.is_empty() || kinds.contains(&kind);
+    if !has(MidiAnalysisKind::File) {
+        analysis.file = MidiAnalysisFileMetrics::default();
+    }
+    if !has(MidiAnalysisKind::Summary) {
+        analysis.key_note_counts.clear();
+        analysis.summary = MIDIAnalysisSummary {
+            total_blocks: 0,
+            keys_with_notes: 0,
+            max_blocks_per_key: 0,
+            max_notes_in_block: 0,
+            densest_key: 0,
+            densest_key_notes: 0,
+        };
+    }
+    if !has(MidiAnalysisKind::Events) {
+        analysis.events = MidiAnalysisEventMetrics::default();
+    }
+    if !has(MidiAnalysisKind::Notes) {
+        analysis.notes = MidiAnalysisNoteMetrics::default();
+    }
+    if !has(MidiAnalysisKind::Tempo) {
+        analysis.tempo = MidiAnalysisTempoMetrics::default();
+    }
+    if !has(MidiAnalysisKind::Buckets) {
+        analysis.buckets.clear();
+    }
+    analysis
+}
+
+impl Default for MidiAnalysisFileMetrics {
+    fn default() -> Self {
+        Self {
+            source_bytes: 0,
+            gzip_bytes: 0,
+            gzip_ratio: 0.0,
+            format: 0,
+            declared_track_count: 0,
+            actual_track_count: 0,
+            ticks_per_quarter: None,
+            total_event_count: 0,
+        }
+    }
+}
+
+impl Default for MidiAnalysisNoteMetrics {
+    fn default() -> Self {
+        Self {
+            pitch_class_note_counts: Vec::new(),
+            velocity_note_on_counts: Vec::new(),
+            track_note_counts: Vec::new(),
+            channel_note_counts: Vec::new(),
+            track_channel_note_counts: Vec::new(),
+            note_start_histogram: Vec::new(),
+            total_note_duration_seconds: 0.0,
+            avg_note_length_seconds: 0.0,
+            min_note_length_seconds: 0.0,
+            max_note_length_seconds: 0.0,
+            max_simultaneous_notes: 0,
+            avg_simultaneous_notes: 0.0,
+            notes_per_second_peak: 0.0,
+            notes_per_second_avg: 0.0,
+            unique_onset_count: 0,
+            avg_notes_per_onset: 0.0,
+        }
+    }
+}
+
+impl Default for MidiAnalysisTempoMetrics {
+    fn default() -> Self {
+        Self {
+            initial_bpm: 0.0,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+            avg_bpm_weighted_by_time: 0.0,
+        }
     }
 }
 
@@ -457,7 +852,7 @@ pub fn analyze_file_metrics(
     }
 }
 
-fn build_buckets_from_display_cache(
+pub fn build_buckets_from_display_cache(
     cache: &DisplayMidiCache,
     bucket_count: usize,
     midi_length: f64,

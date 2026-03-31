@@ -1,3 +1,4 @@
+mod analysis_job;
 mod audio_render_job;
 mod core_state;
 mod resource_types;
@@ -16,7 +17,7 @@ use flume::{Receiver, Sender};
 use crate::{
     audio::AudioRenderEvent,
     error::MeridianError,
-    protocol::{CoreCommand, CoreEvent, RenderedFrame, VideoRenderEvent},
+    protocol::{CoreCommand, CoreEvent, MidiAnalysisJobEvent, RenderedFrame, VideoRenderEvent},
 };
 
 pub use support::{error_code, event_to_error};
@@ -37,6 +38,9 @@ enum RequestMessage {
     },
     AudioRenderUpdate {
         event: AudioRenderEvent,
+    },
+    AnalysisJobUpdate {
+        event: MidiAnalysisJobEvent,
     },
 }
 
@@ -111,6 +115,15 @@ impl CoreHandle {
     pub(crate) fn publish_audio_event(&self, event: AudioRenderEvent) -> Result<(), MeridianError> {
         self.sender
             .send(RequestMessage::AudioRenderUpdate { event })
+            .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))
+    }
+
+    pub(crate) fn publish_analysis_job_event(
+        &self,
+        event: MidiAnalysisJobEvent,
+    ) -> Result<(), MeridianError> {
+        self.sender
+            .send(RequestMessage::AnalysisJobUpdate { event })
             .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))
     }
 }

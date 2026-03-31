@@ -230,7 +230,7 @@ pub(crate) fn build_in_ram_cache_with_progress(
         .map(|key| Arc::<[InRamNoteBlock]>::from(key.column))
         .collect();
 
-    let cached_analysis = analysis.finalize(time_seconds, notes);
+    let cached_analysis = analysis.finalize(time_seconds, notes, midi.track_count().max(1));
 
     Ok((
         InRamMidiCache::new(

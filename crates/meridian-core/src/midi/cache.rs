@@ -3,8 +3,11 @@ use std::sync::{Arc, Mutex};
 use crate::error::MeridianError;
 
 use super::{
-    MIDIFileUnion, analysis::CachedMidiAnalysis, audio_cache::InRamAudioCache,
-    display_cache::DisplayMidiCache, parsed::ParsedMidiFile,
+    MIDIFileUnion,
+    analysis::{CachedMidiAnalysis, build_cached_midi_analysis_with_progress},
+    audio_cache::InRamAudioCache,
+    display_cache::DisplayMidiCache,
+    parsed::ParsedMidiFile,
 };
 
 pub struct MidiCacheStack {
@@ -59,7 +62,19 @@ impl MidiCacheStack {
         &self,
         progress: impl FnMut(f32),
     ) -> Result<Arc<DisplayMidiCache>, MeridianError> {
-        Ok(self.display_and_analysis_with_progress(progress)?.0)
+        let mut display = self
+            .display
+            .lock()
+            .map_err(|_| MeridianError::InvalidMidi("display cache lock poisoned".into()))?;
+        if let Some(cache) = &*display {
+            return Ok(Arc::clone(cache));
+        }
+
+        let (built_display, _) =
+            super::ram::parse::build_in_ram_cache_with_progress(self.parsed(), progress)?;
+        let display_arc = Arc::new(built_display);
+        *display = Some(Arc::clone(&display_arc));
+        Ok(display_arc)
     }
 
     pub fn instantiate_display_in_ram(&self) -> Result<MIDIFileUnion, MeridianError> {
@@ -82,7 +97,20 @@ impl MidiCacheStack {
         &self,
         progress: impl FnMut(f32),
     ) -> Result<Arc<CachedMidiAnalysis>, MeridianError> {
-        Ok(self.display_and_analysis_with_progress(progress)?.1)
+        let mut analysis = self
+            .analysis
+            .lock()
+            .map_err(|_| MeridianError::InvalidMidi("analysis cache lock poisoned".into()))?;
+        if let Some(cache) = &*analysis {
+            return Ok(Arc::clone(cache));
+        }
+
+        let cache = Arc::new(build_cached_midi_analysis_with_progress(
+            self.parsed(),
+            progress,
+        )?);
+        *analysis = Some(Arc::clone(&cache));
+        Ok(cache)
     }
 
     pub fn audio_cache(&self) -> Result<Arc<InRamAudioCache>, MeridianError> {
@@ -107,30 +135,5 @@ impl MidiCacheStack {
         )?);
         *audio = Some(Arc::clone(&cache));
         Ok(cache)
-    }
-
-    fn display_and_analysis_with_progress(
-        &self,
-        progress: impl FnMut(f32),
-    ) -> Result<(Arc<DisplayMidiCache>, Arc<CachedMidiAnalysis>), MeridianError> {
-        let mut display = self
-            .display
-            .lock()
-            .map_err(|_| MeridianError::InvalidMidi("display cache lock poisoned".into()))?;
-        let mut analysis = self
-            .analysis
-            .lock()
-            .map_err(|_| MeridianError::InvalidMidi("analysis cache lock poisoned".into()))?;
-        if let (Some(display), Some(analysis)) = (&*display, &*analysis) {
-            return Ok((Arc::clone(display), Arc::clone(analysis)));
-        }
-
-        let (built_display, built_analysis) =
-            super::ram::parse::build_in_ram_cache_with_progress(self.parsed(), progress)?;
-        let display_arc = Arc::new(built_display);
-        let analysis_arc = Arc::new(built_analysis);
-        *display = Some(Arc::clone(&display_arc));
-        *analysis = Some(Arc::clone(&analysis_arc));
-        Ok((display_arc, analysis_arc))
     }
 }

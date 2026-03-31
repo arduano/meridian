@@ -1,7 +1,10 @@
 use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use crate::{
-    midi::{MidiCacheStack, MidiProcessingConfig, ProcessedMidi, analysis::analyze_midi},
+    midi::{
+        MidiCacheStack, MidiProcessingConfig, ProcessedMidi,
+        analysis::{analyze_midi, analyze_parsed_midi_with_progress},
+    },
     protocol::{
         AudioCacheId, AudioSessionId, CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId,
         ParsedMidiId, ProcessedMidiId,
@@ -67,12 +70,6 @@ impl CoreState {
         };
         match parsed.cache_stack.display_cache_with_progress(progress) {
             Ok(cache_stack) => {
-                let Ok(analysis) = parsed.cache_stack.analysis_cache() else {
-                    return vec![error_event(
-                        CoreErrorCode::Internal,
-                        "failed to build analysis cache",
-                    )];
-                };
                 let display_cache_id = self.next_display_cache_id();
                 let event = CoreEvent::DisplayCacheBuilt {
                     parsed_midi_id,
@@ -86,7 +83,6 @@ impl CoreState {
                     DisplayCacheResource {
                         parsed_midi_id,
                         cache: cache_stack,
-                        analysis,
                     },
                 );
                 vec![event]
@@ -107,12 +103,6 @@ impl CoreState {
         };
         match parsed.cache_stack.display_cache() {
             Ok(cache) => {
-                let Ok(analysis) = parsed.cache_stack.analysis_cache() else {
-                    return vec![error_event(
-                        CoreErrorCode::Internal,
-                        "failed to build analysis cache",
-                    )];
-                };
                 let display_cache_id = self.next_display_cache_id();
                 let event = CoreEvent::DisplayCacheBuilt {
                     parsed_midi_id,
@@ -126,7 +116,6 @@ impl CoreState {
                     DisplayCacheResource {
                         parsed_midi_id,
                         cache,
-                        analysis,
                     },
                 );
                 vec![event]
@@ -702,15 +691,58 @@ impl CoreState {
                     "active display cache is missing its parsed MIDI parent",
                 )];
             };
+            let Ok(analysis) = parsed.cache_stack.analysis_cache() else {
+                return vec![error_event(
+                    CoreErrorCode::Internal,
+                    "failed to build analysis cache",
+                )];
+            };
+            let analysis = match analyze_parsed_midi_with_progress(
+                parsed.cache_stack.parsed(),
+                analysis.as_ref(),
+                bucket_count,
+                |_| {},
+            ) {
+                Ok(analysis) => analysis,
+                Err(error) => {
+                    return vec![error_event(CoreErrorCode::Internal, error.to_string())];
+                }
+            };
             return vec![CoreEvent::MidiAnalysis {
                 processed_midi_id: None,
                 display_cache_id: Some(display_cache_id),
-                analysis: analyze_midi(
-                    parsed.cache_stack.parsed(),
-                    resource.cache.as_ref(),
-                    resource.analysis.as_ref(),
-                    bucket_count,
-                ),
+                analysis,
+            }];
+        }
+
+        if let Some(parsed_midi_id) = self.active_parsed_midi_id {
+            let Some(parsed) = self.parsed_midis.get(&parsed_midi_id) else {
+                return vec![error_event(
+                    CoreErrorCode::Internal,
+                    "active parsed MIDI is missing from registry",
+                )];
+            };
+            let Ok(analysis) = parsed.cache_stack.analysis_cache() else {
+                return vec![error_event(
+                    CoreErrorCode::Internal,
+                    "failed to build analysis cache",
+                )];
+            };
+            let analysis = match analyze_parsed_midi_with_progress(
+                parsed.cache_stack.parsed(),
+                analysis.as_ref(),
+                bucket_count,
+                |_| {},
+            ) {
+                Ok(analysis) => analysis,
+                Err(error) => {
+                    return vec![error_event(CoreErrorCode::Internal, error.to_string())];
+                }
+            };
+            return vec![CoreEvent::MidiAnalysis {
+                processed_midi_id: None,
+                display_cache_id: None,
+                analysis,
             }];
         }
 

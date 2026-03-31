@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use crate::{
     midi::{
-        MidiCacheStack, ProcessedMidi, analysis::CachedMidiAnalysis, audio_cache::InRamAudioCache,
+        MidiCacheStack, ProcessedMidi, audio_cache::InRamAudioCache,
         display_cache::DisplayMidiCache,
     },
     protocol::{
@@ -19,7 +19,6 @@ pub(super) struct ParsedMidiResource {
 pub(super) struct DisplayCacheResource {
     pub(super) parsed_midi_id: ParsedMidiId,
     pub(super) cache: Arc<DisplayMidiCache>,
-    pub(super) analysis: Arc<CachedMidiAnalysis>,
 }
 
 pub(super) struct ProcessedMidiResource {

@@ -13,9 +13,9 @@ use crate::{
     midi::audio_cache::InRamAudioCache,
     midi::{MidiCacheStack, ProcessedMidi},
     protocol::{
-        AudioCacheId, AudioRenderJobId, AudioRenderStatus, AudioSessionId, CoreCommand,
-        CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId, ParsedMidiId, ProcessedMidiId,
-        VideoRenderJobId, VideoRenderStatus,
+        AnalysisJobId, AudioCacheId, AudioRenderJobId, AudioRenderStatus, AudioSessionId,
+        CoreCommand, CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId,
+        MidiAnalysisJobStatus, ParsedMidiId, ProcessedMidiId, VideoRenderJobId, VideoRenderStatus,
     },
     transport::TransportState,
 };
@@ -60,6 +60,7 @@ pub(super) struct CoreState {
     pub(super) active_video_render_job_id: Option<VideoRenderJobId>,
     pub(super) active_audio_render_job_id: Option<AudioRenderJobId>,
     pub(super) current_audio_cache: Option<Arc<InRamAudioCache>>,
+    pub(super) analysis_jobs: HashMap<AnalysisJobId, MidiAnalysisJobStatus>,
     pub(super) display: LiveDisplaySession,
     pub(super) audio_config: AudioConfig,
     pub(super) audio_player: Arc<MeridianAudioPlayer>,
@@ -100,6 +101,7 @@ impl CoreState {
             active_video_render_job_id: None,
             active_audio_render_job_id: None,
             current_audio_cache: None,
+            analysis_jobs: HashMap::new(),
             display: LiveDisplaySession::new(),
             audio_config: AudioConfig::default(),
             audio_player: MeridianAudioPlayer::new(&AudioConfig::default()),
@@ -136,6 +138,9 @@ impl CoreState {
                 RequestMessage::AudioRenderUpdate { event } => {
                     self.handle_audio_render_update(event);
                 }
+                RequestMessage::AnalysisJobUpdate { event } => {
+                    self.handle_midi_analysis_job_update(event);
+                }
             }
         }
     }
@@ -154,6 +159,22 @@ impl CoreState {
                 parsed_midi_id,
                 config,
             } => self.build_processed_midi_resource(parsed_midi_id, config),
+            CoreCommand::ProcessMidiFiles {
+                selection,
+                output,
+                config,
+            } => match crate::midi::file_processing::process_midi_files_to_file(
+                &selection, &output, &config,
+            ) {
+                Ok(summary) => vec![CoreEvent::MidiFilesProcessed {
+                    output: summary.output,
+                    input_count: summary.input_count,
+                    output_track_count: summary.output_track_count,
+                    output_ppq: summary.output_ppq,
+                    total_events: summary.total_events,
+                }],
+                Err(error) => vec![error_event(super::error_code(&error), error.to_string())],
+            },
             CoreCommand::AnalyzeActiveMidi { bucket_count } => {
                 self.analyze_active_midi(bucket_count)
             }
@@ -161,6 +182,17 @@ impl CoreState {
                 processed_midi_id,
                 bucket_count,
             } => self.analyze_processed_midi(processed_midi_id, bucket_count),
+            CoreCommand::StartMidiAnalysisJob {
+                parsed_midi_id,
+                display_cache_id,
+                kinds,
+                bucket_count,
+            } => {
+                self.start_midi_analysis_job(parsed_midi_id, display_cache_id, kinds, bucket_count)
+            }
+            CoreCommand::GetMidiAnalysisJobStatus { job_id } => {
+                self.get_midi_analysis_job_status(job_id)
+            }
             CoreCommand::BuildDisplayCache { parsed_midi_id } => {
                 self.build_display_cache_resource(parsed_midi_id)
             }

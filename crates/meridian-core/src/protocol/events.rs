@@ -7,6 +7,7 @@ use crate::midi::analysis::MidiAnalysisData;
 use crate::render::SceneLayout;
 
 use super::{
+    analysis_jobs::{MidiAnalysisJobEvent, MidiAnalysisJobStatus},
     commands::ImageOutputFormat,
     ids::{
         AudioCacheId, AudioSessionId, DisplayCacheId, DisplaySessionId, ParsedMidiId,
@@ -41,6 +42,12 @@ pub enum CoreEvent {
         display_cache_id: Option<DisplayCacheId>,
         analysis: MidiAnalysisData,
     },
+    MidiAnalysisJob {
+        event: MidiAnalysisJobEvent,
+    },
+    MidiAnalysisJobStatus {
+        status: MidiAnalysisJobStatus,
+    },
     ProcessedMidiBuilt {
         parsed_midi_id: ParsedMidiId,
         processed_midi_id: ProcessedMidiId,
@@ -48,6 +55,13 @@ pub enum CoreEvent {
         total_notes: u64,
         total_audio_events: usize,
         track_count: usize,
+    },
+    MidiFilesProcessed {
+        output: PathBuf,
+        input_count: usize,
+        output_track_count: usize,
+        output_ppq: u16,
+        total_events: usize,
     },
     DisplayCacheBuilt {
         parsed_midi_id: ParsedMidiId,

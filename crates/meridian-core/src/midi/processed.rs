@@ -306,7 +306,7 @@ fn build_processed_midi(
         .last()
         .map(|event| event.time)
         .unwrap_or_else(|| columns_length(&columns));
-    let analysis_cache = Arc::new(analysis.finalize(midi_length, note_count));
+    let analysis_cache = Arc::new(analysis.finalize(midi_length, note_count, track_count));
     let display = Arc::new(DisplayMidiCache::new(
         columns,
         midi_length,

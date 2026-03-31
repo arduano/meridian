@@ -1,14 +1,24 @@
 use std::{
     fs,
     path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use meridian_core::{
     PROTOCOL_VERSION,
+    midi::{
+        EventFilterConfig, FileTimeProcessingConfig, MergeProcessingConfig,
+        MidiFileProcessingConfig, MidiFileSelection, MidiMergeMode, StructureProcessingConfig,
+        TrimProcessingConfig, analysis::MidiAnalysisKind,
+    },
     protocol::{CoreCommand, CoreEvent, JsonRequest, JsonResponse},
     render::{DisplayTimeSpace, SceneLayout},
     spawn_core,
+};
+use midi_toolkit::{
+    events::Event,
+    io::{MIDIFile as ToolkitMidiFile, MIDIWriter},
+    sequence::event::Delta,
 };
 
 fn write_test_midi() -> PathBuf {
@@ -141,6 +151,19 @@ fn write_tempo_staircase_midi() -> PathBuf {
     path
 }
 
+fn write_toolkit_midi(path: &PathBuf, ppq: u16, tracks: Vec<Vec<Delta<u64, Event>>>) {
+    let writer = MIDIWriter::new(path.to_string_lossy().as_ref(), ppq).expect("create midi writer");
+    for track in tracks {
+        let mut track_writer = writer.open_next_track();
+        track_writer
+            .write_events_iter(track.into_iter())
+            .expect("write midi track");
+        track_writer.end().expect("finish midi track");
+    }
+    let mut writer = writer;
+    writer.end().expect("finish midi writer");
+}
+
 #[test]
 fn stateful_core_projects_a_frame() {
     let midi = write_test_midi();
@@ -249,6 +272,195 @@ fn json_protocol_defaults_version_and_render_response_is_lightweight() {
     assert!(json.contains("\"frame_projected\""));
     assert!(!json.contains("\"positions\""));
     assert!(!json.contains("\"note_layers\""));
+}
+
+#[test]
+fn midi_analysis_job_runs_without_building_display_cache() {
+    let midi = write_test_midi();
+    let core = spawn_core();
+
+    let parsed_events = core
+        .request(CoreCommand::LoadParsedMidi { path: midi })
+        .expect("load parsed midi");
+    let parsed_midi_id = parsed_events
+        .iter()
+        .find_map(|event| match event {
+            CoreEvent::ParsedMidiLoaded { parsed_midi_id, .. } => Some(*parsed_midi_id),
+            _ => None,
+        })
+        .expect("parsed midi id");
+
+    let status_events = core
+        .request(CoreCommand::StartMidiAnalysisJob {
+            parsed_midi_id,
+            display_cache_id: None,
+            kinds: vec![
+                MidiAnalysisKind::File,
+                MidiAnalysisKind::Summary,
+                MidiAnalysisKind::Events,
+                MidiAnalysisKind::Notes,
+                MidiAnalysisKind::Tempo,
+                MidiAnalysisKind::Buckets,
+            ],
+            bucket_count: Some(4),
+        })
+        .expect("start midi analysis job");
+
+    let job_id = match status_events.as_slice() {
+        [CoreEvent::MidiAnalysisJobStatus { status }] => match status {
+            meridian_core::protocol::MidiAnalysisJobStatus::Running { job_id, .. } => *job_id,
+            other => panic!("unexpected initial status: {other:?}"),
+        },
+        other => panic!("unexpected status events: {other:?}"),
+    };
+
+    for _ in 0..20 {
+        let events = core
+            .request(CoreCommand::GetMidiAnalysisJobStatus { job_id })
+            .expect("analysis job status");
+        match events.as_slice() {
+            [CoreEvent::MidiAnalysisJobStatus { status }] => match status {
+                meridian_core::protocol::MidiAnalysisJobStatus::Finished { result, .. } => {
+                    assert_eq!(result.total_notes, 2);
+                    assert_eq!(result.buckets.len(), 4);
+                    assert_eq!(
+                        result
+                            .buckets
+                            .iter()
+                            .map(|bucket| bucket.note_starts)
+                            .sum::<u64>(),
+                        2
+                    );
+                    assert!(result.buckets.iter().any(|bucket| bucket.active_notes > 0));
+                    assert_eq!(result.events.note_on_events, 2);
+                    assert_eq!(result.events.note_off_events, 2);
+                    assert_eq!(result.file.declared_track_count, 1);
+                    return;
+                }
+                meridian_core::protocol::MidiAnalysisJobStatus::Failed { message, .. } => {
+                    panic!("analysis job failed: {message}")
+                }
+                meridian_core::protocol::MidiAnalysisJobStatus::Running { .. } => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            },
+            other => panic!("unexpected analysis job status response: {other:?}"),
+        }
+    }
+    panic!("analysis job did not finish");
+}
+
+#[test]
+fn process_midi_files_merges_trims_and_writes_output() {
+    let dir = std::env::temp_dir().join(format!(
+        "meridian-core-process-test-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&dir).expect("create temp test dir");
+    let midi_a = dir.join("a.mid");
+    let midi_b = dir.join("b.mid");
+    let output = dir.join("out.mid");
+
+    write_toolkit_midi(
+        &midi_a,
+        96,
+        vec![vec![
+            Event::new_delta_tempo_event(0, 600_000),
+            Event::new_delta_program_change_event(0, 0, 5),
+            Event::new_delta_note_on_event(48, 0, 60, 100),
+            Event::new_delta_note_off_event(96, 0, 60),
+        ]],
+    );
+    write_toolkit_midi(
+        &midi_b,
+        48,
+        vec![vec![
+            Event::new_delta_note_on_event(0, 1, 65, 90),
+            Event::new_delta_note_off_event(48, 1, 65),
+        ]],
+    );
+
+    let core = spawn_core();
+    let mut config = MidiFileProcessingConfig::default();
+    config.time = FileTimeProcessingConfig {
+        offset_ticks: 0,
+        ppq_override: Some(120),
+        tempo_override: Some(500_000),
+        trim: Some(TrimProcessingConfig {
+            start_tick: 24,
+            end_tick: Some(120),
+            inject_edge_state: true,
+            close_open_notes_at_end: true,
+        }),
+    };
+    config.notes.transpose = 12;
+    config.events = EventFilterConfig::default();
+    config.structure = StructureProcessingConfig {
+        split_channels: false,
+        collapse_tracks: true,
+        remove_empty_tracks: true,
+        drop_orphan_note_offs: true,
+    };
+    config.merge = MergeProcessingConfig {
+        mode: MidiMergeMode::FlattenToSingleTrack,
+    };
+
+    let events = core
+        .request(CoreCommand::ProcessMidiFiles {
+            selection: MidiFileSelection {
+                inputs: vec![midi_a.clone(), midi_b.clone()],
+            },
+            output: output.clone(),
+            config,
+        })
+        .expect("process midi files");
+
+    assert!(matches!(
+        events.as_slice(),
+        [CoreEvent::MidiFilesProcessed {
+            output: processed_output,
+            output_track_count: 1,
+            output_ppq: 120,
+            ..
+        }] if processed_output == &output
+    ));
+
+    let written = ToolkitMidiFile::open_in_ram(&output, None).expect("open output midi");
+    assert_eq!(written.ppq(), 120);
+    assert_eq!(written.track_count(), 1);
+
+    let mut seen_tempo = 0;
+    let mut seen_program = 0;
+    let mut note_ons = Vec::new();
+    let mut note_offs = Vec::new();
+    let mut tick = 0u64;
+    for event in written.iter_track(0) {
+        let event = event.expect("parse written track");
+        tick += event.delta;
+        match event.event {
+            Event::Tempo(tempo) => {
+                seen_tempo += 1;
+                assert_eq!(tempo.tempo, 500_000);
+                assert_eq!(tick, 0);
+            }
+            Event::ProgramChange(program) => {
+                seen_program += 1;
+                assert_eq!(program.program, 5);
+                assert_eq!(tick, 0);
+            }
+            Event::NoteOn(note) => note_ons.push((tick, note.channel, note.key)),
+            Event::NoteOff(note) => note_offs.push((tick, note.channel, note.key)),
+            _ => {}
+        }
+    }
+
+    assert_eq!(seen_tempo, 1);
+    assert_eq!(seen_program, 1);
+    assert_eq!(note_ons, vec![(0, 1, 77), (36, 0, 72)]);
+    assert_eq!(note_offs, vec![(60, 1, 77), (144, 0, 72)]);
 }
 
 #[test]

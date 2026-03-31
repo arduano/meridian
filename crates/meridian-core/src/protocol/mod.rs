@@ -1,3 +1,4 @@
+mod analysis_jobs;
 mod commands;
 mod events;
 mod ids;
@@ -5,11 +6,12 @@ mod json;
 mod render;
 mod state;
 
+pub use analysis_jobs::{MidiAnalysisJobEvent, MidiAnalysisJobStatus};
 pub use commands::{CoreCommand, ImageOutputFormat};
 pub use events::{CoreErrorCode, CoreEvent};
 pub use ids::{
-    AudioCacheId, AudioRenderJobId, AudioSessionId, DisplayCacheId, DisplaySessionId, ParsedMidiId,
-    ProcessedMidiId, VideoRenderJobId,
+    AnalysisJobId, AudioCacheId, AudioRenderJobId, AudioSessionId, DisplayCacheId,
+    DisplaySessionId, ParsedMidiId, ProcessedMidiId, VideoRenderJobId,
 };
 pub use json::{JsonRequest, JsonResponse};
 pub use render::{
@@ -18,7 +20,7 @@ pub use render::{
 };
 pub use state::StateSnapshot;
 
-pub use crate::midi::analysis::{MidiAnalysisBucket, MidiAnalysisData};
+pub use crate::midi::analysis::{MidiAnalysisBucket, MidiAnalysisData, MidiAnalysisKind};
 
 pub const PROTOCOL_VERSION: u32 = 1;
 
