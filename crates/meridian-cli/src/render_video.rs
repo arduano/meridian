@@ -9,9 +9,8 @@ use std::{
 
 use meridian_core::{
     MeridianError,
-    protocol::{CoreCommand, CoreEvent, VideoRenderConfig, VideoRenderEvent, VideoRenderStatus},
-    render::{DisplayTimeSpace, RendererKind, SceneLayout},
-    spawn_core,
+    protocol::{ProtocolClient, ProtocolCommand, ProtocolEvent, ProtocolVideoRenderConfig},
+    render::{DisplayTimeSpace, RendererKind},
 };
 
 pub fn run(
@@ -36,93 +35,104 @@ pub fn run(
         .map_err(|e| MeridianError::Platform(format!("failed to install ctrl-c handler: {e}")))?;
     }
 
-    let mut layout = SceneLayout::default();
-    layout.set_renderer_kind(renderer);
-    let config = VideoRenderConfig {
-        midi_path: Some(midi.to_path_buf()),
-        output: output.to_path_buf(),
-        fps,
-        width,
-        height,
-        scene: Some(layout.scene),
-        view_range: Some(view_range),
-        time_space: Some(time_space),
-        first_key: Some(first_key),
-        last_key: Some(last_key),
-        ffmpeg_args: parse_ffmpeg_args(ffmpeg_flags)?,
-    };
-
-    let core = spawn_core();
-    let event_rx = core.subscribe_events();
+    let client = ProtocolClient::spawn();
     let mut stdout = BufWriter::new(io::stdout().lock());
-    write_core_events(
-        &mut stdout,
-        &core.request(CoreCommand::StartRenderVideo { config })?,
-    )?;
-    let mut terminal_result: Option<Result<(), MeridianError>> = None;
+    let mut cancel_sent = false;
+
+    let start_response = client.request(ProtocolCommand::StartRenderVideo {
+        config: ProtocolVideoRenderConfig {
+            midi_path: midi.to_path_buf(),
+            output: output.to_path_buf(),
+            fps,
+            width,
+            height,
+            renderer,
+            view_range: Some(view_range),
+            time_space: Some(time_space),
+            first_key: Some(first_key),
+            last_key: Some(last_key),
+            ffmpeg_args: parse_ffmpeg_args(ffmpeg_flags)?,
+        },
+    })?;
+    write_events(&mut stdout, &start_response.events)?;
+    assert_no_protocol_error(&start_response.events)?;
+
     let result = loop {
-        if cancel.load(Ordering::SeqCst) {
-            let _ = core.request(CoreCommand::CancelRenderVideo);
+        if cancel.load(Ordering::SeqCst) && !cancel_sent {
+            let response = client.request(ProtocolCommand::CancelRenderVideo)?;
+            assert_no_protocol_error(&response.events)?;
+            cancel_sent = true;
         }
 
-        let event = event_rx
-            .recv()
-            .map_err(|_| MeridianError::Wgpu("core event channel closed".into()))?;
-        match &event {
-            CoreEvent::VideoRender { event } => {
-                write_event(&mut stdout, event)?;
+        match client.recv()? {
+            event @ ProtocolEvent::VideoRender { .. } => {
+                write_event(&mut stdout, &event)?;
                 match event {
-                    VideoRenderEvent::RenderFinished { .. }
-                    | VideoRenderEvent::RenderCancelled { .. } => terminal_result = Some(Ok(())),
-                    VideoRenderEvent::RenderFailed { message } => {
-                        terminal_result = Some(Err(MeridianError::Platform(message.clone())));
-                    }
-                    VideoRenderEvent::RenderStarted { .. }
-                    | VideoRenderEvent::RenderProgress { .. } => {}
+                    ProtocolEvent::VideoRender { event } => match event {
+                        meridian_core::protocol::VideoRenderEvent::RenderFinished { .. } => {
+                            break Ok(());
+                        }
+                        meridian_core::protocol::VideoRenderEvent::RenderCancelled { .. } => {
+                            break Err(MeridianError::Cancelled(
+                                "video render was cancelled".into(),
+                            ));
+                        }
+                        meridian_core::protocol::VideoRenderEvent::RenderFailed { message } => {
+                            break Err(MeridianError::Protocol(message));
+                        }
+                        meridian_core::protocol::VideoRenderEvent::RenderStarted { .. }
+                        | meridian_core::protocol::VideoRenderEvent::RenderProgress { .. } => {}
+                    },
+                    _ => unreachable!(),
                 }
             }
-            CoreEvent::VideoRenderStatus { status } => {
-                if matches!(status, VideoRenderStatus::Idle) {
-                    if let Some(result) = terminal_result.take() {
-                        break result;
-                    }
-                }
+            ProtocolEvent::Error { code, message } => {
+                break Err(MeridianError::Protocol(format!("{code:?}: {message}")));
             }
             _ => {}
         }
     };
-    let _ = core.request(CoreCommand::Shutdown);
+
+    let _ = client.shutdown();
     result
 }
 
 fn parse_ffmpeg_args(value: Option<&str>) -> Result<Vec<String>, MeridianError> {
     match value {
         Some(value) => shell_words::split(value)
-            .map_err(|e| MeridianError::Platform(format!("invalid ffmpeg flags: {e}"))),
+            .map_err(|e| MeridianError::Protocol(format!("invalid ffmpeg flags: {e}"))),
         None => Ok(Vec::new()),
     }
 }
 
+fn write_events(
+    stdout: &mut BufWriter<impl Write>,
+    events: &[ProtocolEvent],
+) -> Result<(), MeridianError> {
+    for event in events {
+        write_event(stdout, event)?;
+    }
+    Ok(())
+}
+
 fn write_event(
     stdout: &mut BufWriter<impl Write>,
-    event: &VideoRenderEvent,
+    event: &ProtocolEvent,
 ) -> Result<(), MeridianError> {
-    serde_json::to_writer(&mut *stdout, event)
-        .map_err(|e| MeridianError::Platform(format!("failed to serialize progress event: {e}")))?;
+    serde_json::to_writer(&mut *stdout, event).map_err(|e| {
+        MeridianError::Protocol(format!("failed to serialize video render event: {e}"))
+    })?;
     stdout.write_all(b"\n")?;
     stdout.flush()?;
     Ok(())
 }
 
-fn write_core_events(
-    stdout: &mut BufWriter<impl Write>,
-    events: &[CoreEvent],
-) -> Result<(), MeridianError> {
-    for event in events {
-        serde_json::to_writer(&mut *stdout, event)
-            .map_err(|e| MeridianError::Platform(format!("failed to serialize core event: {e}")))?;
-        stdout.write_all(b"\n")?;
+fn assert_no_protocol_error(events: &[ProtocolEvent]) -> Result<(), MeridianError> {
+    if let Some(ProtocolEvent::Error { code, message }) = events
+        .iter()
+        .find(|event| matches!(event, ProtocolEvent::Error { .. }))
+    {
+        return Err(MeridianError::Protocol(format!("{code:?}: {message}")));
     }
-    stdout.flush()?;
     Ok(())
 }

@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use meridian_core::sdk_schema::{SdkJsonRequest, SdkJsonResponse, SdkSchemaDemo};
+use meridian_core::protocol::{ProtocolRequest, ProtocolResponse, ProtocolSchemaDemo};
 use ts_rs::{Config, TS};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -19,9 +19,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_import_extension(Some("ts"))
         .with_out_dir(&out_dir);
 
-    SdkJsonRequest::export_all(&config)?;
-    SdkJsonResponse::export_all(&config)?;
-    SdkSchemaDemo::export_all(&config)?;
+    ProtocolRequest::export_all(&config)?;
+    ProtocolResponse::export_all(&config)?;
+    ProtocolSchemaDemo::export_all(&config)?;
 
     println!("{}", out_dir.display());
     Ok(())

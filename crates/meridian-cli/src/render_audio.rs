@@ -1,15 +1,15 @@
 use std::{
     io::{self, BufWriter, Write},
     path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use meridian_core::{
     MeridianError,
-    audio::{
-        AudioBackend, AudioConfig, AudioRenderConfig, MeridianSoundfont, SoundfontCache,
-        render_audio_to_wav,
-    },
-    midi::MidiCacheStack,
+    protocol::{ProtocolAudioRenderConfig, ProtocolClient, ProtocolCommand, ProtocolEvent},
 };
 
 pub fn run(
@@ -20,53 +20,94 @@ pub fn run(
     use_limiter: bool,
     soundfonts: &[PathBuf],
 ) -> Result<(), MeridianError> {
-    let midi_cache = MidiCacheStack::load(midi.to_path_buf())?;
-    let mut audio_config = AudioConfig::default();
-    audio_config.backend = AudioBackend::Xsynth;
-    if !soundfonts.is_empty() {
-        audio_config.soundfonts = soundfonts
-            .iter()
-            .cloned()
-            .map(|path| MeridianSoundfont {
-                path,
-                ..MeridianSoundfont::default()
-            })
-            .collect();
+    let cancel = Arc::new(AtomicBool::new(false));
+    {
+        let cancel = Arc::clone(&cancel);
+        ctrlc::set_handler(move || {
+            cancel.store(true, Ordering::SeqCst);
+        })
+        .map_err(|e| MeridianError::Platform(format!("failed to install ctrl-c handler: {e}")))?;
     }
-    audio_config.xsynth.render.audio_params.sample_rate = sample_rate;
-    audio_config.xsynth.render.audio_params.channels = channels.into();
-    audio_config.xsynth.render.use_limiter = use_limiter;
 
-    let render_config = AudioRenderConfig {
-        midi_path: Some(midi.to_path_buf()),
-        audio: Some(audio_config.clone()),
-        output: output.to_path_buf(),
-        sample_rate: None,
-        channels: None,
-        use_limiter: None,
-        soundfonts: Vec::new(),
-    };
-    let soundfont_cache = SoundfontCache::new();
+    let client = ProtocolClient::spawn();
     let mut stdout = BufWriter::new(io::stdout().lock());
-    render_audio_to_wav(
-        &midi_cache,
-        &audio_config,
-        &soundfont_cache,
-        &render_config,
-        |event| {
-            let _ = write_event(&mut stdout, &event);
+    let mut cancel_sent = false;
+
+    let load_response = client.request(ProtocolCommand::LoadAudioMidi {
+        path: midi.to_path_buf(),
+    })?;
+    assert_no_protocol_error(&load_response.events)?;
+
+    let start_response = client.request(ProtocolCommand::StartRenderAudio {
+        config: ProtocolAudioRenderConfig {
+            midi_path: midi.to_path_buf(),
+            output: output.to_path_buf(),
+            sample_rate: Some(sample_rate),
+            channels: Some(channels),
+            use_limiter: Some(use_limiter),
+            soundfonts: soundfonts.to_vec(),
         },
-    )
+    })?;
+    assert_no_protocol_error(&start_response.events)?;
+
+    let result = loop {
+        if cancel.load(Ordering::SeqCst) && !cancel_sent {
+            let response = client.request(ProtocolCommand::CancelRenderAudio)?;
+            assert_no_protocol_error(&response.events)?;
+            cancel_sent = true;
+        }
+
+        match client.recv()? {
+            event @ ProtocolEvent::AudioRender { .. } => {
+                write_event(&mut stdout, &event)?;
+                match event {
+                    ProtocolEvent::AudioRender { event } => match event {
+                        meridian_core::audio::AudioRenderEvent::RenderFinished { .. } => {
+                            break Ok(());
+                        }
+                        meridian_core::audio::AudioRenderEvent::RenderCancelled { .. } => {
+                            break Err(MeridianError::Cancelled(
+                                "audio render was cancelled".into(),
+                            ));
+                        }
+                        meridian_core::audio::AudioRenderEvent::RenderFailed { message } => {
+                            break Err(MeridianError::Protocol(message));
+                        }
+                        meridian_core::audio::AudioRenderEvent::RenderStarted { .. }
+                        | meridian_core::audio::AudioRenderEvent::RenderProgress { .. } => {}
+                    },
+                    _ => unreachable!(),
+                }
+            }
+            ProtocolEvent::Error { code, message } => {
+                break Err(MeridianError::Protocol(format!("{code:?}: {message}")));
+            }
+            _ => {}
+        }
+    };
+
+    let _ = client.shutdown();
+    result
 }
 
 fn write_event(
     stdout: &mut BufWriter<impl Write>,
-    event: &meridian_core::audio::AudioRenderEvent,
+    event: &ProtocolEvent,
 ) -> Result<(), MeridianError> {
     serde_json::to_writer(&mut *stdout, event).map_err(|e| {
-        MeridianError::Platform(format!("failed to serialize audio render event: {e}"))
+        MeridianError::Protocol(format!("failed to serialize audio render event: {e}"))
     })?;
     stdout.write_all(b"\n")?;
     stdout.flush()?;
+    Ok(())
+}
+
+fn assert_no_protocol_error(events: &[ProtocolEvent]) -> Result<(), MeridianError> {
+    if let Some(ProtocolEvent::Error { code, message }) = events
+        .iter()
+        .find(|event| matches!(event, ProtocolEvent::Error { .. }))
+    {
+        return Err(MeridianError::Protocol(format!("{code:?}: {message}")));
+    }
     Ok(())
 }

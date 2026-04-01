@@ -12,10 +12,10 @@ use meridian_core::{
         SelectableEventKind, TempoMapTool, analysis::MidiAnalysisKind,
     },
     protocol::{
-        CoreCommand, CoreEvent, MidiAnalysisJobStatus, MidiProcessEvent, MidiProcessStatus,
+        MidiAnalysisJobStatus, MidiProcessEvent, MidiProcessStatus, ProtocolClient,
+        ProtocolCommand, ProtocolEvent,
     },
     render::{DisplayTimeSpace, RendererKind},
-    spawn_core,
 };
 
 #[derive(Debug, Parser)]
@@ -385,59 +385,59 @@ enum ProcessTool {
 fn run_analyze(args: AnalyzeArgs) -> Result<(), MeridianError> {
     let kinds = analysis_kinds(&args);
     let bucket_count = args.buckets;
-    let core = spawn_core();
-    let event_rx = core.subscribe_events();
+    let client = ProtocolClient::spawn();
 
-    let parsed_events = core.request(CoreCommand::LoadParsedMidi {
+    let parsed_events = client.request(ProtocolCommand::LoadParsedMidi {
         path: args.midi.clone(),
     })?;
     let parsed_midi_id = parsed_events
+        .events
         .iter()
         .find_map(|event| match event {
-            CoreEvent::ParsedMidiLoaded { parsed_midi_id, .. } => Some(*parsed_midi_id),
+            ProtocolEvent::ParsedMidiLoaded { parsed_midi_id, .. } => Some(*parsed_midi_id),
             _ => None,
         })
-        .ok_or_else(|| MeridianError::Platform("missing parsed midi id".into()))?;
+        .ok_or_else(|| MeridianError::Protocol("missing parsed midi id".into()))?;
 
-    let status_events = core.request(CoreCommand::StartMidiAnalysisJob {
+    let status_events = client.request(ProtocolCommand::StartMidiAnalysisJob {
         parsed_midi_id,
         display_cache_id: None,
         kinds,
         bucket_count,
     })?;
-    let job_id = match status_events.as_slice() {
+    let job_id = match status_events.events.as_slice() {
         [
-            CoreEvent::MidiAnalysisJobStatus {
+            ProtocolEvent::MidiAnalysisJobStatus {
                 status: MidiAnalysisJobStatus::Running { job_id, .. },
             },
         ] => *job_id,
         [
-            CoreEvent::MidiAnalysisJobStatus {
+            ProtocolEvent::MidiAnalysisJobStatus {
                 status: MidiAnalysisJobStatus::Finished { result, .. },
             },
         ] => {
             print_json_to_stdout(result, args.pretty)?;
-            let _ = core.request(CoreCommand::Shutdown);
+            let _ = client.shutdown();
             return Ok(());
         }
         [
-            CoreEvent::MidiAnalysisJobStatus {
+            ProtocolEvent::MidiAnalysisJobStatus {
                 status: MidiAnalysisJobStatus::Failed { message, .. },
             },
-        ] => return Err(MeridianError::Platform(message.clone())),
+        ] => return Err(MeridianError::Protocol(message.clone())),
         other => {
-            return Err(MeridianError::Platform(format!(
+            return Err(MeridianError::Protocol(format!(
                 "unexpected analysis start response: {other:?}"
             )));
         }
     };
 
     let result = loop {
-        let event = event_rx
+        let event = client
             .recv_timeout(Duration::from_secs(30))
             .map_err(|_| MeridianError::Platform("timed out waiting for analysis job".into()))?;
         match event {
-            CoreEvent::MidiAnalysisJob { event } => match event {
+            ProtocolEvent::MidiAnalysisJob { event } => match event {
                 meridian_core::protocol::MidiAnalysisJobEvent::Progress {
                     job_id: event_job_id,
                     progress,
@@ -452,22 +452,21 @@ fn run_analyze(args: AnalyzeArgs) -> Result<(), MeridianError> {
                 meridian_core::protocol::MidiAnalysisJobEvent::Failed {
                     job_id: event_job_id,
                     message,
-                } if event_job_id == job_id => break Err(MeridianError::Platform(message)),
+                } if event_job_id == job_id => break Err(MeridianError::Protocol(message)),
                 _ => {}
             },
             _ => {}
         }
     };
 
-    let _ = core.request(CoreCommand::Shutdown);
+    let _ = client.shutdown();
     print_json_to_stdout(&result?, args.pretty)
 }
 
 fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), MeridianError> {
     let config = build_process_config(&common, tool);
-    let core = spawn_core();
-    let event_rx = core.subscribe_events();
-    let status_events = core.request(CoreCommand::StartProcessMidiFiles {
+    let client = ProtocolClient::spawn();
+    let status_events = client.request(ProtocolCommand::StartProcessMidiFiles {
         selection: MidiFileSelection {
             inputs: common.inputs.clone(),
         },
@@ -475,9 +474,9 @@ fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), Merid
         config,
     })?;
 
-    let job_id = match status_events.as_slice() {
+    let job_id = match status_events.events.as_slice() {
         [
-            CoreEvent::MidiProcessStatus {
+            ProtocolEvent::MidiProcessStatus {
                 status:
                     MidiProcessStatus::Running {
                         job_id,
@@ -490,27 +489,27 @@ fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), Merid
             *job_id
         }
         [
-            CoreEvent::MidiProcessStatus {
+            ProtocolEvent::MidiProcessStatus {
                 status: MidiProcessStatus::Idle,
             },
         ] => {
-            return Err(MeridianError::Platform(
+            return Err(MeridianError::Protocol(
                 "midi processing did not enter a running state".into(),
             ));
         }
         other => {
-            return Err(MeridianError::Platform(format!(
+            return Err(MeridianError::Protocol(format!(
                 "unexpected process start response: {other:?}"
             )));
         }
     };
 
     let result = loop {
-        let event = event_rx
+        let event = client
             .recv_timeout(Duration::from_secs(30))
             .map_err(|_| MeridianError::Platform("timed out waiting for midi processing".into()))?;
         match event {
-            CoreEvent::MidiProcess { event } => match event {
+            ProtocolEvent::MidiProcess { event } => match event {
                 MidiProcessEvent::InputProgress {
                     job_id: event_job_id,
                     processed_inputs,
@@ -531,12 +530,12 @@ fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), Merid
                     job_id: event_job_id,
                     message,
                     ..
-                } if event_job_id == job_id => break Err(MeridianError::Platform(message)),
+                } if event_job_id == job_id => break Err(MeridianError::Protocol(message)),
                 MidiProcessEvent::ProcessCancelled {
                     job_id: event_job_id,
                     ..
                 } if event_job_id == job_id => {
-                    break Err(MeridianError::Platform(
+                    break Err(MeridianError::Cancelled(
                         "midi processing was cancelled".into(),
                     ));
                 }
@@ -546,7 +545,7 @@ fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), Merid
         }
     };
 
-    let _ = core.request(CoreCommand::Shutdown);
+    let _ = client.shutdown();
     print_json_to_stdout(&result?, common.pretty)
 }
 

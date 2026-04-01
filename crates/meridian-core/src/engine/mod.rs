@@ -81,10 +81,10 @@ impl CoreHandle {
                 command,
                 reply: reply_tx,
             })
-            .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))?;
+            .map_err(|_| MeridianError::Transport("core request channel closed".into()))?;
         reply_rx
             .recv()
-            .map_err(|_| MeridianError::Wgpu("core reply channel closed".into()))
+            .map_err(|_| MeridianError::Transport("core reply channel closed".into()))
     }
 
     pub fn render_frame(
@@ -99,10 +99,10 @@ impl CoreHandle {
                 viewport_height,
                 reply: reply_tx,
             })
-            .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))?;
+            .map_err(|_| MeridianError::Transport("core request channel closed".into()))?;
         reply_rx
             .recv()
-            .map_err(|_| MeridianError::Wgpu("core reply channel closed".into()))?
+            .map_err(|_| MeridianError::Transport("core reply channel closed".into()))?
     }
 
     pub fn subscribe_events(&self) -> Receiver<CoreEvent> {
@@ -116,13 +116,13 @@ impl CoreHandle {
     pub(crate) fn publish_video_event(&self, event: VideoRenderEvent) -> Result<(), MeridianError> {
         self.sender
             .send(RequestMessage::VideoRenderUpdate { event })
-            .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))
+            .map_err(|_| MeridianError::Transport("core request channel closed".into()))
     }
 
     pub(crate) fn publish_audio_event(&self, event: AudioRenderEvent) -> Result<(), MeridianError> {
         self.sender
             .send(RequestMessage::AudioRenderUpdate { event })
-            .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))
+            .map_err(|_| MeridianError::Transport("core request channel closed".into()))
     }
 
     pub(crate) fn publish_midi_process_event(
@@ -131,7 +131,7 @@ impl CoreHandle {
     ) -> Result<(), MeridianError> {
         self.sender
             .send(RequestMessage::MidiProcessUpdate { event })
-            .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))
+            .map_err(|_| MeridianError::Transport("core request channel closed".into()))
     }
 
     pub(crate) fn publish_analysis_job_event(
@@ -140,6 +140,6 @@ impl CoreHandle {
     ) -> Result<(), MeridianError> {
         self.sender
             .send(RequestMessage::AnalysisJobUpdate { event })
-            .map_err(|_| MeridianError::Wgpu("core request channel closed".into()))
+            .map_err(|_| MeridianError::Transport("core request channel closed".into()))
     }
 }

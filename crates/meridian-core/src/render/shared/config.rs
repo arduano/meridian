@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use super::{NotePaletteConfig, ProjectorImageConfig};
 
 pub const DEFAULT_PFA_KEYBOARD_ASPECT_RATIO: f32 = 0.084_937_5;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, clap::ValueEnum, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, clap::ValueEnum, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum RendererKind {
     Flat,
@@ -173,7 +174,7 @@ pub struct SceneQuad {
     pub _padding: [f32; 3],
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum DisplayTimeSpace {
     Time,

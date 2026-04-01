@@ -7,7 +7,7 @@ edition.workspace = true
 clap.workspace = true
 ctrlc = "3.4.5"
 flume.workspace = true
-meridian-core = { path = "/home/arduano/programming/meridian/crates/meridian-core" }
+meridian-core = { path = "../meridian-core" }
 serde.workspace = true
 serde_json.workspace = true
 shell-words = "1.1.0"

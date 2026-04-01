@@ -12,15 +12,52 @@ pub fn error_event(code: CoreErrorCode, message: impl Into<String>) -> CoreEvent
 
 pub fn event_to_error(context: &str, event: &CoreEvent) -> MeridianError {
     match event {
-        CoreEvent::Error { message, .. } => {
-            MeridianError::InvalidMidi(format!("{context}: {message}"))
-        }
-        _ => MeridianError::InvalidMidi(context.into()),
+        CoreEvent::Error { code, message } => match code {
+            CoreErrorCode::InvalidJson
+            | CoreErrorCode::InvalidProtocolVersion
+            | CoreErrorCode::InvalidCommand
+            | CoreErrorCode::InvalidRequest => {
+                MeridianError::Protocol(format!("{context}: {message}"))
+            }
+            CoreErrorCode::InvalidState
+            | CoreErrorCode::ValidationFailed
+            | CoreErrorCode::InvalidViewport
+            | CoreErrorCode::InvalidLayout => {
+                MeridianError::Validation(format!("{context}: {message}"))
+            }
+            CoreErrorCode::NoMidiLoaded | CoreErrorCode::ResourceNotFound => {
+                MeridianError::NotFound(format!("{context}: {message}"))
+            }
+            CoreErrorCode::Conflict => MeridianError::Conflict(format!("{context}: {message}")),
+            CoreErrorCode::Unsupported | CoreErrorCode::UnsupportedFormat => {
+                MeridianError::Unsupported(format!("{context}: {message}"))
+            }
+            CoreErrorCode::Io => {
+                MeridianError::Io(std::io::Error::other(format!("{context}: {message}")))
+            }
+            CoreErrorCode::Transport => MeridianError::Transport(format!("{context}: {message}")),
+            CoreErrorCode::Backend => MeridianError::Backend(format!("{context}: {message}")),
+            CoreErrorCode::ExternalTool => {
+                MeridianError::ExternalTool(format!("{context}: {message}"))
+            }
+            CoreErrorCode::Cancelled => MeridianError::Cancelled(format!("{context}: {message}")),
+            CoreErrorCode::Internal => MeridianError::Platform(format!("{context}: {message}")),
+        },
+        _ => MeridianError::Protocol(context.into()),
     }
 }
 
 pub fn error_code(error: &MeridianError) -> CoreErrorCode {
     match error {
+        MeridianError::Transport(_) => CoreErrorCode::Transport,
+        MeridianError::Protocol(_) => CoreErrorCode::InvalidRequest,
+        MeridianError::Validation(_) => CoreErrorCode::ValidationFailed,
+        MeridianError::NotFound(_) => CoreErrorCode::ResourceNotFound,
+        MeridianError::Conflict(_) => CoreErrorCode::Conflict,
+        MeridianError::Unsupported(_) => CoreErrorCode::Unsupported,
+        MeridianError::Backend(_) => CoreErrorCode::Backend,
+        MeridianError::ExternalTool(_) => CoreErrorCode::ExternalTool,
+        MeridianError::Cancelled(_) => CoreErrorCode::Cancelled,
         MeridianError::InvalidMidi(message) if message.contains("no midi loaded") => {
             CoreErrorCode::NoMidiLoaded
         }
@@ -29,12 +66,11 @@ pub fn error_code(error: &MeridianError) -> CoreErrorCode {
         {
             CoreErrorCode::InvalidViewport
         }
-        MeridianError::InvalidMidi(_) => CoreErrorCode::InvalidCommand,
-        MeridianError::Io(_) | MeridianError::Platform(_) | MeridianError::SlintNotifier(_) => {
-            CoreErrorCode::Internal
-        }
-        MeridianError::MidiLoad(_) => CoreErrorCode::InvalidCommand,
-        MeridianError::Wgpu(_) => CoreErrorCode::Internal,
+        MeridianError::InvalidMidi(_) => CoreErrorCode::ValidationFailed,
+        MeridianError::Io(_) => CoreErrorCode::Io,
+        MeridianError::Platform(_) | MeridianError::SlintNotifier(_) => CoreErrorCode::Internal,
+        MeridianError::MidiLoad(_) => CoreErrorCode::ValidationFailed,
+        MeridianError::Wgpu(_) => CoreErrorCode::Backend,
     }
 }
 

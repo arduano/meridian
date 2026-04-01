@@ -10,6 +10,7 @@ export type { ControlValue } from "../generated/ControlValue.ts";
 export type { ControllerMapEntry } from "../generated/ControllerMapEntry.ts";
 export type { ControllerScaleEntry } from "../generated/ControllerScaleEntry.ts";
 export type { CoreErrorCode } from "../generated/CoreErrorCode.ts";
+export type { DisplayTimeSpace } from "../generated/DisplayTimeSpace.ts";
 export type { DisplayCacheId } from "../generated/DisplayCacheId.ts";
 export type { EventFilterConfig } from "../generated/EventFilterConfig.ts";
 export type { FileTimeProcessingConfig } from "../generated/FileTimeProcessingConfig.ts";
@@ -38,11 +39,13 @@ export type { OrphanNoteOffPolicy } from "../generated/OrphanNoteOffPolicy.ts";
 export type { ParsedMidiId } from "../generated/ParsedMidiId.ts";
 export type { PitchProcessingConfig } from "../generated/PitchProcessingConfig.ts";
 export type { RepeatedNoteOnPolicy } from "../generated/RepeatedNoteOnPolicy.ts";
-export type { SdkCommand as MeridianProtocolCommand } from "../generated/SdkCommand.ts";
-export type { SdkAudioRenderConfig } from "../generated/SdkAudioRenderConfig.ts";
-export type { SdkEvent as CoreEvent } from "../generated/SdkEvent.ts";
-export type { SdkJsonRequest as JsonRequest } from "../generated/SdkJsonRequest.ts";
-export type { SdkJsonResponse as JsonResponse } from "../generated/SdkJsonResponse.ts";
+export type { ProtocolCommand as MeridianProtocolCommand } from "../generated/ProtocolCommand.ts";
+export type { ProtocolAudioRenderConfig as SdkAudioRenderConfig } from "../generated/ProtocolAudioRenderConfig.ts";
+export type { ProtocolVideoRenderConfig } from "../generated/ProtocolVideoRenderConfig.ts";
+export type { ProtocolEvent as CoreEvent } from "../generated/ProtocolEvent.ts";
+export type { ProtocolRequest as JsonRequest } from "../generated/ProtocolRequest.ts";
+export type { ProtocolResponse as JsonResponse } from "../generated/ProtocolResponse.ts";
+export type { RendererKind } from "../generated/RendererKind.ts";
 export type { SelectableEventKind } from "../generated/SelectableEventKind.ts";
 export type { StructureProcessingConfig } from "../generated/StructureProcessingConfig.ts";
 export type { TempoPoint } from "../generated/TempoPoint.ts";
@@ -51,12 +54,15 @@ export type { TimeWarpPoint } from "../generated/TimeWarpPoint.ts";
 export type { TrackMapEntry } from "../generated/TrackMapEntry.ts";
 export type { TrimProcessingConfig } from "../generated/TrimProcessingConfig.ts";
 export type { VelocityPoint } from "../generated/VelocityPoint.ts";
+export type { VideoRenderEvent } from "../generated/VideoRenderEvent.ts";
+export type { VideoRenderJobId } from "../generated/VideoRenderJobId.ts";
+export type { VideoRenderStatus } from "../generated/VideoRenderStatus.ts";
 export type { ZeroVelocityNoteOnMode } from "../generated/ZeroVelocityNoteOnMode.ts";
 
-import type { SdkEvent } from "../generated/SdkEvent.ts";
-import type { SdkCommand } from "../generated/SdkCommand.ts";
-import type { SdkJsonRequest } from "../generated/SdkJsonRequest.ts";
-import type { SdkJsonResponse } from "../generated/SdkJsonResponse.ts";
+import type { ProtocolEvent } from "../generated/ProtocolEvent.ts";
+import type { ProtocolCommand } from "../generated/ProtocolCommand.ts";
+import type { ProtocolRequest } from "../generated/ProtocolRequest.ts";
+import type { ProtocolResponse } from "../generated/ProtocolResponse.ts";
 import type { AnalysisGuardTool as RawAnalysisGuardTool } from "../generated/AnalysisGuardTool.ts";
 import type { ChannelRemapTool as RawChannelRemapTool } from "../generated/ChannelRemapTool.ts";
 import type { ControlChangeTool as RawControlChangeTool } from "../generated/ControlChangeTool.ts";
@@ -109,46 +115,54 @@ export type AnalysisGuardTool =
   & { tool: "analysis_guard" }
   & RawAnalysisGuardTool;
 
-export type ErrorEvent = Extract<SdkEvent, { type: "error" }>;
+export type ErrorEvent = Extract<ProtocolEvent, { type: "error" }>;
 export type ParsedMidiLoadedEvent = Extract<
-  SdkEvent,
+  ProtocolEvent,
   { type: "parsed_midi_loaded" }
 >;
-export type MidiLoadedEvent = Extract<SdkEvent, { type: "midi_loaded" }>;
+export type MidiLoadedEvent = Extract<ProtocolEvent, { type: "midi_loaded" }>;
 export type MidiFilesProcessedEvent = Extract<
-  SdkEvent,
+  ProtocolEvent,
   { type: "midi_files_processed" }
 >;
 export type MidiAnalysisJobEventWrapper = Extract<
-  SdkEvent,
+  ProtocolEvent,
   { type: "midi_analysis_job" }
 >;
 export type MidiAnalysisJobStatusEventWrapper = Extract<
-  SdkEvent,
+  ProtocolEvent,
   { type: "midi_analysis_job_status" }
 >;
 export type MidiProcessEventWrapper = Extract<
-  SdkEvent,
+  ProtocolEvent,
   { type: "midi_process" }
 >;
 export type MidiProcessStatusEventWrapper = Extract<
-  SdkEvent,
+  ProtocolEvent,
   { type: "midi_process_status" }
 >;
 export type AudioRenderEventWrapper = Extract<
-  SdkEvent,
+  ProtocolEvent,
   { type: "audio_render" }
 >;
 export type AudioRenderStatusEventWrapper = Extract<
-  SdkEvent,
+  ProtocolEvent,
   { type: "audio_render_status" }
 >;
+export type VideoRenderEventWrapper = Extract<
+  ProtocolEvent,
+  { type: "video_render" }
+>;
+export type VideoRenderStatusEventWrapper = Extract<
+  ProtocolEvent,
+  { type: "video_render_status" }
+>;
 export type ShutdownCompleteEvent = Extract<
-  SdkEvent,
+  ProtocolEvent,
   { type: "shutdown_complete" }
 >;
 
-export type ResponseFor<C extends SdkCommand> = C extends
+export type ResponseFor<C extends ProtocolCommand> = C extends
   { type: "load_parsed_midi" } ? [ParsedMidiLoadedEvent] | [ErrorEvent]
   : C extends { type: "load_audio_midi" } ? [MidiLoadedEvent] | [ErrorEvent]
   : C extends { type: "start_midi_analysis_job" }
@@ -167,7 +181,18 @@ export type ResponseFor<C extends SdkCommand> = C extends
     ? [AudioRenderStatusEventWrapper] | [ErrorEvent]
   : C extends { type: "get_render_audio_status" }
     ? [AudioRenderStatusEventWrapper] | [ErrorEvent]
+  : C extends { type: "start_render_video" }
+    ? [VideoRenderStatusEventWrapper] | [ErrorEvent]
+  : C extends { type: "cancel_render_video" }
+    ? [VideoRenderStatusEventWrapper] | [ErrorEvent]
+  : C extends { type: "get_render_video_status" }
+    ? [VideoRenderStatusEventWrapper] | [ErrorEvent]
   : C extends { type: "shutdown" } ? [ShutdownCompleteEvent]
   : never;
 
-export type { SdkCommand, SdkEvent, SdkJsonRequest, SdkJsonResponse };
+export type {
+  ProtocolCommand,
+  ProtocolEvent,
+  ProtocolRequest,
+  ProtocolResponse,
+};

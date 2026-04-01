@@ -10,6 +10,7 @@ use crate::{
     CoreHandle, MeridianError,
     protocol::{CoreCommand, CoreEvent, VideoRenderConfig, VideoRenderEvent, VideoRenderJobId},
     render::headless::HeadlessRenderSession,
+    spawn_core,
 };
 
 pub use ffmpeg::spawn_ffmpeg;
@@ -35,7 +36,17 @@ pub fn render_video(
     cancel: &AtomicBool,
     mut on_event: impl FnMut(VideoRenderEvent),
 ) -> Result<(), MeridianError> {
-    if let Err(error) = render_video_inner(job_id, core, config, cancel, &mut on_event) {
+    let original_state = read_core_state(core)?;
+    let result = render_video_inner(job_id, core, config, cancel, &mut on_event);
+    let restore_result = restore_core_state(core, &original_state);
+
+    if let Err(error) = result {
+        on_event(VideoRenderEvent::RenderFailed {
+            message: error.to_string(),
+        });
+        return Err(error);
+    }
+    if let Err(error) = restore_result {
         on_event(VideoRenderEvent::RenderFailed {
             message: error.to_string(),
         });
@@ -53,16 +64,37 @@ fn render_video_inner(
 ) -> Result<(), MeridianError> {
     config.validate()?;
 
-    let state = match core.request(CoreCommand::GetState)? {
-        events => match events.into_iter().next() {
-            Some(CoreEvent::StateSnapshot { state }) => state,
-            _ => {
-                return Err(MeridianError::Platform(
-                    "unexpected response while reading core state".into(),
-                ));
-            }
-        },
-    };
+    if should_use_isolated_core(config) {
+        let isolated = spawn_core();
+        let result = render_video_with_core(job_id, &isolated, config, cancel, on_event);
+        let _ = isolated.request(CoreCommand::Shutdown);
+        return result;
+    }
+
+    render_video_with_core(job_id, core, config, cancel, on_event)
+}
+
+fn should_use_isolated_core(config: &VideoRenderConfig) -> bool {
+    config.midi_path.is_some()
+        && config.scene.is_some()
+        && config.view_range.is_some()
+        && config.first_key.is_some()
+        && config.last_key.is_some()
+}
+
+fn render_video_with_core(
+    job_id: VideoRenderJobId,
+    core: &CoreHandle,
+    config: &VideoRenderConfig,
+    cancel: &AtomicBool,
+    on_event: &mut impl FnMut(VideoRenderEvent),
+) -> Result<(), MeridianError> {
+    let default_layout = crate::render::SceneLayout::default();
+    let default_view_range = default_layout.view_range;
+    let default_first_key = default_layout.first_key;
+    let default_last_key = default_layout.last_key;
+
+    let state = read_core_state(core)?;
 
     if let Some(scene) = &config.scene {
         core.request(CoreCommand::SetSceneConfig {
@@ -70,12 +102,30 @@ fn render_video_inner(
         })?;
     }
     core.request(CoreCommand::SetViewRange {
-        seconds: config.view_range.unwrap_or(state.view_range),
+        seconds: config
+            .view_range
+            .unwrap_or(if should_use_isolated_core(config) {
+                default_view_range
+            } else {
+                state.view_range
+            }),
         time_space: config.time_space,
     })?;
     core.request(CoreCommand::SetKeyRange {
-        first_key: config.first_key.unwrap_or(state.first_key),
-        last_key: config.last_key.unwrap_or(state.last_key),
+        first_key: config
+            .first_key
+            .unwrap_or(if should_use_isolated_core(config) {
+                default_first_key
+            } else {
+                state.first_key
+            }),
+        last_key: config
+            .last_key
+            .unwrap_or(if should_use_isolated_core(config) {
+                default_last_key
+            } else {
+                state.last_key
+            }),
     })?;
     core.request(CoreCommand::SetViewport {
         width: config.width,
@@ -172,5 +222,49 @@ fn render_video_inner(
         average_fps,
         output: config.output.clone(),
     });
+    Ok(())
+}
+
+fn read_core_state(core: &CoreHandle) -> Result<crate::protocol::StateSnapshot, MeridianError> {
+    match core.request(CoreCommand::GetState)? {
+        events => match events.into_iter().next() {
+            Some(CoreEvent::StateSnapshot { state }) => Ok(state),
+            _ => Err(MeridianError::Protocol(
+                "unexpected response while reading core state".into(),
+            )),
+        },
+    }
+}
+
+fn restore_core_state(
+    core: &CoreHandle,
+    state: &crate::protocol::StateSnapshot,
+) -> Result<(), MeridianError> {
+    if let Some(path) = &state.midi_path {
+        core.request(CoreCommand::LoadMidi { path: path.clone() })?;
+    } else {
+        core.request(CoreCommand::UnloadRenderContext)?;
+    }
+    core.request(CoreCommand::SetSceneConfig {
+        scene: state.scene.clone(),
+    })?;
+    core.request(CoreCommand::SetViewRange {
+        seconds: state.view_range,
+        time_space: Some(state.time_space),
+    })?;
+    core.request(CoreCommand::SetKeyRange {
+        first_key: state.first_key,
+        last_key: state.last_key,
+    })?;
+    core.request(CoreCommand::SetViewport {
+        width: state.viewport_width,
+        height: state.viewport_height,
+    })?;
+    core.request(CoreCommand::SetTime {
+        time: state.current_time,
+    })?;
+    core.request(CoreCommand::SetPlaying {
+        playing: state.playing,
+    })?;
     Ok(())
 }

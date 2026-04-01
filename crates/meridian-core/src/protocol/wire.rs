@@ -10,11 +10,13 @@ use crate::{
         AnalysisJobId, AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, DisplayCacheId,
         MidiAnalysisData, MidiAnalysisJobEvent, MidiAnalysisJobStatus, MidiAnalysisKind,
         MidiProcessEvent, MidiProcessJobId, MidiProcessStatus, PROTOCOL_VERSION, ParsedMidiId,
+        VideoRenderEvent, VideoRenderStatus,
     },
+    render::{DisplayTimeSpace, RendererKind, SceneLayout},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct SdkAudioRenderConfig {
+pub struct ProtocolAudioRenderConfig {
     pub midi_path: PathBuf,
     pub output: PathBuf,
     pub sample_rate: Option<u32>,
@@ -23,8 +25,25 @@ pub struct SdkAudioRenderConfig {
     pub soundfonts: Vec<PathBuf>,
 }
 
-impl From<SdkAudioRenderConfig> for crate::audio::AudioRenderConfig {
-    fn from(value: SdkAudioRenderConfig) -> Self {
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ProtocolVideoRenderConfig {
+    pub midi_path: PathBuf,
+    pub output: PathBuf,
+    pub fps: f64,
+    pub width: u32,
+    pub height: u32,
+    pub renderer: RendererKind,
+    pub view_range: Option<f64>,
+    #[serde(default)]
+    pub time_space: Option<DisplayTimeSpace>,
+    pub first_key: Option<u8>,
+    pub last_key: Option<u8>,
+    #[serde(default)]
+    pub ffmpeg_args: Vec<String>,
+}
+
+impl From<ProtocolAudioRenderConfig> for crate::audio::AudioRenderConfig {
+    fn from(value: ProtocolAudioRenderConfig) -> Self {
         Self {
             midi_path: Some(value.midi_path),
             audio: None,
@@ -37,9 +56,29 @@ impl From<SdkAudioRenderConfig> for crate::audio::AudioRenderConfig {
     }
 }
 
+impl From<ProtocolVideoRenderConfig> for crate::protocol::VideoRenderConfig {
+    fn from(value: ProtocolVideoRenderConfig) -> Self {
+        let mut layout = SceneLayout::default();
+        layout.set_renderer_kind(value.renderer);
+        Self {
+            midi_path: Some(value.midi_path),
+            output: value.output,
+            fps: value.fps,
+            width: value.width,
+            height: value.height,
+            scene: Some(layout.scene),
+            view_range: value.view_range,
+            time_space: value.time_space,
+            first_key: value.first_key,
+            last_key: value.last_key,
+            ffmpeg_args: value.ffmpeg_args,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum SdkCommand {
+pub enum ProtocolCommand {
     LoadParsedMidi {
         path: PathBuf,
     },
@@ -66,19 +105,24 @@ pub enum SdkCommand {
     CancelProcessMidiFiles,
     GetProcessMidiStatus,
     StartRenderAudio {
-        config: SdkAudioRenderConfig,
+        config: ProtocolAudioRenderConfig,
     },
     CancelRenderAudio,
     GetRenderAudioStatus,
+    StartRenderVideo {
+        config: ProtocolVideoRenderConfig,
+    },
+    CancelRenderVideo,
+    GetRenderVideoStatus,
     Shutdown,
 }
 
-impl From<SdkCommand> for CoreCommand {
-    fn from(value: SdkCommand) -> Self {
+impl From<ProtocolCommand> for CoreCommand {
+    fn from(value: ProtocolCommand) -> Self {
         match value {
-            SdkCommand::LoadParsedMidi { path } => Self::LoadParsedMidi { path },
-            SdkCommand::LoadAudioMidi { path } => Self::LoadAudioMidi { path },
-            SdkCommand::StartMidiAnalysisJob {
+            ProtocolCommand::LoadParsedMidi { path } => Self::LoadParsedMidi { path },
+            ProtocolCommand::LoadAudioMidi { path } => Self::LoadAudioMidi { path },
+            ProtocolCommand::StartMidiAnalysisJob {
                 parsed_midi_id,
                 display_cache_id,
                 kinds,
@@ -89,10 +133,10 @@ impl From<SdkCommand> for CoreCommand {
                 kinds,
                 bucket_count,
             },
-            SdkCommand::GetMidiAnalysisJobStatus { job_id } => {
+            ProtocolCommand::GetMidiAnalysisJobStatus { job_id } => {
                 Self::GetMidiAnalysisJobStatus { job_id }
             }
-            SdkCommand::StartProcessMidiFiles {
+            ProtocolCommand::StartProcessMidiFiles {
                 selection,
                 output,
                 config,
@@ -101,21 +145,26 @@ impl From<SdkCommand> for CoreCommand {
                 output,
                 config,
             },
-            SdkCommand::CancelProcessMidiFiles => Self::CancelProcessMidiFiles,
-            SdkCommand::GetProcessMidiStatus => Self::GetProcessMidiStatus,
-            SdkCommand::StartRenderAudio { config } => Self::StartRenderAudio {
+            ProtocolCommand::CancelProcessMidiFiles => Self::CancelProcessMidiFiles,
+            ProtocolCommand::GetProcessMidiStatus => Self::GetProcessMidiStatus,
+            ProtocolCommand::StartRenderAudio { config } => Self::StartRenderAudio {
                 config: config.into(),
             },
-            SdkCommand::CancelRenderAudio => Self::CancelRenderAudio,
-            SdkCommand::GetRenderAudioStatus => Self::GetRenderAudioStatus,
-            SdkCommand::Shutdown => Self::Shutdown,
+            ProtocolCommand::CancelRenderAudio => Self::CancelRenderAudio,
+            ProtocolCommand::GetRenderAudioStatus => Self::GetRenderAudioStatus,
+            ProtocolCommand::StartRenderVideo { config } => Self::StartRenderVideo {
+                config: config.into(),
+            },
+            ProtocolCommand::CancelRenderVideo => Self::CancelRenderVideo,
+            ProtocolCommand::GetRenderVideoStatus => Self::GetRenderVideoStatus,
+            ProtocolCommand::Shutdown => Self::Shutdown,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum SdkEvent {
+pub enum ProtocolEvent {
     ParsedMidiLoaded {
         parsed_midi_id: ParsedMidiId,
         path: PathBuf,
@@ -148,6 +197,12 @@ pub enum SdkEvent {
     AudioRenderStatus {
         status: AudioRenderStatus,
     },
+    VideoRender {
+        event: VideoRenderEvent,
+    },
+    VideoRenderStatus {
+        status: VideoRenderStatus,
+    },
     Error {
         code: CoreErrorCode,
         message: String,
@@ -156,12 +211,12 @@ pub enum SdkEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UnsupportedSdkEvent;
+pub struct UnsupportedProtocolEvent;
 
-impl TryFrom<CoreEvent> for SdkEvent {
-    type Error = UnsupportedSdkEvent;
+impl TryFrom<CoreEvent> for ProtocolEvent {
+    type Error = UnsupportedProtocolEvent;
 
-    fn try_from(value: CoreEvent) -> Result<Self, UnsupportedSdkEvent> {
+    fn try_from(value: CoreEvent) -> Result<Self, UnsupportedProtocolEvent> {
         match value {
             CoreEvent::ParsedMidiLoaded {
                 parsed_midi_id,
@@ -192,68 +247,44 @@ impl TryFrom<CoreEvent> for SdkEvent {
             CoreEvent::MidiProcessStatus { status } => Ok(Self::MidiProcessStatus { status }),
             CoreEvent::AudioRender { event } => Ok(Self::AudioRender { event }),
             CoreEvent::AudioRenderStatus { status } => Ok(Self::AudioRenderStatus { status }),
+            CoreEvent::VideoRender { event } => Ok(Self::VideoRender { event }),
+            CoreEvent::VideoRenderStatus { status } => Ok(Self::VideoRenderStatus { status }),
             CoreEvent::Error { code, message } => Ok(Self::Error { code, message }),
             CoreEvent::ShutdownComplete => Ok(Self::ShutdownComplete),
-            _ => Err(UnsupportedSdkEvent),
+            _ => Err(UnsupportedProtocolEvent),
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct SdkJsonRequest {
+pub struct ProtocolRequest {
     pub protocol_version: u32,
     pub id: Option<u64>,
-    pub command: SdkCommand,
+    pub command: ProtocolCommand,
 }
 
-impl Default for SdkJsonRequest {
+impl Default for ProtocolRequest {
     fn default() -> Self {
         Self {
             protocol_version: PROTOCOL_VERSION,
             id: None,
-            command: SdkCommand::GetProcessMidiStatus,
-        }
-    }
-}
-
-impl From<SdkJsonRequest> for crate::protocol::JsonRequest {
-    fn from(value: SdkJsonRequest) -> Self {
-        Self {
-            protocol_version: value.protocol_version,
-            id: value.id,
-            command: value.command.into(),
+            command: ProtocolCommand::GetProcessMidiStatus,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct SdkJsonResponse {
+pub struct ProtocolResponse {
     pub protocol_version: u32,
     pub id: Option<u64>,
-    pub events: Vec<SdkEvent>,
-}
-
-impl TryFrom<crate::protocol::JsonResponse> for SdkJsonResponse {
-    type Error = UnsupportedSdkEvent;
-
-    fn try_from(value: crate::protocol::JsonResponse) -> Result<Self, UnsupportedSdkEvent> {
-        let mut events = Vec::with_capacity(value.events.len());
-        for event in value.events {
-            events.push(event.try_into()?);
-        }
-        Ok(Self {
-            protocol_version: value.protocol_version,
-            id: value.id,
-            events,
-        })
-    }
+    pub events: Vec<ProtocolEvent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct SdkSchemaDemo {
+pub struct ProtocolSchemaDemo {
     pub protocol_version: u32,
-    pub example_request: SdkJsonRequest,
-    pub example_response: SdkJsonResponse,
+    pub example_request: ProtocolRequest,
+    pub example_response: ProtocolResponse,
     pub sample_analysis: Option<MidiAnalysisData>,
     pub latest_analysis_job: Option<MidiAnalysisJobStatus>,
     pub latest_process_job: MidiProcessStatus,
@@ -263,12 +294,12 @@ pub struct SdkSchemaDemo {
     pub latest_audio_render_event: Option<AudioRenderEvent>,
 }
 
-impl Default for SdkSchemaDemo {
+impl Default for ProtocolSchemaDemo {
     fn default() -> Self {
         Self {
             protocol_version: PROTOCOL_VERSION,
-            example_request: SdkJsonRequest::default(),
-            example_response: SdkJsonResponse {
+            example_request: ProtocolRequest::default(),
+            example_response: ProtocolResponse {
                 protocol_version: PROTOCOL_VERSION,
                 id: None,
                 events: Vec::new(),

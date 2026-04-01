@@ -25,7 +25,7 @@ debug-snapshots = []
 
 [dependencies]
 clap.workspace = true
-meridian-core = { path = "/home/arduano/programming/meridian/crates/meridian-core" }
+meridian-core = { path = "../meridian-core" }
 rfd.workspace = true
 slint.workspace = true
 

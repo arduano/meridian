@@ -82,7 +82,7 @@ pub enum AudioRenderStatus {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum VideoRenderEvent {
     RenderStarted {
@@ -122,7 +122,7 @@ pub enum VideoRenderEvent {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum VideoRenderStatus {
     Idle,
