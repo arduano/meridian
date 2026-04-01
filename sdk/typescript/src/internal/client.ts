@@ -142,7 +142,7 @@ export class MeridianProtocolClient {
     let client: MeridianProtocolClient | null = null;
     const process = await options.runtime.spawn(
       options.executablePath,
-      options.args ?? ["serve-json"],
+      options.args ?? ["stdio"],
       {
         onLine: (line) => {
           if (client) {
@@ -155,7 +155,7 @@ export class MeridianProtocolClient {
           }
         },
         onExit: (code, signal) => {
-          const suffix = `meridian-stdio exited with code=${
+          const suffix = `meridian-cli exited with code=${
             String(code)
           } signal=${String(signal)}`;
           if (client) {

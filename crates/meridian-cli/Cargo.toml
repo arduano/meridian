@@ -1,5 +1,5 @@
 [package]
-name = "meridian-stdio"
+name = "meridian-cli"
 version.workspace = true
 edition.workspace = true
 
@@ -7,7 +7,7 @@ edition.workspace = true
 clap.workspace = true
 ctrlc = "3.4.5"
 flume.workspace = true
-meridian-core = { path = "../meridian-core" }
+meridian-core = { path = "/home/arduano/programming/meridian/crates/meridian-core" }
 serde.workspace = true
 serde_json.workspace = true
 shell-words = "1.1.0"

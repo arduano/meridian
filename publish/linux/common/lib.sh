@@ -9,7 +9,7 @@ CARGO_BUILD_PROFILE="${CARGO_BUILD_PROFILE:-release}"
 RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly-2026-03-29}"
 PACKAGE_NAME="${PACKAGE_NAME:-meridian}"
 UI_BINARY_NAME="${UI_BINARY_NAME:-meridian-ui}"
-CLI_SOURCE_BINARY="${CLI_SOURCE_BINARY:-meridian-stdio}"
+CLI_SOURCE_BINARY="${CLI_SOURCE_BINARY:-meridian-cli}"
 CLI_BINARY_NAME="${CLI_BINARY_NAME:-meridian}"
 APP_ID="${APP_ID:-io.github.arduano.meridian}"
 ARCH="${ARCH:-x86_64}"
@@ -288,7 +288,7 @@ build_binaries_in_container() {
 $(printf '%s\n' "$prereq_script")
 $(bootstrap_rustup_script)
 export CARGO_TARGET_DIR='$target_dir'
-cargo build $cargo_args -p meridian-stdio -p meridian-ui
+cargo build $cargo_args -p meridian-cli -p meridian-ui
 "
 }
 

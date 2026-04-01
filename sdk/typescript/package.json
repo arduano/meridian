@@ -1,5 +1,5 @@
 {
-  "name": "@meridian/stdio-sdk",
+  "name": "@meridian/cli-sdk",
   "version": "0.1.0",
   "private": true,
   "type": "module",

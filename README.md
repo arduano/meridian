@@ -44,10 +44,16 @@ Build/check (recommended on this host):
 nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo check'
 ```
 
-Run:
+Run the CLI:
 
 ```bash
-nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run -p meridian-cli -- --help'
+```
+
+Run stdio mode:
+
+```bash
+nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run -p meridian-cli -- stdio'
 ```
 
 Run without the accelerated viewport (A/B resize test):

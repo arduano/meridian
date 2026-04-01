@@ -3388,6 +3388,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "meridian-cli"
+version = "0.1.0"
+dependencies = [
+ "clap 4.6.0",
+ "ctrlc",
+ "flume",
+ "meridian-core",
+ "serde",
+ "serde_json",
+ "shell-words",
+]
+
+[[package]]
 name = "meridian-core"
 version = "0.1.0"
 dependencies = [
@@ -3411,19 +3424,6 @@ dependencies = [
  "xsynth-core",
  "xsynth-realtime",
  "xsynth-render",
-]
-
-[[package]]
-name = "meridian-stdio"
-version = "0.1.0"
-dependencies = [
- "clap 4.6.0",
- "ctrlc",
- "flume",
- "meridian-core",
- "serde",
- "serde_json",
- "shell-words",
 ]
 
 [[package]]

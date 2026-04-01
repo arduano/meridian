@@ -57,7 +57,7 @@ function Initialize-StageDir {
     }
     New-Item -ItemType Directory -Force -Path $paths.StageDir | Out-Null
 
-    $cliSource = Join-Path $targetRelease "meridian-stdio.exe"
+    $cliSource = Join-Path $targetRelease "meridian-cli.exe"
     if (-not (Test-Path $cliSource)) {
         throw "Missing CLI binary: $cliSource"
     }

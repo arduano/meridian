@@ -2,11 +2,11 @@ import { type MidiAnalysisData } from "../src/index.ts";
 import { createDenoMeridianClient } from "../src/runtime/deno_client.ts";
 
 function defaultExecutablePath(): string {
-  const envPath = Deno.env.get("MERIDIAN_STDIO_BIN");
+  const envPath = Deno.env.get("MERIDIAN_CLI_BIN");
   if (envPath) {
     return envPath;
   }
-  return new URL("../../../target/debug/meridian-stdio", import.meta.url)
+  return new URL("../../../target/debug/meridian-cli", import.meta.url)
     .pathname;
 }
 
@@ -28,14 +28,14 @@ async function ensureExecutable(path: string): Promise<void> {
     cwd: new URL("../../..", import.meta.url).pathname,
     args: [
       "--run",
-      "PATH=/run/current-system/sw/bin:$PATH cargo build -p meridian-stdio",
+      "PATH=/run/current-system/sw/bin:$PATH cargo build -p meridian-cli",
     ],
     stdout: "inherit",
     stderr: "inherit",
   });
   const status = await command.spawn().status;
   if (status.code !== 0) {
-    throw new Error(`Failed to build meridian-stdio, exit code ${status.code}`);
+    throw new Error(`Failed to build meridian-cli, exit code ${status.code}`);
   }
 }
 

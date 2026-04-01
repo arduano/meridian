@@ -67,11 +67,11 @@
           };
         meridianCli = mkMeridianPackage {
           pname = "meridian";
-          cargoBuildFlags = [ "-p" "meridian-stdio" ];
+          cargoBuildFlags = [ "-p" "meridian-cli" ];
           installPhase = ''
             runHook preInstall
             mkdir -p $out/bin
-            install -m 0755 "$(find target -path '*/release/meridian-stdio' -type f | head -n 1)" $out/bin/meridian
+            install -m 0755 "$(find target -path '*/release/meridian-cli' -type f | head -n 1)" $out/bin/meridian
             runHook postInstall
           '';
         };
