@@ -1,4 +1,4 @@
-use std::io::{BufRead, Write};
+use std::io::{BufRead, BufReader, Write};
 
 use crate::{CoreHandle, MeridianError, spawn_core};
 
@@ -18,7 +18,7 @@ pub fn serve_protocol_json() -> Result<(), MeridianError> {
     let core = spawn_core();
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout().lock();
-    serve_protocol_json_io(core, stdin.lock(), &mut stdout)
+    serve_protocol_json_io(core, BufReader::new(stdin), &mut stdout)
 }
 
 pub fn run_one_protocol_json(raw: &str) -> Result<(), MeridianError> {

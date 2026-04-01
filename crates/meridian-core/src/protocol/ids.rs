@@ -25,7 +25,7 @@ pub struct DisplaySessionId(pub u64);
 #[serde(transparent)]
 pub struct AudioSessionId(pub u64);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(transparent)]
 pub struct VideoRenderJobId(pub u64);
 

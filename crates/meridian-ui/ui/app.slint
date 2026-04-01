@@ -6,14 +6,14 @@
 //   - primitives.slint     (SectionHeader, FieldRow, …)
 //   - chrome.slint         (ProfileTab, TransportButton, TimeScrubber)
 //   - midi_loading.slint   (MidiStateSection, MidiFileBar, …)
-//   - panels/*.slint       (PreviewWelcome, DropOverlay, RenderPanel, …)
+//   - panels/*.slint       (PreviewWelcome, DropOverlay, VideoPanel, …)
 // ═══════════════════════════════════════════════════════════
 
 import { InspectorRow, MidiLoadState, BarValue, EventCount } from "structs.slint";
 import { SectionHeader, FieldRow } from "primitives.slint";
 import { ProfileTab, TransportButton, TimeScrubber } from "chrome.slint";
 import { PreviewWelcome, DropOverlay } from "panels/preview.slint";
-import { RenderPanel } from "panels/render.slint";
+import { VideoPanel } from "panels/render.slint";
 import { AudioPanel } from "panels/audio.slint";
 import { ModifyPanel } from "panels/modify.slint";
 import { AnalysisPanel } from "panels/analysis.slint";
@@ -92,6 +92,47 @@ export component App inherits Window {
     in-out property <string> viewport-text: "1280 x 720";
     in-out property <string> current-renderer-text: "pfa";
     in-out property <string> time-space-text: "time";
+    in-out property <string> video-view-range-value-text: "8.0";
+    in-out property <string> video-first-key-text: "0";
+    in-out property <string> video-last-key-text: "127";
+    in-out property <string> video-keyboard-height-mode-text: "aspect_ratio";
+    in-out property <string> video-keyboard-height-value-text: "0.08494";
+    in-out property <string> video-note-same-width-text: "off";
+    in-out property <string> video-border-width-text: "1.0";
+    in-out property <string> video-keyboard-same-width-text: "off";
+    in-out property <string> video-middle-c-text: "off";
+    in-out property <string> video-top-color-text: "red";
+    in-out property <string> video-top-bar-rgb-text: "0.5850, 0.0392, 0.0249";
+    in-out property <string> video-palette-source-text: "default_track_colors";
+    in-out property <string> video-palette-kind-text: "random";
+    in-out property <string> video-palette-randomize-text: "on";
+    in-out property <string> video-palette-path-text: "(palette png)";
+    in-out property <string> video-ptc-same-width-text: "on";
+    in-out property <string> video-ptc-fov-text: "60.0";
+    in-out property <string> video-ptc-view-height-text: "0.50";
+    in-out property <string> video-ptc-view-offset-text: "0.40";
+    in-out property <string> video-ptc-view-pan-text: "0.00";
+    in-out property <string> video-ptc-cam-ang-text: "0.56";
+    in-out property <string> video-ptc-cam-rot-text: "0.00";
+    in-out property <string> video-ptc-cam-spin-text: "0.00";
+    in-out property <string> video-ptc-viewdist-text: "14.0";
+    in-out property <string> video-ptc-viewback-text: "0.20";
+    in-out property <string> video-ptc-vertical-notes-text: "off";
+    in-out property <string> video-ptc-note-down-speed-text: "0.60";
+    in-out property <string> video-ptc-note-up-speed-text: "0.20";
+    in-out property <string> video-ptc-box-notes-text: "on";
+    in-out property <string> video-ptc-light-shade-text: "off";
+    in-out property <string> video-ptc-show-keyboard-text: "on";
+    in-out property <string> video-ptc-tilt-keys-text: "on";
+    in-out property <string> video-ptc-eat-notes-text: "off";
+    in-out property <string> video-ptc-aura-enabled-text: "on";
+    in-out property <string> video-ptc-aura-strength-text: "2.0";
+    in-out property <string> video-ptc-notes-change-size-text: "off";
+    in-out property <string> video-ptc-notes-change-tint-text: "on";
+    in-out property <string> video-ptc-use-vel-text: "off";
+    in-out property <string> video-ptc-aura-image-source-text: "builtin";
+    in-out property <string> video-ptc-aura-image-name-text: "ring";
+    in-out property <string> video-ptc-aura-image-path-text: "(aura png)";
     in-out property <float> current-time-seconds: 0;
     in-out property <float> midi-length-seconds: 1;
     in-out property <[InspectorRow]> inspector-items;
@@ -246,6 +287,9 @@ export component App inherits Window {
     callback seek-time(float);
     callback select-renderer(string);
     callback select-time-space(string);
+    callback update-video-control(string, string);
+    callback browse-video-asset(string);
+    callback reset-video-asset(string);
     callback select-audio-sample-rate(string);
     callback select-audio-channel-count(string);
     callback select-audio-render-window(string);
@@ -296,7 +340,7 @@ export component App inherits Window {
                         spacing: 4px;
 
                         ProfileTab { label: "Preview";  active: root.active-profile == 0; pressed => { root.active-profile = 0; } }
-                        ProfileTab { label: "Render";   active: root.active-profile == 1; pressed => { root.active-profile = 1; } }
+                        ProfileTab { label: "Video";    active: root.active-profile == 1; pressed => { root.active-profile = 1; } }
                         ProfileTab { label: "Audio";    active: root.active-profile == 2; pressed => { root.active-profile = 2; } }
                         ProfileTab { label: "Modify";   active: root.active-profile == 3; pressed => { root.active-profile = 3; } }
                         ProfileTab { label: "Analysis"; active: root.active-profile == 4; pressed => { root.active-profile = 4; } }
@@ -400,7 +444,7 @@ export component App inherits Window {
                 // Right-edge separator
                 Rectangle { x: parent.width - 1px; width: 1px; height: parent.height; background: #141e2e; }
 
-                RenderPanel {
+                VideoPanel {
                     visible: root.active-profile == 1;
                     x: 0; y: 0; width: parent.width; height: parent.height;
 
@@ -418,11 +462,53 @@ export component App inherits Window {
                     current-renderer-text: root.current-renderer-text;
                     time-space-text:       root.time-space-text;
                     view-range-text:       root.view-range-text;
+                    video-view-range-value-text: root.video-view-range-value-text;
+                    video-first-key-text: root.video-first-key-text;
+                    video-last-key-text: root.video-last-key-text;
                     scene-summary-text:    root.scene-summary-text;
+                    video-keyboard-height-mode-text: root.video-keyboard-height-mode-text;
+                    video-keyboard-height-value-text: root.video-keyboard-height-value-text;
+                    video-note-same-width-text: root.video-note-same-width-text;
+                    video-border-width-text: root.video-border-width-text;
+                    video-keyboard-same-width-text: root.video-keyboard-same-width-text;
+                    video-middle-c-text: root.video-middle-c-text;
+                    video-top-color-text: root.video-top-color-text;
+                    video-top-bar-rgb-text: root.video-top-bar-rgb-text;
+                    video-palette-source-text: root.video-palette-source-text;
+                    video-palette-kind-text: root.video-palette-kind-text;
+                    video-palette-randomize-text: root.video-palette-randomize-text;
+                    video-palette-path-text: root.video-palette-path-text;
+                    video-ptc-same-width-text: root.video-ptc-same-width-text;
+                    video-ptc-fov-text: root.video-ptc-fov-text;
+                    video-ptc-view-height-text: root.video-ptc-view-height-text;
+                    video-ptc-view-offset-text: root.video-ptc-view-offset-text;
+                    video-ptc-view-pan-text: root.video-ptc-view-pan-text;
+                    video-ptc-cam-ang-text: root.video-ptc-cam-ang-text;
+                    video-ptc-cam-rot-text: root.video-ptc-cam-rot-text;
+                    video-ptc-cam-spin-text: root.video-ptc-cam-spin-text;
+                    video-ptc-viewdist-text: root.video-ptc-viewdist-text;
+                    video-ptc-viewback-text: root.video-ptc-viewback-text;
+                    video-ptc-vertical-notes-text: root.video-ptc-vertical-notes-text;
+                    video-ptc-note-down-speed-text: root.video-ptc-note-down-speed-text;
+                    video-ptc-note-up-speed-text: root.video-ptc-note-up-speed-text;
+                    video-ptc-box-notes-text: root.video-ptc-box-notes-text;
+                    video-ptc-light-shade-text: root.video-ptc-light-shade-text;
+                    video-ptc-show-keyboard-text: root.video-ptc-show-keyboard-text;
+                    video-ptc-tilt-keys-text: root.video-ptc-tilt-keys-text;
+                    video-ptc-eat-notes-text: root.video-ptc-eat-notes-text;
+                    video-ptc-aura-enabled-text: root.video-ptc-aura-enabled-text;
+                    video-ptc-aura-strength-text: root.video-ptc-aura-strength-text;
+                    video-ptc-notes-change-size-text: root.video-ptc-notes-change-size-text;
+                    video-ptc-notes-change-tint-text: root.video-ptc-notes-change-tint-text;
+                    video-ptc-use-vel-text: root.video-ptc-use-vel-text;
+                    video-ptc-aura-image-source-text: root.video-ptc-aura-image-source-text;
+                    video-ptc-aura-image-name-text: root.video-ptc-aura-image-name-text;
+                    video-ptc-aura-image-path-text: root.video-ptc-aura-image-path-text;
                     select-renderer(r)     => { root.select-renderer(r); }
                     select-time-space(ts)  => { root.select-time-space(ts); }
-                    start-render           => { root.start-render(); }
-                    cancel-render          => { root.cancel-render(); }
+                    update-control(key, value) => { root.update-video-control(key, value); }
+                    browse-asset(target)   => { root.browse-video-asset(target); }
+                    reset-asset(target)    => { root.reset-video-asset(target); }
                 }
 
                 AudioPanel {

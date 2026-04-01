@@ -1,8 +1,6 @@
-use std::{
-    fs,
-    path::PathBuf,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+mod support;
+
+use std::{fs, path::PathBuf, time::Duration};
 
 use meridian_core::{
     PROTOCOL_VERSION,
@@ -17,158 +15,11 @@ use meridian_core::{
     render::{DisplayTimeSpace, SceneLayout},
     spawn_core,
 };
-use midi_toolkit::{
-    events::Event,
-    io::{MIDIFile as ToolkitMidiFile, MIDIWriter},
-    sequence::event::Delta,
-};
-
-fn write_test_midi() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "meridian-core-test-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    ));
-    fs::create_dir_all(&dir).expect("create temp test dir");
-    let path = dir.join("fixture.mid");
-    let bytes = [
-        0x4d, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x60, 0x4d,
-        0x54, 0x72, 0x6b, 0x00, 0x00, 0x00, 0x1b, 0x00, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20, 0x00,
-        0x90, 0x3c, 0x64, 0x30, 0x90, 0x40, 0x64, 0x30, 0x80, 0x3c, 0x40, 0x30, 0x80, 0x40, 0x40,
-        0x00, 0xff, 0x2f, 0x00,
-    ];
-    fs::write(&path, bytes).expect("write midi fixture");
-    path
-}
-
-fn encode_vlq(mut value: u32) -> Vec<u8> {
-    let mut bytes = vec![(value & 0x7f) as u8];
-    value >>= 7;
-    while value > 0 {
-        bytes.push(((value & 0x7f) as u8) | 0x80);
-        value >>= 7;
-    }
-    bytes.reverse();
-    bytes
-}
-
-fn write_tempo_staircase_midi() -> PathBuf {
-    #[derive(Clone, Copy)]
-    enum EventKind {
-        Tempo(u32),
-        NoteOn(u8),
-        NoteOff(u8),
-        EndOfTrack,
-    }
-
-    let dir = std::env::temp_dir().join(format!(
-        "meridian-core-staircase-test-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    ));
-    fs::create_dir_all(&dir).expect("create temp test dir");
-    let path = dir.join("tempo_staircase.mid");
-
-    let mut events = vec![
-        (0_u32, 0_u8, EventKind::Tempo(379_747)),
-        (13_438, 0, EventKind::Tempo(400_000)),
-        (14_210, 0, EventKind::Tempo(387_097)),
-        (17_284, 0, EventKind::Tempo(379_747)),
-        (28_802, 0, EventKind::Tempo(400_000)),
-        (29_568, 0, EventKind::Tempo(392_157)),
-        (32_640, 0, EventKind::Tempo(384_615)),
-        (35_716, 0, EventKind::Tempo(379_747)),
-        (50_304, 0, EventKind::Tempo(382_166)),
-        (51_074, 0, EventKind::Tempo(387_097)),
-        (54_148, 0, EventKind::Tempo(379_747)),
-        (56_448, 0, EventKind::Tempo(394_737)),
-        (57_216, 0, EventKind::Tempo(379_747)),
-        (65_676, 0, EventKind::Tempo(382_166)),
-        (66_432, 0, EventKind::Tempo(392_157)),
-        (69_504_u32, 0_u8, EventKind::Tempo(1_276_596)),
-        (69_888, 0, EventKind::Tempo(714_286)),
-        (69_912, 0, EventKind::Tempo(631_579)),
-        (69_936, 0, EventKind::Tempo(612_245)),
-        (69_960, 0, EventKind::Tempo(571_429)),
-        (70_008, 0, EventKind::Tempo(606_061)),
-        (70_032, 0, EventKind::Tempo(645_161)),
-        (70_056, 0, EventKind::Tempo(705_882)),
-        (70_080, 0, EventKind::Tempo(759_494)),
-        (70_104, 0, EventKind::Tempo(779_221)),
-        (70_128, 0, EventKind::Tempo(833_333)),
-        (70_152, 0, EventKind::Tempo(857_143)),
-        (70_176, 0, EventKind::Tempo(937_500)),
-        (70_200, 0, EventKind::Tempo(1_034_483)),
-        (70_224, 0, EventKind::Tempo(1_071_429)),
-        (70_248, 0, EventKind::Tempo(1_714_286)),
-        (70_272, 0, EventKind::Tempo(500_000)),
-    ];
-
-    let staircase_notes = [
-        (70_176_u32, 60_u8),
-        (70_200, 61),
-        (70_224, 62),
-        (70_248, 63),
-        (70_272, 64),
-    ];
-    for (tick, key) in staircase_notes {
-        events.push((tick, 1, EventKind::NoteOn(key)));
-        events.push((tick + 48, 2, EventKind::NoteOff(key)));
-    }
-    events.push((70_400, 3, EventKind::EndOfTrack));
-    events.sort_by_key(|(tick, order, _)| (*tick, *order));
-
-    let mut track = Vec::new();
-    let mut previous_tick = 0_u32;
-    for (tick, _, event) in events {
-        track.extend_from_slice(&encode_vlq(tick.saturating_sub(previous_tick)));
-        previous_tick = tick;
-        match event {
-            EventKind::Tempo(mpq) => {
-                track.extend_from_slice(&[0xff, 0x51, 0x03]);
-                track.push(((mpq >> 16) & 0xff) as u8);
-                track.push(((mpq >> 8) & 0xff) as u8);
-                track.push((mpq & 0xff) as u8);
-            }
-            EventKind::NoteOn(key) => track.extend_from_slice(&[0x90, key, 0x64]),
-            EventKind::NoteOff(key) => track.extend_from_slice(&[0x80, key, 0x40]),
-            EventKind::EndOfTrack => track.extend_from_slice(&[0xff, 0x2f, 0x00]),
-        }
-    }
-
-    let mut bytes = Vec::new();
-    bytes.extend_from_slice(b"MThd");
-    bytes.extend_from_slice(&6_u32.to_be_bytes());
-    bytes.extend_from_slice(&0_u16.to_be_bytes());
-    bytes.extend_from_slice(&1_u16.to_be_bytes());
-    bytes.extend_from_slice(&96_u16.to_be_bytes());
-    bytes.extend_from_slice(b"MTrk");
-    bytes.extend_from_slice(&(track.len() as u32).to_be_bytes());
-    bytes.extend_from_slice(&track);
-    fs::write(&path, bytes).expect("write staircase midi fixture");
-    path
-}
-
-fn write_toolkit_midi(path: &PathBuf, ppq: u16, tracks: Vec<Vec<Delta<u64, Event>>>) {
-    let writer = MIDIWriter::new(path.to_string_lossy().as_ref(), ppq).expect("create midi writer");
-    for track in tracks {
-        let mut track_writer = writer.open_next_track();
-        track_writer
-            .write_events_iter(track.into_iter())
-            .expect("write midi track");
-        track_writer.end().expect("finish midi track");
-    }
-    let mut writer = writer;
-    writer.end().expect("finish midi writer");
-}
+use midi_toolkit::{events::Event, io::MIDIFile as ToolkitMidiFile, sequence::event::Delta};
 
 #[test]
 fn stateful_core_projects_a_frame() {
-    let midi = write_test_midi();
+    let midi = support::write_test_midi();
     let core = spawn_core();
 
     core.request(CoreCommand::LoadMidi { path: midi })
@@ -194,7 +45,7 @@ fn stateful_core_projects_a_frame() {
 
 #[test]
 fn save_frame_supports_png_and_rgba() {
-    let midi = write_test_midi();
+    let midi = support::write_test_midi();
     let out_dir = midi.parent().unwrap().to_path_buf();
     let png_path = out_dir.join("frame.png");
     let rgba_path = out_dir.join("frame.rgba");
@@ -244,7 +95,7 @@ fn save_frame_supports_png_and_rgba() {
 
 #[test]
 fn json_protocol_defaults_version_and_render_response_is_lightweight() {
-    let midi = write_test_midi();
+    let midi = support::write_test_midi();
     let core = spawn_core();
     core.request(CoreCommand::LoadMidi { path: midi })
         .expect("load midi");
@@ -278,7 +129,7 @@ fn json_protocol_defaults_version_and_render_response_is_lightweight() {
 
 #[test]
 fn midi_analysis_job_runs_without_building_display_cache() {
-    let midi = write_test_midi();
+    let midi = support::write_test_midi();
     let core = spawn_core();
 
     let parsed_events = core
@@ -354,19 +205,12 @@ fn midi_analysis_job_runs_without_building_display_cache() {
 
 #[test]
 fn process_midi_files_merges_trims_and_writes_output() {
-    let dir = std::env::temp_dir().join(format!(
-        "meridian-core-process-test-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    ));
-    fs::create_dir_all(&dir).expect("create temp test dir");
+    let dir = support::temp_dir("meridian-core-process-test");
     let midi_a = dir.join("a.mid");
     let midi_b = dir.join("b.mid");
     let output = dir.join("out.mid");
 
-    write_toolkit_midi(
+    support::write_toolkit_midi(
         &midi_a,
         96,
         vec![vec![
@@ -376,7 +220,7 @@ fn process_midi_files_merges_trims_and_writes_output() {
             Event::new_delta_note_off_event(96, 0, 60),
         ]],
     );
-    write_toolkit_midi(
+    support::write_toolkit_midi(
         &midi_b,
         48,
         vec![vec![
@@ -467,17 +311,10 @@ fn process_midi_files_merges_trims_and_writes_output() {
 
 #[test]
 fn process_midi_files_job_reports_status_and_finishes() {
-    let dir = std::env::temp_dir().join(format!(
-        "meridian-core-process-job-test-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    ));
-    fs::create_dir_all(&dir).expect("create temp test dir");
+    let dir = support::temp_dir("meridian-core-process-job-test");
     let midi = dir.join("input.mid");
     let output = dir.join("job_out.mid");
-    write_toolkit_midi(
+    support::write_toolkit_midi(
         &midi,
         96,
         vec![vec![
@@ -582,7 +419,7 @@ fn scene_and_view_commands_are_separate() {
 
 #[test]
 fn tick_space_render_shows_staircase_notes_at_distinct_positions() {
-    let midi = write_tempo_staircase_midi();
+    let midi = support::write_tempo_staircase_midi();
     let core = spawn_core();
 
     core.request(CoreCommand::LoadMidi { path: midi })
@@ -641,4 +478,71 @@ fn tick_space_render_shows_staircase_notes_at_distinct_positions() {
             *end - *start
         );
     }
+}
+
+#[test]
+fn video_render_smokes_when_ffmpeg_is_available() {
+    if !support::ffmpeg_available() {
+        eprintln!("skipping video smoke test because ffmpeg is unavailable");
+        return;
+    }
+
+    let midi = support::write_test_midi();
+    let dir = support::temp_dir("meridian-core-video-test");
+    let output = dir.join("video.mp4");
+    let core = spawn_core();
+    let event_rx = core.subscribe_events();
+
+    let events = core
+        .request(CoreCommand::StartRenderVideo {
+            config: meridian_core::protocol::VideoRenderConfig {
+                midi_path: Some(midi),
+                output: output.clone(),
+                fps: 4.0,
+                width: 160,
+                height: 90,
+                scene: Some(SceneLayout::default().scene),
+                view_range: Some(2.0),
+                time_space: Some(DisplayTimeSpace::Tick),
+                first_key: None,
+                last_key: None,
+                ffmpeg_args: vec!["-y".to_string()],
+            },
+        })
+        .expect("start video render");
+
+    assert!(matches!(
+        events.as_slice(),
+        [CoreEvent::VideoRenderStatus {
+            status: meridian_core::protocol::VideoRenderStatus::Running { .. }
+        }]
+    ));
+
+    let mut saw_finished = false;
+    for _ in 0..60 {
+        match event_rx.recv_timeout(Duration::from_secs(2)) {
+            Ok(CoreEvent::VideoRender {
+                event:
+                    meridian_core::protocol::VideoRenderEvent::RenderFinished {
+                        output: finished_output,
+                        ..
+                    },
+            }) => {
+                assert_eq!(finished_output, output);
+                saw_finished = true;
+                break;
+            }
+            Ok(CoreEvent::VideoRender {
+                event: meridian_core::protocol::VideoRenderEvent::RenderFailed { message },
+            }) => {
+                panic!("video render failed: {message}");
+            }
+            Ok(_) => {}
+            Err(error) => panic!("timed out waiting for video render to finish: {error}"),
+        }
+    }
+
+    assert!(saw_finished, "video render did not finish");
+    assert!(output.exists(), "expected video output to exist");
+    assert!(fs::metadata(&output).expect("video output metadata").len() > 0);
 }

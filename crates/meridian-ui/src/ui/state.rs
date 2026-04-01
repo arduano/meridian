@@ -9,8 +9,9 @@ use meridian_core::{
     audio::{AudioBackend, EnvelopeCurveType, ThreadCount},
     protocol::{AudioRenderStatus, CoreEvent, MidiAnalysisData, StateSnapshot},
     render::{
-        KeyboardHeightSpec, KeyboardProjectorConfig, NoteProjectorConfig, RendererKind,
-        SceneConfig, ThreeDSceneConfig,
+        KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
+        PfaTopColor, ProjectorImageConfig, RendererKind, SceneConfig, ThreeDSceneConfig,
+        ZenithPaletteSpec,
     },
 };
 use slint::{ModelRc, SharedString, VecModel};
@@ -181,6 +182,7 @@ fn apply_state_to_app(app: &App, shared_state: &Arc<Mutex<UiViewModel>>, state: 
     app.set_inspector_items(ModelRc::from(std::rc::Rc::new(VecModel::from(
         rows_for_scene(&state.scene),
     ))));
+    apply_video_scene_to_app(app, state);
     app.set_play_label(if state.playing {
         "Pause".into()
     } else {
@@ -243,6 +245,191 @@ fn renderer_summary(scene: &SceneConfig) -> &'static str {
             _ => "mixed",
         },
         SceneConfig::ThreeD(_) => "3d",
+    }
+}
+
+fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
+    app.set_video_view_range_value_text(format!("{:.1}", state.view_range).into());
+    app.set_video_first_key_text(state.first_key.to_string().into());
+    app.set_video_last_key_text(state.last_key.to_string().into());
+
+    match &state.scene {
+        SceneConfig::TwoD(config) => {
+            match config.keyboard_height {
+                KeyboardHeightSpec::ScreenPercent { height } => {
+                    app.set_video_keyboard_height_mode_text("screen_percent".into());
+                    app.set_video_keyboard_height_value_text(format!("{height:.5}").into());
+                }
+                KeyboardHeightSpec::AspectRatio { ratio } => {
+                    app.set_video_keyboard_height_mode_text("aspect_ratio".into());
+                    app.set_video_keyboard_height_value_text(format!("{ratio:.5}").into());
+                }
+            }
+
+            match &config.notes {
+                NoteProjectorConfig::Flat(notes) => {
+                    app.set_video_note_same_width_text("off".into());
+                    app.set_video_border_width_text("1.0".into());
+                    apply_palette_to_app(app, &notes.palette);
+                }
+                NoteProjectorConfig::Pfa(notes) => {
+                    app.set_video_note_same_width_text(on_off(notes.same_width_notes).into());
+                    app.set_video_border_width_text(format!("{:.1}", notes.border_width).into());
+                    apply_palette_to_app(app, &notes.palette);
+                }
+            }
+
+            match &config.keyboard {
+                KeyboardProjectorConfig::Flat(_) => {
+                    app.set_video_keyboard_same_width_text("off".into());
+                    app.set_video_middle_c_text("off".into());
+                    app.set_video_top_color_text("red".into());
+                    app.set_video_top_bar_rgb_text("0.5850, 0.0392, 0.0249".into());
+                }
+                KeyboardProjectorConfig::Pfa(keyboard) => {
+                    app.set_video_keyboard_same_width_text(
+                        on_off(keyboard.same_width_notes).into(),
+                    );
+                    app.set_video_middle_c_text(on_off(keyboard.middle_c).into());
+                    app.set_video_top_color_text(top_color_name(keyboard).into());
+                    app.set_video_top_bar_rgb_text(
+                        format!(
+                            "{:.4}, {:.4}, {:.4}",
+                            keyboard.top_bar_rgb[0],
+                            keyboard.top_bar_rgb[1],
+                            keyboard.top_bar_rgb[2]
+                        )
+                        .into(),
+                    );
+                }
+            }
+
+            apply_ptc_defaults_to_app(app);
+        }
+        SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => {
+            app.set_video_keyboard_height_mode_text("aspect_ratio".into());
+            app.set_video_keyboard_height_value_text("0.08494".into());
+            app.set_video_note_same_width_text("off".into());
+            app.set_video_border_width_text("1.0".into());
+            app.set_video_keyboard_same_width_text("off".into());
+            app.set_video_middle_c_text("off".into());
+            app.set_video_top_color_text("red".into());
+            app.set_video_top_bar_rgb_text("0.5850, 0.0392, 0.0249".into());
+            apply_palette_to_app(app, &config.palette);
+
+            app.set_video_ptc_same_width_text(on_off(config.same_width_notes).into());
+            app.set_video_ptc_fov_text(format!("{:.1}", config.fov.to_degrees()).into());
+            app.set_video_ptc_view_height_text(format!("{:.2}", config.view_height).into());
+            app.set_video_ptc_view_offset_text(format!("{:.2}", config.view_offset).into());
+            app.set_video_ptc_view_pan_text(format!("{:.2}", config.view_pan).into());
+            app.set_video_ptc_cam_ang_text(format!("{:.2}", config.cam_ang).into());
+            app.set_video_ptc_cam_rot_text(format!("{:.2}", config.cam_rot).into());
+            app.set_video_ptc_cam_spin_text(format!("{:.2}", config.cam_spin).into());
+            app.set_video_ptc_viewdist_text(format!("{:.1}", config.viewdist).into());
+            app.set_video_ptc_viewback_text(format!("{:.2}", config.viewback).into());
+            app.set_video_ptc_vertical_notes_text(on_off(config.vertical_notes).into());
+            app.set_video_ptc_note_down_speed_text(format!("{:.2}", config.note_down_speed).into());
+            app.set_video_ptc_note_up_speed_text(format!("{:.2}", config.note_up_speed).into());
+            app.set_video_ptc_box_notes_text(on_off(config.box_notes).into());
+            app.set_video_ptc_light_shade_text(on_off(config.light_shade).into());
+            app.set_video_ptc_show_keyboard_text(on_off(config.show_keyboard).into());
+            app.set_video_ptc_tilt_keys_text(on_off(config.tilt_keys).into());
+            app.set_video_ptc_eat_notes_text(on_off(config.eat_notes).into());
+            app.set_video_ptc_aura_enabled_text(on_off(config.aura_enabled).into());
+            app.set_video_ptc_aura_strength_text(format!("{:.1}", config.aura_strength).into());
+            app.set_video_ptc_notes_change_size_text(on_off(config.notes_change_size).into());
+            app.set_video_ptc_notes_change_tint_text(on_off(config.notes_change_tint).into());
+            app.set_video_ptc_use_vel_text(on_off(config.use_vel).into());
+            match &config.aura_image {
+                ProjectorImageConfig::Builtin { name } => {
+                    app.set_video_ptc_aura_image_source_text("builtin".into());
+                    app.set_video_ptc_aura_image_name_text(name.clone().into());
+                    app.set_video_ptc_aura_image_path_text("(aura png)".into());
+                }
+                ProjectorImageConfig::PngFile { path } => {
+                    app.set_video_ptc_aura_image_source_text("png_file".into());
+                    app.set_video_ptc_aura_image_name_text("ring".into());
+                    app.set_video_ptc_aura_image_path_text(path.clone().into());
+                }
+            }
+        }
+    }
+}
+
+fn apply_ptc_defaults_to_app(app: &App) {
+    app.set_video_ptc_same_width_text("on".into());
+    app.set_video_ptc_fov_text("60.0".into());
+    app.set_video_ptc_view_height_text("0.50".into());
+    app.set_video_ptc_view_offset_text("0.40".into());
+    app.set_video_ptc_view_pan_text("0.00".into());
+    app.set_video_ptc_cam_ang_text("0.56".into());
+    app.set_video_ptc_cam_rot_text("0.00".into());
+    app.set_video_ptc_cam_spin_text("0.00".into());
+    app.set_video_ptc_viewdist_text("14.0".into());
+    app.set_video_ptc_viewback_text("0.20".into());
+    app.set_video_ptc_vertical_notes_text("off".into());
+    app.set_video_ptc_note_down_speed_text("0.60".into());
+    app.set_video_ptc_note_up_speed_text("0.20".into());
+    app.set_video_ptc_box_notes_text("on".into());
+    app.set_video_ptc_light_shade_text("off".into());
+    app.set_video_ptc_show_keyboard_text("on".into());
+    app.set_video_ptc_tilt_keys_text("on".into());
+    app.set_video_ptc_eat_notes_text("off".into());
+    app.set_video_ptc_aura_enabled_text("on".into());
+    app.set_video_ptc_aura_strength_text("2.0".into());
+    app.set_video_ptc_notes_change_size_text("off".into());
+    app.set_video_ptc_notes_change_tint_text("on".into());
+    app.set_video_ptc_use_vel_text("off".into());
+    app.set_video_ptc_aura_image_source_text("builtin".into());
+    app.set_video_ptc_aura_image_name_text("ring".into());
+    app.set_video_ptc_aura_image_path_text("(aura png)".into());
+}
+
+fn apply_palette_to_app(app: &App, palette: &NotePaletteConfig) {
+    match palette {
+        NotePaletteConfig::DefaultTrackColors => {
+            app.set_video_palette_source_text("default_track_colors".into());
+            app.set_video_palette_kind_text("random".into());
+            app.set_video_palette_randomize_text("on".into());
+            app.set_video_palette_path_text("(palette png)".into());
+        }
+        NotePaletteConfig::ZenithPalette { palette, randomize } => {
+            app.set_video_palette_source_text("zenith_palette".into());
+            app.set_video_palette_randomize_text(on_off(*randomize).into());
+            match palette {
+                ZenithPaletteSpec::Random => {
+                    app.set_video_palette_kind_text("random".into());
+                    app.set_video_palette_path_text("(palette png)".into());
+                }
+                ZenithPaletteSpec::RandomGradients => {
+                    app.set_video_palette_kind_text("random_gradients".into());
+                    app.set_video_palette_path_text("(palette png)".into());
+                }
+                ZenithPaletteSpec::PngFile { path } => {
+                    app.set_video_palette_kind_text("png_file".into());
+                    app.set_video_palette_path_text(path.display().to_string().into());
+                }
+            }
+        }
+    }
+}
+
+fn on_off(value: bool) -> &'static str {
+    if value { "on" } else { "off" }
+}
+
+fn top_color_name(config: &meridian_core::render::PfaKeyboardProjectorConfig) -> &'static str {
+    match config.top_color {
+        PfaTopColor::Blue => "blue",
+        PfaTopColor::Green => "green",
+        PfaTopColor::Red => {
+            let red = [0.585, 0.0392, 0.0249];
+            if config.top_bar_rgb == red {
+                "red"
+            } else {
+                "custom"
+            }
+        }
     }
 }
 

@@ -8,7 +8,31 @@ use xsynth_core::{
 };
 use xsynth_realtime::XSynthRealtimeConfig;
 
-pub const DEFAULT_SOUNDFONT: &str = "/mnt/fat/Midis/Soundfonts/Loud and Proud Remastered/Axley Presets/Loud and Proud Remastered.sfz";
+pub const DEFAULT_SOUNDFONT: &str =
+    "assets/soundfonts/freepats-upright-kw-small/UprightPianoKW-small-20190703.sfz";
+
+fn default_soundfont_path() -> PathBuf {
+    if let Some(path) = std::env::var_os("MERIDIAN_SOUNDFONT") {
+        return PathBuf::from(path);
+    }
+
+    let relative = PathBuf::from(DEFAULT_SOUNDFONT);
+    if relative.exists() {
+        return relative;
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        let exe_assets = exe
+            .parent()
+            .map(|parent| parent.join(DEFAULT_SOUNDFONT))
+            .unwrap_or_else(|| relative.clone());
+        if exe_assets.exists() {
+            return exe_assets;
+        }
+    }
+
+    PathBuf::from(DEFAULT_SOUNDFONT)
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -28,7 +52,7 @@ pub struct MeridianSoundfont {
 impl Default for MeridianSoundfont {
     fn default() -> Self {
         Self {
-            path: PathBuf::from(DEFAULT_SOUNDFONT),
+            path: default_soundfont_path(),
             enabled: true,
             options: Default::default(),
         }

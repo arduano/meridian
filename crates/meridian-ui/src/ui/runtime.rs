@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
     rc::Rc,
     sync::atomic::{AtomicU64, Ordering},
-    sync::{Arc, Mutex},
+    sync::{Arc, LazyLock, Mutex},
     time::Duration,
 };
 
@@ -16,7 +16,11 @@ use meridian_core::{
     },
     midi::MidiProcessingConfig,
     protocol::{CoreEvent, ParsedMidiId, ProcessedMidiId},
-    render::{DisplayTimeSpace, RendererKind},
+    render::{
+        DisplayTimeSpace, KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig,
+        NoteProjectorConfig, PfaTopColor, PianoTrailClassicSceneConfig, ProjectorImageConfig,
+        RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
+    },
     spawn_core,
 };
 use slint::ComponentHandle;
@@ -29,6 +33,9 @@ use super::{
     view_model::UiViewModel,
     viewport::ViewportRenderer,
 };
+
+static LAST_PALETTE_PNG: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
+static LAST_AURA_PNG: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 
 pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let backend_selector = slint::BackendSelector::new();
@@ -112,6 +119,7 @@ fn wire_callbacks(
     analysis_load_generation: &Arc<AtomicU64>,
 ) {
     wire_transport_callbacks(app, bridge, shared_state);
+    wire_video_callbacks(app, bridge, shared_state);
     wire_audio_config_callbacks(app, bridge, shared_state);
     wire_midi_callbacks(
         app,
@@ -135,6 +143,47 @@ fn selected_or_empty_state(app: &App) -> MidiLoadState {
         MidiLoadState::NoMidi
     } else {
         MidiLoadState::Selected
+    }
+}
+
+fn update_video_scene(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    mutate: impl FnOnce(&mut SceneConfig),
+) {
+    if let Ok(events) = bridge.update_scene(shared_state, mutate) {
+        apply_events_to_app(app, shared_state, &events);
+        app.window().request_redraw();
+    }
+}
+
+fn update_video_key_range(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    first_key: u8,
+    last_key: u8,
+) {
+    if let Ok(events) = bridge.set_key_range(
+        first_key.min(last_key),
+        first_key.max(last_key),
+        shared_state,
+    ) {
+        apply_events_to_app(app, shared_state, &events);
+        app.window().request_redraw();
+    }
+}
+
+fn update_video_view_range(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    seconds: f64,
+) {
+    if let Ok(events) = bridge.set_view_range_value(seconds.clamp(1.0, 30.0), shared_state) {
+        apply_events_to_app(app, shared_state, &events);
+        app.window().request_redraw();
     }
 }
 
@@ -278,6 +327,414 @@ fn wire_transport_callbacks(
                     apply_events_to_app(&app, &shared_state, &events);
                 }
                 app.window().request_redraw();
+            }
+        });
+    }
+}
+
+fn wire_video_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mutex<UiViewModel>>) {
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_update_video_control(move |key, value| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            match key.as_str() {
+                "view_range" => {
+                    let Ok(seconds) = value.parse::<f64>() else {
+                        return;
+                    };
+                    update_video_view_range(&app, &bridge, &shared_state, seconds);
+                }
+                "first_key" => {
+                    let Ok(first_key) = value.parse::<u8>() else {
+                        return;
+                    };
+                    let last_key = shared_state
+                        .lock()
+                        .expect("shared UI state mutex poisoned")
+                        .snapshot
+                        .as_ref()
+                        .map(|snapshot| snapshot.last_key)
+                        .unwrap_or(127);
+                    update_video_key_range(&app, &bridge, &shared_state, first_key, last_key);
+                }
+                "last_key" => {
+                    let Ok(last_key) = value.parse::<u8>() else {
+                        return;
+                    };
+                    let first_key = shared_state
+                        .lock()
+                        .expect("shared UI state mutex poisoned")
+                        .snapshot
+                        .as_ref()
+                        .map(|snapshot| snapshot.first_key)
+                        .unwrap_or(0);
+                    update_video_key_range(&app, &bridge, &shared_state, first_key, last_key);
+                }
+                "keyboard_height_mode" => {
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        let SceneConfig::TwoD(config) = scene else {
+                            return;
+                        };
+                        let current = match config.keyboard_height {
+                            KeyboardHeightSpec::ScreenPercent { height } => height,
+                            KeyboardHeightSpec::AspectRatio { ratio } => ratio,
+                        };
+                        config.keyboard_height = if value.as_str() == "screen_percent" {
+                            KeyboardHeightSpec::ScreenPercent { height: current }
+                        } else {
+                            KeyboardHeightSpec::AspectRatio { ratio: current }
+                        };
+                    });
+                }
+                "keyboard_height_value" => {
+                    let Ok(parsed) = value.parse::<f32>() else {
+                        return;
+                    };
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        let SceneConfig::TwoD(config) = scene else {
+                            return;
+                        };
+                        config.keyboard_height = match config.keyboard_height {
+                            KeyboardHeightSpec::ScreenPercent { .. } => {
+                                KeyboardHeightSpec::ScreenPercent { height: parsed }
+                            }
+                            KeyboardHeightSpec::AspectRatio { .. } => {
+                                KeyboardHeightSpec::AspectRatio { ratio: parsed }
+                            }
+                        };
+                    });
+                }
+                "pfa_note_same_width" => update_pfa_note_bool(
+                    &app,
+                    &bridge,
+                    &shared_state,
+                    value.as_str(),
+                    |config, enabled| config.same_width_notes = enabled,
+                ),
+                "pfa_border_width" => {
+                    let Ok(parsed) = value.parse::<f32>() else {
+                        return;
+                    };
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        if let SceneConfig::TwoD(config) = scene {
+                            if let NoteProjectorConfig::Pfa(notes) = &mut config.notes {
+                                notes.border_width = parsed;
+                            }
+                        }
+                    });
+                }
+                "pfa_keyboard_same_width" => update_pfa_keyboard_bool(
+                    &app,
+                    &bridge,
+                    &shared_state,
+                    value.as_str(),
+                    |config, enabled| config.same_width_notes = enabled,
+                ),
+                "pfa_middle_c" => update_pfa_keyboard_bool(
+                    &app,
+                    &bridge,
+                    &shared_state,
+                    value.as_str(),
+                    |config, enabled| config.middle_c = enabled,
+                ),
+                "pfa_top_color" => {
+                    let color = match value.as_str() {
+                        "blue" => PfaTopColor::Blue,
+                        "green" => PfaTopColor::Green,
+                        _ => PfaTopColor::Red,
+                    };
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        if let SceneConfig::TwoD(config) = scene {
+                            if let KeyboardProjectorConfig::Pfa(keyboard) = &mut config.keyboard {
+                                keyboard.top_color = color;
+                            }
+                        }
+                    });
+                }
+                "pfa_top_bar_rgb" => {
+                    let Some(rgb) = parse_rgb_triplet(value.as_str()) else {
+                        return;
+                    };
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        if let SceneConfig::TwoD(config) = scene {
+                            if let KeyboardProjectorConfig::Pfa(keyboard) = &mut config.keyboard {
+                                keyboard.set_top_bar_rgb(rgb);
+                            }
+                        }
+                    });
+                }
+                "palette_source" => {
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        let Some(palette) = palette_mut(scene) else {
+                            return;
+                        };
+                        *palette = if value.as_str() == "zenith_palette" {
+                            NotePaletteConfig::ZenithPalette {
+                                palette: ZenithPaletteSpec::Random,
+                                randomize: true,
+                            }
+                        } else {
+                            NotePaletteConfig::DefaultTrackColors
+                        };
+                    });
+                }
+                "palette_kind" => {
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        let Some(NotePaletteConfig::ZenithPalette { palette, .. }) =
+                            palette_mut(scene)
+                        else {
+                            return;
+                        };
+                        *palette = match value.as_str() {
+                            "random_gradients" => ZenithPaletteSpec::RandomGradients,
+                            "png_file" => match LAST_PALETTE_PNG
+                                .lock()
+                                .expect("palette png mutex poisoned")
+                                .clone()
+                            {
+                                Some(path) => ZenithPaletteSpec::PngFile { path },
+                                None => return,
+                            },
+                            _ => ZenithPaletteSpec::Random,
+                        };
+                    });
+                }
+                "palette_randomize" => {
+                    let enabled = bool_from_label(value.as_str());
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        if let Some(NotePaletteConfig::ZenithPalette { randomize, .. }) =
+                            palette_mut(scene)
+                        {
+                            *randomize = enabled;
+                        }
+                    });
+                }
+                "ptc_same_width_notes" => {
+                    update_ptc_bool(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.same_width_notes = v
+                    })
+                }
+                "ptc_vertical_notes" => {
+                    update_ptc_bool(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.vertical_notes = v
+                    })
+                }
+                "ptc_box_notes" => {
+                    update_ptc_bool(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.box_notes = v
+                    })
+                }
+                "ptc_light_shade" => {
+                    update_ptc_bool(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.light_shade = v
+                    })
+                }
+                "ptc_show_keyboard" => {
+                    update_ptc_bool(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.show_keyboard = v
+                    })
+                }
+                "ptc_tilt_keys" => {
+                    update_ptc_bool(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.tilt_keys = v
+                    })
+                }
+                "ptc_eat_notes" => {
+                    update_ptc_bool(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.eat_notes = v
+                    })
+                }
+                "ptc_aura_enabled" => {
+                    update_ptc_bool(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.aura_enabled = v
+                    })
+                }
+                "ptc_notes_change_size" => {
+                    update_ptc_bool(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.notes_change_size = v
+                    })
+                }
+                "ptc_notes_change_tint" => {
+                    update_ptc_bool(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.notes_change_tint = v
+                    })
+                }
+                "ptc_use_vel" => {
+                    update_ptc_bool(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.use_vel = v
+                    })
+                }
+                "ptc_fov" => {
+                    update_ptc_f32(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.fov = v.to_radians()
+                    })
+                }
+                "ptc_view_height" => {
+                    update_ptc_f32(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.view_height = v
+                    })
+                }
+                "ptc_view_offset" => {
+                    update_ptc_f32(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.view_offset = v
+                    })
+                }
+                "ptc_view_pan" => {
+                    update_ptc_f32(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.view_pan = v
+                    })
+                }
+                "ptc_cam_ang" => {
+                    update_ptc_f32(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.cam_ang = v
+                    })
+                }
+                "ptc_cam_rot" => {
+                    update_ptc_f32(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.cam_rot = v
+                    })
+                }
+                "ptc_cam_spin" => {
+                    update_ptc_f32(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.cam_spin = v
+                    })
+                }
+                "ptc_viewdist" => {
+                    update_ptc_f32(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.viewdist = v
+                    })
+                }
+                "ptc_viewback" => {
+                    update_ptc_f32(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.viewback = v
+                    })
+                }
+                "ptc_note_down_speed" => {
+                    update_ptc_f32(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.note_down_speed = v
+                    })
+                }
+                "ptc_note_up_speed" => {
+                    update_ptc_f32(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.note_up_speed = v
+                    })
+                }
+                "ptc_aura_strength" => {
+                    update_ptc_f32(&app, &bridge, &shared_state, value.as_str(), |c, v| {
+                        c.aura_strength = v
+                    })
+                }
+                "ptc_aura_image_source" => {
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        let Some(config) = ptc_mut(scene) else {
+                            return;
+                        };
+                        config.aura_image = if value.as_str() == "builtin" {
+                            ProjectorImageConfig::Builtin {
+                                name: "ring".into(),
+                            }
+                        } else {
+                            match LAST_AURA_PNG
+                                .lock()
+                                .expect("aura png mutex poisoned")
+                                .clone()
+                            {
+                                Some(path) => ProjectorImageConfig::PngFile { path },
+                                None => return,
+                            }
+                        };
+                    });
+                }
+                "ptc_aura_image_builtin" => {
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        let Some(config) = ptc_mut(scene) else {
+                            return;
+                        };
+                        config.aura_image = ProjectorImageConfig::Builtin {
+                            name: value.to_string(),
+                        };
+                    });
+                }
+                _ => {}
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_browse_video_asset(move |target| {
+            let app_weak = app_weak.clone();
+            let bridge = bridge.clone();
+            let shared_state = Arc::clone(&shared_state);
+            std::thread::spawn(move || {
+                let file = rfd::FileDialog::new()
+                    .add_filter("PNG", &["png", "PNG"])
+                    .add_filter("All files", &["*"])
+                    .pick_file();
+                if let Some(path) = file {
+                    let target = target.to_string();
+                    let _ = app_weak.upgrade_in_event_loop(move |app| match target.as_str() {
+                        "palette_png" => {
+                            *LAST_PALETTE_PNG.lock().expect("palette png mutex poisoned") =
+                                Some(path.clone());
+                            update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                                if let Some(NotePaletteConfig::ZenithPalette { palette, .. }) =
+                                    palette_mut(scene)
+                                {
+                                    *palette = ZenithPaletteSpec::PngFile { path };
+                                }
+                            });
+                        }
+                        "aura_png" => {
+                            *LAST_AURA_PNG.lock().expect("aura png mutex poisoned") =
+                                Some(path.display().to_string());
+                            update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                                if let Some(config) = ptc_mut(scene) {
+                                    config.aura_image = ProjectorImageConfig::PngFile {
+                                        path: path.display().to_string(),
+                                    };
+                                }
+                            });
+                        }
+                        _ => {}
+                    });
+                }
+            });
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_reset_video_asset(move |target| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            match target.as_str() {
+                "palette_png" => {
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        if let Some(NotePaletteConfig::ZenithPalette { palette, .. }) =
+                            palette_mut(scene)
+                        {
+                            *palette = ZenithPaletteSpec::Random;
+                        }
+                    });
+                }
+                "aura_png" => {
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        if let Some(config) = ptc_mut(scene) {
+                            config.aura_image = ProjectorImageConfig::Builtin {
+                                name: "ring".into(),
+                            };
+                        }
+                    });
+                }
+                _ => {}
             }
         });
     }
@@ -532,6 +989,107 @@ fn envelope_curve_from_label(label: &str) -> EnvelopeCurveType {
         "linear" => EnvelopeCurveType::Linear,
         _ => EnvelopeCurveType::Exponential,
     }
+}
+
+fn bool_from_label(label: &str) -> bool {
+    matches!(label, "on" | "yes" | "true" | "1")
+}
+
+fn parse_rgb_triplet(value: &str) -> Option<[f32; 3]> {
+    let parts: Vec<_> = value.split(',').map(str::trim).collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    Some([
+        parts[0].parse().ok()?,
+        parts[1].parse().ok()?,
+        parts[2].parse().ok()?,
+    ])
+}
+
+fn palette_mut(scene: &mut SceneConfig) -> Option<&mut NotePaletteConfig> {
+    match scene {
+        SceneConfig::TwoD(config) => match &mut config.notes {
+            NoteProjectorConfig::Flat(notes) => Some(&mut notes.palette),
+            NoteProjectorConfig::Pfa(notes) => Some(&mut notes.palette),
+        },
+        SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => {
+            Some(&mut config.palette)
+        }
+    }
+}
+
+fn ptc_mut(scene: &mut SceneConfig) -> Option<&mut PianoTrailClassicSceneConfig> {
+    match scene {
+        SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => Some(config),
+        _ => None,
+    }
+}
+
+fn update_pfa_note_bool(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    value: &str,
+    mutate: impl Fn(&mut meridian_core::render::PfaNoteProjectorConfig, bool) + 'static,
+) {
+    let enabled = bool_from_label(value);
+    update_video_scene(app, bridge, shared_state, move |scene| {
+        if let SceneConfig::TwoD(config) = scene {
+            if let NoteProjectorConfig::Pfa(notes) = &mut config.notes {
+                mutate(notes, enabled);
+            }
+        }
+    });
+}
+
+fn update_pfa_keyboard_bool(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    value: &str,
+    mutate: impl Fn(&mut meridian_core::render::PfaKeyboardProjectorConfig, bool) + 'static,
+) {
+    let enabled = bool_from_label(value);
+    update_video_scene(app, bridge, shared_state, move |scene| {
+        if let SceneConfig::TwoD(config) = scene {
+            if let KeyboardProjectorConfig::Pfa(keyboard) = &mut config.keyboard {
+                mutate(keyboard, enabled);
+            }
+        }
+    });
+}
+
+fn update_ptc_bool(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    value: &str,
+    mutate: impl Fn(&mut PianoTrailClassicSceneConfig, bool) + 'static,
+) {
+    let enabled = bool_from_label(value);
+    update_video_scene(app, bridge, shared_state, move |scene| {
+        if let Some(config) = ptc_mut(scene) {
+            mutate(config, enabled);
+        }
+    });
+}
+
+fn update_ptc_f32(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    value: &str,
+    mutate: impl Fn(&mut PianoTrailClassicSceneConfig, f32) + 'static,
+) {
+    let Ok(parsed) = value.parse::<f32>() else {
+        return;
+    };
+    update_video_scene(app, bridge, shared_state, move |scene| {
+        if let Some(config) = ptc_mut(scene) {
+            mutate(config, parsed);
+        }
+    });
 }
 
 /// Wire MIDI file selection, loading, unloading, and drag-drop callbacks.

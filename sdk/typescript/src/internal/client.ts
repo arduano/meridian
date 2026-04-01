@@ -25,20 +25,22 @@ import {
   type MidiAnalysisJobStatusEventWrapper,
   type MidiAnalysisKind,
   type MidiFileProcessingConfig,
+  type MidiLoadedEvent,
   type MidiModifierTool,
-  type NoteLengthTool,
-  type OverlapRepairTool,
   type MidiProcessEvent,
   type MidiProcessEventWrapper,
   type MidiProcessJobId,
   type MidiProcessStatus,
   type MidiProcessStatusEventWrapper,
+  type NoteLengthTool,
+  type OverlapRepairTool,
   type ParsedMidiId,
   type PitchBendTool,
   type ProgramTool,
+  PROTOCOL_VERSION,
+  type ProtocolVideoRenderConfig,
   type QuantizeTool,
   type RangeSelectTool,
-  PROTOCOL_VERSION,
   type ResponseFor,
   type SdkAudioRenderConfig,
   type SysexTool,
@@ -47,6 +49,11 @@ import {
   type TimeWarpTool,
   type TrackRouteTool,
   type VelocityMapTool,
+  type VideoRenderEvent,
+  type VideoRenderEventWrapper,
+  type VideoRenderJobId,
+  type VideoRenderStatus,
+  type VideoRenderStatusEventWrapper,
 } from "../protocol.ts";
 import type { MeridianRuntimeAdapter, MeridianSubprocess } from "./runtime.ts";
 
@@ -579,6 +586,21 @@ export interface AudioRenderOptions {
   onEvent?: (event: AudioRenderEvent) => void;
 }
 
+export interface VideoRenderOptions {
+  midiPath: string;
+  output: string;
+  fps: number;
+  width: number;
+  height: number;
+  renderer: ProtocolVideoRenderConfig["renderer"];
+  viewRange?: number | null;
+  timeSpace?: ProtocolVideoRenderConfig["time_space"];
+  firstKey?: number | null;
+  lastKey?: number | null;
+  ffmpegArgs?: string[];
+  onEvent?: (event: VideoRenderEvent) => void;
+}
+
 export interface MidiToolTaskOptions {
   inputs: string[];
   output: string;
@@ -624,7 +646,7 @@ function analysisOptionsToSpec(
     midiPath,
     kinds: uniqueKinds(kinds),
     bucketCount,
-    onProgress: options.onProgress,
+    ...(options.onProgress ? { onProgress: options.onProgress } : {}),
   };
 }
 
@@ -681,14 +703,14 @@ export class MidiAnalysisTask implements PromiseLike<MidiAnalysisData> {
       midiPath: this.#spec.midiPath,
       kinds: [...(this.#spec.kinds ?? [])],
       bucketCount: this.#spec.bucketCount ?? null,
-      onProgress: this.#spec.onProgress,
+      ...(this.#spec.onProgress ? { onProgress: this.#spec.onProgress } : {}),
     };
   }
 }
 
 export class MidiProcessTask
-  implements PromiseLike<Extract<MidiProcessEvent, { type: "process_finished" }>>
-{
+  implements
+    PromiseLike<Extract<MidiProcessEvent, { type: "process_finished" }>> {
   #client: MeridianClient;
   #options: MidiToolTaskOptions;
   #handlePromise: Promise<MidiProcessJobHandle> | null = null;
@@ -702,8 +724,8 @@ export class MidiProcessTask
       inputs: [...options.inputs],
       output: options.output,
       tool: structuredClone(options.tool),
-      config: options.config ? structuredClone(options.config) : undefined,
-      onEvent: options.onEvent,
+      ...(options.config ? { config: structuredClone(options.config) } : {}),
+      ...(options.onEvent ? { onEvent: options.onEvent } : {}),
     };
   }
 
@@ -733,7 +755,9 @@ export class MidiProcessTask
 
   catch<TResult = never>(
     onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null,
-  ): Promise<Extract<MidiProcessEvent, { type: "process_finished" }> | TResult> {
+  ): Promise<
+    Extract<MidiProcessEvent, { type: "process_finished" }> | TResult
+  > {
     return Promise.resolve(this).catch(onrejected);
   }
 
@@ -752,17 +776,116 @@ export class MidiProcessTask
       inputs: [...this.#options.inputs],
       output: this.#options.output,
       tool: structuredClone(this.#options.tool),
-      config: this.#options.config
-        ? structuredClone(this.#options.config)
-        : undefined,
-      onEvent: this.#options.onEvent,
+      ...(this.#options.config
+        ? { config: structuredClone(this.#options.config) }
+        : {}),
+      ...(this.#options.onEvent ? { onEvent: this.#options.onEvent } : {}),
     };
   }
 }
 
+export class VideoRenderJobHandle {
+  readonly jobId: VideoRenderJobId;
+  #protocol: MeridianProtocolClient;
+  #unsubscribe: (() => void) | null = null;
+  #eventListeners = new Set<(event: VideoRenderEvent) => void>();
+  #done: Promise<Extract<VideoRenderEvent, { type: "render_finished" }>>;
+  #resolve!: (
+    value: Extract<VideoRenderEvent, { type: "render_finished" }>,
+  ) => void;
+  #reject!: (error: Error) => void;
+  #status: VideoRenderStatus;
+
+  constructor(
+    protocol: MeridianProtocolClient,
+    initialStatus: VideoRenderStatus,
+  ) {
+    if (initialStatus.state === "idle") {
+      throw new MeridianSubprocessError(
+        "Cannot create a video render handle from idle status",
+      );
+    }
+    this.#protocol = protocol;
+    this.#status = initialStatus;
+    this.jobId = initialStatus.job_id;
+    this.#done = new Promise((resolve, reject) => {
+      this.#resolve = resolve;
+      this.#reject = reject;
+    });
+    this.#unsubscribe = protocol.onEvent((event) => this.#handleEvent(event));
+  }
+
+  onEvent(listener: (event: VideoRenderEvent) => void): () => void {
+    this.#eventListeners.add(listener);
+    return () => {
+      this.#eventListeners.delete(listener);
+    };
+  }
+
+  async refreshStatus(): Promise<VideoRenderStatus> {
+    const events = await this.#protocol.request({
+      type: "get_render_video_status",
+    });
+    const wrapper = requireEvent(events, "video_render_status");
+    this.#status = wrapper.status;
+    return this.#status;
+  }
+
+  async cancel(): Promise<VideoRenderStatus> {
+    const events = await this.#protocol.request({
+      type: "cancel_render_video",
+    });
+    const wrapper = requireEvent(events, "video_render_status");
+    this.#status = wrapper.status;
+    return this.#status;
+  }
+
+  wait(): Promise<Extract<VideoRenderEvent, { type: "render_finished" }>> {
+    return this.#done;
+  }
+
+  #handleEvent(event: CoreEvent): void {
+    if (event.type === "video_render_status") {
+      this.#status = (event as VideoRenderStatusEventWrapper).status;
+      return;
+    }
+    if (event.type !== "video_render") {
+      return;
+    }
+    const wrapped = event as VideoRenderEventWrapper;
+    if ("job_id" in wrapped.event && wrapped.event.job_id !== this.jobId) {
+      return;
+    }
+    for (const listener of this.#eventListeners) {
+      listener(wrapped.event);
+    }
+    switch (wrapped.event.type) {
+      case "render_finished":
+        this.#unsubscribe?.();
+        this.#unsubscribe = null;
+        this.#resolve(wrapped.event);
+        break;
+      case "render_cancelled":
+        this.#unsubscribe?.();
+        this.#unsubscribe = null;
+        this.#reject(
+          new MeridianSubprocessError("Video render job was cancelled"),
+        );
+        break;
+      case "render_failed":
+        this.#unsubscribe?.();
+        this.#unsubscribe = null;
+        this.#reject(new MeridianSubprocessError(wrapped.event.message));
+        break;
+      default:
+        break;
+    }
+  }
+}
+
 export class AudioRenderTask
-  implements PromiseLike<Extract<AudioRenderEvent, { type: "render_finished" }>>
-{
+  implements
+    PromiseLike<Extract<AudioRenderEvent, { type: "render_finished" }>> {
   #client: MeridianClient;
   #options: AudioRenderOptions;
   #handlePromise: Promise<AudioRenderJobHandle> | null = null;
@@ -779,7 +902,7 @@ export class AudioRenderTask
       channels: options.channels ?? null,
       useLimiter: options.useLimiter ?? null,
       soundfonts: options.soundfonts ? [...options.soundfonts] : [],
-      onEvent: options.onEvent,
+      ...(options.onEvent ? { onEvent: options.onEvent } : {}),
     };
   }
 
@@ -831,23 +954,122 @@ export class AudioRenderTask
       channels: this.#options.channels ?? null,
       useLimiter: this.#options.useLimiter ?? null,
       soundfonts: [...(this.#options.soundfonts ?? [])],
-      onEvent: this.#options.onEvent,
+      ...(this.#options.onEvent ? { onEvent: this.#options.onEvent } : {}),
+    };
+  }
+}
+
+export class VideoRenderTask
+  implements
+    PromiseLike<Extract<VideoRenderEvent, { type: "render_finished" }>> {
+  #client: MeridianClient;
+  #options: VideoRenderOptions;
+  #handlePromise: Promise<VideoRenderJobHandle> | null = null;
+  #resultPromise:
+    | Promise<Extract<VideoRenderEvent, { type: "render_finished" }>>
+    | null = null;
+
+  constructor(client: MeridianClient, options: VideoRenderOptions) {
+    this.#client = client;
+    this.#options = {
+      midiPath: options.midiPath,
+      output: options.output,
+      fps: options.fps,
+      width: options.width,
+      height: options.height,
+      renderer: options.renderer,
+      viewRange: options.viewRange ?? null,
+      timeSpace: options.timeSpace ?? null,
+      firstKey: options.firstKey ?? null,
+      lastKey: options.lastKey ?? null,
+      ffmpegArgs: options.ffmpegArgs ? [...options.ffmpegArgs] : [],
+      ...(options.onEvent ? { onEvent: options.onEvent } : {}),
+    };
+  }
+
+  start(): Promise<VideoRenderJobHandle> {
+    if (!this.#handlePromise) {
+      this.#handlePromise = this.#client.startVideoRender(this.#snapshot());
+    }
+    return this.#handlePromise;
+  }
+
+  then<
+    TResult1 = Extract<VideoRenderEvent, { type: "render_finished" }>,
+    TResult2 = never,
+  >(
+    onfulfilled?:
+      | ((
+        value: Extract<VideoRenderEvent, { type: "render_finished" }>,
+      ) => TResult1 | PromiseLike<TResult1>)
+      | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2> {
+    if (!this.#resultPromise) {
+      this.#resultPromise = this.start().then((handle) => handle.wait());
+    }
+    return this.#resultPromise.then(onfulfilled, onrejected);
+  }
+
+  catch<TResult = never>(
+    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null,
+  ): Promise<Extract<VideoRenderEvent, { type: "render_finished" }> | TResult> {
+    return Promise.resolve(this).catch(onrejected);
+  }
+
+  finally(
+    onfinally?: (() => void) | null,
+  ): Promise<Extract<VideoRenderEvent, { type: "render_finished" }>> {
+    return Promise.resolve(this).finally(onfinally ?? undefined);
+  }
+
+  toJSON(): VideoRenderOptions {
+    return this.#snapshot();
+  }
+
+  #snapshot(): VideoRenderOptions {
+    return {
+      midiPath: this.#options.midiPath,
+      output: this.#options.output,
+      fps: this.#options.fps,
+      width: this.#options.width,
+      height: this.#options.height,
+      renderer: this.#options.renderer,
+      viewRange: this.#options.viewRange ?? null,
+      timeSpace: this.#options.timeSpace ?? null,
+      firstKey: this.#options.firstKey ?? null,
+      lastKey: this.#options.lastKey ?? null,
+      ffmpegArgs: [...(this.#options.ffmpegArgs ?? [])],
+      ...(this.#options.onEvent ? { onEvent: this.#options.onEvent } : {}),
     };
   }
 }
 
 export class MeridianClient {
   readonly protocol: MeridianProtocolClient;
+  readonly resources = {
+    loadParsedMidi: (path: string): Promise<ParsedMidiId> =>
+      this.loadParsedMidi(path),
+    loadAudioMidi: (path: string): Promise<MidiLoadedEvent> =>
+      this.loadAudioMidi(path),
+  };
   readonly audio = {
     render: (options: AudioRenderOptions): AudioRenderTask =>
       new AudioRenderTask(this, options),
   };
+  readonly video = {
+    render: (options: VideoRenderOptions): VideoRenderTask =>
+      new VideoRenderTask(this, options),
+  };
   readonly modification = {
-    apply: (tool: MidiModifierTool, options: MidiModificationOptions): MidiProcessTask =>
-      this.midi({ ...options, tool }),
+    apply: (
+      tool: MidiModifierTool,
+      options: MidiModificationOptions,
+    ): MidiProcessTask => this.midi({ ...options, tool }),
     rangeSelect: (
       options: MidiModificationOptions & Partial<ToolConfig<RangeSelectTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.rangeSelect(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.rangeSelect(tool)),
     tempoMap: {
       flatten: (
         tempo: number,
@@ -867,10 +1089,12 @@ export class MeridianClient {
     },
     timeWarp: (
       options: MidiModificationOptions & Partial<ToolConfig<TimeWarpTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.timeWarp(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.timeWarp(tool)),
     channelRemap: (
       options: MidiModificationOptions & Partial<ToolConfig<ChannelRemapTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.channelRemap(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.channelRemap(tool)),
     trackRoute: {
       preserve: (options: MidiModificationOptions): MidiProcessTask =>
         this.midi({ ...options, tool: midiTools.trackRoute.preserve() }),
@@ -886,13 +1110,16 @@ export class MeridianClient {
     },
     program: (
       options: MidiModificationOptions & Partial<ToolConfig<ProgramTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.program(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.program(tool)),
     controlChange: (
       options: MidiModificationOptions & Partial<ToolConfig<ControlChangeTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.controlChange(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.controlChange(tool)),
     pitchBend: (
       options: MidiModificationOptions & Partial<ToolConfig<PitchBendTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.pitchBend(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.pitchBend(tool)),
     velocityMap: {
       scale: (
         scale: number,
@@ -912,34 +1139,44 @@ export class MeridianClient {
     },
     noteLength: (
       options: MidiModificationOptions & Partial<ToolConfig<NoteLengthTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.noteLength(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.noteLength(tool)),
     overlapRepair: (
       options: MidiModificationOptions & Partial<ToolConfig<OverlapRepairTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.overlapRepair(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.overlapRepair(tool)),
     quantize: (
       options: MidiModificationOptions & Partial<ToolConfig<QuantizeTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.quantize(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.quantize(tool)),
     humanize: (
       options: MidiModificationOptions & Partial<ToolConfig<HumanizeTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.humanize(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.humanize(tool)),
     keyMap: (
       options: MidiModificationOptions & Partial<ToolConfig<KeyMapTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.keyMap(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.keyMap(tool)),
     dedupe: (
       options: MidiModificationOptions & Partial<ToolConfig<DedupeTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.dedupe(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.dedupe(tool)),
     metaText: (
       options: MidiModificationOptions & Partial<ToolConfig<MetaTextTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.metaText(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.metaText(tool)),
     sysex: (
       options: MidiModificationOptions & Partial<ToolConfig<SysexTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.sysex(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.sysex(tool)),
     mergeBalance: (
       options: MidiModificationOptions & Partial<ToolConfig<MergeBalanceTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.mergeBalance(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.mergeBalance(tool)),
     analysisGuard: (
       options: MidiModificationOptions & Partial<ToolConfig<AnalysisGuardTool>>,
-    ): MidiProcessTask => this.#withTool(options, (tool) => midiTools.analysisGuard(tool)),
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.analysisGuard(tool)),
   };
 
   constructor(protocol: MeridianProtocolClient) {
@@ -969,8 +1206,8 @@ export class MeridianClient {
     return this.midi({
       inputs,
       output,
-      config,
-      onEvent,
+      ...(config ? { config } : {}),
+      ...(onEvent ? { onEvent } : {}),
       tool: build(toolConfig as unknown as Partial<ToolConfig<T>>),
     });
   }
@@ -978,7 +1215,7 @@ export class MeridianClient {
   async startAnalysis(
     options: StartAnalysisForFileOptions,
   ): Promise<MidiAnalysisJobHandle> {
-    const parsedMidiId = await this.loadParsedMidi(options.midiPath);
+    const parsedMidiId = await this.resources.loadParsedMidi(options.midiPath);
     const events = await this.protocol.request({
       type: "start_midi_analysis_job",
       parsed_midi_id: parsedMidiId,
@@ -997,9 +1234,11 @@ export class MeridianClient {
   async startMidiProcess(
     options: MidiToolTaskOptions,
   ): Promise<MidiProcessJobHandle> {
-    const config = createMidiFileProcessingConfig(options.config as
-      | DeepPartial<MidiFileProcessingConfig>
-      | undefined);
+    const config = createMidiFileProcessingConfig(
+      options.config as
+        | DeepPartial<MidiFileProcessingConfig>
+        | undefined,
+    );
     config.tools = [structuredClone(options.tool)];
     const events = await this.protocol.request({
       type: "start_process_midi_files",
@@ -1023,11 +1262,7 @@ export class MeridianClient {
   async startAudioRender(
     options: AudioRenderOptions,
   ): Promise<AudioRenderJobHandle> {
-    const loadEvents = await this.protocol.request({
-      type: "load_audio_midi",
-      path: options.midiPath,
-    });
-    requireEvent(loadEvents, "midi_loaded");
+    await this.resources.loadAudioMidi(options.midiPath);
 
     const config: SdkAudioRenderConfig = {
       midi_path: options.midiPath,
@@ -1054,6 +1289,39 @@ export class MeridianClient {
     return handle;
   }
 
+  async startVideoRender(
+    options: VideoRenderOptions,
+  ): Promise<VideoRenderJobHandle> {
+    const config: ProtocolVideoRenderConfig = {
+      midi_path: options.midiPath,
+      output: options.output,
+      fps: options.fps,
+      width: options.width,
+      height: options.height,
+      renderer: options.renderer,
+      view_range: options.viewRange ?? null,
+      time_space: options.timeSpace ?? null,
+      first_key: options.firstKey ?? null,
+      last_key: options.lastKey ?? null,
+      ffmpeg_args: options.ffmpegArgs ?? [],
+    };
+    const events = await this.protocol.request({
+      type: "start_render_video",
+      config,
+    });
+    const wrapper = requireEvent(events, "video_render_status");
+    if (wrapper.status.state === "idle") {
+      throw new MeridianSubprocessError(
+        "Video render job did not enter a running state",
+      );
+    }
+    const handle = new VideoRenderJobHandle(this.protocol, wrapper.status);
+    if (options.onEvent) {
+      handle.onEvent(options.onEvent);
+    }
+    return handle;
+  }
+
   private async loadParsedMidi(path: string): Promise<ParsedMidiId> {
     const events = await this.protocol.request({
       type: "load_parsed_midi",
@@ -1061,5 +1329,13 @@ export class MeridianClient {
     });
     const event = requireEvent(events, "parsed_midi_loaded");
     return event.parsed_midi_id;
+  }
+
+  private async loadAudioMidi(path: string): Promise<MidiLoadedEvent> {
+    const events = await this.protocol.request({
+      type: "load_audio_midi",
+      path,
+    });
+    return requireEvent(events, "midi_loaded");
   }
 }

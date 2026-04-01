@@ -1,42 +1,12 @@
-use std::{
-    fs,
-    path::PathBuf,
-    process::Command,
-    time::{SystemTime, UNIX_EPOCH},
-};
+mod support;
 
-fn cli_path() -> String {
-    std::env::var("CARGO_BIN_EXE_meridian-cli").expect("cargo exposes built cli path")
-}
-
-fn temp_path(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "meridian-cli-test-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    ));
-    fs::create_dir_all(&dir).expect("create temp dir");
-    dir.join(name)
-}
-
-fn write_fixture_midi(path: &PathBuf) {
-    let bytes = [
-        0x4d, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x60, 0x4d,
-        0x54, 0x72, 0x6b, 0x00, 0x00, 0x00, 0x1b, 0x00, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20, 0x00,
-        0x90, 0x3c, 0x64, 0x30, 0x90, 0x40, 0x64, 0x30, 0x80, 0x3c, 0x40, 0x30, 0x80, 0x40, 0x40,
-        0x00, 0xff, 0x2f, 0x00,
-    ];
-    fs::write(path, bytes).expect("write midi fixture");
-}
+use std::process::Command;
 
 #[test]
 fn analyze_command_emits_analysis_json() {
-    let midi = temp_path("fixture.mid");
-    write_fixture_midi(&midi);
+    let midi = support::write_test_midi("smoke-two-notes.mid");
 
-    let output = Command::new(cli_path())
+    let output = Command::new(support::cli_path())
         .args([
             "analyze",
             midi.to_string_lossy().as_ref(),
@@ -55,11 +25,10 @@ fn analyze_command_emits_analysis_json() {
 
 #[test]
 fn process_tempo_flatten_writes_output_file() {
-    let midi = temp_path("input.mid");
-    let out = temp_path("out.mid");
-    write_fixture_midi(&midi);
+    let midi = support::write_test_midi("smoke-two-notes.mid");
+    let out = support::temp_path("out.mid");
 
-    let output = Command::new(cli_path())
+    let output = Command::new(support::cli_path())
         .args([
             "process",
             "tempo-flatten",

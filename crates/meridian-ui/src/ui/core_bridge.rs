@@ -8,7 +8,7 @@ use meridian_core::{
     audio::{AudioBackend, AudioConfig},
     midi::MidiProcessingConfig,
     protocol::{CoreCommand, CoreEvent, ParsedMidiId, ProcessedMidiId},
-    render::{DisplayTimeSpace, RendererKind, SceneLayout},
+    render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
 };
 
 use super::{state::UiOptions, view_model::UiViewModel};
@@ -259,6 +259,58 @@ impl UiCoreBridge {
             },
             model,
         )
+    }
+
+    pub fn set_view_range_value(
+        &self,
+        seconds: f64,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        let current = model
+            .lock()
+            .expect("ui model mutex poisoned")
+            .transport
+            .clone();
+        self.request(
+            CoreCommand::SetViewRange {
+                seconds,
+                time_space: Some(current.time_space),
+            },
+            model,
+        )
+    }
+
+    pub fn set_key_range(
+        &self,
+        first_key: u8,
+        last_key: u8,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(
+            CoreCommand::SetKeyRange {
+                first_key,
+                last_key,
+            },
+            model,
+        )
+    }
+
+    pub fn update_scene(
+        &self,
+        model: &Arc<Mutex<UiViewModel>>,
+        mutate: impl FnOnce(&mut SceneConfig),
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        let Some(mut scene) = model
+            .lock()
+            .expect("ui model mutex poisoned")
+            .snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.scene.clone())
+        else {
+            return Ok(Vec::new());
+        };
+        mutate(&mut scene);
+        self.request(CoreCommand::SetSceneConfig { scene }, model)
     }
 
     pub fn refresh_state(

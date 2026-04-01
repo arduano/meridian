@@ -1,0 +1,74 @@
+mod support;
+
+use std::{fs, process::Command};
+
+#[test]
+fn render_video_writes_output_file_when_ffmpeg_is_available() {
+    if !support::ffmpeg_available() {
+        eprintln!("skipping CLI video render smoke because ffmpeg is unavailable");
+        return;
+    }
+
+    let midi = support::write_test_midi("piano/burgmuller-op100-no4-the-little-party.mid");
+    let out = support::temp_path("render.mp4");
+
+    let output = Command::new(support::cli_path())
+        .args([
+            "render",
+            "video",
+            midi.to_string_lossy().as_ref(),
+            "--output",
+            out.to_string_lossy().as_ref(),
+            "--fps",
+            "4",
+            "--width",
+            "160",
+            "--height",
+            "90",
+            "--view-range",
+            "2",
+            "--renderer",
+            "piano-trail-classic",
+            "--ffmpeg-flags",
+            "-y",
+        ])
+        .output()
+        .expect("run render video command");
+
+    assert!(output.status.success(), "render video failed: {output:?}");
+    assert!(out.exists(), "expected output video to exist");
+    assert!(fs::metadata(&out).expect("video metadata").len() > 0);
+}
+
+#[test]
+fn render_audio_writes_output_file_when_soundfont_is_available() {
+    let Some(soundfont) = support::soundfont_path() else {
+        eprintln!("skipping CLI audio render smoke because MERIDIAN_TEST_SOUNDFONT is unset");
+        return;
+    };
+
+    let midi = support::write_test_midi("piano/burgmuller-op100-no13-consolation.mid");
+    let out = support::temp_path("render.wav");
+
+    let output = Command::new(support::cli_path())
+        .args([
+            "render",
+            "audio",
+            midi.to_string_lossy().as_ref(),
+            "--output",
+            out.to_string_lossy().as_ref(),
+            "--sample-rate",
+            "22050",
+            "--channels",
+            "2",
+            "--soundfont",
+            soundfont.to_string_lossy().as_ref(),
+        ])
+        .output()
+        .expect("run render audio command");
+
+    assert!(output.status.success(), "render audio failed: {output:?}");
+    let bytes = fs::read(&out).expect("read audio output");
+    assert!(bytes.len() > 12, "expected non-empty wav output");
+    assert_eq!(&bytes[..4], b"RIFF");
+}

@@ -1,21 +1,24 @@
 export * from "./protocol.ts";
 export * from "./helpers.ts";
 export {
-  type MidiAnalysisOptions,
-  type AudioRenderOptions,
-  type MidiModificationOptions,
-  type MidiToolTaskOptions,
-  type StartAnalysisForFileOptions,
-  MeridianClient,
   AudioRenderJobHandle,
+  type AudioRenderOptions,
   AudioRenderTask,
-  MidiAnalysisTask,
-  MidiProcessTask,
+  MeridianClient,
   MeridianProtocolClient,
   MeridianProtocolError,
   MeridianSubprocessError,
   MidiAnalysisJobHandle,
+  type MidiAnalysisOptions,
+  MidiAnalysisTask,
+  type MidiModificationOptions,
   MidiProcessJobHandle,
+  MidiProcessTask,
+  type MidiToolTaskOptions,
+  type StartAnalysisForFileOptions,
+  VideoRenderJobHandle,
+  type VideoRenderOptions,
+  VideoRenderTask,
 } from "./internal/client.ts";
 
 import { MeridianClient, MeridianProtocolClient } from "./internal/client.ts";

@@ -1,106 +1,19 @@
 import { type MidiAnalysisData } from "../src/index.ts";
 import { createDenoMeridianClient } from "../src/runtime/deno_client.ts";
-
-function defaultExecutablePath(): string {
-  const envPath = Deno.env.get("MERIDIAN_CLI_BIN");
-  if (envPath) {
-    return envPath;
-  }
-  return new URL("../../../target/debug/meridian-cli", import.meta.url)
-    .pathname;
-}
-
-function defaultSoundfontPath(): string {
-  return "/mnt/fat/Midis/Soundfonts/test.sfz";
-}
-
-async function ensureExecutable(path: string): Promise<void> {
-  try {
-    const stat = await Deno.stat(path);
-    if (stat.isFile) {
-      return;
-    }
-  } catch {
-    // build below
-  }
-
-  const command = new Deno.Command("nix-shell", {
-    cwd: new URL("../../..", import.meta.url).pathname,
-    args: [
-      "--run",
-      "PATH=/run/current-system/sw/bin:$PATH cargo build -p meridian-cli",
-    ],
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  const status = await command.spawn().status;
-  if (status.code !== 0) {
-    throw new Error(`Failed to build meridian-cli, exit code ${status.code}`);
-  }
-}
-
-async function writeFixtureMidi(path: string): Promise<void> {
-  const bytes = new Uint8Array([
-    0x4d,
-    0x54,
-    0x68,
-    0x64,
-    0x00,
-    0x00,
-    0x00,
-    0x06,
-    0x00,
-    0x00,
-    0x00,
-    0x01,
-    0x00,
-    0x60,
-    0x4d,
-    0x54,
-    0x72,
-    0x6b,
-    0x00,
-    0x00,
-    0x00,
-    0x1b,
-    0x00,
-    0xff,
-    0x51,
-    0x03,
-    0x07,
-    0xa1,
-    0x20,
-    0x00,
-    0x90,
-    0x3c,
-    0x64,
-    0x30,
-    0x90,
-    0x40,
-    0x64,
-    0x30,
-    0x80,
-    0x3c,
-    0x40,
-    0x30,
-    0x80,
-    0x40,
-    0x40,
-    0x00,
-    0xff,
-    0x2f,
-    0x00,
-  ]);
-  await Deno.writeFile(path, bytes);
-}
+import {
+  defaultExecutablePath,
+  defaultSoundfontPath,
+  ensureExecutable,
+  hasCommand,
+  resolveMidiFixture,
+  TWO_NOTE_MIDI,
+} from "./common.ts";
 
 Deno.test("analysis job runs through the declarative SDK API", async () => {
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);
 
-  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-analysis-" });
-  const midiPath = `${tempDir}/fixture.mid`;
-  await writeFixtureMidi(midiPath);
+  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
 
   const client = await createDenoMeridianClient(executablePath);
   try {
@@ -137,9 +50,7 @@ Deno.test("analysis start returns a live job handle", async () => {
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);
 
-  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-plan-" });
-  const midiPath = `${tempDir}/fixture.mid`;
-  await writeFixtureMidi(midiPath);
+  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
 
   const client = await createDenoMeridianClient(executablePath);
   try {
@@ -168,11 +79,9 @@ Deno.test("midi processing job runs through the SDK", async () => {
   await ensureExecutable(executablePath);
 
   const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-process-" });
-  const midiA = `${tempDir}/a.mid`;
-  const midiB = `${tempDir}/b.mid`;
+  const midiA = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiB = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
   const output = `${tempDir}/out.mid`;
-  await writeFixtureMidi(midiA);
-  await writeFixtureMidi(midiB);
 
   const client = await createDenoMeridianClient(executablePath);
   try {
@@ -212,11 +121,9 @@ Deno.test("midi processing start returns a live job handle", async () => {
   await ensureExecutable(executablePath);
 
   const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-process-handle-" });
-  const midiA = `${tempDir}/a.mid`;
-  const midiB = `${tempDir}/b.mid`;
+  const midiA = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiB = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
   const output = `${tempDir}/out.mid`;
-  await writeFixtureMidi(midiA);
-  await writeFixtureMidi(midiB);
 
   const client = await createDenoMeridianClient(executablePath);
   try {
@@ -241,10 +148,16 @@ Deno.test("audio render runs through the declarative SDK API", async () => {
   await ensureExecutable(executablePath);
 
   const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-audio-" });
-  const midiPath = `${tempDir}/fixture.mid`;
+  const midiPath = await resolveMidiFixture(
+    "piano/burgmuller-op100-no13-consolation.mid",
+    TWO_NOTE_MIDI,
+  );
   const output = `${tempDir}/out.wav`;
-  await writeFixtureMidi(midiPath);
-  await Deno.stat(defaultSoundfontPath());
+  const soundfontPath = await defaultSoundfontPath();
+  if (!soundfontPath) {
+    throw new Error("No bundled or override soundfont is available for audio render smoke");
+  }
+  await Deno.stat(soundfontPath);
 
   const client = await createDenoMeridianClient(executablePath);
   try {
@@ -254,7 +167,7 @@ Deno.test("audio render runs through the declarative SDK API", async () => {
       output,
       sampleRate: 22050,
       channels: 2,
-      soundfonts: [defaultSoundfontPath()],
+      soundfonts: [soundfontPath],
       onEvent: (event) => events.push(event.type),
     });
 
@@ -266,6 +179,76 @@ Deno.test("audio render runs through the declarative SDK API", async () => {
       throw new Error(
         `Expected render_finished in event stream, got ${events.join(", ")}`,
       );
+    }
+  } finally {
+    await client.close();
+  }
+});
+
+Deno.test("video render runs through the declarative SDK API", async () => {
+  if (!(await hasCommand("ffmpeg"))) {
+    console.warn("skipping video render smoke because ffmpeg is unavailable");
+    return;
+  }
+
+  const executablePath = defaultExecutablePath();
+  await ensureExecutable(executablePath);
+
+  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-video-" });
+  const midiPath = await resolveMidiFixture(
+    "piano/burgmuller-op100-no4-the-little-party.mid",
+    TWO_NOTE_MIDI,
+  );
+  const output = `${tempDir}/out.mp4`;
+
+  const client = await createDenoMeridianClient(executablePath);
+  try {
+    const events: string[] = [];
+    const result = await client.video.render({
+      midiPath,
+      output,
+      fps: 4,
+      width: 160,
+      height: 90,
+      renderer: "piano_trail_classic",
+      viewRange: 2,
+      ffmpegArgs: ["-y"],
+      onEvent: (event) => events.push(event.type),
+    });
+
+    if (result.output !== output) {
+      throw new Error(`Expected output ${output}, got ${result.output}`);
+    }
+    const stat = await Deno.stat(output);
+    if (!stat.isFile || stat.size === 0) {
+      throw new Error(`Expected non-empty video output at ${output}`);
+    }
+    if (!events.includes("render_finished")) {
+      throw new Error(
+        `Expected render_finished in event stream, got ${events.join(", ")}`,
+      );
+    }
+  } finally {
+    await client.close();
+  }
+});
+
+Deno.test("resource helpers load parsed and audio midi through the SDK", async () => {
+  const executablePath = defaultExecutablePath();
+  await ensureExecutable(executablePath);
+
+  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+
+  const client = await createDenoMeridianClient(executablePath);
+  try {
+    const parsedMidiId = await client.resources.loadParsedMidi(midiPath);
+    const loadedMidi = await client.resources.loadAudioMidi(midiPath);
+
+    if (typeof parsedMidiId !== "number") {
+      throw new Error(`Expected numeric parsed midi id, got ${parsedMidiId}`);
+    }
+    if (loadedMidi.path !== midiPath) {
+      throw new Error(`Expected loaded path ${midiPath}, got ${loadedMidi.path}`);
     }
   } finally {
     await client.close();
