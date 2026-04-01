@@ -1,16 +1,279 @@
 // ═══════════════════════════════════════════════════════════
 //  Analysis panel (profile 4).
 //
-//  MIDI analysis: note density, key distribution, track
-//  breakdown, and performance statistics.
+//  MIDI structural analysis: file metrics, tempo analysis,
+//  note statistics, key/velocity/pitch-class distributions,
+//  channel & track breakdowns, density timeline, event
+//  breakdown, polyphony stats, and block summary.
 //
 //  Uses the *analysis* MIDI loading mode (parsed + processed
 //  MIDI only — no display/audio caches needed).
 // ═══════════════════════════════════════════════════════════
 
-import { MidiLoadState } from "../structs.slint";
-import { SectionHeader, Separator, FieldRow } from "../primitives.slint";
+import { MidiLoadState, BarValue, EventCount } from "../structs.slint";
+import { SectionHeader, Separator, FieldRow, StatusBadge } from "../primitives.slint";
 import { MidiStateSection } from "../midi_loading.slint";
+
+
+// ─────────────────────────────────────────────────────────
+//  StatCard — compact stat with big number + label below
+// ─────────────────────────────────────────────────────────
+component StatCard inherits Rectangle {
+    in property <string> value;
+    in property <string> label;
+    in property <color> accent: #60a5fa;
+
+    min-width: 100px;
+    horizontal-stretch: 1;
+    height: 68px;
+    border-radius: 8px;
+    background: #0c1420;
+    border-width: 1px;
+    border-color: #111a28;
+
+    VerticalLayout {
+        alignment: center;
+        padding: 10px;
+        spacing: 2px;
+
+        Text {
+            text: root.value;
+            color: root.accent;
+            font-family: "monospace";
+            font-size: 16px;
+            font-weight: 800;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+        Text {
+            text: root.label;
+            color: #4d6580;
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            horizontal-alignment: center;
+        }
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────
+//  MiniStat — even more compact, for dense grids
+// ─────────────────────────────────────────────────────────
+component MiniStat inherits Rectangle {
+    in property <string> value;
+    in property <string> label;
+
+    height: 46px;
+    horizontal-stretch: 1;
+    border-radius: 6px;
+    background: #0a1220;
+
+    VerticalLayout {
+        alignment: center;
+        padding: 6px;
+        spacing: 1px;
+
+        Text {
+            text: root.value;
+            color: #b0c0d4;
+            font-family: "monospace";
+            font-size: 12px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+        Text {
+            text: root.label;
+            color: #3d5068;
+            font-size: 8px;
+            font-weight: 600;
+            horizontal-alignment: center;
+        }
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────
+//  BarChart — generic histogram using for-in repeater.
+//  Each bar is a thin Rectangle scaled to its normalised value.
+// ─────────────────────────────────────────────────────────
+component BarChart inherits Rectangle {
+    in property <[BarValue]> model: [];
+    in property <color> bar-color: #2563eb;
+    in property <color> bar-color-hover: #3b82f6;
+    in property <int> chart-height: 100;
+    in property <bool> show-labels: false;
+
+    height: root.chart-height * 1px + (root.show-labels ? 16px : 0px);
+    border-radius: 6px;
+    background: #080d16;
+    clip: true;
+
+    VerticalLayout {
+        spacing: 0px;
+
+        // Bar area
+        Rectangle {
+            height: root.chart-height * 1px;
+
+            HorizontalLayout {
+                spacing: 0px;
+                padding-left: 2px;
+                padding-right: 2px;
+
+                for bar in root.model : Rectangle {
+                    horizontal-stretch: 1;
+                    height: parent.height;
+
+                    VerticalLayout {
+                        alignment: end;
+                        padding-bottom: 1px;
+
+                        Rectangle {
+                            height: max(1px, parent.height * max(0.0, min(1.0, bar.value)) - 1px);
+                            border-radius: 1px;
+                            background: bar-touch.has-hover ? root.bar-color-hover : root.bar-color;
+
+                            bar-touch := TouchArea {
+                                mouse-cursor: pointer;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Zero baseline
+            Rectangle {
+                y: parent.height - 1px;
+                height: 1px;
+                background: #141e2e;
+            }
+        }
+
+        // Labels row (only when show-labels is true)
+        if root.show-labels : HorizontalLayout {
+            height: 16px;
+            spacing: 0px;
+            padding-left: 2px;
+            padding-right: 2px;
+
+            for bar in root.model : Text {
+                horizontal-stretch: 1;
+                text: bar.label;
+                color: #3d5068;
+                font-size: 8px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────
+//  DensityTimeline — wider variant for time-series data
+// ─────────────────────────────────────────────────────────
+component DensityTimeline inherits Rectangle {
+    in property <[BarValue]> model: [];
+    in property <color> fill-color: #2563eb40;
+    in property <color> peak-color: #60a5fa;
+    in property <int> chart-height: 80;
+
+    height: root.chart-height * 1px;
+    border-radius: 6px;
+    background: #080d16;
+    clip: true;
+
+    HorizontalLayout {
+        spacing: 0px;
+        padding-left: 1px;
+        padding-right: 1px;
+
+        for bar in root.model : Rectangle {
+            horizontal-stretch: 1;
+            height: parent.height;
+
+            VerticalLayout {
+                alignment: end;
+
+                Rectangle {
+                    height: max(0px, parent.height * max(0.0, min(1.0, bar.value)));
+                    background: root.fill-color;
+
+                    // Peak cap line
+                    Rectangle {
+                        height: 1px;
+                        background: root.peak-color;
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────
+//  EventRow — single row in the event breakdown table
+// ─────────────────────────────────────────────────────────
+component EventRow inherits Rectangle {
+    in property <string> name;
+    in property <int> count;
+    in property <float> fraction;
+
+    height: 24px;
+    background: transparent;
+
+    HorizontalLayout {
+        spacing: 8px;
+
+        // Name
+        Text {
+            text: root.name;
+            color: #7d8fa8;
+            font-size: 10px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+
+        // Bar
+        VerticalLayout {
+            alignment: center;
+            width: 80px;
+
+            Rectangle {
+                width: 80px;
+                height: 6px;
+                border-radius: 3px;
+                background: #111a28;
+
+                Rectangle {
+                    width: parent.width * max(0.0, min(1.0, root.fraction));
+                    height: parent.height;
+                    border-radius: 3px;
+                    background: #2563eb;
+                }
+            }
+        }
+
+        // Count
+        Text {
+            text: root.count;
+            color: #b0c0d4;
+            font-family: "monospace";
+            font-size: 10px;
+            font-weight: 600;
+            vertical-alignment: center;
+            min-width: 60px;
+            horizontal-alignment: right;
+        }
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  Main AnalysisPanel
+// ═══════════════════════════════════════════════════════════
 
 export component AnalysisPanel inherits Rectangle {
     // ── MIDI state bindings ──
@@ -27,7 +290,7 @@ export component AnalysisPanel inherits Rectangle {
     callback unload-midi;
     callback retry-load;
 
-    // ── Analysis data bindings ──
+    // ── Overview data ──
     in property <string> note-count-text: "—";
     in property <string> track-count-text: "—";
     in property <string> midi-length-text: "—";
@@ -36,6 +299,54 @@ export component AnalysisPanel inherits Rectangle {
     in property <string> key-range-text: "—";
     in property <string> avg-velocity-text: "—";
     in property <string> note-density-text: "—";
+
+    // ── File metrics ──
+    in property <string> file-size-text: "—";
+    in property <string> gzip-size-text: "—";
+    in property <string> gzip-ratio-text: "—";
+    in property <string> format-text: "—";
+    in property <string> declared-tracks-text: "—";
+    in property <string> actual-tracks-text: "—";
+    in property <string> ticks-per-quarter-text: "—";
+    in property <string> total-events-text: "—";
+
+    // ── Tempo metrics ──
+    in property <string> initial-bpm-text: "—";
+    in property <string> min-bpm-text: "—";
+    in property <string> max-bpm-text: "—";
+    in property <string> avg-bpm-text: "—";
+
+    // ── Note metrics ──
+    in property <string> avg-note-length-text: "—";
+    in property <string> min-note-length-text: "—";
+    in property <string> max-note-length-text: "—";
+    in property <string> total-note-duration-text: "—";
+    in property <string> max-polyphony-text: "—";
+    in property <string> avg-polyphony-text: "—";
+    in property <string> peak-nps-text: "—";
+    in property <string> avg-nps-text: "—";
+    in property <string> unique-onsets-text: "—";
+    in property <string> avg-notes-per-onset-text: "—";
+
+    // ── Summary ──
+    in property <string> total-blocks-text: "—";
+    in property <string> keys-with-notes-text: "—";
+    in property <string> densest-key-text: "—";
+    in property <string> densest-key-notes-text: "—";
+    in property <string> max-blocks-per-key-text: "—";
+    in property <string> max-notes-in-block-text: "—";
+
+    // ── Histograms ──
+    in property <[BarValue]> key-histogram: [];
+    in property <[BarValue]> velocity-histogram: [];
+    in property <[BarValue]> pitch-class-histogram: [];
+    in property <[BarValue]> channel-histogram: [];
+    in property <[BarValue]> track-histogram: [];
+    in property <[BarValue]> density-timeline: [];
+
+    // ── Event breakdown ──
+    in property <[EventCount]> event-breakdown: [];
+    in property <string> event-total-text: "—";
 
     clip: true;
 
@@ -50,7 +361,10 @@ export component AnalysisPanel inherits Rectangle {
             spacing: 6px;
             alignment: start;
 
-            // ── MIDI FILE ──
+            // ══════════════════════════════════════════
+            //  MIDI FILE LOADER
+            // ══════════════════════════════════════════
+
             MidiStateSection {
                 midi-state: root.midi-state;
                 file-name: root.selected-midi-name;
@@ -72,35 +386,369 @@ export component AnalysisPanel inherits Rectangle {
             Separator { }
             Rectangle { height: 8px; }
 
-            // ── OVERVIEW ──
-            SectionHeader { title: "OVERVIEW"; }
-            Rectangle { height: 4px; }
-            FieldRow { label: "Total Notes";    value: root.note-count-text; }
-            FieldRow { label: "Tracks";         value: root.track-count-text; }
-            FieldRow { label: "Duration";       value: root.midi-length-text; }
-            FieldRow { label: "Key Range";      value: root.key-range-text; }
 
-            Rectangle { height: 8px; }
+            // ══════════════════════════════════════════
+            //  HERO STATS — big numbers at a glance
+            // ══════════════════════════════════════════
+
+            SectionHeader { title: "AT A GLANCE"; }
+            Rectangle { height: 4px; }
+
+            HorizontalLayout {
+                spacing: 8px;
+                StatCard { value: root.note-count-text; label: "TOTAL NOTES";  accent: #60a5fa; }
+                StatCard { value: root.track-count-text; label: "TRACKS";      accent: #a78bfa; }
+                StatCard { value: root.midi-length-text; label: "DURATION";    accent: #34d399; }
+                StatCard { value: root.key-range-text; label: "KEY RANGE";     accent: #fbbf24; }
+            }
+
+            Rectangle { height: 2px; }
+
+            HorizontalLayout {
+                spacing: 8px;
+                StatCard { value: root.avg-bpm-text; label: "AVG BPM";          accent: #f87171; }
+                StatCard { value: root.peak-nps-text; label: "PEAK NOTES/S";   accent: #fb923c; }
+                StatCard { value: root.max-polyphony-text; label: "MAX POLYPHONY"; accent: #e879f9; }
+                StatCard { value: root.total-events-text; label: "TOTAL EVENTS"; accent: #38bdf8; }
+            }
+
+            Rectangle { height: 12px; }
             Separator { }
             Rectangle { height: 8px; }
 
-            // ── TEMPO ──
+
+            // ══════════════════════════════════════════
+            //  KEY DISTRIBUTION — 128-bar histogram
+            // ══════════════════════════════════════════
+
+            SectionHeader { title: "KEY DISTRIBUTION"; }
+            Rectangle { height: 4px; }
+
+            Text {
+                text: "Note count per MIDI key (0–127). Brighter bars = more notes on that key.";
+                color: #3d5068;
+                font-size: 10px;
+                wrap: word-wrap;
+            }
+
+            Rectangle { height: 2px; }
+
+            BarChart {
+                model: root.key-histogram;
+                bar-color: #2563eb;
+                bar-color-hover: #60a5fa;
+                chart-height: 120;
+            }
+
+            // Key range callout
+            HorizontalLayout {
+                spacing: 12px;
+                height: 20px;
+
+                Text { text: "Range:"; color: #4d6580; font-size: 10px; vertical-alignment: center; }
+                Text { text: root.key-range-text; color: #b0c0d4; font-family: "monospace"; font-size: 10px; font-weight: 600; vertical-alignment: center; }
+                Rectangle { horizontal-stretch: 1; }
+                Text { text: "Densest key:"; color: #4d6580; font-size: 10px; vertical-alignment: center; }
+                Text { text: root.densest-key-text; color: #fbbf24; font-family: "monospace"; font-size: 10px; font-weight: 700; vertical-alignment: center; }
+                Text { text: "(" + root.densest-key-notes-text + " notes)"; color: #4d6580; font-size: 9px; vertical-alignment: center; }
+            }
+
+            Rectangle { height: 12px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+
+            // ══════════════════════════════════════════
+            //  PITCH CLASS DISTRIBUTION — 12 bars
+            // ══════════════════════════════════════════
+
+            SectionHeader { title: "PITCH CLASS DISTRIBUTION"; }
+            Rectangle { height: 4px; }
+
+            Text {
+                text: "Note counts collapsed to pitch class (C, C♯, D, … B). Shows tonal center.";
+                color: #3d5068;
+                font-size: 10px;
+                wrap: word-wrap;
+            }
+
+            Rectangle { height: 2px; }
+
+            BarChart {
+                model: root.pitch-class-histogram;
+                bar-color: #7c3aed;
+                bar-color-hover: #a78bfa;
+                chart-height: 90;
+                show-labels: true;
+            }
+
+            Rectangle { height: 12px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+
+            // ══════════════════════════════════════════
+            //  VELOCITY DISTRIBUTION — 128 bars
+            // ══════════════════════════════════════════
+
+            SectionHeader { title: "VELOCITY DISTRIBUTION"; }
+            Rectangle { height: 4px; }
+
+            Text {
+                text: "Count of note-on events at each velocity level (0–127).";
+                color: #3d5068;
+                font-size: 10px;
+                wrap: word-wrap;
+            }
+
+            Rectangle { height: 2px; }
+
+            BarChart {
+                model: root.velocity-histogram;
+                bar-color: #059669;
+                bar-color-hover: #34d399;
+                chart-height: 100;
+            }
+
+            HorizontalLayout {
+                spacing: 12px;
+                height: 20px;
+
+                Text { text: "Avg Velocity:"; color: #4d6580; font-size: 10px; vertical-alignment: center; }
+                Text { text: root.avg-velocity-text; color: #34d399; font-family: "monospace"; font-size: 10px; font-weight: 600; vertical-alignment: center; }
+            }
+
+            Rectangle { height: 12px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+
+            // ══════════════════════════════════════════
+            //  DENSITY OVER TIME — timeline chart
+            // ══════════════════════════════════════════
+
+            SectionHeader { title: "NOTE DENSITY OVER TIME"; }
+            Rectangle { height: 4px; }
+
+            Text {
+                text: "Note starts per time bucket across the file duration. Shows activity peaks.";
+                color: #3d5068;
+                font-size: 10px;
+                wrap: word-wrap;
+            }
+
+            Rectangle { height: 2px; }
+
+            DensityTimeline {
+                model: root.density-timeline;
+                fill-color: #2563eb40;
+                peak-color: #60a5fa;
+                chart-height: 80;
+            }
+
+            HorizontalLayout {
+                spacing: 16px;
+                height: 20px;
+
+                Text { text: "Peak:"; color: #4d6580; font-size: 10px; vertical-alignment: center; }
+                Text { text: root.peak-nps-text + "/s"; color: #fb923c; font-family: "monospace"; font-size: 10px; font-weight: 600; vertical-alignment: center; }
+                Text { text: "Avg:"; color: #4d6580; font-size: 10px; vertical-alignment: center; }
+                Text { text: root.avg-nps-text + "/s"; color: #60a5fa; font-family: "monospace"; font-size: 10px; font-weight: 600; vertical-alignment: center; }
+            }
+
+            Rectangle { height: 12px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+
+            // ══════════════════════════════════════════
+            //  CHANNEL & TRACK BREAKDOWN
+            // ══════════════════════════════════════════
+
+            SectionHeader { title: "CHANNEL DISTRIBUTION"; }
+            Rectangle { height: 4px; }
+
+            Text {
+                text: "Note count per MIDI channel (0–15).";
+                color: #3d5068;
+                font-size: 10px;
+                wrap: word-wrap;
+            }
+
+            Rectangle { height: 2px; }
+
+            BarChart {
+                model: root.channel-histogram;
+                bar-color: #dc2626;
+                bar-color-hover: #f87171;
+                chart-height: 70;
+                show-labels: true;
+            }
+
+            Rectangle { height: 12px; }
+
+            SectionHeader { title: "TRACK DISTRIBUTION"; }
+            Rectangle { height: 4px; }
+
+            Text {
+                text: "Note count per MIDI track.";
+                color: #3d5068;
+                font-size: 10px;
+                wrap: word-wrap;
+            }
+
+            Rectangle { height: 2px; }
+
+            BarChart {
+                model: root.track-histogram;
+                bar-color: #0891b2;
+                bar-color-hover: #22d3ee;
+                chart-height: 70;
+                show-labels: true;
+            }
+
+            Rectangle { height: 12px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+
+            // ══════════════════════════════════════════
+            //  TEMPO ANALYSIS
+            // ══════════════════════════════════════════
+
             SectionHeader { title: "TEMPO"; }
             Rectangle { height: 4px; }
-            FieldRow { label: "Tempo";          value: root.tempo-text; }
+
+            HorizontalLayout {
+                spacing: 8px;
+                MiniStat { value: root.initial-bpm-text; label: "INITIAL"; }
+                MiniStat { value: root.avg-bpm-text;     label: "AVG (weighted)"; }
+                MiniStat { value: root.min-bpm-text;     label: "MIN"; }
+                MiniStat { value: root.max-bpm-text;     label: "MAX"; }
+            }
+
+            Rectangle { height: 4px; }
             FieldRow { label: "Time Signature"; value: root.time-signature-text; }
 
-            Rectangle { height: 8px; }
+            Rectangle { height: 12px; }
             Separator { }
             Rectangle { height: 8px; }
 
-            // ── NOTE STATISTICS ──
-            SectionHeader { title: "NOTE STATISTICS"; }
-            Rectangle { height: 4px; }
-            FieldRow { label: "Avg. Velocity";  value: root.avg-velocity-text; }
-            FieldRow { label: "Note Density";   value: root.note-density-text; }
 
-            Rectangle { height: 20px; }
+            // ══════════════════════════════════════════
+            //  NOTE LENGTH & POLYPHONY
+            // ══════════════════════════════════════════
+
+            SectionHeader { title: "NOTE LENGTH"; }
+            Rectangle { height: 4px; }
+
+            HorizontalLayout {
+                spacing: 8px;
+                MiniStat { value: root.avg-note-length-text; label: "AVG LENGTH"; }
+                MiniStat { value: root.min-note-length-text; label: "SHORTEST"; }
+                MiniStat { value: root.max-note-length-text; label: "LONGEST"; }
+            }
+
+            Rectangle { height: 4px; }
+            FieldRow { label: "Total Note Duration"; value: root.total-note-duration-text; }
+
+            Rectangle { height: 12px; }
+
+            SectionHeader { title: "POLYPHONY"; }
+            Rectangle { height: 4px; }
+
+            HorizontalLayout {
+                spacing: 8px;
+                MiniStat { value: root.max-polyphony-text;  label: "MAX SIMULTANEOUS"; }
+                MiniStat { value: root.avg-polyphony-text;  label: "AVG SIMULTANEOUS"; }
+                MiniStat { value: root.unique-onsets-text;  label: "UNIQUE ONSETS"; }
+                MiniStat { value: root.avg-notes-per-onset-text; label: "NOTES / ONSET"; }
+            }
+
+            Rectangle { height: 12px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+
+            // ══════════════════════════════════════════
+            //  EVENT BREAKDOWN
+            // ══════════════════════════════════════════
+
+            SectionHeader { title: "EVENT BREAKDOWN"; }
+            Rectangle { height: 4px; }
+
+            HorizontalLayout {
+                height: 20px;
+                Text { text: "Total events:"; color: #4d6580; font-size: 10px; vertical-alignment: center; }
+                Rectangle { width: 6px; }
+                Text { text: root.event-total-text; color: #b0c0d4; font-family: "monospace"; font-size: 11px; font-weight: 700; vertical-alignment: center; }
+            }
+
+            Rectangle { height: 2px; }
+
+            for ev in root.event-breakdown : EventRow {
+                name: ev.name;
+                count: ev.count;
+                fraction: ev.fraction;
+            }
+
+            Rectangle { height: 12px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+
+            // ══════════════════════════════════════════
+            //  FILE METRICS
+            // ══════════════════════════════════════════
+
+            SectionHeader { title: "FILE METRICS"; }
+            Rectangle { height: 4px; }
+
+            HorizontalLayout {
+                spacing: 8px;
+                MiniStat { value: root.file-size-text;  label: "FILE SIZE"; }
+                MiniStat { value: root.gzip-size-text;  label: "GZIP SIZE"; }
+                MiniStat { value: root.gzip-ratio-text; label: "RATIO"; }
+            }
+
+            Rectangle { height: 4px; }
+            FieldRow { label: "MIDI Format";       value: root.format-text; }
+            FieldRow { label: "Declared Tracks";   value: root.declared-tracks-text; }
+            FieldRow { label: "Actual Tracks";     value: root.actual-tracks-text; }
+            FieldRow { label: "Ticks/Quarter";     value: root.ticks-per-quarter-text; }
+            FieldRow { label: "Total Events";      value: root.total-events-text; }
+
+            Rectangle { height: 12px; }
+            Separator { }
+            Rectangle { height: 8px; }
+
+
+            // ══════════════════════════════════════════
+            //  BLOCK SUMMARY (internal analysis)
+            // ══════════════════════════════════════════
+
+            SectionHeader { title: "BLOCK ANALYSIS"; }
+            Rectangle { height: 4px; }
+
+            Text {
+                text: "Internal analysis grid: how notes are distributed across time×key blocks.";
+                color: #3d5068;
+                font-size: 10px;
+                wrap: word-wrap;
+            }
+
+            Rectangle { height: 4px; }
+
+            HorizontalLayout {
+                spacing: 8px;
+                MiniStat { value: root.total-blocks-text;      label: "TOTAL BLOCKS"; }
+                MiniStat { value: root.keys-with-notes-text;   label: "KEYS WITH NOTES"; }
+                MiniStat { value: root.max-blocks-per-key-text; label: "MAX BLOCKS/KEY"; }
+                MiniStat { value: root.max-notes-in-block-text; label: "MAX NOTES/BLOCK"; }
+            }
+
+            // End padding
+            Rectangle { height: 40px; }
         }
     }
 }

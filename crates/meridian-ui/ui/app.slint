@@ -9,7 +9,7 @@
 //   - panels/*.slint       (PreviewWelcome, DropOverlay, RenderPanel, …)
 // ═══════════════════════════════════════════════════════════
 
-import { InspectorRow, MidiLoadState } from "structs.slint";
+import { InspectorRow, MidiLoadState, BarValue, EventCount } from "structs.slint";
 import { SectionHeader, FieldRow } from "primitives.slint";
 import { ProfileTab, TransportButton, TimeScrubber } from "chrome.slint";
 import { PreviewWelcome, DropOverlay } from "panels/preview.slint";
@@ -18,7 +18,7 @@ import { AudioPanel } from "panels/audio.slint";
 import { ModifyPanel } from "panels/modify.slint";
 import { AnalysisPanel } from "panels/analysis.slint";
 
-export { InspectorRow, MidiLoadState }
+export { InspectorRow, MidiLoadState, BarValue, EventCount }
 
 export component App inherits Window {
     icon: @image-url("../../../assets/icons/meridian.png");
@@ -103,6 +103,54 @@ export component App inherits Window {
     in-out property <string> analysis-key-range-text: "—";
     in-out property <string> analysis-avg-velocity-text: "—";
     in-out property <string> analysis-note-density-text: "—";
+
+    // ── Analysis: File metrics ──
+    in-out property <string> analysis-file-size-text: "—";
+    in-out property <string> analysis-gzip-size-text: "—";
+    in-out property <string> analysis-gzip-ratio-text: "—";
+    in-out property <string> analysis-format-text: "—";
+    in-out property <string> analysis-declared-tracks-text: "—";
+    in-out property <string> analysis-actual-tracks-text: "—";
+    in-out property <string> analysis-ticks-per-quarter-text: "—";
+    in-out property <string> analysis-total-events-text: "—";
+
+    // ── Analysis: Tempo metrics ──
+    in-out property <string> analysis-initial-bpm-text: "—";
+    in-out property <string> analysis-min-bpm-text: "—";
+    in-out property <string> analysis-max-bpm-text: "—";
+    in-out property <string> analysis-avg-bpm-text: "—";
+
+    // ── Analysis: Note metrics ──
+    in-out property <string> analysis-avg-note-length-text: "—";
+    in-out property <string> analysis-min-note-length-text: "—";
+    in-out property <string> analysis-max-note-length-text: "—";
+    in-out property <string> analysis-total-note-duration-text: "—";
+    in-out property <string> analysis-max-polyphony-text: "—";
+    in-out property <string> analysis-avg-polyphony-text: "—";
+    in-out property <string> analysis-peak-nps-text: "—";
+    in-out property <string> analysis-avg-nps-text: "—";
+    in-out property <string> analysis-unique-onsets-text: "—";
+    in-out property <string> analysis-avg-notes-per-onset-text: "—";
+
+    // ── Analysis: Summary ──
+    in-out property <string> analysis-total-blocks-text: "—";
+    in-out property <string> analysis-keys-with-notes-text: "—";
+    in-out property <string> analysis-densest-key-text: "—";
+    in-out property <string> analysis-densest-key-notes-text: "—";
+    in-out property <string> analysis-max-blocks-per-key-text: "—";
+    in-out property <string> analysis-max-notes-in-block-text: "—";
+
+    // ── Analysis: Histograms (model arrays) ──
+    in-out property <[BarValue]> analysis-key-histogram: [];
+    in-out property <[BarValue]> analysis-velocity-histogram: [];
+    in-out property <[BarValue]> analysis-pitch-class-histogram: [];
+    in-out property <[BarValue]> analysis-channel-histogram: [];
+    in-out property <[BarValue]> analysis-track-histogram: [];
+    in-out property <[BarValue]> analysis-density-timeline: [];
+
+    // ── Analysis: Event breakdown ──
+    in-out property <[EventCount]> analysis-event-breakdown: [];
+    in-out property <string> analysis-event-total-text: "—";
     in-out property <string> audio-backend-text: "xsynth";
     in-out property <string> audio-engine-status-text: "Idle";
     in-out property <string> audio-output-stream-text: "Stereo @ 48 kHz";
@@ -668,6 +716,54 @@ export component App inherits Window {
                     key-range-text:        root.analysis-key-range-text;
                     avg-velocity-text:     root.analysis-avg-velocity-text;
                     note-density-text:     root.analysis-note-density-text;
+
+                    // File metrics
+                    file-size-text:        root.analysis-file-size-text;
+                    gzip-size-text:        root.analysis-gzip-size-text;
+                    gzip-ratio-text:       root.analysis-gzip-ratio-text;
+                    format-text:           root.analysis-format-text;
+                    declared-tracks-text:  root.analysis-declared-tracks-text;
+                    actual-tracks-text:    root.analysis-actual-tracks-text;
+                    ticks-per-quarter-text: root.analysis-ticks-per-quarter-text;
+                    total-events-text:     root.analysis-total-events-text;
+
+                    // Tempo metrics
+                    initial-bpm-text:      root.analysis-initial-bpm-text;
+                    min-bpm-text:          root.analysis-min-bpm-text;
+                    max-bpm-text:          root.analysis-max-bpm-text;
+                    avg-bpm-text:          root.analysis-avg-bpm-text;
+
+                    // Note metrics
+                    avg-note-length-text:  root.analysis-avg-note-length-text;
+                    min-note-length-text:  root.analysis-min-note-length-text;
+                    max-note-length-text:  root.analysis-max-note-length-text;
+                    total-note-duration-text: root.analysis-total-note-duration-text;
+                    max-polyphony-text:    root.analysis-max-polyphony-text;
+                    avg-polyphony-text:    root.analysis-avg-polyphony-text;
+                    peak-nps-text:         root.analysis-peak-nps-text;
+                    avg-nps-text:          root.analysis-avg-nps-text;
+                    unique-onsets-text:    root.analysis-unique-onsets-text;
+                    avg-notes-per-onset-text: root.analysis-avg-notes-per-onset-text;
+
+                    // Summary
+                    total-blocks-text:     root.analysis-total-blocks-text;
+                    keys-with-notes-text:  root.analysis-keys-with-notes-text;
+                    densest-key-text:      root.analysis-densest-key-text;
+                    densest-key-notes-text: root.analysis-densest-key-notes-text;
+                    max-blocks-per-key-text: root.analysis-max-blocks-per-key-text;
+                    max-notes-in-block-text: root.analysis-max-notes-in-block-text;
+
+                    // Histograms
+                    key-histogram:         root.analysis-key-histogram;
+                    velocity-histogram:    root.analysis-velocity-histogram;
+                    pitch-class-histogram: root.analysis-pitch-class-histogram;
+                    channel-histogram:     root.analysis-channel-histogram;
+                    track-histogram:       root.analysis-track-histogram;
+                    density-timeline:      root.analysis-density-timeline;
+
+                    // Event breakdown
+                    event-breakdown:       root.analysis-event-breakdown;
+                    event-total-text:      root.analysis-event-total-text;
                 }
             }
         }

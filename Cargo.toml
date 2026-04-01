@@ -18,7 +18,7 @@ enum_dispatch = "0.3.13"
 flate2 = "1.1.4"
 flume = "0.11.1"
 glam = "0.30.8"
-midi-toolkit-rs = { path = "../midi-toolkit-rs/midi-toolkit" }
+midi-toolkit-rs = { path = "/home/arduano/programming/midi-toolkit-rs/midi-toolkit" }
 midly = "0.5.3"
 png = "0.18.0"
 pollster = "0.4.0"
@@ -39,9 +39,9 @@ slint = { version = "~1.15", features = [
 thiserror = "2.0.12"
 ts-rs = { version = "12.0.1", features = ["no-serde-warnings"] }
 wgpu = "28.0.0"
-xsynth-core = { path = "../xsynth/core", features = ["serde"] }
-xsynth-realtime = { path = "../xsynth/realtime", features = ["serde"] }
-xsynth-render = { path = "../xsynth/render" }
+xsynth-core = { path = "/home/arduano/programming/xsynth/core", features = ["serde"] }
+xsynth-realtime = { path = "/home/arduano/programming/xsynth/realtime", features = ["serde"] }
+xsynth-render = { path = "/home/arduano/programming/xsynth/render" }
 
 [profile.dev]
 opt-level = 2

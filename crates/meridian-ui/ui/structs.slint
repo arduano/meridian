@@ -33,3 +33,25 @@ export enum MidiLoadState {
     loaded,
     error,
 }
+
+
+// ── BarValue ───────────────────────────────────────────────
+// Single bar in a histogram / bar chart.
+// `value` is normalised 0.0–1.0 (fraction of the max).
+// `label` is an optional tooltip / x-axis label.
+
+export struct BarValue {
+    value: float,
+    label: string,
+    count: int,
+}
+
+
+// ── EventCount ─────────────────────────────────────────────
+// Name + count pair for the event-type breakdown table.
+
+export struct EventCount {
+    name: string,
+    count: int,
+    fraction: float,
+}

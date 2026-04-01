@@ -13,9 +13,13 @@ use meridian_core::{
         SceneConfig, ThreeDSceneConfig,
     },
 };
-use slint::{ModelRc, VecModel};
+use slint::{ModelRc, SharedString, VecModel};
 
-use super::{inspector::rows_for_scene, view::App, view_model::UiViewModel};
+use super::{
+    inspector::rows_for_scene,
+    view::{App, BarValue, EventCount},
+    view_model::UiViewModel,
+};
 
 #[derive(Debug, Clone)]
 pub struct UiOptions {
@@ -468,8 +472,9 @@ fn file_name_or_full(path: &Path) -> String {
 }
 
 fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
-    app.set_analysis_note_count_text(analysis.total_notes.to_string().into());
-    app.set_analysis_midi_length_text(format!("{:.3} s", analysis.midi_length).into());
+    // ── Overview ──
+    app.set_analysis_note_count_text(format_number(analysis.total_notes).into());
+    app.set_analysis_midi_length_text(format_duration(analysis.midi_length).into());
 
     let first_key = analysis
         .key_note_counts
@@ -481,8 +486,17 @@ fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
         .iter()
         .rposition(|count| *count > 0)
         .unwrap_or(0);
-    app.set_analysis_key_range_text(format!("{first_key}..{last_key}").into());
+    app.set_analysis_key_range_text(
+        format!(
+            "{} – {} ({})",
+            midi_note_name(first_key),
+            midi_note_name(last_key),
+            last_key - first_key + 1
+        )
+        .into(),
+    );
 
+    // ── Note density (computed from buckets) ──
     let bucket_width = if analysis.buckets.len() > 1 {
         analysis.buckets[1].time_seconds - analysis.buckets[0].time_seconds
     } else {
@@ -502,8 +516,248 @@ fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
     app.set_analysis_note_density_text(
         format!("avg {:.1}/s peak {:.1}/s", avg_nps, peak_nps).into(),
     );
+    app.set_analysis_peak_nps_text(format!("{:.1}", peak_nps).into());
+    app.set_analysis_avg_nps_text(format!("{:.1}", avg_nps).into());
 
-    app.set_analysis_tempo_text("From bucketed analysis".into());
-    app.set_analysis_time_signature_text("Not computed".into());
-    app.set_analysis_avg_velocity_text("Not computed".into());
+    // ── File metrics ──
+    app.set_analysis_file_size_text(format_bytes(analysis.file.source_bytes).into());
+    app.set_analysis_gzip_size_text(format_bytes(analysis.file.gzip_bytes).into());
+    app.set_analysis_gzip_ratio_text(format!("{:.1}%", analysis.file.gzip_ratio * 100.0).into());
+    app.set_analysis_format_text(format!("Type {}", analysis.file.format).into());
+    app.set_analysis_declared_tracks_text(analysis.file.declared_track_count.to_string().into());
+    app.set_analysis_actual_tracks_text(analysis.file.actual_track_count.to_string().into());
+    app.set_analysis_track_count_text(analysis.file.actual_track_count.to_string().into());
+    app.set_analysis_ticks_per_quarter_text(
+        analysis
+            .file
+            .ticks_per_quarter
+            .map(|t| t.to_string())
+            .unwrap_or_else(|| "—".into())
+            .into(),
+    );
+    app.set_analysis_total_events_text(format_number(analysis.file.total_event_count).into());
+
+    // ── Tempo metrics ──
+    app.set_analysis_initial_bpm_text(format!("{:.1}", analysis.tempo.initial_bpm).into());
+    app.set_analysis_min_bpm_text(format!("{:.1}", analysis.tempo.min_bpm).into());
+    app.set_analysis_max_bpm_text(format!("{:.1}", analysis.tempo.max_bpm).into());
+    app.set_analysis_avg_bpm_text(format!("{:.1}", analysis.tempo.avg_bpm_weighted_by_time).into());
+    app.set_analysis_tempo_text(
+        format!(
+            "{:.0} BPM ({:.0}–{:.0})",
+            analysis.tempo.avg_bpm_weighted_by_time, analysis.tempo.min_bpm, analysis.tempo.max_bpm
+        )
+        .into(),
+    );
+    app.set_analysis_time_signature_text("—".into()); // Not in analysis data
+
+    // ── Note metrics ──
+    app.set_analysis_avg_note_length_text(
+        format_duration_short(analysis.notes.avg_note_length_seconds).into(),
+    );
+    app.set_analysis_min_note_length_text(
+        format_duration_short(analysis.notes.min_note_length_seconds).into(),
+    );
+    app.set_analysis_max_note_length_text(
+        format_duration_short(analysis.notes.max_note_length_seconds).into(),
+    );
+    app.set_analysis_total_note_duration_text(
+        format_duration(analysis.notes.total_note_duration_seconds).into(),
+    );
+    app.set_analysis_max_polyphony_text(analysis.notes.max_simultaneous_notes.to_string().into());
+    app.set_analysis_avg_polyphony_text(
+        format!("{:.1}", analysis.notes.avg_simultaneous_notes).into(),
+    );
+    app.set_analysis_unique_onsets_text(format_number(analysis.notes.unique_onset_count).into());
+    app.set_analysis_avg_notes_per_onset_text(
+        format!("{:.2}", analysis.notes.avg_notes_per_onset).into(),
+    );
+
+    // ── Average velocity (computed from histogram) ──
+    let total_velocity_notes: u64 = analysis.notes.velocity_note_on_counts.iter().sum();
+    let weighted_velocity: u64 = analysis
+        .notes
+        .velocity_note_on_counts
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| i as u64 * c)
+        .sum();
+    let avg_velocity = if total_velocity_notes > 0 {
+        weighted_velocity as f64 / total_velocity_notes as f64
+    } else {
+        0.0
+    };
+    app.set_analysis_avg_velocity_text(format!("{:.0}", avg_velocity).into());
+
+    // ── Summary (block analysis) ──
+    app.set_analysis_total_blocks_text(format_number(analysis.summary.total_blocks).into());
+    app.set_analysis_keys_with_notes_text(analysis.summary.keys_with_notes.to_string().into());
+    app.set_analysis_densest_key_text(midi_note_name(analysis.summary.densest_key).into());
+    app.set_analysis_densest_key_notes_text(
+        format_number(analysis.summary.densest_key_notes).into(),
+    );
+    app.set_analysis_max_blocks_per_key_text(
+        format_number(analysis.summary.max_blocks_per_key as u64).into(),
+    );
+    app.set_analysis_max_notes_in_block_text(
+        format_number(analysis.summary.max_notes_in_block as u64).into(),
+    );
+
+    // ── Histograms ──
+    app.set_analysis_key_histogram(build_bar_model(&analysis.key_note_counts, |i| {
+        midi_note_name(i)
+    }));
+    app.set_analysis_velocity_histogram(build_bar_model(
+        &analysis.notes.velocity_note_on_counts,
+        |i| i.to_string(),
+    ));
+    app.set_analysis_pitch_class_histogram(build_bar_model(
+        &analysis.notes.pitch_class_note_counts,
+        |i| {
+            const NAMES: [&str; 12] = [
+                "C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B",
+            ];
+            NAMES.get(i).unwrap_or(&"?").to_string()
+        },
+    ));
+    app.set_analysis_channel_histogram(build_bar_model(&analysis.notes.channel_note_counts, |i| {
+        i.to_string()
+    }));
+    app.set_analysis_track_histogram(build_bar_model(&analysis.notes.track_note_counts, |i| {
+        format!("T{}", i)
+    }));
+
+    // ── Density timeline ──
+    let peak_bucket = analysis
+        .buckets
+        .iter()
+        .map(|b| b.note_starts)
+        .max()
+        .unwrap_or(1)
+        .max(1) as f32;
+    let density_bars: Vec<BarValue> = analysis
+        .buckets
+        .iter()
+        .map(|b| BarValue {
+            value: b.note_starts as f32 / peak_bucket,
+            label: SharedString::from(format!("{:.0}s", b.time_seconds)),
+            count: b.note_starts as i32,
+        })
+        .collect();
+    app.set_analysis_density_timeline(ModelRc::from(std::rc::Rc::new(VecModel::from(
+        density_bars,
+    ))));
+
+    // ── Event breakdown ──
+    let events = &analysis.events;
+    let event_pairs: Vec<(&str, u64)> = vec![
+        ("Note On", events.note_on_events),
+        ("Note Off", events.note_off_events),
+        ("Zero-Vel Note On", events.zero_velocity_note_on_events),
+        ("Program Change", events.program_change_events),
+        ("Control Change", events.control_change_events),
+        ("Pitch Bend", events.pitch_bend_events),
+        ("Channel Pressure", events.channel_pressure_events),
+        ("Polyphonic Pressure", events.polyphonic_pressure_events),
+        ("SysEx", events.sysex_events),
+        ("Text", events.text_events),
+        ("Lyric", events.lyric_events),
+        ("Marker", events.marker_events),
+        ("Cue Point", events.cue_point_events),
+        ("Track Name", events.track_name_events),
+        ("Instrument Name", events.instrument_name_events),
+        ("Tempo", events.tempo_events),
+        ("Time Signature", events.time_signature_events),
+        ("Key Signature", events.key_signature_events),
+    ];
+    let max_event_count = event_pairs
+        .iter()
+        .map(|(_, c)| *c)
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    let event_counts: Vec<EventCount> = event_pairs
+        .into_iter()
+        .filter(|(_, count)| *count > 0)
+        .map(|(name, count)| EventCount {
+            name: SharedString::from(name),
+            count: count as i32,
+            fraction: count as f32 / max_event_count as f32,
+        })
+        .collect();
+    app.set_analysis_event_breakdown(ModelRc::from(std::rc::Rc::new(VecModel::from(
+        event_counts,
+    ))));
+    app.set_analysis_event_total_text(format_number(analysis.file.total_event_count).into());
+}
+
+// ── Formatting helpers ──
+
+fn format_number(n: impl Into<u64>) -> String {
+    let n = n.into();
+    if n >= 1_000_000 {
+        format!("{:.2}M", n as f64 / 1_000_000.0)
+    } else if n >= 10_000 {
+        format!("{:.1}K", n as f64 / 1_000.0)
+    } else {
+        n.to_string()
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    if bytes >= 1_048_576 {
+        format!("{:.1} MB", bytes as f64 / 1_048_576.0)
+    } else if bytes >= 1_024 {
+        format!("{:.1} KB", bytes as f64 / 1_024.0)
+    } else {
+        format!("{} B", bytes)
+    }
+}
+
+fn format_duration(seconds: f64) -> String {
+    if seconds >= 3600.0 {
+        let h = (seconds / 3600.0).floor() as u64;
+        let m = ((seconds % 3600.0) / 60.0).floor() as u64;
+        let s = seconds % 60.0;
+        format!("{}h {:02}m {:04.1}s", h, m, s)
+    } else if seconds >= 60.0 {
+        let m = (seconds / 60.0).floor() as u64;
+        let s = seconds % 60.0;
+        format!("{}m {:04.1}s", m, s)
+    } else {
+        format!("{:.3}s", seconds)
+    }
+}
+
+fn format_duration_short(seconds: f64) -> String {
+    if seconds >= 1.0 {
+        format!("{:.2}s", seconds)
+    } else if seconds >= 0.001 {
+        format!("{:.1}ms", seconds * 1_000.0)
+    } else {
+        format!("{:.0}µs", seconds * 1_000_000.0)
+    }
+}
+
+fn midi_note_name(key: usize) -> String {
+    const NAMES: [&str; 12] = [
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+    ];
+    let octave = key as i32 / 12 - 1;
+    let name = NAMES[key % 12];
+    format!("{}{}", name, octave)
+}
+
+fn build_bar_model(counts: &[u64], label_fn: impl Fn(usize) -> String) -> ModelRc<BarValue> {
+    let max = counts.iter().copied().max().unwrap_or(1).max(1) as f32;
+    let bars: Vec<BarValue> = counts
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| BarValue {
+            value: c as f32 / max,
+            label: SharedString::from(label_fn(i)),
+            count: c as i32,
+        })
+        .collect();
+    ModelRc::from(std::rc::Rc::new(VecModel::from(bars)))
 }

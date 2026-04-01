@@ -1,11 +1,26 @@
-use clap::{Parser, Subcommand};
+use std::{
+    io::{self, Write},
+    path::{Path, PathBuf},
+    time::Duration,
+};
+
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use meridian_core::{
     MeridianError,
+    midi::{
+        MidiFileProcessingConfig, MidiFileSelection, MidiMergeMode, QuantizeTool, RangeSelectTool,
+        SelectableEventKind, TempoMapTool, analysis::MidiAnalysisKind,
+    },
+    protocol::{
+        CoreCommand, CoreEvent, MidiAnalysisJobStatus, MidiProcessEvent, MidiProcessStatus,
+    },
     render::{DisplayTimeSpace, RendererKind},
+    spawn_core,
 };
 
 #[derive(Debug, Parser)]
 #[command(name = "meridian")]
+#[command(version)]
 #[command(about = "Meridian command line interface")]
 pub struct Cli {
     #[command(subcommand)]
@@ -17,6 +32,11 @@ pub enum Command {
     #[command(visible_alias = "serve-json")]
     Stdio,
     Json(JsonArgs),
+    Analyze(AnalyzeArgs),
+    Process {
+        #[command(subcommand)]
+        command: ProcessCommand,
+    },
     Render {
         #[command(subcommand)]
         command: RenderCommand,
@@ -43,24 +63,43 @@ pub fn run() -> Result<(), MeridianError> {
     match cli.command {
         Command::Stdio => crate::json_mode::serve_json(),
         Command::Json(args) => crate::json_mode::run_one_json(args.raw.join(" ").trim()),
+        Command::Analyze(args) => run_analyze(args),
+        Command::Process {
+            command: ProcessCommand::Select(args),
+        } => run_process(
+            ProcessTool::Select(process_range_select_tool(&args)),
+            args.common,
+        ),
+        Command::Process {
+            command: ProcessCommand::TempoFlatten(args),
+        } => run_process(
+            ProcessTool::Tempo(process_tempo_flatten_tool(&args)),
+            args.common,
+        ),
+        Command::Process {
+            command: ProcessCommand::TempoScale(args),
+        } => run_process(
+            ProcessTool::Tempo(process_tempo_scale_tool(&args)),
+            args.common,
+        ),
+        Command::Process {
+            command: ProcessCommand::Quantize(args),
+        } => run_process(
+            ProcessTool::Quantize(process_quantize_tool(&args)),
+            args.common,
+        ),
         Command::Render {
             command: RenderCommand::Frame(args),
         }
-        | Command::FrameStdout(args) => {
-            run_frame_stdout(args)
-        }
+        | Command::FrameStdout(args) => run_frame_stdout(args),
         Command::Render {
             command: RenderCommand::Video(args),
         }
-        | Command::RenderVideo(args) => {
-            run_render_video(args)
-        }
+        | Command::RenderVideo(args) => run_render_video(args),
         Command::Render {
             command: RenderCommand::Audio(args),
         }
-        | Command::RenderAudio(args) => {
-            run_render_audio(args)
-        }
+        | Command::RenderAudio(args) => run_render_audio(args),
         Command::Bench(args) | Command::Benchmark(args) => run_benchmark(args),
         Command::Debug {
             command: DebugCommand::PianoTrailClassicGeometry(args),
@@ -69,10 +108,30 @@ pub fn run() -> Result<(), MeridianError> {
     }
 }
 
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Args)]
 pub struct JsonArgs {
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     raw: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct AnalyzeArgs {
+    #[arg(value_name = "MIDI")]
+    midi: PathBuf,
+    #[arg(long = "include", value_enum)]
+    include: Vec<AnalysisKindArg>,
+    #[arg(long)]
+    buckets: Option<usize>,
+    #[arg(long)]
+    pretty: bool,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ProcessCommand {
+    Select(ProcessSelectArgs),
+    TempoFlatten(ProcessTempoFlattenArgs),
+    TempoScale(ProcessTempoScaleArgs),
+    Quantize(ProcessQuantizeArgs),
 }
 
 #[derive(Debug, Subcommand)]
@@ -87,10 +146,10 @@ pub enum DebugCommand {
     PianoTrailClassicGeometry(DebugPianoTrailClassicGeometryArgs),
 }
 
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Clone, Args)]
 pub struct FrameStdoutArgs {
     #[arg(value_name = "MIDI")]
-    midi: std::path::PathBuf,
+    midi: PathBuf,
     #[arg(long, value_enum, default_value_t = meridian_core::protocol::ImageOutputFormat::Rgba)]
     format: meridian_core::protocol::ImageOutputFormat,
     #[arg(long, default_value_t = 0.0)]
@@ -111,10 +170,10 @@ pub struct FrameStdoutArgs {
     renderer: RendererKind,
 }
 
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Clone, Args)]
 pub struct BenchmarkArgs {
     #[arg(value_name = "MIDI")]
-    midi: std::path::PathBuf,
+    midi: PathBuf,
     #[arg(long, default_value_t = 30.0)]
     time: f64,
     #[arg(long, default_value_t = 8.0)]
@@ -137,12 +196,12 @@ pub struct BenchmarkArgs {
     warmup: u32,
 }
 
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Clone, Args)]
 pub struct RenderVideoArgs {
     #[arg(value_name = "MIDI")]
-    midi: std::path::PathBuf,
+    midi: PathBuf,
     #[arg(long)]
-    output: std::path::PathBuf,
+    output: PathBuf,
     #[arg(long, default_value_t = 60.0)]
     fps: f64,
     #[arg(long, default_value_t = 1920)]
@@ -163,12 +222,12 @@ pub struct RenderVideoArgs {
     ffmpeg_flags: Option<String>,
 }
 
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Clone, Args)]
 pub struct RenderAudioArgs {
     #[arg(value_name = "MIDI")]
-    midi: std::path::PathBuf,
+    midi: PathBuf,
     #[arg(long)]
-    output: std::path::PathBuf,
+    output: PathBuf,
     #[arg(long, default_value_t = 44_100)]
     sample_rate: u32,
     #[arg(long, default_value_t = 2)]
@@ -176,10 +235,10 @@ pub struct RenderAudioArgs {
     #[arg(long)]
     no_limiter: bool,
     #[arg(long)]
-    soundfont: Vec<std::path::PathBuf>,
+    soundfont: Vec<PathBuf>,
 }
 
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Clone, Args)]
 pub struct DebugPianoTrailClassicGeometryArgs {
     #[arg(long, default_value_t = 0)]
     first_key: u8,
@@ -191,6 +250,446 @@ pub struct DebugPianoTrailClassicGeometryArgs {
     height: u32,
     #[arg(long, allow_hyphen_values = true)]
     scene_json: Option<String>,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ProcessCommonArgs {
+    #[arg(value_name = "INPUT", num_args = 1..)]
+    inputs: Vec<PathBuf>,
+    #[arg(long)]
+    output: PathBuf,
+    #[arg(long)]
+    pretty: bool,
+    #[arg(long)]
+    piano_only: bool,
+    #[arg(long)]
+    min_key: Option<u8>,
+    #[arg(long)]
+    max_key: Option<u8>,
+    #[arg(long)]
+    transpose: Option<i16>,
+    #[arg(long)]
+    velocity_scale: Option<f32>,
+    #[arg(long)]
+    split_channels: bool,
+    #[arg(long)]
+    collapse_tracks: bool,
+    #[arg(long, value_enum)]
+    merge_mode: Option<MergeModeArg>,
+    #[arg(long)]
+    ppq_override: Option<u16>,
+    #[arg(long)]
+    tempo_override: Option<u32>,
+    #[arg(long)]
+    trim_start: Option<u64>,
+    #[arg(long)]
+    trim_end: Option<u64>,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ProcessSelectArgs {
+    #[command(flatten)]
+    common: ProcessCommonArgs,
+    #[arg(long)]
+    reset: bool,
+    #[arg(long)]
+    track_min: Option<usize>,
+    #[arg(long)]
+    track_max: Option<usize>,
+    #[arg(long)]
+    channel_min: Option<u8>,
+    #[arg(long)]
+    channel_max: Option<u8>,
+    #[arg(long)]
+    key_min: Option<u8>,
+    #[arg(long)]
+    key_max: Option<u8>,
+    #[arg(long)]
+    velocity_min: Option<u8>,
+    #[arg(long)]
+    velocity_max: Option<u8>,
+    #[arg(long)]
+    tick_start: Option<u64>,
+    #[arg(long)]
+    tick_end: Option<u64>,
+    #[arg(long = "event-kind", value_enum)]
+    event_kinds: Vec<SelectableEventKindArg>,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ProcessTempoFlattenArgs {
+    #[command(flatten)]
+    common: ProcessCommonArgs,
+    #[arg(long)]
+    tempo: u32,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ProcessTempoScaleArgs {
+    #[command(flatten)]
+    common: ProcessCommonArgs,
+    #[arg(long)]
+    factor: f64,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ProcessQuantizeArgs {
+    #[command(flatten)]
+    common: ProcessCommonArgs,
+    #[arg(long)]
+    grid_ticks: u64,
+    #[arg(long, default_value_t = 1.0)]
+    strength: f32,
+    #[arg(long)]
+    quantize_note_ends: bool,
+    #[arg(long, default_value_t = 0.0)]
+    swing: f32,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum AnalysisKindArg {
+    File,
+    Summary,
+    Events,
+    Notes,
+    Tempo,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum SelectableEventKindArg {
+    Note,
+    Tempo,
+    ProgramChange,
+    ControlChange,
+    PitchBend,
+    ChannelPressure,
+    PolyphonicPressure,
+    Text,
+    Sysex,
+    MetaOther,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum MergeModeArg {
+    PreserveTracks,
+    FlattenToSingleTrack,
+    MergeByTrackIndex,
+}
+
+enum ProcessTool {
+    Select(RangeSelectTool),
+    Tempo(TempoMapTool),
+    Quantize(QuantizeTool),
+}
+
+fn run_analyze(args: AnalyzeArgs) -> Result<(), MeridianError> {
+    let kinds = analysis_kinds(&args);
+    let bucket_count = args.buckets;
+    let core = spawn_core();
+    let event_rx = core.subscribe_events();
+
+    let parsed_events = core.request(CoreCommand::LoadParsedMidi {
+        path: args.midi.clone(),
+    })?;
+    let parsed_midi_id = parsed_events
+        .iter()
+        .find_map(|event| match event {
+            CoreEvent::ParsedMidiLoaded { parsed_midi_id, .. } => Some(*parsed_midi_id),
+            _ => None,
+        })
+        .ok_or_else(|| MeridianError::Platform("missing parsed midi id".into()))?;
+
+    let status_events = core.request(CoreCommand::StartMidiAnalysisJob {
+        parsed_midi_id,
+        display_cache_id: None,
+        kinds,
+        bucket_count,
+    })?;
+    let job_id = match status_events.as_slice() {
+        [
+            CoreEvent::MidiAnalysisJobStatus {
+                status: MidiAnalysisJobStatus::Running { job_id, .. },
+            },
+        ] => *job_id,
+        [
+            CoreEvent::MidiAnalysisJobStatus {
+                status: MidiAnalysisJobStatus::Finished { result, .. },
+            },
+        ] => {
+            print_json_to_stdout(result, args.pretty)?;
+            let _ = core.request(CoreCommand::Shutdown);
+            return Ok(());
+        }
+        [
+            CoreEvent::MidiAnalysisJobStatus {
+                status: MidiAnalysisJobStatus::Failed { message, .. },
+            },
+        ] => return Err(MeridianError::Platform(message.clone())),
+        other => {
+            return Err(MeridianError::Platform(format!(
+                "unexpected analysis start response: {other:?}"
+            )));
+        }
+    };
+
+    let result = loop {
+        let event = event_rx
+            .recv_timeout(Duration::from_secs(30))
+            .map_err(|_| MeridianError::Platform("timed out waiting for analysis job".into()))?;
+        match event {
+            CoreEvent::MidiAnalysisJob { event } => match event {
+                meridian_core::protocol::MidiAnalysisJobEvent::Progress {
+                    job_id: event_job_id,
+                    progress,
+                    status,
+                } if event_job_id == job_id => {
+                    eprintln!("analysis: {:>3.0}% {status}", progress as f64 * 100.0);
+                }
+                meridian_core::protocol::MidiAnalysisJobEvent::Finished {
+                    job_id: event_job_id,
+                    result,
+                } if event_job_id == job_id => break Ok(result),
+                meridian_core::protocol::MidiAnalysisJobEvent::Failed {
+                    job_id: event_job_id,
+                    message,
+                } if event_job_id == job_id => break Err(MeridianError::Platform(message)),
+                _ => {}
+            },
+            _ => {}
+        }
+    };
+
+    let _ = core.request(CoreCommand::Shutdown);
+    print_json_to_stdout(&result?, args.pretty)
+}
+
+fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), MeridianError> {
+    let config = build_process_config(&common, tool);
+    let core = spawn_core();
+    let event_rx = core.subscribe_events();
+    let status_events = core.request(CoreCommand::StartProcessMidiFiles {
+        selection: MidiFileSelection {
+            inputs: common.inputs.clone(),
+        },
+        output: common.output.clone(),
+        config,
+    })?;
+
+    let job_id = match status_events.as_slice() {
+        [
+            CoreEvent::MidiProcessStatus {
+                status:
+                    MidiProcessStatus::Running {
+                        job_id,
+                        total_inputs,
+                        ..
+                    },
+            },
+        ] => {
+            eprintln!("process: started job {job_id:?} with {total_inputs} input(s)");
+            *job_id
+        }
+        [
+            CoreEvent::MidiProcessStatus {
+                status: MidiProcessStatus::Idle,
+            },
+        ] => {
+            return Err(MeridianError::Platform(
+                "midi processing did not enter a running state".into(),
+            ));
+        }
+        other => {
+            return Err(MeridianError::Platform(format!(
+                "unexpected process start response: {other:?}"
+            )));
+        }
+    };
+
+    let result = loop {
+        let event = event_rx
+            .recv_timeout(Duration::from_secs(30))
+            .map_err(|_| MeridianError::Platform("timed out waiting for midi processing".into()))?;
+        match event {
+            CoreEvent::MidiProcess { event } => match event {
+                MidiProcessEvent::InputProgress {
+                    job_id: event_job_id,
+                    processed_inputs,
+                    total_inputs,
+                    current_input,
+                } if event_job_id == job_id => match current_input {
+                    Some(path) => eprintln!(
+                        "process: {processed_inputs}/{total_inputs} {}",
+                        path.display()
+                    ),
+                    None => eprintln!("process: {processed_inputs}/{total_inputs}"),
+                },
+                MidiProcessEvent::ProcessFinished {
+                    job_id: event_job_id,
+                    ..
+                } if event_job_id == job_id => break Ok(event),
+                MidiProcessEvent::ProcessFailed {
+                    job_id: event_job_id,
+                    message,
+                    ..
+                } if event_job_id == job_id => break Err(MeridianError::Platform(message)),
+                MidiProcessEvent::ProcessCancelled {
+                    job_id: event_job_id,
+                    ..
+                } if event_job_id == job_id => {
+                    break Err(MeridianError::Platform(
+                        "midi processing was cancelled".into(),
+                    ));
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    };
+
+    let _ = core.request(CoreCommand::Shutdown);
+    print_json_to_stdout(&result?, common.pretty)
+}
+
+fn analysis_kinds(args: &AnalyzeArgs) -> Vec<MidiAnalysisKind> {
+    let mut kinds = if args.include.is_empty() {
+        vec![
+            MidiAnalysisKind::File,
+            MidiAnalysisKind::Summary,
+            MidiAnalysisKind::Events,
+            MidiAnalysisKind::Notes,
+            MidiAnalysisKind::Tempo,
+        ]
+    } else {
+        args.include
+            .iter()
+            .map(|kind| match kind {
+                AnalysisKindArg::File => MidiAnalysisKind::File,
+                AnalysisKindArg::Summary => MidiAnalysisKind::Summary,
+                AnalysisKindArg::Events => MidiAnalysisKind::Events,
+                AnalysisKindArg::Notes => MidiAnalysisKind::Notes,
+                AnalysisKindArg::Tempo => MidiAnalysisKind::Tempo,
+            })
+            .collect::<Vec<_>>()
+    };
+    if args.buckets.is_some() {
+        kinds.push(MidiAnalysisKind::Buckets);
+    }
+    kinds
+}
+
+fn build_process_config(common: &ProcessCommonArgs, tool: ProcessTool) -> MidiFileProcessingConfig {
+    let mut config = MidiFileProcessingConfig::default();
+    config.piano_only = common.piano_only;
+    if let Some(min_key) = common.min_key {
+        config.notes.min_key = min_key;
+    }
+    if let Some(max_key) = common.max_key {
+        config.notes.max_key = max_key;
+    }
+    if let Some(transpose) = common.transpose {
+        config.notes.transpose = transpose;
+    }
+    if let Some(velocity_scale) = common.velocity_scale {
+        config.notes.velocity_scale = velocity_scale;
+    }
+    config.structure.split_channels = common.split_channels;
+    config.structure.collapse_tracks = common.collapse_tracks;
+    if let Some(mode) = common.merge_mode {
+        config.merge.mode = match mode {
+            MergeModeArg::PreserveTracks => MidiMergeMode::PreserveTracks,
+            MergeModeArg::FlattenToSingleTrack => MidiMergeMode::FlattenToSingleTrack,
+            MergeModeArg::MergeByTrackIndex => MidiMergeMode::MergeByTrackIndex,
+        };
+    }
+    if common.ppq_override.is_some()
+        || common.tempo_override.is_some()
+        || common.trim_start.is_some()
+        || common.trim_end.is_some()
+    {
+        config.time.ppq_override = common.ppq_override;
+        config.time.tempo_override = common.tempo_override;
+        if common.trim_start.is_some() || common.trim_end.is_some() {
+            let mut trim = meridian_core::midi::TrimProcessingConfig::default();
+            if let Some(start) = common.trim_start {
+                trim.start_tick = start;
+            }
+            trim.end_tick = common.trim_end;
+            config.time.trim = Some(trim);
+        }
+    }
+    config.tools = vec![match tool {
+        ProcessTool::Select(tool) => meridian_core::midi::MidiModifierTool::RangeSelect(tool),
+        ProcessTool::Tempo(tool) => meridian_core::midi::MidiModifierTool::TempoMap(tool),
+        ProcessTool::Quantize(tool) => meridian_core::midi::MidiModifierTool::Quantize(tool),
+    }];
+    config
+}
+
+fn process_range_select_tool(args: &ProcessSelectArgs) -> RangeSelectTool {
+    RangeSelectTool {
+        reset: args.reset,
+        track_min: args.track_min,
+        track_max: args.track_max,
+        channel_min: args.channel_min,
+        channel_max: args.channel_max,
+        key_min: args.key_min,
+        key_max: args.key_max,
+        velocity_min: args.velocity_min,
+        velocity_max: args.velocity_max,
+        tick_start: args.tick_start,
+        tick_end: args.tick_end,
+        event_kinds: args
+            .event_kinds
+            .iter()
+            .map(|kind| match kind {
+                SelectableEventKindArg::Note => SelectableEventKind::Note,
+                SelectableEventKindArg::Tempo => SelectableEventKind::Tempo,
+                SelectableEventKindArg::ProgramChange => SelectableEventKind::ProgramChange,
+                SelectableEventKindArg::ControlChange => SelectableEventKind::ControlChange,
+                SelectableEventKindArg::PitchBend => SelectableEventKind::PitchBend,
+                SelectableEventKindArg::ChannelPressure => SelectableEventKind::ChannelPressure,
+                SelectableEventKindArg::PolyphonicPressure => {
+                    SelectableEventKind::PolyphonicPressure
+                }
+                SelectableEventKindArg::Text => SelectableEventKind::Text,
+                SelectableEventKindArg::Sysex => SelectableEventKind::Sysex,
+                SelectableEventKindArg::MetaOther => SelectableEventKind::MetaOther,
+            })
+            .collect(),
+    }
+}
+
+fn process_tempo_flatten_tool(args: &ProcessTempoFlattenArgs) -> TempoMapTool {
+    TempoMapTool::Flatten { tempo: args.tempo }
+}
+
+fn process_tempo_scale_tool(args: &ProcessTempoScaleArgs) -> TempoMapTool {
+    TempoMapTool::ScaleBpm {
+        factor: args.factor,
+    }
+}
+
+fn process_quantize_tool(args: &ProcessQuantizeArgs) -> QuantizeTool {
+    QuantizeTool {
+        grid_ticks: args.grid_ticks,
+        strength: args.strength,
+        quantize_note_ends: args.quantize_note_ends,
+        swing: args.swing,
+    }
+}
+
+fn print_json_to_stdout(value: &impl serde::Serialize, pretty: bool) -> Result<(), MeridianError> {
+    let mut stdout = io::stdout().lock();
+    if pretty {
+        serde_json::to_writer_pretty(&mut stdout, value)
+            .map_err(|error| MeridianError::Platform(error.to_string()))?;
+    } else {
+        serde_json::to_writer(&mut stdout, value)
+            .map_err(|error| MeridianError::Platform(error.to_string()))?;
+    }
+    stdout.write_all(b"\n")?;
+    stdout.flush()?;
+    Ok(())
 }
 
 fn run_frame_stdout(args: FrameStdoutArgs) -> Result<(), MeridianError> {
@@ -259,4 +758,9 @@ fn run_debug_geometry(args: DebugPianoTrailClassicGeometryArgs) -> Result<(), Me
         args.height,
         args.scene_json.as_deref(),
     )
+}
+
+#[allow(dead_code)]
+fn _path_exists(path: &Path) -> bool {
+    path.exists()
 }

@@ -56,6 +56,22 @@ Run stdio mode:
 nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run -p meridian-cli -- stdio'
 ```
 
+Analyze a MIDI file:
+
+```bash
+nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run -p meridian-cli -- analyze song.mid --pretty --buckets 64'
+```
+
+Process MIDI files:
+
+```bash
+# Flatten tempo map to a fixed tempo and write a new file
+nix-shell --run '\''PATH=/run/current-system/sw/bin:$PATH cargo run -p meridian-cli -- process tempo-flatten song.mid --output song_flat.mid --tempo 500000 --pretty'\''
+
+# Keep only a key range
+nix-shell --run '\''PATH=/run/current-system/sw/bin:$PATH cargo run -p meridian-cli -- process select song.mid --output right_hand.mid --key-min 60 --event-kind note --pretty'\''
+```
+
 Run without the accelerated viewport (A/B resize test):
 
 ```bash
