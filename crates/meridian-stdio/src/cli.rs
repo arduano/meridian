@@ -5,7 +5,7 @@ use meridian_core::{
 };
 
 #[derive(Debug, Parser)]
-#[command(name = "meridian-stdio")]
+#[command(name = "meridian")]
 #[command(about = "Stateful JSON-lines frontend for Meridian core")]
 pub struct Cli {
     #[command(subcommand)]

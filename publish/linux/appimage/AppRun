@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APPDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ "${1:-}" == "meridian" ]]; then
+    shift
+    exec "$APPDIR/usr/bin/meridian" "$@"
+fi
+
+if [[ "${1:-}" == "meridian-ui" ]]; then
+    shift
+    exec "$APPDIR/usr/bin/meridian-ui" "$@"
+fi
+
+exec "$APPDIR/usr/bin/meridian-ui" "$@"

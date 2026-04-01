@@ -1,0 +1,85 @@
+name: Windows Prototype
+
+on:
+  push:
+    branches:
+      - "codex/windows-gha-prototype-*"
+  workflow_dispatch:
+
+jobs:
+  windows-package:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: meridian
+
+    steps:
+      - name: Checkout meridian
+        uses: actions/checkout@v4
+        with:
+          path: meridian
+
+      - name: Checkout midi-toolkit-rs
+        uses: actions/checkout@v4
+        with:
+          repository: arduano/midi-toolkit-rs
+          path: midi-toolkit-rs
+
+      - name: Checkout xsynth
+        uses: actions/checkout@v4
+        with:
+          repository: arduano/xsynth
+          path: xsynth
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-03-29
+
+      - name: Cache cargo state
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\.cargo\bin
+            ~\.cargo\registry\cache
+            ~\.cargo\registry\index
+            ~\.cargo\registry\src
+            ~\.cargo\git\db
+            meridian\target
+          key: windows-prototype-${{ runner.os }}-${{ hashFiles('meridian/Cargo.lock', 'meridian/Cargo.toml', 'meridian/crates/**/Cargo.toml') }}
+          restore-keys: |
+            windows-prototype-${{ runner.os }}-
+
+      - name: Install NSIS
+        run: choco install nsis -y --no-progress
+
+      - name: Build CLI
+        run: cargo build --release -p meridian-stdio
+
+      - name: Build UI
+        continue-on-error: true
+        run: cargo build --release -p meridian-ui
+
+      - name: Build portable zip
+        run: .\publish\windows\ci\build-portable.ps1
+
+      - name: Smoke staged CLI
+        run: .\publish\windows\ci\smoke-cli.ps1
+
+      - name: Smoke staged UI
+        run: .\publish\windows\ci\smoke-ui.ps1
+
+      - name: Build NSIS installer
+        run: .\publish\windows\ci\build-installer.ps1
+
+      - name: Smoke installed CLI
+        run: .\publish\windows\ci\smoke-installer.ps1
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-prototype
+          path: |
+            meridian/publish/windows/artifacts/dist/*.zip
+            meridian/publish/windows/artifacts/dist/*.exe
