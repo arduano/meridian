@@ -176,9 +176,18 @@ pub(crate) fn build_in_ram_cache_with_progress(
                 let key_index = note_on.key as usize;
                 if key_index < MIDI_KEY_COUNT {
                     let track_chan = TrackAndChannel::new(track, note_on.channel);
-                    keys[key_index].add_note(track_chan, current_colors[track_chan.as_usize()]);
-                    analysis.observe_note_start(time_seconds, key_index, track_chan);
-                    notes += 1;
+                    if note_on.velocity == 0 {
+                        keys[key_index].end_note(
+                            track_chan,
+                            time_seconds,
+                            time_ticks,
+                            &mut analysis,
+                        );
+                    } else {
+                        keys[key_index].add_note(track_chan, current_colors[track_chan.as_usize()]);
+                        analysis.observe_note_start(time_seconds, key_index, track_chan);
+                        notes += 1;
+                    }
                 }
             }
             Event::NoteOff(note_off) => {

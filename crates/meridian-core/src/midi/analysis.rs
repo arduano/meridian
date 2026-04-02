@@ -553,9 +553,18 @@ pub fn build_cached_midi_analysis_with_progress(
                 let key_index = note_on.key as usize;
                 if key_index < 256 {
                     let track_chan = TrackAndChannel::new(track, note_on.channel);
-                    keys[key_index].add_note(track_chan, time_seconds);
-                    analysis.observe_note_start(time_seconds, key_index, track_chan);
-                    total_notes += 1;
+                    if is_zero_velocity_note_off(note_on.velocity) {
+                        keys[key_index].end_note(
+                            key_index,
+                            track_chan,
+                            time_seconds,
+                            &mut analysis,
+                        );
+                    } else {
+                        keys[key_index].add_note(track_chan, time_seconds);
+                        analysis.observe_note_start(time_seconds, key_index, track_chan);
+                        total_notes += 1;
+                    }
                 }
             }
             Event::NoteOff(note_off) => {
@@ -649,13 +658,25 @@ pub fn build_buckets_from_parsed_with_progress(
                 micros_per_quarter = tempo.tempo;
             }
             Event::NoteOn(note_on) => {
-                let start_bucket = bucket_index(time_seconds, bucket_width, bucket_count);
-                note_starts[start_bucket] += 1;
-                active_deltas[start_bucket] += 1;
-                open_notes
-                    .entry((note_on.key, TrackAndChannel::new(track, note_on.channel)))
-                    .or_default()
-                    .push_back(time_seconds);
+                let key = (note_on.key, TrackAndChannel::new(track, note_on.channel));
+                if is_zero_velocity_note_off(note_on.velocity) {
+                    if let Some(queue) = open_notes.get_mut(&key) {
+                        let removed = queue.pop_front().is_some();
+                        if queue.is_empty() {
+                            open_notes.remove(&key);
+                        }
+                        if removed {
+                            let end_bucket =
+                                end_bucket_index(time_seconds, bucket_width, bucket_count);
+                            active_deltas[end_bucket] -= 1;
+                        }
+                    }
+                } else {
+                    let start_bucket = bucket_index(time_seconds, bucket_width, bucket_count);
+                    note_starts[start_bucket] += 1;
+                    active_deltas[start_bucket] += 1;
+                    open_notes.entry(key).or_default().push_back(time_seconds);
+                }
             }
             Event::NoteOff(note_off) => {
                 let key = (note_off.key, TrackAndChannel::new(track, note_off.channel));
@@ -944,6 +965,10 @@ impl RollingNpsPeak {
     fn peak(&self) -> u64 {
         self.peak
     }
+}
+
+fn is_zero_velocity_note_off(velocity: u8) -> bool {
+    velocity == 0
 }
 
 fn bucket_index(time: f64, width: f64, bucket_count: usize) -> usize {
