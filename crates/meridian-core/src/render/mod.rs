@@ -6,10 +6,11 @@ pub mod shared;
 
 pub use shared::{
     DisplayTimeSpace, FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardHeightSpec,
-    KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig, PfaKeyboardProjectorConfig,
-    PfaNoteProjectorConfig, PfaTopColor, PianoTrailClassicSceneConfig, ProjectedScene,
-    ProjectorImageConfig, RendererKind, SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState,
-    SceneQuad, ThreeDSceneConfig, TwoDSceneConfig, ZenithPaletteSpec, tick_scene_physics,
+    KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig, PFA_BLUE_TOP_BAR_COLOR,
+    PFA_GREEN_TOP_BAR_COLOR, PFA_RED_TOP_BAR_COLOR, PfaKeyboardProjectorConfig,
+    PfaNoteProjectorConfig, PianoTrailClassicSceneConfig, ProjectedScene, ProjectorImageConfig,
+    RendererKind, SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState, SceneQuad,
+    ThreeDSceneConfig, TwoDSceneConfig, ZenithPaletteSpec, tick_scene_physics,
 };
 
 use crate::midi::{backend::MIDIFileUnion, views::MIDIFileViewsUnion};

@@ -64,10 +64,10 @@ export component App inherits Window {
     callback cancel-load-render;                // cancel render-context loading
     callback cancel-load-audio;                 // cancel audio-context loading
     callback cancel-load-analysis;              // cancel analysis-context loading
-    callback unload-preview;                    // unload preview display + audio
-    callback unload-render;                     // unload from render/audio mode
-    callback unload-audio;                      // unload from audio mode
-    callback unload-analysis;                   // unload from modify/analysis mode
+    callback unload-preview;                    // unload the currently selected MIDI everywhere
+    callback unload-render;                     // unload the currently selected MIDI everywhere
+    callback unload-audio;                      // unload the currently selected MIDI everywhere
+    callback unload-analysis;                   // unload the currently selected MIDI everywhere
     callback retry-load-preview;                // retry failed preview load
     callback retry-load-render;                 // retry failed render load
     callback retry-load-audio;                  // retry failed audio load
@@ -102,7 +102,7 @@ export component App inherits Window {
     in-out property <string> video-keyboard-same-width-text: "off";
     in-out property <string> video-middle-c-text: "off";
     in-out property <string> video-top-color-text: "red";
-    in-out property <string> video-top-bar-rgb-text: "0.5850, 0.0392, 0.0249";
+    in-out property <string> video-top-bar-color-text: "#950A06";
     in-out property <string> video-palette-source-text: "default_track_colors";
     in-out property <string> video-palette-kind-text: "random";
     in-out property <string> video-palette-randomize-text: "on";
@@ -492,7 +492,7 @@ export component App inherits Window {
                     video-keyboard-same-width-text: root.video-keyboard-same-width-text;
                     video-middle-c-text: root.video-middle-c-text;
                     video-top-color-text: root.video-top-color-text;
-                    video-top-bar-rgb-text: root.video-top-bar-rgb-text;
+                    video-top-bar-color-text: root.video-top-bar-color-text;
                     video-palette-source-text: root.video-palette-source-text;
                     video-palette-kind-text: root.video-palette-kind-text;
                     video-palette-randomize-text: root.video-palette-randomize-text;

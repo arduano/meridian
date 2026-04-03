@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex, atomic::AtomicBool},
+    sync::{atomic::AtomicBool, Arc, Mutex},
     time::Instant,
 };
 
@@ -22,12 +22,12 @@ use crate::{
 };
 
 use super::{
-    CoreHandle, CoreResponse, RequestMessage,
     resource_types::{
         AudioCacheRegistry, AudioSessionRegistry, DisplayCacheRegistry, DisplaySessionRegistry,
         ParsedMidiRegistry, ProcessedMidiRegistry,
     },
     support::error_event,
+    CoreHandle, CoreResponse, RequestMessage,
 };
 
 pub(super) struct RenderJobState {

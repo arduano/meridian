@@ -10,7 +10,7 @@ use meridian_core::{
     protocol::{AudioRenderStatus, CoreEvent, MidiAnalysisData, StateSnapshot},
     render::{
         KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
-        PfaTopColor, ProjectorImageConfig, RendererKind, SceneConfig, ThreeDSceneConfig,
+        PFA_RED_TOP_BAR_COLOR, ProjectorImageConfig, RendererKind, SceneConfig, ThreeDSceneConfig,
         ZenithPaletteSpec,
     },
 };
@@ -289,23 +289,17 @@ fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
                     app.set_video_keyboard_same_width_text("off".into());
                     app.set_video_middle_c_text("off".into());
                     app.set_video_top_color_text("red".into());
-                    app.set_video_top_bar_rgb_text("0.5850, 0.0392, 0.0249".into());
+                    app.set_video_top_bar_color_text(PFA_RED_TOP_BAR_COLOR.into());
                 }
                 KeyboardProjectorConfig::Pfa(keyboard) => {
                     app.set_video_keyboard_same_width_text(
                         on_off(keyboard.same_width_notes).into(),
                     );
                     app.set_video_middle_c_text(on_off(keyboard.middle_c).into());
-                    app.set_video_top_color_text(top_color_name(keyboard).into());
-                    app.set_video_top_bar_rgb_text(
-                        format!(
-                            "{:.4}, {:.4}, {:.4}",
-                            keyboard.top_bar_rgb[0],
-                            keyboard.top_bar_rgb[1],
-                            keyboard.top_bar_rgb[2]
-                        )
-                        .into(),
+                    app.set_video_top_color_text(
+                        keyboard.top_bar_preset_name().unwrap_or("custom").into(),
                     );
+                    app.set_video_top_bar_color_text(keyboard.top_bar_color.clone().into());
                 }
             }
 
@@ -321,7 +315,7 @@ fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
             app.set_video_keyboard_same_width_text("off".into());
             app.set_video_middle_c_text("off".into());
             app.set_video_top_color_text("red".into());
-            app.set_video_top_bar_rgb_text("0.5850, 0.0392, 0.0249".into());
+            app.set_video_top_bar_color_text(PFA_RED_TOP_BAR_COLOR.into());
             apply_palette_to_app(app, &config.palette);
 
             app.set_video_ptc_same_width_text(on_off(config.same_width_notes).into());
@@ -447,21 +441,6 @@ fn apply_palette_to_app(app: &App, palette: &NotePaletteConfig) {
 
 fn on_off(value: bool) -> &'static str {
     if value { "on" } else { "off" }
-}
-
-fn top_color_name(config: &meridian_core::render::PfaKeyboardProjectorConfig) -> &'static str {
-    match config.top_color {
-        PfaTopColor::Blue => "blue",
-        PfaTopColor::Green => "green",
-        PfaTopColor::Red => {
-            let red = [0.585, 0.0392, 0.0249];
-            if config.top_bar_rgb == red {
-                "red"
-            } else {
-                "custom"
-            }
-        }
-    }
 }
 
 fn apply_audio_to_app(app: &App, state: &StateSnapshot, audio_render_status: &AudioRenderStatus) {

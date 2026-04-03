@@ -4,12 +4,12 @@ use std::{
 };
 
 use meridian_core::{
-    CoreHandle, MeridianError,
     audio::{AudioBackend, AudioConfig},
     display::MIN_VIEW_RANGE_SECONDS,
     midi::MidiProcessingConfig,
     protocol::{CoreCommand, CoreEvent, ParsedMidiId, ProcessedMidiId},
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
+    CoreHandle, MeridianError,
 };
 
 use super::{state::UiOptions, view_model::UiViewModel};
@@ -109,20 +109,6 @@ impl UiCoreBridge {
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
         self.request(CoreCommand::LoadAudioMidi { path }, model)
-    }
-
-    pub fn unload_display_context(
-        &self,
-        model: &Arc<Mutex<UiViewModel>>,
-    ) -> Result<Vec<CoreEvent>, MeridianError> {
-        self.request(CoreCommand::UnloadDisplayContext, model)
-    }
-
-    pub fn unload_audio_context(
-        &self,
-        model: &Arc<Mutex<UiViewModel>>,
-    ) -> Result<Vec<CoreEvent>, MeridianError> {
-        self.request(CoreCommand::UnloadAudioContext, model)
     }
 
     pub fn unload_render_context(

@@ -1,6 +1,6 @@
 use meridian_core::render::{
     KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
-    PfaTopColor, RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
+    RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
 };
 
 use super::{
@@ -105,15 +105,7 @@ fn keyboard_rows(config: &KeyboardProjectorConfig) -> Vec<InspectorRow> {
                 yes_no(config.same_width_notes),
             ),
             row("Keyboard", "Middle C Marker", yes_no(config.middle_c)),
-            row("Keyboard", "Top Color", top_color(config.top_color)),
-            row(
-                "Keyboard",
-                "Top Bar RGB",
-                format!(
-                    "{:.2}, {:.2}, {:.2}",
-                    config.top_bar_rgb[0], config.top_bar_rgb[1], config.top_bar_rgb[2]
-                ),
-            ),
+            row("Keyboard", "Top Bar Color", config.top_bar_color.clone()),
         ],
     }
 }
@@ -132,14 +124,6 @@ fn row(
 
 fn yes_no(value: bool) -> &'static str {
     if value { "yes" } else { "no" }
-}
-
-fn top_color(color: PfaTopColor) -> &'static str {
-    match color {
-        PfaTopColor::Red => "red",
-        PfaTopColor::Blue => "blue",
-        PfaTopColor::Green => "green",
-    }
 }
 
 fn palette_name(config: &NotePaletteConfig) -> String {
@@ -178,6 +162,6 @@ fn control_kind_name(kind: UiControlKind) -> String {
         UiControlKind::Toggle => "toggle".into(),
         UiControlKind::Slider { min, max } => format!("slider [{min:.1}, {max:.1}]"),
         UiControlKind::Choice => "choice".into(),
-        UiControlKind::ColorRgb => "color_rgb".into(),
+        UiControlKind::Text => "text".into(),
     }
 }

@@ -48,7 +48,7 @@ export component VideoPanel inherits Rectangle {
     in property <string> video-keyboard-same-width-text;
     in property <string> video-middle-c-text;
     in property <string> video-top-color-text;
-    in property <string> video-top-bar-rgb-text;
+    in property <string> video-top-bar-color-text;
     in property <string> video-palette-source-text;
     in property <string> video-palette-kind-text;
     in property <string> video-palette-randomize-text;
@@ -417,10 +417,10 @@ export component VideoPanel inherits Rectangle {
                     if root.is-pfa : Rectangle { height: 4px; }
 
                     if root.is-pfa : InlineCustomRow {
-                        label: "Top RGB";
-                        value: root.video-top-bar-rgb-text;
-                        custom-submitted(val) => { root.update-control("pfa_top_bar_rgb", val); }
-                        is-preset: false;
+                        label: "Top Hex";
+                        value: root.video-top-bar-color-text;
+                        custom-submitted(val) => { root.update-control("pfa_top_bar_color", val); }
+                        is-preset: root.video-top-color-text != "custom";
                     }
 
                     // ── 3D CAMERA (shown only for 3D Trail) ──

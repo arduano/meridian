@@ -9,27 +9,27 @@ use std::{
 };
 
 use meridian_core::{
-    CoreHandle, MeridianError,
     audio::{
-        AudioConfig, ChannelCount, DEFAULT_SOUNDFONT, EnvelopeCurveType, Interpolator,
-        MeridianSoundfont, ThreadCount,
+        AudioConfig, ChannelCount, EnvelopeCurveType, Interpolator, MeridianSoundfont, ThreadCount,
+        DEFAULT_SOUNDFONT,
     },
     display::MIN_VIEW_RANGE_SECONDS,
     midi::MidiProcessingConfig,
     protocol::{CoreEvent, ParsedMidiId, ProcessedMidiId},
     render::{
         DisplayTimeSpace, KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig,
-        NoteProjectorConfig, PfaTopColor, PianoTrailClassicSceneConfig, ProjectorImageConfig,
-        RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
+        NoteProjectorConfig, PfaKeyboardProjectorConfig, PianoTrailClassicSceneConfig,
+        ProjectorImageConfig, RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
+        PFA_BLUE_TOP_BAR_COLOR, PFA_GREEN_TOP_BAR_COLOR, PFA_RED_TOP_BAR_COLOR,
     },
-    spawn_core,
+    spawn_core, CoreHandle, MeridianError,
 };
+use slint::winit_030::{winit, EventResult, WinitWindowAccessor};
 use slint::ComponentHandle;
-use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
 
 use super::{
     core_bridge::UiCoreBridge,
-    state::{UiOptions, apply_events_to_app},
+    state::{apply_events_to_app, UiOptions},
     view::{App, MidiLoadState},
     view_model::UiViewModel,
     viewport::ViewportRenderer,
@@ -139,12 +139,80 @@ fn app_is_loading(app: &App) -> bool {
         || app.get_analysis_load_state() == MidiLoadState::Loading
 }
 
-fn selected_or_empty_state(app: &App) -> MidiLoadState {
-    if app.get_selected_midi_name().is_empty() {
-        MidiLoadState::NoMidi
-    } else {
-        MidiLoadState::Selected
+fn cancel_pending_midi_loads(
+    preview_load_generation: &Arc<AtomicU64>,
+    render_load_generation: &Arc<AtomicU64>,
+    audio_load_generation: &Arc<AtomicU64>,
+    analysis_load_generation: &Arc<AtomicU64>,
+) {
+    preview_load_generation.fetch_add(1, Ordering::SeqCst);
+    render_load_generation.fetch_add(1, Ordering::SeqCst);
+    audio_load_generation.fetch_add(1, Ordering::SeqCst);
+    analysis_load_generation.fetch_add(1, Ordering::SeqCst);
+}
+
+fn reset_midi_ui_state(app: &App, state: MidiLoadState) {
+    app.set_viewport_image(slint::Image::default());
+    app.set_render_load_state(state);
+    app.set_audio_load_state(state);
+    app.set_analysis_load_state(state);
+    app.set_audio_load_error(Default::default());
+    app.set_render_load_error(Default::default());
+    app.set_analysis_load_error(Default::default());
+    app.set_audio_loading_progress(0.0);
+    app.set_audio_loading_status(Default::default());
+    app.set_render_loading_progress(0.0);
+    app.set_render_loading_status(Default::default());
+    app.set_analysis_loading_progress(0.0);
+    app.set_analysis_loading_status(Default::default());
+    reset_analysis_outputs(app);
+}
+
+fn unload_selected_midi(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    preview_load_generation: &Arc<AtomicU64>,
+    render_load_generation: &Arc<AtomicU64>,
+    audio_load_generation: &Arc<AtomicU64>,
+    analysis_load_generation: &Arc<AtomicU64>,
+) {
+    cancel_pending_midi_loads(
+        preview_load_generation,
+        render_load_generation,
+        audio_load_generation,
+        analysis_load_generation,
+    );
+    if let Ok(events) = bridge.unload_render_context(shared_state) {
+        apply_events_to_app(app, shared_state, &events);
     }
+    set_selected_midi(app, Default::default());
+    reset_midi_ui_state(app, MidiLoadState::NoMidi);
+    app.window().request_redraw();
+}
+
+fn replace_selected_midi(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    preview_load_generation: &Arc<AtomicU64>,
+    render_load_generation: &Arc<AtomicU64>,
+    audio_load_generation: &Arc<AtomicU64>,
+    analysis_load_generation: &Arc<AtomicU64>,
+    selected_midi_name: slint::SharedString,
+) {
+    cancel_pending_midi_loads(
+        preview_load_generation,
+        render_load_generation,
+        audio_load_generation,
+        analysis_load_generation,
+    );
+    if let Ok(events) = bridge.unload_render_context(shared_state) {
+        apply_events_to_app(app, shared_state, &events);
+    }
+    set_selected_midi(app, selected_midi_name);
+    reset_midi_ui_state(app, MidiLoadState::Selected);
+    app.window().request_redraw();
 }
 
 fn update_video_scene(
@@ -446,26 +514,26 @@ fn wire_video_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mut
                 ),
                 "pfa_top_color" => {
                     let color = match value.as_str() {
-                        "blue" => PfaTopColor::Blue,
-                        "green" => PfaTopColor::Green,
-                        _ => PfaTopColor::Red,
+                        "blue" => PFA_BLUE_TOP_BAR_COLOR,
+                        "green" => PFA_GREEN_TOP_BAR_COLOR,
+                        _ => PFA_RED_TOP_BAR_COLOR,
                     };
                     update_video_scene(&app, &bridge, &shared_state, move |scene| {
                         if let SceneConfig::TwoD(config) = scene {
                             if let KeyboardProjectorConfig::Pfa(keyboard) = &mut config.keyboard {
-                                keyboard.top_color = color;
+                                keyboard.top_bar_color = color.to_string();
                             }
                         }
                     });
                 }
-                "pfa_top_bar_rgb" => {
-                    let Some(rgb) = parse_rgb_triplet(value.as_str()) else {
+                "pfa_top_bar_color" => {
+                    let Some(color) = normalize_top_bar_color(value.as_str()) else {
                         return;
                     };
                     update_video_scene(&app, &bridge, &shared_state, move |scene| {
                         if let SceneConfig::TwoD(config) = scene {
                             if let KeyboardProjectorConfig::Pfa(keyboard) = &mut config.keyboard {
-                                keyboard.set_top_bar_rgb(rgb);
+                                keyboard.top_bar_color = color.clone();
                             }
                         }
                     });
@@ -1137,16 +1205,8 @@ fn bool_from_label(label: &str) -> bool {
     matches!(label, "on" | "yes" | "true" | "1")
 }
 
-fn parse_rgb_triplet(value: &str) -> Option<[f32; 3]> {
-    let parts: Vec<_> = value.split(',').map(str::trim).collect();
-    if parts.len() != 3 {
-        return None;
-    }
-    Some([
-        parts[0].parse().ok()?,
-        parts[1].parse().ok()?,
-        parts[2].parse().ok()?,
-    ])
+fn normalize_top_bar_color(value: &str) -> Option<String> {
+    PfaKeyboardProjectorConfig::normalize_top_bar_color(value)
 }
 
 fn palette_mut(scene: &mut SceneConfig) -> Option<&mut NotePaletteConfig> {
@@ -1247,12 +1307,16 @@ fn wire_midi_callbacks(
     // ── Browse button (open native file dialog) ──
     {
         let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
         let preview_load_generation = Arc::clone(preview_load_generation);
         let render_load_generation = Arc::clone(render_load_generation);
         let audio_load_generation = Arc::clone(audio_load_generation);
         let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_select_midi_file(move || {
             let app_weak = app_weak.clone();
+            let bridge = bridge.clone();
+            let shared_state = Arc::clone(&shared_state);
             let preview_load_generation = Arc::clone(&preview_load_generation);
             let render_load_generation = Arc::clone(&render_load_generation);
             let audio_load_generation = Arc::clone(&audio_load_generation);
@@ -1266,25 +1330,16 @@ fn wire_midi_callbacks(
                 if let Some(path) = file {
                     let name: slint::SharedString = path.display().to_string().into();
                     let _ = app_weak.upgrade_in_event_loop(move |app| {
-                        preview_load_generation.fetch_add(1, Ordering::SeqCst);
-                        render_load_generation.fetch_add(1, Ordering::SeqCst);
-                        audio_load_generation.fetch_add(1, Ordering::SeqCst);
-                        analysis_load_generation.fetch_add(1, Ordering::SeqCst);
-                        app.set_viewport_image(slint::Image::default());
-                        set_selected_midi(&app, name);
-                        app.set_audio_load_state(MidiLoadState::Selected);
-                        app.set_render_load_state(MidiLoadState::Selected);
-                        app.set_analysis_load_state(MidiLoadState::Selected);
-                        app.set_audio_load_error(Default::default());
-                        app.set_render_load_error(Default::default());
-                        app.set_analysis_load_error(Default::default());
-                        app.set_audio_loading_progress(0.0);
-                        app.set_audio_loading_status(Default::default());
-                        app.set_render_loading_progress(0.0);
-                        app.set_render_loading_status(Default::default());
-                        app.set_analysis_loading_progress(0.0);
-                        app.set_analysis_loading_status(Default::default());
-                        reset_analysis_outputs(&app);
+                        replace_selected_midi(
+                            &app,
+                            &bridge,
+                            &shared_state,
+                            &preview_load_generation,
+                            &render_load_generation,
+                            &audio_load_generation,
+                            &analysis_load_generation,
+                            name,
+                        );
                     });
                 }
             });
@@ -1302,25 +1357,16 @@ fn wire_midi_callbacks(
         let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_drop_midi_file(move |path| {
             if let Some(app) = app_weak.upgrade() {
-                app.set_viewport_image(slint::Image::default());
-                set_selected_midi(&app, path.clone());
-                preview_load_generation.fetch_add(1, Ordering::SeqCst);
-                render_load_generation.fetch_add(1, Ordering::SeqCst);
-                audio_load_generation.fetch_add(1, Ordering::SeqCst);
-                analysis_load_generation.fetch_add(1, Ordering::SeqCst);
-                app.set_audio_load_state(MidiLoadState::Selected);
-                app.set_render_load_state(MidiLoadState::Selected);
-                app.set_analysis_load_state(MidiLoadState::Selected);
-                app.set_audio_load_error(Default::default());
-                app.set_render_load_error(Default::default());
-                app.set_analysis_load_error(Default::default());
-                app.set_audio_loading_progress(0.0);
-                app.set_audio_loading_status(Default::default());
-                app.set_render_loading_progress(0.0);
-                app.set_render_loading_status(Default::default());
-                app.set_analysis_loading_progress(0.0);
-                app.set_analysis_loading_status(Default::default());
-                reset_analysis_outputs(&app);
+                replace_selected_midi(
+                    &app,
+                    &bridge,
+                    &shared_state,
+                    &preview_load_generation,
+                    &render_load_generation,
+                    &audio_load_generation,
+                    &analysis_load_generation,
+                    path.clone(),
+                );
                 // Auto-load for the current profile context
                 match app.get_active_profile() {
                     0 => load_preview_midi_async(
@@ -1519,21 +1565,20 @@ fn wire_midi_callbacks(
         let bridge = bridge.clone();
         let shared_state = Arc::clone(shared_state);
         let preview_load_generation = Arc::clone(preview_load_generation);
+        let render_load_generation = Arc::clone(render_load_generation);
+        let audio_load_generation = Arc::clone(audio_load_generation);
+        let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_unload_preview(move || {
             if let Some(app) = app_weak.upgrade() {
-                preview_load_generation.fetch_add(1, Ordering::SeqCst);
-                if let Ok(events) = bridge.unload_render_context(&shared_state) {
-                    apply_events_to_app(&app, &shared_state, &events);
-                }
-                app.set_viewport_image(slint::Image::default());
-                app.set_render_load_state(selected_or_empty_state(&app));
-                app.set_audio_load_state(selected_or_empty_state(&app));
-                app.set_render_loading_progress(0.0);
-                app.set_render_loading_status(Default::default());
-                app.set_render_load_error(Default::default());
-                app.set_audio_loading_progress(0.0);
-                app.set_audio_loading_status(Default::default());
-                app.set_audio_load_error(Default::default());
+                unload_selected_midi(
+                    &app,
+                    &bridge,
+                    &shared_state,
+                    &preview_load_generation,
+                    &render_load_generation,
+                    &audio_load_generation,
+                    &analysis_load_generation,
+                );
             }
         });
     }
@@ -1543,18 +1588,21 @@ fn wire_midi_callbacks(
         let app_weak = app.as_weak();
         let bridge = bridge.clone();
         let shared_state = Arc::clone(shared_state);
+        let preview_load_generation = Arc::clone(preview_load_generation);
         let render_load_generation = Arc::clone(render_load_generation);
+        let audio_load_generation = Arc::clone(audio_load_generation);
+        let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_unload_render(move || {
             if let Some(app) = app_weak.upgrade() {
-                render_load_generation.fetch_add(1, Ordering::SeqCst);
-                if let Ok(events) = bridge.unload_display_context(&shared_state) {
-                    apply_events_to_app(&app, &shared_state, &events);
-                }
-                app.set_viewport_image(slint::Image::default());
-                app.set_render_load_state(selected_or_empty_state(&app));
-                app.set_render_loading_progress(0.0);
-                app.set_render_loading_status(Default::default());
-                app.set_render_load_error(Default::default());
+                unload_selected_midi(
+                    &app,
+                    &bridge,
+                    &shared_state,
+                    &preview_load_generation,
+                    &render_load_generation,
+                    &audio_load_generation,
+                    &analysis_load_generation,
+                );
             }
         });
     }
@@ -1564,17 +1612,21 @@ fn wire_midi_callbacks(
         let app_weak = app.as_weak();
         let bridge = bridge.clone();
         let shared_state = Arc::clone(shared_state);
+        let preview_load_generation = Arc::clone(preview_load_generation);
+        let render_load_generation = Arc::clone(render_load_generation);
         let audio_load_generation = Arc::clone(audio_load_generation);
+        let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_unload_audio(move || {
             if let Some(app) = app_weak.upgrade() {
-                audio_load_generation.fetch_add(1, Ordering::SeqCst);
-                if let Ok(events) = bridge.unload_audio_context(&shared_state) {
-                    apply_events_to_app(&app, &shared_state, &events);
-                }
-                app.set_audio_load_state(selected_or_empty_state(&app));
-                app.set_audio_loading_progress(0.0);
-                app.set_audio_loading_status(Default::default());
-                app.set_audio_load_error(Default::default());
+                unload_selected_midi(
+                    &app,
+                    &bridge,
+                    &shared_state,
+                    &preview_load_generation,
+                    &render_load_generation,
+                    &audio_load_generation,
+                    &analysis_load_generation,
+                );
             }
         });
     }
@@ -1582,15 +1634,23 @@ fn wire_midi_callbacks(
     // ── Unload analysis ──
     {
         let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        let preview_load_generation = Arc::clone(preview_load_generation);
+        let render_load_generation = Arc::clone(render_load_generation);
+        let audio_load_generation = Arc::clone(audio_load_generation);
         let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_unload_analysis(move || {
             if let Some(app) = app_weak.upgrade() {
-                analysis_load_generation.fetch_add(1, Ordering::SeqCst);
-                app.set_analysis_load_state(selected_or_empty_state(&app));
-                app.set_analysis_loading_progress(0.0);
-                app.set_analysis_loading_status(Default::default());
-                app.set_analysis_load_error(Default::default());
-                reset_analysis_outputs(&app);
+                unload_selected_midi(
+                    &app,
+                    &bridge,
+                    &shared_state,
+                    &preview_load_generation,
+                    &render_load_generation,
+                    &audio_load_generation,
+                    &analysis_load_generation,
+                );
             }
         });
     }

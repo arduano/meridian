@@ -143,3 +143,128 @@ impl CoreHandle {
             .map_err(|_| MeridianError::Transport("core request channel closed".into()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::{
+        audio::{AudioBackend, AudioConfig},
+        protocol::{CoreCommand, CoreEvent, StateSnapshot},
+    };
+
+    use super::{spawn_core, CoreHandle};
+
+    fn midi_fixture(relative_path: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/midis")
+            .join(relative_path)
+    }
+
+    fn test_core() -> CoreHandle {
+        let core = spawn_core();
+        core.request(CoreCommand::SetAudioConfig {
+            config: AudioConfig {
+                backend: AudioBackend::None,
+                ..AudioConfig::default()
+            },
+        })
+        .expect("set test audio backend");
+        core
+    }
+
+    fn snapshot(core: &CoreHandle) -> StateSnapshot {
+        match core
+            .request(CoreCommand::GetState)
+            .expect("request current core state")
+            .as_slice()
+        {
+            [CoreEvent::StateSnapshot { state }] => state.clone(),
+            events => panic!("unexpected state response: {events:?}"),
+        }
+    }
+
+    fn shutdown(core: &CoreHandle) {
+        core.request(CoreCommand::Shutdown)
+            .expect("shutdown core after test");
+    }
+
+    #[test]
+    fn loading_audio_for_a_new_midi_clears_the_old_display_context() {
+        let core = test_core();
+        let preview_midi = midi_fixture("smoke-two-notes.mid");
+        let audio_only_midi = midi_fixture("piano/mozart-kv457-sonata-no14-fragment.mid");
+
+        core.request(CoreCommand::LoadMidi {
+            path: preview_midi.clone(),
+        })
+        .expect("load preview midi");
+        let preview_state = snapshot(&core);
+        assert!(preview_state.active_display_cache_id.is_some());
+        assert!(preview_state.active_audio_cache_id.is_some());
+
+        core.request(CoreCommand::LoadAudioMidi {
+            path: audio_only_midi.clone(),
+        })
+        .expect("load audio-only midi");
+        let replaced_state = snapshot(&core);
+
+        assert_eq!(replaced_state.midi_path, Some(audio_only_midi));
+        assert!(replaced_state.active_audio_cache_id.is_some());
+        assert!(replaced_state.active_display_cache_id.is_none());
+        assert!(!replaced_state.midi_loaded);
+
+        shutdown(&core);
+    }
+
+    #[test]
+    fn loading_display_for_the_same_midi_keeps_the_existing_audio_context() {
+        let core = test_core();
+        let midi = midi_fixture("smoke-two-notes.mid");
+
+        core.request(CoreCommand::LoadAudioMidi { path: midi.clone() })
+            .expect("load audio-only midi");
+        let audio_state = snapshot(&core);
+        assert!(audio_state.active_audio_cache_id.is_some());
+        assert!(audio_state.active_display_cache_id.is_none());
+
+        core.request(CoreCommand::LoadDisplayMidi { path: midi.clone() })
+            .expect("load display midi for same file");
+        let combined_state = snapshot(&core);
+
+        assert_eq!(combined_state.midi_path, Some(midi));
+        assert!(combined_state.active_audio_cache_id.is_some());
+        assert!(combined_state.active_display_cache_id.is_some());
+        assert!(combined_state.midi_loaded);
+
+        shutdown(&core);
+    }
+
+    #[test]
+    fn legacy_load_replaces_every_active_context_with_the_new_midi() {
+        let core = test_core();
+        let first_midi = midi_fixture("smoke-two-notes.mid");
+        let second_midi = midi_fixture("piano/burgmuller-op100-no13-consolation.mid");
+
+        core.request(CoreCommand::LoadAudioMidi {
+            path: first_midi.clone(),
+        })
+        .expect("load first audio-only midi");
+        let first_state = snapshot(&core);
+        assert!(first_state.active_audio_cache_id.is_some());
+        assert!(first_state.active_display_cache_id.is_none());
+
+        core.request(CoreCommand::LoadMidi {
+            path: second_midi.clone(),
+        })
+        .expect("load second preview midi");
+        let replaced_state = snapshot(&core);
+
+        assert_eq!(replaced_state.midi_path, Some(second_midi));
+        assert!(replaced_state.active_audio_cache_id.is_some());
+        assert!(replaced_state.active_display_cache_id.is_some());
+        assert!(replaced_state.midi_loaded);
+
+        shutdown(&core);
+    }
+}

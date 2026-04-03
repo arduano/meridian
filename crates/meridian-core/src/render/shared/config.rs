@@ -4,6 +4,9 @@ use ts_rs::TS;
 use super::{NotePaletteConfig, ProjectorImageConfig};
 
 pub const DEFAULT_PFA_KEYBOARD_ASPECT_RATIO: f32 = 0.084_937_5;
+pub const PFA_RED_TOP_BAR_COLOR: &str = "#950A06";
+pub const PFA_BLUE_TOP_BAR_COLOR: &str = "#0A0695";
+pub const PFA_GREEN_TOP_BAR_COLOR: &str = "#06950A";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, clap::ValueEnum, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
@@ -13,14 +16,6 @@ pub enum RendererKind {
     #[serde(rename = "piano_trail_classic")]
     #[value(name = "piano-trail-classic")]
     PianoTrailClassic,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PfaTopColor {
-    Red,
-    Blue,
-    Green,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -42,16 +37,14 @@ pub struct PfaNoteProjectorConfig {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FlatKeyboardProjectorConfig;
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PfaKeyboardProjectorConfig {
     #[serde(default)]
     pub same_width_notes: bool,
     #[serde(default)]
     pub middle_c: bool,
-    #[serde(default)]
-    pub top_color: PfaTopColor,
-    #[serde(default = "default_top_bar_rgb")]
-    pub top_bar_rgb: [f32; 3],
+    #[serde(default = "default_top_bar_color")]
+    pub top_bar_color: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -222,8 +215,7 @@ impl Default for PfaKeyboardProjectorConfig {
         Self {
             same_width_notes: false,
             middle_c: false,
-            top_color: PfaTopColor::Red,
-            top_bar_rgb: default_top_bar_rgb(),
+            top_bar_color: default_top_bar_color(),
         }
     }
 }
@@ -290,12 +282,6 @@ impl Default for SceneLayout {
     }
 }
 
-impl Default for PfaTopColor {
-    fn default() -> Self {
-        Self::Red
-    }
-}
-
 impl Default for PianoTrailClassicSceneConfig {
     fn default() -> Self {
         Self {
@@ -334,19 +320,9 @@ impl Default for ThreeDSceneConfig {
     }
 }
 
-impl PfaTopColor {
-    pub fn preset_bar_rgb(self) -> Option<[f32; 3]> {
-        match self {
-            Self::Red => None,
-            Self::Blue => Some([0.0392, 0.0249, 0.585]),
-            Self::Green => Some([0.0249, 0.585, 0.0392]),
-        }
-    }
-}
-
 impl PfaKeyboardProjectorConfig {
     pub fn resolved_top_bar_rgb(&self) -> [f32; 3] {
-        self.top_color.preset_bar_rgb().unwrap_or(self.top_bar_rgb)
+        parse_hex_color(self.top_bar_color.as_str()).unwrap_or_else(default_top_bar_rgb)
     }
 
     pub fn resolved_top_bar_gradient(&self) -> ([f32; 4], [f32; 4]) {
@@ -356,9 +332,25 @@ impl PfaKeyboardProjectorConfig {
         (top, bottom)
     }
 
-    pub fn set_top_bar_rgb(&mut self, rgb: [f32; 3]) {
-        self.top_color = PfaTopColor::Red;
-        self.top_bar_rgb = rgb;
+    pub fn set_top_bar_color(&mut self, value: &str) -> bool {
+        let Some(color) = normalize_top_bar_color(value) else {
+            return false;
+        };
+        self.top_bar_color = color;
+        true
+    }
+
+    pub fn top_bar_preset_name(&self) -> Option<&'static str> {
+        match self.top_bar_color.as_str() {
+            PFA_RED_TOP_BAR_COLOR => Some("red"),
+            PFA_BLUE_TOP_BAR_COLOR => Some("blue"),
+            PFA_GREEN_TOP_BAR_COLOR => Some("green"),
+            _ => None,
+        }
+    }
+
+    pub fn normalize_top_bar_color(value: &str) -> Option<String> {
+        normalize_top_bar_color(value)
     }
 }
 
@@ -411,8 +403,12 @@ const fn default_border_width() -> f32 {
     1.0
 }
 
+fn default_top_bar_color() -> String {
+    PFA_RED_TOP_BAR_COLOR.to_string()
+}
+
 const fn default_top_bar_rgb() -> [f32; 3] {
-    [0.585, 0.0392, 0.0249]
+    [149.0 / 255.0, 10.0 / 255.0, 6.0 / 255.0]
 }
 
 const fn default_piano_trail_classic_same_width_notes() -> bool {
@@ -457,6 +453,25 @@ const fn default_piano_trail_classic_show_keyboard() -> bool {
 
 const fn default_piano_trail_classic_tilt_keys() -> bool {
     true
+}
+
+fn normalize_top_bar_color(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    let hex = trimmed.strip_prefix('#').unwrap_or(trimmed);
+    if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(format!("#{}", hex.to_ascii_uppercase()))
+}
+
+fn parse_hex_color(value: &str) -> Option<[f32; 3]> {
+    let normalized = normalize_top_bar_color(value)?;
+    let hex = &normalized[1..];
+    Some([
+        u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0,
+        u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0,
+        u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0,
+    ])
 }
 
 const fn default_piano_trail_classic_aura_strength() -> f32 {

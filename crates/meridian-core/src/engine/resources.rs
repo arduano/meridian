@@ -2,8 +2,8 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use crate::{
     midi::{
-        MidiCacheStack, MidiProcessingConfig, ProcessedMidi,
         analysis::{analyze_midi, analyze_parsed_midi_with_progress},
+        MidiCacheStack, MidiProcessingConfig, ProcessedMidi,
     },
     protocol::{
         AudioCacheId, AudioSessionId, CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId,
@@ -27,6 +27,38 @@ impl CoreState {
             progress,
             status: status.into(),
         });
+    }
+
+    fn active_midi_conflicts_with(&self, parsed_midi_id: ParsedMidiId) -> bool {
+        self.active_parsed_midi_id
+            .is_some_and(|active_parsed_midi_id| active_parsed_midi_id != parsed_midi_id)
+    }
+
+    fn clear_active_midi_context(&mut self, now: Instant) {
+        self.audio_session = None;
+        self.processed_midi = None;
+        self.midi_cache = None;
+        self.current_audio_cache = None;
+        self.active_parsed_midi_id = None;
+        self.active_processed_midi_id = None;
+        self.active_display_cache_id = None;
+        self.active_audio_cache_id = None;
+        self.active_display_session_id = None;
+        self.active_audio_session_id = None;
+        self.active_video_render_job_id = None;
+        self.active_audio_render_job_id = None;
+        self.midi_path = None;
+        self.transport.reset(now);
+        self.audio_clock.set_time(0.0);
+        self.audio_clock.set_playing(false);
+        self.audio_player.reset();
+        self.display.unload_midi(now);
+    }
+
+    fn clear_conflicting_active_midi(&mut self, parsed_midi_id: ParsedMidiId) {
+        if self.active_midi_conflicts_with(parsed_midi_id) {
+            self.clear_active_midi_context(Instant::now());
+        }
     }
 
     pub(super) fn load_parsed_midi_resource(&mut self, path: PathBuf) -> Vec<CoreEvent> {
@@ -167,14 +199,18 @@ impl CoreState {
         &mut self,
         display_cache_id: DisplayCacheId,
     ) -> Vec<CoreEvent> {
-        let Some(resource) = self.display_caches.get(&display_cache_id) else {
+        let Some(parsed_midi_id) = self
+            .display_caches
+            .get(&display_cache_id)
+            .map(|resource| resource.parsed_midi_id)
+        else {
             return vec![error_event(
                 CoreErrorCode::InvalidCommand,
                 format!("unknown display_cache_id {}", display_cache_id.0),
             )];
         };
-        let parsed_midi_id = resource.parsed_midi_id;
-        let display_cache = Arc::clone(&resource.cache);
+        self.clear_conflicting_active_midi(parsed_midi_id);
+        let display_cache = Arc::clone(&self.display_caches[&display_cache_id].cache);
         let Some(parsed) = self.parsed_midis.get(&parsed_midi_id) else {
             return vec![error_event(
                 CoreErrorCode::Internal,
@@ -213,14 +249,18 @@ impl CoreState {
         &mut self,
         audio_cache_id: AudioCacheId,
     ) -> Vec<CoreEvent> {
-        let Some(resource) = self.audio_caches.get(&audio_cache_id) else {
+        let Some(parsed_midi_id) = self
+            .audio_caches
+            .get(&audio_cache_id)
+            .map(|resource| resource.parsed_midi_id)
+        else {
             return vec![error_event(
                 CoreErrorCode::InvalidCommand,
                 format!("unknown audio_cache_id {}", audio_cache_id.0),
             )];
         };
-        let parsed_midi_id = resource.parsed_midi_id;
-        let audio_cache = Arc::clone(&resource.cache);
+        self.clear_conflicting_active_midi(parsed_midi_id);
+        let audio_cache = Arc::clone(&self.audio_caches[&audio_cache_id].cache);
         let Some(parsed) = self.parsed_midis.get(&parsed_midi_id) else {
             return vec![error_event(
                 CoreErrorCode::Internal,
@@ -293,24 +333,7 @@ impl CoreState {
 
     pub(super) fn unload_render_context(&mut self) -> Vec<CoreEvent> {
         let now = Instant::now();
-        self.audio_session = None;
-        self.processed_midi = None;
-        self.midi_cache = None;
-        self.current_audio_cache = None;
-        self.active_parsed_midi_id = None;
-        self.active_processed_midi_id = None;
-        self.active_display_cache_id = None;
-        self.active_audio_cache_id = None;
-        self.active_display_session_id = None;
-        self.active_audio_session_id = None;
-        self.active_video_render_job_id = None;
-        self.active_audio_render_job_id = None;
-        self.midi_path = None;
-        self.transport.reset(now);
-        self.audio_clock.set_time(0.0);
-        self.audio_clock.set_playing(false);
-        self.audio_player.reset();
-        self.display.unload_midi(now);
+        self.clear_active_midi_context(now);
         vec![CoreEvent::StateSnapshot {
             state: self.snapshot(),
         }]
@@ -410,11 +433,9 @@ impl CoreState {
                 );
             });
         let display_cache_id = match display_events.as_slice() {
-            [
-                event @ CoreEvent::DisplayCacheBuilt {
-                    display_cache_id, ..
-                },
-            ] => {
+            [event @ CoreEvent::DisplayCacheBuilt {
+                display_cache_id, ..
+            }] => {
                 self.broadcast(event.clone());
                 self.broadcast_midi_load_progress(&path, 0.70, "Building audio cache…");
                 *display_cache_id
@@ -600,14 +621,18 @@ impl CoreState {
         &mut self,
         processed_midi_id: ProcessedMidiId,
     ) -> Vec<CoreEvent> {
-        let Some(resource) = self.processed_midis.get(&processed_midi_id) else {
+        let Some(parsed_midi_id) = self
+            .processed_midis
+            .get(&processed_midi_id)
+            .map(|resource| resource.parsed_midi_id)
+        else {
             return vec![error_event(
                 CoreErrorCode::InvalidCommand,
                 format!("unknown processed_midi_id {}", processed_midi_id.0),
             )];
         };
-        let parsed_midi_id = resource.parsed_midi_id;
-        let midi = Arc::clone(&resource.midi);
+        self.clear_conflicting_active_midi(parsed_midi_id);
+        let midi = Arc::clone(&self.processed_midis[&processed_midi_id].midi);
         let Some(parsed) = self.parsed_midis.get(&parsed_midi_id) else {
             return vec![error_event(
                 CoreErrorCode::Internal,
@@ -869,11 +894,9 @@ impl CoreState {
                 );
             });
         match events.as_slice() {
-            [
-                event @ CoreEvent::DisplayCacheBuilt {
-                    display_cache_id, ..
-                },
-            ] => {
+            [event @ CoreEvent::DisplayCacheBuilt {
+                display_cache_id, ..
+            }] => {
                 self.broadcast(event.clone());
                 Ok(*display_cache_id)
             }

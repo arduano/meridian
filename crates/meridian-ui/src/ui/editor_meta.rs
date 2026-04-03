@@ -5,7 +5,7 @@ pub enum UiControlKind {
     Toggle,
     Slider { min: f32, max: f32 },
     Choice,
-    ColorRgb,
+    Text,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -49,16 +49,16 @@ const PFA_FIELDS: &[UiFieldMeta] = &[
     UiFieldMeta {
         section: "Keyboard",
         key: "top_color",
-        label: "Top Color",
+        label: "Top Preset",
         control: UiControlKind::Choice,
         default_hint: "red",
     },
     UiFieldMeta {
         section: "Keyboard",
-        key: "top_bar_rgb",
-        label: "Top Bar RGB",
-        control: UiControlKind::ColorRgb,
-        default_hint: "0.585, 0.0392, 0.0249",
+        key: "top_bar_color",
+        label: "Top Bar Hex",
+        control: UiControlKind::Text,
+        default_hint: "#950A06",
     },
 ];
 

@@ -1,4 +1,7 @@
-use meridian_core::render::{PfaKeyboardProjectorConfig, PfaNoteProjectorConfig, PfaTopColor};
+use meridian_core::render::{
+    PFA_BLUE_TOP_BAR_COLOR, PFA_GREEN_TOP_BAR_COLOR, PFA_RED_TOP_BAR_COLOR,
+    PfaKeyboardProjectorConfig, PfaNoteProjectorConfig,
+};
 
 #[test]
 fn pfa_note_defaults_match_zenith_master() {
@@ -12,50 +15,49 @@ fn pfa_keyboard_defaults_match_zenith_master() {
     let config = PfaKeyboardProjectorConfig::default();
     assert!(!config.same_width_notes);
     assert!(!config.middle_c);
-    assert_eq!(config.top_color, PfaTopColor::Red);
-    assert_eq!(config.top_bar_rgb, [0.585, 0.0392, 0.0249]);
+    assert_eq!(config.top_bar_color, PFA_RED_TOP_BAR_COLOR);
 }
 
 #[test]
-fn pfa_red_top_bar_uses_custom_rgb() {
+fn pfa_top_bar_uses_hex_color() {
     let config = PfaKeyboardProjectorConfig {
-        top_color: PfaTopColor::Red,
-        top_bar_rgb: [0.8, 0.2, 0.1],
+        top_bar_color: "#CC331A".into(),
         ..PfaKeyboardProjectorConfig::default()
     };
-    assert_eq!(config.resolved_top_bar_rgb(), [0.8, 0.2, 0.1]);
+    let expected = [204.0 / 255.0, 51.0 / 255.0, 26.0 / 255.0];
+    assert_eq!(config.resolved_top_bar_rgb(), expected);
     assert_eq!(
         config.resolved_top_bar_gradient(),
-        ([0.4, 0.1, 0.05, 1.0], [0.8, 0.2, 0.1, 1.0])
+        (
+            [expected[0] * 0.5, expected[1] * 0.5, expected[2] * 0.5, 1.0],
+            [expected[0], expected[1], expected[2], 1.0]
+        )
     );
 }
 
 #[test]
-fn pfa_blue_and_green_use_zenith_presets() {
+fn pfa_preset_names_are_detected_from_hex_colors() {
     let blue = PfaKeyboardProjectorConfig {
-        top_color: PfaTopColor::Blue,
-        top_bar_rgb: [1.0, 0.0, 0.0],
+        top_bar_color: PFA_BLUE_TOP_BAR_COLOR.into(),
         ..PfaKeyboardProjectorConfig::default()
     };
     let green = PfaKeyboardProjectorConfig {
-        top_color: PfaTopColor::Green,
-        top_bar_rgb: [1.0, 0.0, 0.0],
+        top_bar_color: PFA_GREEN_TOP_BAR_COLOR.into(),
         ..PfaKeyboardProjectorConfig::default()
     };
 
-    assert_eq!(blue.resolved_top_bar_rgb(), [0.0392, 0.0249, 0.585]);
-    assert_eq!(green.resolved_top_bar_rgb(), [0.0249, 0.585, 0.0392]);
+    assert_eq!(blue.top_bar_preset_name(), Some("blue"));
+    assert_eq!(green.top_bar_preset_name(), Some("green"));
 }
 
 #[test]
-fn setting_custom_top_bar_rgb_switches_back_to_red_mode() {
-    let mut config = PfaKeyboardProjectorConfig {
-        top_color: PfaTopColor::Blue,
-        ..PfaKeyboardProjectorConfig::default()
-    };
-    config.set_top_bar_rgb([0.2, 0.3, 0.4]);
-
-    assert_eq!(config.top_color, PfaTopColor::Red);
-    assert_eq!(config.top_bar_rgb, [0.2, 0.3, 0.4]);
-    assert_eq!(config.resolved_top_bar_rgb(), [0.2, 0.3, 0.4]);
+fn setting_top_bar_color_normalizes_hex_strings() {
+    let mut config = PfaKeyboardProjectorConfig::default();
+    assert!(config.set_top_bar_color("3366cc"));
+    assert_eq!(config.top_bar_color, "#3366CC");
+    assert_eq!(config.top_bar_preset_name(), None);
+    assert_eq!(
+        config.resolved_top_bar_rgb(),
+        [51.0 / 255.0, 102.0 / 255.0, 204.0 / 255.0]
+    );
 }
