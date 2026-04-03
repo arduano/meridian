@@ -50,10 +50,6 @@ pub(crate) fn mix(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     ]
 }
 
-pub(crate) fn is_black_key(key: u8) -> bool {
-    matches!(key % 12, 1 | 3 | 6 | 8 | 10)
-}
-
 pub(crate) fn alpha_blend(top: [f32; 4], bottom: [f32; 4]) -> [f32; 4] {
     let alpha = top[3].clamp(0.0, 1.0);
     [

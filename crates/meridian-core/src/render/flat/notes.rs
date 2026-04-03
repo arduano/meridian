@@ -1,67 +1,96 @@
-use crate::midi::views::MIDIFileViewsUnion;
+use crate::midi::{MIDINoteViews, ram::view::InRamCurrentNoteViews, views::MIDIFileViewsUnion};
 
-use super::{
-    super::{
-        NoteProjector, SceneLayout,
-        shared::{KeyActivity, ProjectedScene, SceneLayer, is_black_key, solid_quad},
+use super::super::{
+    SceneLayout,
+    shared::{
+        FlatNoteProjectorConfig, KeyActivity, NoteInstance, NoteShaderKind, ProjectedScene,
+        SceneLayer, build_key_x_layout, for_each_visible_note, is_black_key, linear_key_span,
+        normalized_key_range,
     },
-    FlatNoteProjector, key_span,
 };
 
-impl NoteProjector for FlatNoteProjector {
-    fn project_notes(
-        &self,
-        views: &MIDIFileViewsUnion<'_>,
-        layout: &SceneLayout,
-        piano_height: f32,
-        scene: &mut ProjectedScene,
-    ) {
-        let _ = self.0;
-        scene.notes_black_first = false;
-        let (first_key, last_key, key_width) = key_span(layout);
-        let view_range = views.range().length() as f32;
+pub(crate) fn project_flat_notes(
+    _config: &FlatNoteProjectorConfig,
+    views: &MIDIFileViewsUnion<'_>,
+    layout: &SceneLayout,
+    piano_height: f32,
+    scene: &mut ProjectedScene,
+) {
+    scene.set_note_shader_kind(NoteShaderKind::Flat);
+    scene.notes_black_first = false;
+    let view_range = views.range().length() as f32;
+    let (first_key, last_key_exclusive) = normalized_key_range(layout.first_key, layout.last_key);
+    let key_layout = build_key_x_layout(
+        first_key,
+        last_key_exclusive,
+        true,
+        crate::render::shared::PFA_BLACK_KEY_PROFILE,
+    );
+    let (_, last_key, _) = linear_key_span(first_key, last_key_exclusive);
+    scene.set_note_params(
+        piano_height,
+        (1.0 - piano_height) / view_range.max(0.001),
+        0.0,
+        0.0,
+    );
+    for key in first_key..=last_key {
+        scene.set_note_key_x(
+            key as u8,
+            key_layout.x1[key],
+            key_layout.x1[key] + key_layout.width[key],
+        );
+    }
 
-        for key in first_key..=last_key {
-            let x1 = (key - first_key) as f32 * key_width;
-            let x2 = x1 + key_width;
-            let is_black = is_black_key(key as u8);
-            let note_layer = if is_black {
-                SceneLayer::BlackNotes
-            } else {
-                SceneLayer::WhiteNotes
-            };
-            let column = views.get_column(key);
-            let mut activity = KeyActivity::default();
+    match views {
+        MIDIFileViewsUnion::InRam(views) => {
+            project_flat_notes_in_ram(views, first_key, last_key, view_range, scene)
+        }
+    }
+}
 
-            column.for_each_displaced_note(|note| {
-                let end = note.start + note.len;
-                if end <= 0.0 || note.start >= view_range {
-                    return;
-                }
+fn project_flat_notes_in_ram(
+    views: &InRamCurrentNoteViews<'_>,
+    first_key: usize,
+    last_key: usize,
+    view_range: f32,
+    scene: &mut ProjectedScene,
+) {
+    for key in first_key..=last_key {
+        let is_black = is_black_key(key as u8);
+        let note_layer = if is_black {
+            SceneLayer::BlackNotes
+        } else {
+            SceneLayer::WhiteNotes
+        };
+        let column = views.get_column(key);
+        let mut activity = KeyActivity::default();
 
-                let bottom =
-                    piano_height + (note.start.max(0.0) / view_range) * (1.0 - piano_height);
-                let top = piano_height + (end.min(view_range) / view_range) * (1.0 - piano_height);
-                let color = note
-                    .color
-                    .average()
-                    .to_rgba(if is_black { 0.94 } else { 0.88 });
+        scene.visible_notes +=
+            for_each_visible_note(column, 0.0, view_range, false, false, |note| {
+                let average = note.color.average();
+                let color = average.to_rgba(if is_black { 0.94 } else { 0.88 });
+                scene.push_note_layer(
+                    note_layer,
+                    NoteInstance::new(
+                        key as u32,
+                        note.start,
+                        note.end,
+                        average.to_rgba_packed(if is_black { 240 } else { 224 }),
+                        average.to_rgba_packed(if is_black { 240 } else { 224 }),
+                    ),
+                );
 
-                scene.push_quad(note_layer, solid_quad(x1, bottom, x2, top, color));
-
-                if note.start <= 0.0 && end > 0.0 {
+                if note.active {
                     activity.pressed = true;
                     activity.left = color;
                     activity.right = color;
                 }
-                scene.visible_notes += 1;
                 scene.note_quads += 1;
             });
 
-            if activity.pressed {
-                scene.active_keys += 1;
-            }
-            scene.set_key_activity(key, activity);
+        if activity.pressed {
+            scene.active_keys += 1;
         }
+        scene.set_key_activity(key, activity);
     }
 }

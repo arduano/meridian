@@ -13,8 +13,8 @@ pub use shared::{
 };
 
 use crate::midi::{backend::MIDIFileUnion, views::MIDIFileViewsUnion};
-use flat::{FlatKeyboardProjector, FlatNoteProjector};
-use pfa::{PfaKeyboardProjector, PfaNoteProjector};
+use flat::{project_flat_keyboard, project_flat_notes};
+use pfa::{project_pfa_keyboard, project_pfa_notes};
 use piano_trail_classic::project_piano_trail_classic_scene;
 use shared::{
     KeyboardProjectorConfig as KeyboardConfig, NoteProjectorConfig as NoteConfig, SceneConfig::*,
@@ -64,26 +64,18 @@ pub fn project_scene_views_into(
     match &layout.scene {
         TwoD(config) => {
             match &config.notes {
-                NoteConfig::Flat(config) => FlatNoteProjector(config.clone()).project_notes(
-                    views,
-                    layout,
-                    piano_height,
-                    scene,
-                ),
-                NoteConfig::Pfa(config) => PfaNoteProjector(config.clone()).project_notes(
-                    views,
-                    layout,
-                    piano_height,
-                    scene,
-                ),
+                NoteConfig::Flat(config) => {
+                    project_flat_notes(config, views, layout, piano_height, scene)
+                }
+                NoteConfig::Pfa(config) => {
+                    project_pfa_notes(config, views, layout, piano_height, scene)
+                }
             }
 
             match &config.keyboard {
-                KeyboardConfig::Flat(config) => {
-                    FlatKeyboardProjector(*config).project_keyboard(layout, piano_height, scene)
-                }
+                KeyboardConfig::Flat(_config) => project_flat_keyboard(layout, piano_height, scene),
                 KeyboardConfig::Pfa(config) => {
-                    PfaKeyboardProjector(*config).project_keyboard(layout, piano_height, scene)
+                    project_pfa_keyboard(config, layout, piano_height, scene)
                 }
             }
         }
@@ -91,18 +83,4 @@ pub fn project_scene_views_into(
             project_piano_trail_classic_scene(config, physics, views, layout, scene)
         }
     }
-}
-
-pub(crate) trait NoteProjector {
-    fn project_notes(
-        &self,
-        views: &MIDIFileViewsUnion<'_>,
-        layout: &SceneLayout,
-        piano_height: f32,
-        scene: &mut ProjectedScene,
-    );
-}
-
-pub(crate) trait KeyboardProjector {
-    fn project_keyboard(&self, layout: &SceneLayout, piano_height: f32, scene: &mut ProjectedScene);
 }

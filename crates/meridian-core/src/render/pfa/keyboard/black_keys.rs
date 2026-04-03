@@ -1,9 +1,9 @@
 use crate::render::shared::{ProjectedScene, SceneLayer, mod_add, quad};
 
-use super::{
-    super::model::{KeyColorPair, activity_pair, blend_key_pair},
-    KeyPositionArrays, PfaLayoutParams, is_black_key,
+use super::super::model::{
+    KeyColorPair, KeyPositionArrays, PfaLayoutParams, activity_pair, blend_key_pair,
 };
+use crate::render::shared::is_black_key;
 
 pub(super) fn push_black_keys(
     scene: &mut ProjectedScene,

@@ -2,10 +2,16 @@ use glam::{Mat4, Vec3};
 use rayon::prelude::*;
 
 use crate::{
-    midi::views::MIDIFileViewsUnion,
+    midi::{
+        MIDINoteColumnView, MIDINoteViews, ram::view::InRamCurrentNoteViews,
+        views::MIDIFileViewsUnion,
+    },
     render::{
         SceneLayout,
-        shared::{PianoTrailClassicSceneConfig, ProjectedScene, alpha_blend, is_black_key},
+        shared::{
+            PianoTrailClassicSceneConfig, ProjectedScene, alpha_blend, for_each_visible_note,
+            is_black_key,
+        },
     },
 };
 
@@ -139,36 +145,44 @@ fn collect_visible_notes(
     key_layout: &PianoTrailClassicLayout,
     view_range: f32,
 ) -> Vec<Vec<VisibleNote>> {
+    match views {
+        MIDIFileViewsUnion::InRam(views) => {
+            collect_visible_notes_in_ram(config, views, key_layout, view_range)
+        }
+    }
+}
+
+fn collect_visible_notes_in_ram(
+    config: &PianoTrailClassicSceneConfig,
+    views: &InRamCurrentNoteViews<'_>,
+    key_layout: &PianoTrailClassicLayout,
+    view_range: f32,
+) -> Vec<Vec<VisibleNote>> {
     let render_start = -view_range * config.viewback;
     (key_layout.first_key..key_layout.last_key_exclusive)
         .into_par_iter()
         .map(|key| {
             let column = views.get_column(key);
-            let iter = column.iterate_displaced_notes();
-            let mut notes = Vec::with_capacity(iter.len());
-            for note in iter {
-                let start = note.start;
-                let unclamped_end = start + note.len;
-                let mut end = unclamped_end;
-                if end < render_start || start >= view_range {
-                    continue;
-                }
-                let mut clamped_start = start.max(render_start);
-                if config.eat_notes {
-                    clamped_start = clamped_start.max(0.0);
-                    end = end.max(0.0);
-                }
-                notes.push(VisibleNote {
-                    key,
-                    start: clamped_start,
-                    end: end.min(view_range),
-                    unclamped_end,
-                    left: note.color.left.to_rgba(1.0),
-                    right: note.color.right.to_rgba(1.0),
-                    active: note.start <= 0.0 && end > 0.0,
-                    has_ended: unclamped_end <= view_range,
-                });
-            }
+            let mut notes = Vec::with_capacity(column.iterate_displaced_notes().len());
+            for_each_visible_note(
+                column,
+                render_start,
+                view_range,
+                config.eat_notes,
+                config.eat_notes,
+                |note| {
+                    notes.push(VisibleNote {
+                        key,
+                        start: note.start,
+                        end: note.end,
+                        unclamped_end: note.unclamped_end,
+                        left: note.color.left.to_rgba(1.0),
+                        right: note.color.right.to_rgba(1.0),
+                        active: note.active,
+                        has_ended: note.has_ended,
+                    });
+                },
+            );
             notes
         })
         .collect()

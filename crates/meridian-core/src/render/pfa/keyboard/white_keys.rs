@@ -1,12 +1,13 @@
+use crate::render::shared::{PfaKeyboardProjectorConfig, expanded_white_key_bounds};
 use crate::render::shared::{ProjectedScene, SceneLayer, mod_add, quad, vertical_gradient_quad};
 
-use super::{
-    super::model::{KeyColorPair, activity_pair, blend_key_pair},
-    KeyPositionArrays, PfaKeyboardProjector, PfaLayoutParams, is_black_key,
+use super::super::model::{
+    KeyColorPair, KeyPositionArrays, PfaLayoutParams, activity_pair, blend_key_pair,
 };
+use crate::render::shared::is_black_key;
 
 pub(super) fn push_white_keys(
-    projector: &PfaKeyboardProjector,
+    projector: &PfaKeyboardProjectorConfig,
     scene: &mut ProjectedScene,
     params: &PfaLayoutParams,
     arrays: &KeyPositionArrays,
@@ -21,26 +22,8 @@ pub(super) fn push_white_keys(
         let (mut x1, mut x2) = (arrays.x1[n], arrays.x1[n] + arrays.width[n]);
         let width = x2 - x1;
 
-        if projector.0.same_width_notes {
-            match n % 12 {
-                0 => x2 += width * 0.666,
-                2 => {
-                    x1 -= width / 3.0;
-                    x2 += width / 3.0;
-                }
-                4 => x1 -= width * 0.666,
-                5 => x2 += width * 0.75,
-                7 => {
-                    x1 -= width / 4.0;
-                    x2 += width / 2.0;
-                }
-                9 => {
-                    x1 -= width / 2.0;
-                    x2 += width / 4.0;
-                }
-                11 => x1 -= width * 0.75,
-                _ => {}
-            }
+        if projector.same_width_notes {
+            (x1, x2) = expanded_white_key_bounds(x1, x2, n);
         }
 
         let activity = scene.key_activity(n);
@@ -51,7 +34,7 @@ pub(super) fn push_white_keys(
             push_unpressed_white_key(scene, params, x1, x2);
         }
 
-        if n == 60 && projector.0.middle_c {
+        if n == 60 && projector.middle_c {
             push_middle_c_marker(scene, params, x1, x2, width, activity.pressed, pair);
         }
 

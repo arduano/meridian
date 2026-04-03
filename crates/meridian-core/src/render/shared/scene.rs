@@ -1,7 +1,16 @@
 use crate::midi::MIDI_KEY_COUNT;
 
 use super::{LAYER_COUNT, SceneLayer, SceneQuad};
-use crate::render::{pfa::NoteInstance, piano_trail_classic::PianoTrailClassicScene};
+use crate::render::piano_trail_classic::PianoTrailClassicScene;
+
+use super::NoteInstance;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum NoteShaderKind {
+    #[default]
+    Flat,
+    Pfa,
+}
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct KeyActivity {
@@ -17,6 +26,7 @@ pub struct ProjectedScene {
     piano_trail_classic: Option<PianoTrailClassicScene>,
     note_key_x: [[f32; 2]; MIDI_KEY_COUNT],
     note_params: [f32; 4],
+    note_shader_kind: NoteShaderKind,
     key_activity: [KeyActivity; MIDI_KEY_COUNT],
     pub notes_black_first: bool,
     pub visible_notes: usize,
@@ -33,6 +43,7 @@ impl Default for ProjectedScene {
             piano_trail_classic: None,
             note_key_x: [[0.0; 2]; MIDI_KEY_COUNT],
             note_params: [0.0; 4],
+            note_shader_kind: NoteShaderKind::default(),
             key_activity: [KeyActivity::default(); MIDI_KEY_COUNT],
             notes_black_first: false,
             visible_notes: 0,
@@ -55,6 +66,7 @@ impl ProjectedScene {
             piano_trail_classic.clear();
         }
         self.key_activity.fill(KeyActivity::default());
+        self.note_shader_kind = NoteShaderKind::default();
         self.notes_black_first = false;
         self.visible_notes = 0;
         self.active_keys = 0;
@@ -94,6 +106,10 @@ impl ProjectedScene {
         self.note_params
     }
 
+    pub(crate) fn note_shader_kind(&self) -> NoteShaderKind {
+        self.note_shader_kind
+    }
+
     pub fn key_activity(&self, key: usize) -> KeyActivity {
         self.key_activity[key]
     }
@@ -112,10 +128,22 @@ impl ProjectedScene {
         self.note_params = [piano_height, note_pos_factor, pad_x, pad_y];
     }
 
+    pub(crate) fn set_note_shader_kind(&mut self, kind: NoteShaderKind) {
+        self.note_shader_kind = kind;
+    }
+
     pub(crate) fn extend_note_layer(&mut self, layer: SceneLayer, notes: Vec<NoteInstance>) {
         match layer {
             SceneLayer::WhiteNotes => self.note_layers[0].extend(notes),
             SceneLayer::BlackNotes => self.note_layers[1].extend(notes),
+            _ => {}
+        }
+    }
+
+    pub(crate) fn push_note_layer(&mut self, layer: SceneLayer, note: NoteInstance) {
+        match layer {
+            SceneLayer::WhiteNotes => self.note_layers[0].push(note),
+            SceneLayer::BlackNotes => self.note_layers[1].push(note),
             _ => {}
         }
     }

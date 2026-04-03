@@ -1,6 +1,6 @@
 use bytemuck::cast_slice;
 
-use crate::render::{SceneQuad, pfa::NoteInstance};
+use crate::render::{SceneQuad, shared::NoteInstance};
 
 use super::{pipeline::clear_color, renderer::PrimitiveSceneRenderer};
 
@@ -10,6 +10,7 @@ pub(super) fn submit_note_chunks(
     queue: &wgpu::Queue,
     view: &wgpu::TextureView,
     depth_view: Option<&wgpu::TextureView>,
+    pipeline: &wgpu::RenderPipeline,
     notes: &[NoteInstance],
     has_existing_color: bool,
     label: &'static str,
@@ -57,7 +58,7 @@ pub(super) fn submit_note_chunks(
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        pass.set_pipeline(&renderer.resources.note_pipeline);
+        pass.set_pipeline(pipeline);
         pass.set_bind_group(0, &renderer.resources.note_bind_group, &[]);
         pass.set_vertex_buffer(0, renderer.resources.note_vertex_buffer.slice(..));
         pass.set_vertex_buffer(

@@ -2,6 +2,6 @@ mod keyboard;
 mod model;
 mod notes;
 
-pub(crate) use model::{
-    FlatKeyState, FlatKeyboardProjector, FlatNoteProjector, key_span, zenith_white_key_bounds,
-};
+pub(crate) use keyboard::project_flat_keyboard;
+pub(crate) use model::FlatKeyState;
+pub(crate) use notes::project_flat_notes;

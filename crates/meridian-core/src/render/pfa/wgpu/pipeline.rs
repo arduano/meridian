@@ -3,9 +3,9 @@ use std::borrow::Cow;
 use bytemuck::cast_slice;
 use wgpu::{Extent3d, util::DeviceExt};
 
-use crate::render::{SceneQuad, pfa::NoteInstance};
+use crate::render::{SceneQuad, shared::NoteInstance};
 
-use super::shaders::{FLAT_SHADER, NOTE_SHADER};
+use super::shaders::{FLAT_NOTE_SHADER, FLAT_SHADER, PFA_NOTE_SHADER};
 
 pub const VIEWPORT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -30,7 +30,8 @@ pub(super) struct NoteKeyPositionUniform {
 }
 
 pub(super) struct RendererResources {
-    pub note_pipeline: wgpu::RenderPipeline,
+    pub flat_note_pipeline: wgpu::RenderPipeline,
+    pub pfa_note_pipeline: wgpu::RenderPipeline,
     pub flat_pipeline: wgpu::RenderPipeline,
     pub quad_vertex_buffer: wgpu::Buffer,
     pub note_vertex_buffer: wgpu::Buffer,
@@ -49,8 +50,12 @@ pub(super) fn create_renderer_resources(device: &wgpu::Device) -> RendererResour
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(FLAT_SHADER)),
     });
     let note_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("MeridianNoteShader"),
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(NOTE_SHADER)),
+        label: Some("MeridianFlatNoteShader"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(FLAT_NOTE_SHADER)),
+    });
+    let pfa_note_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("MeridianPfaNoteShader"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(PFA_NOTE_SHADER)),
     });
     let flat_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("MeridianFlatPipelineLayout"),
@@ -89,7 +94,18 @@ pub(super) fn create_renderer_resources(device: &wgpu::Device) -> RendererResour
         immediate_size: 0,
     });
     let flat_pipeline = create_flat_pipeline(device, &flat_shader, &flat_pipeline_layout);
-    let note_pipeline = create_note_pipeline(device, &note_shader, &note_pipeline_layout);
+    let flat_note_pipeline = create_note_pipeline(
+        device,
+        &note_shader,
+        &note_pipeline_layout,
+        "MeridianSceneFlatNotePipeline",
+    );
+    let pfa_note_pipeline = create_note_pipeline(
+        device,
+        &pfa_note_shader,
+        &note_pipeline_layout,
+        "MeridianScenePfaNotePipeline",
+    );
 
     let quad_vertices: [[f32; 2]; 6] = [
         [0.0, 0.0],
@@ -155,7 +171,8 @@ pub(super) fn create_renderer_resources(device: &wgpu::Device) -> RendererResour
     let depth_texture = create_depth_texture(device, depth_extent);
 
     RendererResources {
-        note_pipeline,
+        flat_note_pipeline,
+        pfa_note_pipeline,
         flat_pipeline,
         quad_vertex_buffer,
         note_vertex_buffer,
@@ -251,9 +268,10 @@ fn create_note_pipeline(
     device: &wgpu::Device,
     note_shader: &wgpu::ShaderModule,
     layout: &wgpu::PipelineLayout,
+    label: &'static str,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("MeridianSceneNotePipeline"),
+        label: Some(label),
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: note_shader,

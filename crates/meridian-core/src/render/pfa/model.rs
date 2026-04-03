@@ -1,32 +1,7 @@
-use crate::{
-    midi::MIDI_KEY_COUNT,
-    render::{
-        SceneLayout,
-        shared::{
-            KeyActivity, PfaKeyboardProjectorConfig, PfaNoteProjectorConfig, alpha_blend,
-            is_black_key,
-        },
-    },
+use crate::render::{
+    SceneLayout,
+    shared::{KeyActivity, KeyXLayout, PFA_BLACK_KEY_PROFILE, alpha_blend, build_key_x_layout},
 };
-
-#[repr(C)]
-#[derive(
-    Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable, serde::Serialize, serde::Deserialize,
-)]
-pub struct NoteInstance {
-    pub key: u32,
-    pub start: f32,
-    pub end: f32,
-    pub left_color: u32,
-    pub right_color: u32,
-    pub _padding: [u32; 2],
-}
-
-#[derive(Clone)]
-pub(crate) struct PfaNoteProjector(pub PfaNoteProjectorConfig);
-
-#[derive(Clone, Copy)]
-pub(crate) struct PfaKeyboardProjector(pub PfaKeyboardProjectorConfig);
 
 #[derive(Clone, Copy, Default)]
 pub(crate) struct KeyColorPair {
@@ -109,63 +84,19 @@ impl PfaLayoutParams {
     }
 }
 
-pub(crate) struct KeyPositionArrays {
-    pub x1: [f32; MIDI_KEY_COUNT + 1],
-    pub width: [f32; MIDI_KEY_COUNT + 1],
-}
+pub(crate) type KeyPositionArrays = KeyXLayout;
 
-impl KeyPositionArrays {
-    pub(crate) fn new(first_note: usize, last_note: usize, same_width: bool) -> Self {
-        let mut result = Self {
-            x1: [0.0; MIDI_KEY_COUNT + 1],
-            width: [0.0; MIDI_KEY_COUNT + 1],
-        };
-        let keynum = build_key_numbers();
-
-        if same_width {
-            for i in 0..=MIDI_KEY_COUNT {
-                result.x1[i] =
-                    (i.saturating_sub(first_note)) as f32 / (last_note - first_note) as f32;
-                result.width[i] = 1.0 / (last_note - first_note) as f32;
-            }
-        } else {
-            let mut knmfn = keynum[first_note] as f32;
-            let mut knmln = keynum[last_note - 1] as f32;
-            if is_black_key(first_note as u8) && first_note > 0 {
-                knmfn = keynum[first_note - 1] as f32 + 0.5;
-            }
-            if is_black_key((last_note - 1) as u8) && last_note < MIDI_KEY_COUNT {
-                knmln = keynum[last_note] as f32 - 0.5;
-            }
-            let norm = knmln - knmfn + 1.0;
-            for i in 0..=MIDI_KEY_COUNT {
-                if !is_black_key(i as u8) {
-                    result.x1[i] = (keynum[i] as f32 - knmfn) / norm;
-                    result.width[i] = 1.0 / norm;
-                } else {
-                    let width = 0.64 / norm;
-                    let bknum = keynum[i] % 5;
-                    let mut offset = width / 2.0;
-                    if bknum == 0 || bknum == 2 {
-                        offset += offset * 0.4;
-                    }
-                    if bknum == 1 || bknum == 4 {
-                        offset -= offset * 0.4;
-                    }
-                    let next = (i + 1).min(MIDI_KEY_COUNT);
-                    result.x1[i] = (keynum[next] as f32 - knmfn) / norm - offset;
-                    result.width[i] = width;
-                }
-            }
-        }
-
-        result
-    }
+pub(crate) fn build_key_position_arrays(
+    first_note: usize,
+    last_note: usize,
+    same_width: bool,
+) -> KeyPositionArrays {
+    build_key_x_layout(first_note, last_note, same_width, PFA_BLACK_KEY_PROFILE)
 }
 
 pub(crate) struct KeyNoteProjection {
     pub key: usize,
-    pub notes: Vec<NoteInstance>,
+    pub notes: Vec<crate::render::shared::NoteInstance>,
     pub key_color: KeyColorPair,
     pub key_pressed: bool,
 }
@@ -175,22 +106,6 @@ pub(crate) fn blend_key_pair(pair: KeyColorPair, base: KeyColorPair) -> KeyColor
         left: alpha_blend(pair.left, base.left),
         right: alpha_blend(pair.right, base.right),
     }
-}
-
-fn build_key_numbers() -> [i32; MIDI_KEY_COUNT + 1] {
-    let mut keynum = [0; MIDI_KEY_COUNT + 1];
-    let mut b = 0;
-    let mut w = 0;
-    for (i, slot) in keynum.iter_mut().enumerate() {
-        if is_black_key(i as u8) {
-            *slot = b;
-            b += 1;
-        } else {
-            *slot = w;
-            w += 1;
-        }
-    }
-    keynum
 }
 
 pub(crate) fn activity_pair(activity: KeyActivity) -> KeyColorPair {

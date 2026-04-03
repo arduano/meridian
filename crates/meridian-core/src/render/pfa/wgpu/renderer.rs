@@ -1,6 +1,9 @@
 use bytemuck::cast_slice;
 
-use crate::render::{SceneLayer, SceneQuad, pfa::NoteInstance, shared::ProjectedScene};
+use crate::render::{
+    SceneLayer, SceneQuad,
+    shared::{NoteInstance, NoteShaderKind, ProjectedScene},
+};
 
 use super::{passes, pipeline::*};
 
@@ -60,6 +63,10 @@ impl PrimitiveSceneRenderer {
         } else {
             [SceneLayer::WhiteNotes, SceneLayer::BlackNotes]
         };
+        let note_pipeline = match scene.note_shader_kind() {
+            NoteShaderKind::Flat => self.resources.flat_note_pipeline.clone(),
+            NoteShaderKind::Pfa => self.resources.pfa_note_pipeline.clone(),
+        };
         let mut has_color = false;
         for layer in note_layers {
             has_color = passes::submit_note_chunks(
@@ -68,6 +75,7 @@ impl PrimitiveSceneRenderer {
                 queue,
                 &view,
                 Some(&depth_view),
+                &note_pipeline,
                 scene.note_layer(layer),
                 has_color,
                 "MeridianNoteChunk",

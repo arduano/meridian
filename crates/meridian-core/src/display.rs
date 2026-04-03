@@ -11,6 +11,8 @@ use crate::{
     transport::TransportSnapshot,
 };
 
+pub const MIN_VIEW_RANGE_SECONDS: f64 = 0.001;
+
 pub struct DisplayFrame {
     pub layout: SceneLayout,
     pub stats: FrameStats,
@@ -70,7 +72,7 @@ impl LiveDisplaySession {
         seconds: f64,
         time_space: Option<crate::render::DisplayTimeSpace>,
     ) {
-        self.layout.view_range = seconds.clamp(1.0, 30.0);
+        self.layout.view_range = seconds.max(MIN_VIEW_RANGE_SECONDS);
         if let Some(time_space) = time_space {
             self.layout.time_space = time_space;
         }
@@ -245,5 +247,24 @@ impl LiveDisplaySession {
             Some(&self.scene_physics),
             &self.layout,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LiveDisplaySession, MIN_VIEW_RANGE_SECONDS};
+
+    #[test]
+    fn view_range_accepts_custom_values_outside_slider_band() {
+        let mut display = LiveDisplaySession::new();
+
+        display.set_view_range(0.5, None);
+        assert_eq!(display.layout().view_range, 0.5);
+
+        display.set_view_range(120.0, None);
+        assert_eq!(display.layout().view_range, 120.0);
+
+        display.set_view_range(0.0, None);
+        assert_eq!(display.layout().view_range, MIN_VIEW_RANGE_SECONDS);
     }
 }

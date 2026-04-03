@@ -1,9 +1,11 @@
-use crate::render::shared::{ProjectedScene, SceneLayer, vertical_gradient_quad};
+use crate::render::shared::{
+    PfaKeyboardProjectorConfig, ProjectedScene, SceneLayer, vertical_gradient_quad,
+};
 
-use super::{PfaKeyboardProjector, PfaLayoutParams};
+use super::super::model::PfaLayoutParams;
 
 pub(super) fn push_keyboard_decorations(
-    projector: &PfaKeyboardProjector,
+    projector: &PfaKeyboardProjectorConfig,
     scene: &mut ProjectedScene,
     params: &PfaLayoutParams,
 ) {
@@ -21,7 +23,7 @@ pub(super) fn push_keyboard_decorations(
         ),
     );
 
-    let (top, bottom) = projector.0.resolved_top_bar_gradient();
+    let (top, bottom) = projector.resolved_top_bar_gradient();
     scene.push_quad(
         SceneLayer::KeyboardDecor,
         vertical_gradient_quad(
