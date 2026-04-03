@@ -250,6 +250,7 @@ fn renderer_summary(scene: &SceneConfig) -> &'static str {
 
 fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
     app.set_video_view_range_value_text(format!("{:.1}", state.view_range).into());
+    app.set_video_view_range_value_float(state.view_range as f32);
     app.set_video_first_key_text(state.first_key.to_string().into());
     app.set_video_last_key_text(state.last_key.to_string().into());
 
@@ -259,10 +260,12 @@ fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
                 KeyboardHeightSpec::ScreenPercent { height } => {
                     app.set_video_keyboard_height_mode_text("screen_percent".into());
                     app.set_video_keyboard_height_value_text(format!("{height:.5}").into());
+                    app.set_video_keyboard_height_value_float(height);
                 }
                 KeyboardHeightSpec::AspectRatio { ratio } => {
                     app.set_video_keyboard_height_mode_text("aspect_ratio".into());
                     app.set_video_keyboard_height_value_text(format!("{ratio:.5}").into());
+                    app.set_video_keyboard_height_value_float(ratio);
                 }
             }
 
@@ -270,11 +273,13 @@ fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
                 NoteProjectorConfig::Flat(notes) => {
                     app.set_video_note_same_width_text("off".into());
                     app.set_video_border_width_text("1.0".into());
+                    app.set_video_border_width_float(1.0);
                     apply_palette_to_app(app, &notes.palette);
                 }
                 NoteProjectorConfig::Pfa(notes) => {
                     app.set_video_note_same_width_text(on_off(notes.same_width_notes).into());
                     app.set_video_border_width_text(format!("{:.1}", notes.border_width).into());
+                    app.set_video_border_width_float(notes.border_width);
                     apply_palette_to_app(app, &notes.palette);
                 }
             }
@@ -309,8 +314,10 @@ fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
         SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => {
             app.set_video_keyboard_height_mode_text("aspect_ratio".into());
             app.set_video_keyboard_height_value_text("0.08494".into());
+            app.set_video_keyboard_height_value_float(0.08494);
             app.set_video_note_same_width_text("off".into());
             app.set_video_border_width_text("1.0".into());
+            app.set_video_border_width_float(1.0);
             app.set_video_keyboard_same_width_text("off".into());
             app.set_video_middle_c_text("off".into());
             app.set_video_top_color_text("red".into());
@@ -319,17 +326,28 @@ fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
 
             app.set_video_ptc_same_width_text(on_off(config.same_width_notes).into());
             app.set_video_ptc_fov_text(format!("{:.1}", config.fov.to_degrees()).into());
+            app.set_video_ptc_fov_float(config.fov.to_degrees());
             app.set_video_ptc_view_height_text(format!("{:.2}", config.view_height).into());
+            app.set_video_ptc_view_height_float(config.view_height);
             app.set_video_ptc_view_offset_text(format!("{:.2}", config.view_offset).into());
+            app.set_video_ptc_view_offset_float(config.view_offset);
             app.set_video_ptc_view_pan_text(format!("{:.2}", config.view_pan).into());
-            app.set_video_ptc_cam_ang_text(format!("{:.2}", config.cam_ang).into());
-            app.set_video_ptc_cam_rot_text(format!("{:.2}", config.cam_rot).into());
-            app.set_video_ptc_cam_spin_text(format!("{:.2}", config.cam_spin).into());
+            app.set_video_ptc_view_pan_float(config.view_pan);
+            app.set_video_ptc_cam_ang_text(format!("{:.2}", config.cam_ang.to_degrees()).into());
+            app.set_video_ptc_cam_ang_float(config.cam_ang.to_degrees());
+            app.set_video_ptc_cam_rot_text(format!("{:.2}", config.cam_rot.to_degrees()).into());
+            app.set_video_ptc_cam_rot_float(config.cam_rot.to_degrees());
+            app.set_video_ptc_cam_spin_text(format!("{:.2}", config.cam_spin.to_degrees()).into());
+            app.set_video_ptc_cam_spin_float(config.cam_spin.to_degrees());
             app.set_video_ptc_viewdist_text(format!("{:.1}", config.viewdist).into());
+            app.set_video_ptc_viewdist_float(config.viewdist);
             app.set_video_ptc_viewback_text(format!("{:.2}", config.viewback).into());
+            app.set_video_ptc_viewback_float(config.viewback);
             app.set_video_ptc_vertical_notes_text(on_off(config.vertical_notes).into());
             app.set_video_ptc_note_down_speed_text(format!("{:.2}", config.note_down_speed).into());
+            app.set_video_ptc_note_down_speed_float(config.note_down_speed);
             app.set_video_ptc_note_up_speed_text(format!("{:.2}", config.note_up_speed).into());
+            app.set_video_ptc_note_up_speed_float(config.note_up_speed);
             app.set_video_ptc_box_notes_text(on_off(config.box_notes).into());
             app.set_video_ptc_light_shade_text(on_off(config.light_shade).into());
             app.set_video_ptc_show_keyboard_text(on_off(config.show_keyboard).into());
@@ -337,6 +355,7 @@ fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
             app.set_video_ptc_eat_notes_text(on_off(config.eat_notes).into());
             app.set_video_ptc_aura_enabled_text(on_off(config.aura_enabled).into());
             app.set_video_ptc_aura_strength_text(format!("{:.1}", config.aura_strength).into());
+            app.set_video_ptc_aura_strength_float(config.aura_strength);
             app.set_video_ptc_notes_change_size_text(on_off(config.notes_change_size).into());
             app.set_video_ptc_notes_change_tint_text(on_off(config.notes_change_tint).into());
             app.set_video_ptc_use_vel_text(on_off(config.use_vel).into());
@@ -359,17 +378,28 @@ fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
 fn apply_ptc_defaults_to_app(app: &App) {
     app.set_video_ptc_same_width_text("on".into());
     app.set_video_ptc_fov_text("60.0".into());
+    app.set_video_ptc_fov_float(60.0);
     app.set_video_ptc_view_height_text("0.50".into());
+    app.set_video_ptc_view_height_float(0.50);
     app.set_video_ptc_view_offset_text("0.40".into());
+    app.set_video_ptc_view_offset_float(0.40);
     app.set_video_ptc_view_pan_text("0.00".into());
-    app.set_video_ptc_cam_ang_text("0.56".into());
+    app.set_video_ptc_view_pan_float(0.0);
+    app.set_video_ptc_cam_ang_text(format!("{:.2}", 0.56_f32.to_degrees()).into());
+    app.set_video_ptc_cam_ang_float(0.56_f32.to_degrees());
     app.set_video_ptc_cam_rot_text("0.00".into());
+    app.set_video_ptc_cam_rot_float(0.0);
     app.set_video_ptc_cam_spin_text("0.00".into());
+    app.set_video_ptc_cam_spin_float(0.0);
     app.set_video_ptc_viewdist_text("14.0".into());
+    app.set_video_ptc_viewdist_float(14.0);
     app.set_video_ptc_viewback_text("0.20".into());
+    app.set_video_ptc_viewback_float(0.20);
     app.set_video_ptc_vertical_notes_text("off".into());
     app.set_video_ptc_note_down_speed_text("0.60".into());
+    app.set_video_ptc_note_down_speed_float(0.60);
     app.set_video_ptc_note_up_speed_text("0.20".into());
+    app.set_video_ptc_note_up_speed_float(0.20);
     app.set_video_ptc_box_notes_text("on".into());
     app.set_video_ptc_light_shade_text("off".into());
     app.set_video_ptc_show_keyboard_text("on".into());
@@ -377,6 +407,7 @@ fn apply_ptc_defaults_to_app(app: &App) {
     app.set_video_ptc_eat_notes_text("off".into());
     app.set_video_ptc_aura_enabled_text("on".into());
     app.set_video_ptc_aura_strength_text("2.0".into());
+    app.set_video_ptc_aura_strength_float(2.0);
     app.set_video_ptc_notes_change_size_text("off".into());
     app.set_video_ptc_notes_change_tint_text("on".into());
     app.set_video_ptc_use_vel_text("off".into());

@@ -55,3 +55,17 @@ export struct EventCount {
     count: int,
     fraction: float,
 }
+
+
+// ── SliderCurve ────────────────────────────────────────────
+// Determines the mapping between the 0-1 slider position and
+// the actual value range.  "linear" gives uniform resolution;
+// "quadratic" gives more resolution near the low end (the
+// position is squared before scaling). "exponential" keeps
+// even more precision near the low end for wide positive ranges.
+
+export enum SliderCurve {
+    linear,
+    quadratic,
+    exponential,
+}

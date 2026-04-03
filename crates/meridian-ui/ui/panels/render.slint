@@ -5,12 +5,18 @@
 //  2D/3D renderer selection, palette selection, and renderer-
 //  specific projector controls. Render-job settings are
 //  intentionally out of scope for this page.
+//
+//  Layout: two-column design. Left column holds universal
+//  settings (scene type, framing, palette, summary). Right
+//  column holds renderer-specific settings that appear
+//  conditionally (3D camera/geometry/styling, 2D layout,
+//  PFA notes/keyboard).
 // ═══════════════════════════════════════════════════════════
 
-import { MidiLoadState } from "../structs.slint";
+import { MidiLoadState, SliderCurve } from "../structs.slint";
 import {
     SectionHeader, Separator, FieldRow, ToggleButton, OptionChip,
-    InlineOptionRow, InlineCustomRow, FilePicker
+    InlineOptionRow, InlineCustomRow, FilePicker, SliderRow
 } from "../primitives.slint";
 import { MidiStateSection } from "../midi_loading.slint";
 
@@ -27,6 +33,7 @@ export component VideoPanel inherits Rectangle {
     callback unload-midi;
     callback retry-load;
 
+    // ── Text properties (display values from Rust) ──
     in property <string> current-renderer-text;
     in property <string> time-space-text;
     in property <string> view-range-text;
@@ -73,9 +80,27 @@ export component VideoPanel inherits Rectangle {
     in property <string> video-ptc-aura-image-name-text;
     in property <string> video-ptc-aura-image-path-text;
 
+    // ── Float properties (numeric values for sliders from Rust) ──
+    in property <float> video-view-range-value-float: 8.0;
+    in property <float> video-border-width-float: 1.0;
+    in property <float> video-keyboard-height-value-float: 0.085;
+    in property <float> video-ptc-fov-float: 60.0;
+    in property <float> video-ptc-view-height-float: 0.5;
+    in property <float> video-ptc-view-offset-float: 0.4;
+    in property <float> video-ptc-view-pan-float: 0.0;
+    in property <float> video-ptc-cam-ang-float: 32.08564;
+    in property <float> video-ptc-cam-rot-float: 0.0;
+    in property <float> video-ptc-cam-spin-float: 0.0;
+    in property <float> video-ptc-viewdist-float: 14.0;
+    in property <float> video-ptc-viewback-float: 0.2;
+    in property <float> video-ptc-note-down-speed-float: 0.6;
+    in property <float> video-ptc-note-up-speed-float: 0.2;
+    in property <float> video-ptc-aura-strength-float: 2.0;
+
     callback select-renderer(string);
     callback select-time-space(string);
     callback update-control(string, string);
+    callback update-control-float(string, float);
     callback browse-asset(string);
     callback reset-asset(string);
 
@@ -87,6 +112,10 @@ export component VideoPanel inherits Rectangle {
     private property <bool> uses-palette-png: root.video-palette-kind-text == "png_file";
     private property <bool> uses-aura-png: root.video-ptc-aura-image-source-text == "png_file";
 
+    // Whether there's a right column at all
+    private property <bool> has-right-column:
+        root.is-3d || root.is-pfa || root.uses-2d-layout;
+
     clip: true;
 
     Flickable {
@@ -95,8 +124,8 @@ export component VideoPanel inherits Rectangle {
 
         VerticalLayout {
             width: parent.width;
-            padding: 20px;
-            padding-right: 24px;
+            padding: 16px;
+            padding-right: 16px;
             spacing: 0px;
             alignment: start;
 
@@ -118,400 +147,553 @@ export component VideoPanel inherits Rectangle {
 
             Rectangle { height: 12px; }
             Separator { }
-            Rectangle { height: 16px; }
+            Rectangle { height: 12px; }
 
-            SectionHeader { title: "SCENE TYPE"; }
-            Rectangle { height: 6px; }
+            // ══════════════════════════════════════════
+            //  TWO-COLUMN LAYOUT
+            // ══════════════════════════════════════════
             HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "PFA";      active: root.is-pfa;  pressed => { root.select-renderer("pfa"); } }
-                ToggleButton { label: "Flat";     active: root.is-flat; pressed => { root.select-renderer("flat"); } }
-                ToggleButton { label: "3D Trail"; active: root.is-3d;   pressed => { root.select-renderer("3d"); } }
-            }
+                spacing: 0px;
 
-            Rectangle { height: 8px; }
-            FieldRow { label: "Current Scene"; value: root.scene-summary-text; }
+                // ──────────────────────────────────────
+                //  LEFT COLUMN — universal settings
+                // ──────────────────────────────────────
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 0px;
+                    alignment: start;
 
-            Rectangle { height: 12px; }
-            Separator { }
-            Rectangle { height: 16px; }
+                    SectionHeader { title: "SCENE TYPE"; }
+                    Rectangle { height: 6px; }
+                    HorizontalLayout {
+                        spacing: 4px;
+                        ToggleButton { label: "PFA";      active: root.is-pfa;  pressed => { root.select-renderer("pfa"); } }
+                        ToggleButton { label: "Flat";     active: root.is-flat; pressed => { root.select-renderer("flat"); } }
+                        ToggleButton { label: "3D Trail"; active: root.is-3d;   pressed => { root.select-renderer("3d"); } }
+                    }
 
-            SectionHeader { title: "FRAMING"; }
-            Rectangle { height: 8px; }
+                    Rectangle { height: 4px; }
+                    FieldRow { label: "Current Scene"; value: root.scene-summary-text; }
 
-            InlineOptionRow {
-                label: "Time Space";
-                OptionChip { label: "Time"; active: root.time-space-text == "time"; pressed => { root.select-time-space("time"); } }
-                OptionChip { label: "Tick"; active: root.time-space-text == "tick"; pressed => { root.select-time-space("tick"); } }
-            }
+                    Rectangle { height: 12px; }
+                    Separator { }
+                    Rectangle { height: 12px; }
 
-            Rectangle { height: 4px; }
+                    SectionHeader { title: "FRAMING"; }
+                    Rectangle { height: 6px; }
 
-            InlineCustomRow {
-                label: "View Range";
-                value: root.video-view-range-value-text;
-                custom-display: root.video-view-range-value-text + " s";
-                is-preset:
-                    root.video-view-range-value-text == "4.0"
-                    || root.video-view-range-value-text == "8.0"
-                    || root.video-view-range-value-text == "12.0"
-                    || root.video-view-range-value-text == "16.0";
-                custom-submitted(val) => { root.update-control("view_range", val); }
+                    InlineOptionRow {
+                        label: "Time Space";
+                        OptionChip { label: "Time"; active: root.time-space-text == "time"; pressed => { root.select-time-space("time"); } }
+                        OptionChip { label: "Tick"; active: root.time-space-text == "tick"; pressed => { root.select-time-space("tick"); } }
+                    }
 
-                OptionChip { label: "4 s"; active: root.video-view-range-value-text == "4.0"; pressed => { root.update-control("view_range", "4"); } }
-                OptionChip { label: "8 s"; active: root.video-view-range-value-text == "8.0"; pressed => { root.update-control("view_range", "8"); } }
-                OptionChip { label: "12 s"; active: root.video-view-range-value-text == "12.0"; pressed => { root.update-control("view_range", "12"); } }
-                OptionChip { label: "16 s"; active: root.video-view-range-value-text == "16.0"; pressed => { root.update-control("view_range", "16"); } }
-            }
+                    Rectangle { height: 4px; }
 
-            Rectangle { height: 4px; }
+                    SliderRow {
+                        label: "View Range";
+                        value: root.video-view-range-value-float;
+                        display-text: root.video-view-range-value-text + " s";
+                        edit-text: root.video-view-range-value-text;
+                        minimum: 1.0;
+                        maximum: 30.0;
+                        curve: quadratic;
+                        changed(v) => { root.update-control-float("view_range", v); }
+                        custom-submitted(v) => { root.update-control("view_range", v); }
+                        reset-requested() => { root.update-control("view_range", "8.0"); }
+                    }
 
-            InlineCustomRow {
-                label: "First Key";
-                value: root.video-first-key-text;
-                is-preset:
-                    root.video-first-key-text == "0"
-                    || root.video-first-key-text == "21"
-                    || root.video-first-key-text == "36"
-                    || root.video-first-key-text == "48";
-                custom-submitted(val) => { root.update-control("first_key", val); }
+                    Rectangle { height: 4px; }
 
-                OptionChip { label: "0";  active: root.video-first-key-text == "0";  pressed => { root.update-control("first_key", "0"); } }
-                OptionChip { label: "21"; active: root.video-first-key-text == "21"; pressed => { root.update-control("first_key", "21"); } }
-                OptionChip { label: "36"; active: root.video-first-key-text == "36"; pressed => { root.update-control("first_key", "36"); } }
-                OptionChip { label: "48"; active: root.video-first-key-text == "48"; pressed => { root.update-control("first_key", "48"); } }
-            }
+                    InlineCustomRow {
+                        label: "First Key";
+                        value: root.video-first-key-text;
+                        is-preset:
+                            root.video-first-key-text == "0"
+                            || root.video-first-key-text == "21"
+                            || root.video-first-key-text == "36"
+                            || root.video-first-key-text == "48";
+                        custom-submitted(val) => { root.update-control("first_key", val); }
 
-            Rectangle { height: 4px; }
+                        OptionChip { label: "0";  active: root.video-first-key-text == "0";  pressed => { root.update-control("first_key", "0"); } }
+                        OptionChip { label: "21"; active: root.video-first-key-text == "21"; pressed => { root.update-control("first_key", "21"); } }
+                        OptionChip { label: "36"; active: root.video-first-key-text == "36"; pressed => { root.update-control("first_key", "36"); } }
+                        OptionChip { label: "48"; active: root.video-first-key-text == "48"; pressed => { root.update-control("first_key", "48"); } }
+                    }
 
-            InlineCustomRow {
-                label: "Last Key";
-                value: root.video-last-key-text;
-                is-preset:
-                    root.video-last-key-text == "84"
-                    || root.video-last-key-text == "96"
-                    || root.video-last-key-text == "108"
-                    || root.video-last-key-text == "127";
-                custom-submitted(val) => { root.update-control("last_key", val); }
+                    Rectangle { height: 4px; }
 
-                OptionChip { label: "84";  active: root.video-last-key-text == "84";  pressed => { root.update-control("last_key", "84"); } }
-                OptionChip { label: "96";  active: root.video-last-key-text == "96";  pressed => { root.update-control("last_key", "96"); } }
-                OptionChip { label: "108"; active: root.video-last-key-text == "108"; pressed => { root.update-control("last_key", "108"); } }
-                OptionChip { label: "127"; active: root.video-last-key-text == "127"; pressed => { root.update-control("last_key", "127"); } }
-            }
+                    InlineCustomRow {
+                        label: "Last Key";
+                        value: root.video-last-key-text;
+                        is-preset:
+                            root.video-last-key-text == "84"
+                            || root.video-last-key-text == "96"
+                            || root.video-last-key-text == "108"
+                            || root.video-last-key-text == "127";
+                        custom-submitted(val) => { root.update-control("last_key", val); }
 
-            if root.uses-2d-layout : Rectangle { height: 12px; }
-            if root.uses-2d-layout : Separator { }
-            if root.uses-2d-layout : Rectangle { height: 16px; }
+                        OptionChip { label: "84";  active: root.video-last-key-text == "84";  pressed => { root.update-control("last_key", "84"); } }
+                        OptionChip { label: "96";  active: root.video-last-key-text == "96";  pressed => { root.update-control("last_key", "96"); } }
+                        OptionChip { label: "108"; active: root.video-last-key-text == "108"; pressed => { root.update-control("last_key", "108"); } }
+                        OptionChip { label: "127"; active: root.video-last-key-text == "127"; pressed => { root.update-control("last_key", "127"); } }
+                    }
 
-            if root.uses-2d-layout : SectionHeader { title: "2D LAYOUT"; }
-            if root.uses-2d-layout : Rectangle { height: 8px; }
+                    Rectangle { height: 12px; }
+                    Separator { }
+                    Rectangle { height: 12px; }
 
-            if root.uses-2d-layout : InlineOptionRow {
-                label: "Keyboard";
-                OptionChip {
-                    label: "Aspect";
-                    active: root.video-keyboard-height-mode-text == "aspect_ratio";
-                    pressed => { root.update-control("keyboard_height_mode", "aspect_ratio"); }
+                    SectionHeader { title: "PALETTE"; }
+                    Rectangle { height: 6px; }
+
+                    InlineOptionRow {
+                        label: "Source";
+                        OptionChip { label: "Default"; active: root.video-palette-source-text == "default_track_colors"; pressed => { root.update-control("palette_source", "default_track_colors"); } }
+                        OptionChip { label: "Zenith";  active: root.video-palette-source-text == "zenith_palette";        pressed => { root.update-control("palette_source", "zenith_palette"); } }
+                    }
+
+                    if root.uses-zenith-palette : Rectangle { height: 4px; }
+
+                    if root.uses-zenith-palette : InlineOptionRow {
+                        label: "Kind";
+                        OptionChip { label: "Random";      active: root.video-palette-kind-text == "random";           pressed => { root.update-control("palette_kind", "random"); } }
+                        OptionChip { label: "Gradients";   active: root.video-palette-kind-text == "random_gradients"; pressed => { root.update-control("palette_kind", "random_gradients"); } }
+                        OptionChip { label: "PNG";         active: root.video-palette-kind-text == "png_file";         pressed => { root.update-control("palette_kind", "png_file"); } }
+                    }
+
+                    if root.uses-zenith-palette : Rectangle { height: 4px; }
+
+                    if root.uses-zenith-palette : InlineOptionRow {
+                        label: "Shuffle";
+                        OptionChip { label: "On";  active: root.video-palette-randomize-text == "on";  pressed => { root.update-control("palette_randomize", "on"); } }
+                        OptionChip { label: "Off"; active: root.video-palette-randomize-text == "off"; pressed => { root.update-control("palette_randomize", "off"); } }
+                    }
+
+                    if root.uses-zenith-palette && root.uses-palette-png : Rectangle { height: 6px; }
+
+                    if root.uses-zenith-palette && root.uses-palette-png : FilePicker {
+                        file-name: root.video-palette-path-text;
+                        file-label: "16px/32px wide opaque RGB palette png";
+                        browse => { root.browse-asset("palette_png"); }
+                        reset => { root.reset-asset("palette_png"); }
+                    }
+
+                    Rectangle { height: 12px; }
+                    Separator { }
+                    Rectangle { height: 8px; }
+
+                    SectionHeader { title: "LIVE SUMMARY"; }
+                    Rectangle { height: 4px; }
+                    FieldRow { label: "View Range"; value: root.view-range-text; }
+                    FieldRow { label: "Time Space"; value: root.time-space-text; }
+                    FieldRow { label: "Scene"; value: root.scene-summary-text; }
+
+                    Rectangle { height: 20px; }
                 }
-                OptionChip {
-                    label: "Screen %";
-                    active: root.video-keyboard-height-mode-text == "screen_percent";
-                    pressed => { root.update-control("keyboard_height_mode", "screen_percent"); }
+
+                // ──────────────────────────────────────
+                //  COLUMN SEPARATOR
+                // ──────────────────────────────────────
+                if root.has-right-column : Rectangle {
+                    width: 12px;
+                    horizontal-stretch: 0;
+                }
+                if root.has-right-column : Rectangle {
+                    width: 1px;
+                    background: #141e2e;
+                    horizontal-stretch: 0;
+                }
+                if root.has-right-column : Rectangle {
+                    width: 12px;
+                    horizontal-stretch: 0;
+                }
+
+                // ──────────────────────────────────────
+                //  RIGHT COLUMN — renderer-specific
+                // ──────────────────────────────────────
+                if root.has-right-column : VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 0px;
+                    alignment: start;
+
+                    // ── 2D LAYOUT (shown for PFA & Flat) ──
+                    if root.uses-2d-layout : SectionHeader { title: "2D LAYOUT"; }
+                    if root.uses-2d-layout : Rectangle { height: 6px; }
+
+                    if root.uses-2d-layout : InlineOptionRow {
+                        label: "Keyboard";
+                        OptionChip {
+                            label: "Aspect";
+                            active: root.video-keyboard-height-mode-text == "aspect_ratio";
+                            pressed => { root.update-control("keyboard_height_mode", "aspect_ratio"); }
+                        }
+                        OptionChip {
+                            label: "Screen %";
+                            active: root.video-keyboard-height-mode-text == "screen_percent";
+                            pressed => { root.update-control("keyboard_height_mode", "screen_percent"); }
+                        }
+                    }
+
+                    if root.uses-2d-layout : Rectangle { height: 4px; }
+
+                    if root.uses-2d-layout : SliderRow {
+                        label: root.video-keyboard-height-mode-text == "screen_percent" ? "Height %" : "Aspect";
+                        value: root.video-keyboard-height-value-float;
+                        display-text: root.video-keyboard-height-value-text;
+                        edit-text: root.video-keyboard-height-value-text;
+                        minimum: 0.02;
+                        maximum: 0.5;
+                        curve: linear;
+                        changed(v) => { root.update-control-float("keyboard_height_value", v); }
+                        custom-submitted(v) => { root.update-control("keyboard_height_value", v); }
+                        reset-requested() => {
+                            root.update-control(
+                                "keyboard_height_value",
+                                root.video-keyboard-height-mode-text == "screen_percent" ? "0.12" : "0.0849375"
+                            );
+                        }
+                    }
+
+                    // ── PFA NOTES (shown only for PFA renderer) ──
+                    if root.is-pfa : Rectangle { height: 12px; }
+                    if root.is-pfa : Separator { }
+                    if root.is-pfa : Rectangle { height: 12px; }
+
+                    if root.is-pfa : SectionHeader { title: "PFA NOTES"; }
+                    if root.is-pfa : Rectangle { height: 6px; }
+
+                    if root.is-pfa : InlineOptionRow {
+                        label: "Note Width";
+                        OptionChip { label: "Variable"; active: root.video-note-same-width-text == "off"; pressed => { root.update-control("pfa_note_same_width", "off"); } }
+                        OptionChip { label: "Uniform";  active: root.video-note-same-width-text == "on";  pressed => { root.update-control("pfa_note_same_width", "on"); } }
+                    }
+
+                    if root.is-pfa : Rectangle { height: 4px; }
+
+                    if root.is-pfa : SliderRow {
+                        label: "Border";
+                        value: root.video-border-width-float;
+                        display-text: root.video-border-width-text;
+                        edit-text: root.video-border-width-text;
+                        minimum: 0;
+                        maximum: 8;
+                        curve: linear;
+                        changed(v) => { root.update-control-float("pfa_border_width", v); }
+                        custom-submitted(v) => { root.update-control("pfa_border_width", v); }
+                        reset-requested() => { root.update-control("pfa_border_width", "1.0"); }
+                    }
+
+                    // ── PFA KEYBOARD ──
+                    if root.is-pfa : Rectangle { height: 12px; }
+                    if root.is-pfa : Separator { }
+                    if root.is-pfa : Rectangle { height: 12px; }
+
+                    if root.is-pfa : SectionHeader { title: "PFA KEYBOARD"; }
+                    if root.is-pfa : Rectangle { height: 6px; }
+
+                    if root.is-pfa : InlineOptionRow {
+                        label: "Key Width";
+                        OptionChip { label: "Variable"; active: root.video-keyboard-same-width-text == "off"; pressed => { root.update-control("pfa_keyboard_same_width", "off"); } }
+                        OptionChip { label: "Uniform";  active: root.video-keyboard-same-width-text == "on";  pressed => { root.update-control("pfa_keyboard_same_width", "on"); } }
+                    }
+
+                    if root.is-pfa : Rectangle { height: 4px; }
+
+                    if root.is-pfa : InlineOptionRow {
+                        label: "Middle C";
+                        OptionChip { label: "Off"; active: root.video-middle-c-text == "off"; pressed => { root.update-control("pfa_middle_c", "off"); } }
+                        OptionChip { label: "On";  active: root.video-middle-c-text == "on";  pressed => { root.update-control("pfa_middle_c", "on"); } }
+                    }
+
+                    if root.is-pfa : Rectangle { height: 4px; }
+
+                    if root.is-pfa : InlineOptionRow {
+                        label: "Top Color";
+                        OptionChip { label: "Red";   active: root.video-top-color-text == "red";   pressed => { root.update-control("pfa_top_color", "red"); } }
+                        OptionChip { label: "Blue";  active: root.video-top-color-text == "blue";  pressed => { root.update-control("pfa_top_color", "blue"); } }
+                        OptionChip { label: "Green"; active: root.video-top-color-text == "green"; pressed => { root.update-control("pfa_top_color", "green"); } }
+                    }
+
+                    if root.is-pfa : Rectangle { height: 4px; }
+
+                    if root.is-pfa : InlineCustomRow {
+                        label: "Top RGB";
+                        value: root.video-top-bar-rgb-text;
+                        custom-submitted(val) => { root.update-control("pfa_top_bar_rgb", val); }
+                        is-preset: false;
+                    }
+
+                    // ── 3D CAMERA (shown only for 3D Trail) ──
+                    if root.is-3d : SectionHeader { title: "3D CAMERA"; }
+                    if root.is-3d : Rectangle { height: 6px; }
+
+                    if root.is-3d : SliderRow {
+                        label: "FOV";
+                        value: root.video-ptc-fov-float;
+                        display-text: root.video-ptc-fov-text + "°";
+                        edit-text: root.video-ptc-fov-text;
+                        minimum: 10;
+                        maximum: 150;
+                        curve: linear;
+                        changed(v) => { root.update-control-float("ptc_fov", v); }
+                        custom-submitted(v) => { root.update-control("ptc_fov", v); }
+                        reset-requested() => { root.update-control("ptc_fov", "60.0"); }
+                    }
+                    if root.is-3d : Rectangle { height: 2px; }
+                    if root.is-3d : SliderRow {
+                        label: "Height";
+                        value: root.video-ptc-view-height-float;
+                        display-text: root.video-ptc-view-height-text;
+                        edit-text: root.video-ptc-view-height-text;
+                        minimum: -2.0;
+                        maximum: 5.0;
+                        curve: linear;
+                        changed(v) => { root.update-control-float("ptc_view_height", v); }
+                        custom-submitted(v) => { root.update-control("ptc_view_height", v); }
+                        reset-requested() => { root.update-control("ptc_view_height", "0.50"); }
+                    }
+                    if root.is-3d : Rectangle { height: 2px; }
+                    if root.is-3d : SliderRow {
+                        label: "Offset";
+                        value: root.video-ptc-view-offset-float;
+                        display-text: root.video-ptc-view-offset-text;
+                        edit-text: root.video-ptc-view-offset-text;
+                        minimum: -2.0;
+                        maximum: 2.0;
+                        curve: linear;
+                        changed(v) => { root.update-control-float("ptc_view_offset", v); }
+                        custom-submitted(v) => { root.update-control("ptc_view_offset", v); }
+                        reset-requested() => { root.update-control("ptc_view_offset", "0.40"); }
+                    }
+                    if root.is-3d : Rectangle { height: 2px; }
+                    if root.is-3d : SliderRow {
+                        label: "Pan";
+                        value: root.video-ptc-view-pan-float;
+                        display-text: root.video-ptc-view-pan-text;
+                        edit-text: root.video-ptc-view-pan-text;
+                        minimum: -2.0;
+                        maximum: 2.0;
+                        curve: linear;
+                        changed(v) => { root.update-control-float("ptc_view_pan", v); }
+                        custom-submitted(v) => { root.update-control("ptc_view_pan", v); }
+                        reset-requested() => { root.update-control("ptc_view_pan", "0.00"); }
+                    }
+                    if root.is-3d : Rectangle { height: 2px; }
+                    if root.is-3d : SliderRow {
+                        label: "Cam Angle";
+                        value: root.video-ptc-cam-ang-float;
+                        display-text: root.video-ptc-cam-ang-text + "°";
+                        edit-text: root.video-ptc-cam-ang-text;
+                        minimum: -90;
+                        maximum: 90;
+                        curve: linear;
+                        changed(v) => { root.update-control-float("ptc_cam_ang", v); }
+                        custom-submitted(v) => { root.update-control("ptc_cam_ang", v); }
+                        reset-requested() => { root.update-control("ptc_cam_ang", "32.08564"); }
+                    }
+                    if root.is-3d : Rectangle { height: 2px; }
+                    if root.is-3d : SliderRow {
+                        label: "Cam Rot";
+                        value: root.video-ptc-cam-rot-float;
+                        display-text: root.video-ptc-cam-rot-text + "°";
+                        edit-text: root.video-ptc-cam-rot-text;
+                        minimum: -180;
+                        maximum: 180;
+                        curve: linear;
+                        changed(v) => { root.update-control-float("ptc_cam_rot", v); }
+                        custom-submitted(v) => { root.update-control("ptc_cam_rot", v); }
+                        reset-requested() => { root.update-control("ptc_cam_rot", "0.00"); }
+                    }
+                    if root.is-3d : Rectangle { height: 2px; }
+                    if root.is-3d : SliderRow {
+                        label: "Cam Spin";
+                        value: root.video-ptc-cam-spin-float;
+                        display-text: root.video-ptc-cam-spin-text + "°";
+                        edit-text: root.video-ptc-cam-spin-text;
+                        minimum: -180;
+                        maximum: 180;
+                        curve: linear;
+                        changed(v) => { root.update-control-float("ptc_cam_spin", v); }
+                        custom-submitted(v) => { root.update-control("ptc_cam_spin", v); }
+                        reset-requested() => { root.update-control("ptc_cam_spin", "0.00"); }
+                    }
+                    if root.is-3d : Rectangle { height: 2px; }
+                    if root.is-3d : SliderRow {
+                        label: "Distance";
+                        value: root.video-ptc-viewdist-float;
+                        display-text: root.video-ptc-viewdist-text;
+                        edit-text: root.video-ptc-viewdist-text;
+                        minimum: 0.5;
+                        maximum: 200;
+                        curve: exponential;
+                        changed(v) => { root.update-control-float("ptc_viewdist", v); }
+                        custom-submitted(v) => { root.update-control("ptc_viewdist", v); }
+                        reset-requested() => { root.update-control("ptc_viewdist", "14.0"); }
+                    }
+                    if root.is-3d : Rectangle { height: 2px; }
+                    if root.is-3d : SliderRow {
+                        label: "Look Back";
+                        value: root.video-ptc-viewback-float;
+                        display-text: root.video-ptc-viewback-text;
+                        edit-text: root.video-ptc-viewback-text;
+                        minimum: 0.0;
+                        maximum: 2.0;
+                        curve: linear;
+                        changed(v) => { root.update-control-float("ptc_viewback", v); }
+                        custom-submitted(v) => { root.update-control("ptc_viewback", v); }
+                        reset-requested() => { root.update-control("ptc_viewback", "0.20"); }
+                    }
+
+                    // ── 3D GEOMETRY ──
+                    if root.is-3d : Rectangle { height: 12px; }
+                    if root.is-3d : Separator { }
+                    if root.is-3d : Rectangle { height: 12px; }
+
+                    if root.is-3d : SectionHeader { title: "3D GEOMETRY"; }
+                    if root.is-3d : Rectangle { height: 6px; }
+
+                    if root.is-3d : InlineOptionRow {
+                        label: "Note Width";
+                        OptionChip { label: "Uniform";  active: root.video-ptc-same-width-text == "on";  pressed => { root.update-control("ptc_same_width_notes", "on"); } }
+                        OptionChip { label: "Variable"; active: root.video-ptc-same-width-text == "off"; pressed => { root.update-control("ptc_same_width_notes", "off"); } }
+                    }
+                    if root.is-3d : Rectangle { height: 4px; }
+                    if root.is-3d : InlineOptionRow {
+                        label: "Vertical";
+                        OptionChip { label: "Off"; active: root.video-ptc-vertical-notes-text == "off"; pressed => { root.update-control("ptc_vertical_notes", "off"); } }
+                        OptionChip { label: "On";  active: root.video-ptc-vertical-notes-text == "on";  pressed => { root.update-control("ptc_vertical_notes", "on"); } }
+                    }
+                    if root.is-3d : Rectangle { height: 4px; }
+                    if root.is-3d : SliderRow {
+                        label: "Down Speed";
+                        value: root.video-ptc-note-down-speed-float;
+                        display-text: root.video-ptc-note-down-speed-text;
+                        edit-text: root.video-ptc-note-down-speed-text;
+                        minimum: 0.0;
+                        maximum: 5.0;
+                        curve: quadratic;
+                        changed(v) => { root.update-control-float("ptc_note_down_speed", v); }
+                        custom-submitted(v) => { root.update-control("ptc_note_down_speed", v); }
+                        reset-requested() => { root.update-control("ptc_note_down_speed", "0.60"); }
+                    }
+                    if root.is-3d : Rectangle { height: 2px; }
+                    if root.is-3d : SliderRow {
+                        label: "Up Speed";
+                        value: root.video-ptc-note-up-speed-float;
+                        display-text: root.video-ptc-note-up-speed-text;
+                        edit-text: root.video-ptc-note-up-speed-text;
+                        minimum: 0.0;
+                        maximum: 5.0;
+                        curve: quadratic;
+                        changed(v) => { root.update-control-float("ptc_note_up_speed", v); }
+                        custom-submitted(v) => { root.update-control("ptc_note_up_speed", v); }
+                        reset-requested() => { root.update-control("ptc_note_up_speed", "0.20"); }
+                    }
+                    if root.is-3d : Rectangle { height: 4px; }
+                    if root.is-3d : InlineOptionRow {
+                        label: "Box Notes";
+                        OptionChip { label: "On";  active: root.video-ptc-box-notes-text == "on";  pressed => { root.update-control("ptc_box_notes", "on"); } }
+                        OptionChip { label: "Off"; active: root.video-ptc-box-notes-text == "off"; pressed => { root.update-control("ptc_box_notes", "off"); } }
+                    }
+                    if root.is-3d : Rectangle { height: 4px; }
+                    if root.is-3d : InlineOptionRow {
+                        label: "Tilt Keys";
+                        OptionChip { label: "On";  active: root.video-ptc-tilt-keys-text == "on";  pressed => { root.update-control("ptc_tilt_keys", "on"); } }
+                        OptionChip { label: "Off"; active: root.video-ptc-tilt-keys-text == "off"; pressed => { root.update-control("ptc_tilt_keys", "off"); } }
+                    }
+                    if root.is-3d : Rectangle { height: 4px; }
+                    if root.is-3d : InlineOptionRow {
+                        label: "Eat Notes";
+                        OptionChip { label: "Off"; active: root.video-ptc-eat-notes-text == "off"; pressed => { root.update-control("ptc_eat_notes", "off"); } }
+                        OptionChip { label: "On";  active: root.video-ptc-eat-notes-text == "on";  pressed => { root.update-control("ptc_eat_notes", "on"); } }
+                    }
+
+                    // ── 3D STYLING ──
+                    if root.is-3d : Rectangle { height: 12px; }
+                    if root.is-3d : Separator { }
+                    if root.is-3d : Rectangle { height: 12px; }
+
+                    if root.is-3d : SectionHeader { title: "3D STYLING"; }
+                    if root.is-3d : Rectangle { height: 6px; }
+
+                    if root.is-3d : InlineOptionRow {
+                        label: "Keyboard";
+                        OptionChip { label: "Show"; active: root.video-ptc-show-keyboard-text == "on";  pressed => { root.update-control("ptc_show_keyboard", "on"); } }
+                        OptionChip { label: "Hide"; active: root.video-ptc-show-keyboard-text == "off"; pressed => { root.update-control("ptc_show_keyboard", "off"); } }
+                    }
+                    if root.is-3d : Rectangle { height: 4px; }
+                    if root.is-3d : InlineOptionRow {
+                        label: "Shade";
+                        OptionChip { label: "Off"; active: root.video-ptc-light-shade-text == "off"; pressed => { root.update-control("ptc_light_shade", "off"); } }
+                        OptionChip { label: "On";  active: root.video-ptc-light-shade-text == "on";  pressed => { root.update-control("ptc_light_shade", "on"); } }
+                    }
+                    if root.is-3d : Rectangle { height: 4px; }
+                    if root.is-3d : InlineOptionRow {
+                        label: "Size by Vel";
+                        OptionChip { label: "Off"; active: root.video-ptc-notes-change-size-text == "off"; pressed => { root.update-control("ptc_notes_change_size", "off"); } }
+                        OptionChip { label: "On";  active: root.video-ptc-notes-change-size-text == "on";  pressed => { root.update-control("ptc_notes_change_size", "on"); } }
+                    }
+                    if root.is-3d : Rectangle { height: 4px; }
+                    if root.is-3d : InlineOptionRow {
+                        label: "Tint by Vel";
+                        OptionChip { label: "On";  active: root.video-ptc-notes-change-tint-text == "on";  pressed => { root.update-control("ptc_notes_change_tint", "on"); } }
+                        OptionChip { label: "Off"; active: root.video-ptc-notes-change-tint-text == "off"; pressed => { root.update-control("ptc_notes_change_tint", "off"); } }
+                    }
+                    if root.is-3d : Rectangle { height: 4px; }
+                    if root.is-3d : InlineOptionRow {
+                        label: "Use Velocity";
+                        OptionChip { label: "Off"; active: root.video-ptc-use-vel-text == "off"; pressed => { root.update-control("ptc_use_vel", "off"); } }
+                        OptionChip { label: "On";  active: root.video-ptc-use-vel-text == "on";  pressed => { root.update-control("ptc_use_vel", "on"); } }
+                    }
+
+                    // ── AURA ──
+                    if root.is-3d : Rectangle { height: 12px; }
+                    if root.is-3d : Separator { }
+                    if root.is-3d : Rectangle { height: 12px; }
+
+                    if root.is-3d : SectionHeader { title: "AURA"; }
+                    if root.is-3d : Rectangle { height: 6px; }
+
+                    if root.is-3d : InlineOptionRow {
+                        label: "Enabled";
+                        OptionChip { label: "On";  active: root.video-ptc-aura-enabled-text == "on";  pressed => { root.update-control("ptc_aura_enabled", "on"); } }
+                        OptionChip { label: "Off"; active: root.video-ptc-aura-enabled-text == "off"; pressed => { root.update-control("ptc_aura_enabled", "off"); } }
+                    }
+                    if root.is-3d : Rectangle { height: 4px; }
+                    if root.is-3d : SliderRow {
+                        label: "Strength";
+                        value: root.video-ptc-aura-strength-float;
+                        display-text: root.video-ptc-aura-strength-text;
+                        edit-text: root.video-ptc-aura-strength-text;
+                        minimum: 0.0;
+                        maximum: 20.0;
+                        curve: exponential;
+                        changed(v) => { root.update-control-float("ptc_aura_strength", v); }
+                        custom-submitted(v) => { root.update-control("ptc_aura_strength", v); }
+                        reset-requested() => { root.update-control("ptc_aura_strength", "2.0"); }
+                    }
+                    if root.is-3d : Rectangle { height: 4px; }
+                    if root.is-3d : InlineOptionRow {
+                        label: "Texture";
+                        OptionChip { label: "Builtin"; active: root.video-ptc-aura-image-source-text == "builtin"; pressed => { root.update-control("ptc_aura_image_source", "builtin"); } }
+                        OptionChip { label: "PNG";     active: root.video-ptc-aura-image-source-text == "png_file"; pressed => { root.update-control("ptc_aura_image_source", "png_file"); } }
+                    }
+                    if root.is-3d && root.video-ptc-aura-image-source-text == "builtin" : Rectangle { height: 4px; }
+                    if root.is-3d && root.video-ptc-aura-image-source-text == "builtin" : InlineOptionRow {
+                        label: "Builtin";
+                        OptionChip { label: "Ring"; active: root.video-ptc-aura-image-name-text == "ring"; pressed => { root.update-control("ptc_aura_image_builtin", "ring"); } }
+                    }
+                    if root.is-3d && root.uses-aura-png : Rectangle { height: 6px; }
+                    if root.is-3d && root.uses-aura-png : FilePicker {
+                        file-name: root.video-ptc-aura-image-path-text;
+                        file-label: "Aura texture PNG";
+                        browse => { root.browse-asset("aura_png"); }
+                        reset => { root.reset-asset("aura_png"); }
+                    }
+
+                    Rectangle { height: 20px; }
                 }
             }
-
-            if root.uses-2d-layout : Rectangle { height: 4px; }
-
-            if root.uses-2d-layout : InlineCustomRow {
-                label: root.video-keyboard-height-mode-text == "screen_percent" ? "Height %" : "Aspect";
-                value: root.video-keyboard-height-value-text;
-                is-preset:
-                    root.video-keyboard-height-value-text == "0.08494"
-                    || root.video-keyboard-height-value-text == "0.12000"
-                    || root.video-keyboard-height-value-text == "0.16000"
-                    || root.video-keyboard-height-value-text == "0.20000";
-                custom-submitted(val) => { root.update-control("keyboard_height_value", val); }
-
-                if root.video-keyboard-height-mode-text == "aspect_ratio" : OptionChip {
-                    label: "0.085";
-                    active: root.video-keyboard-height-value-text == "0.08494";
-                    pressed => { root.update-control("keyboard_height_value", "0.0849375"); }
-                }
-                if root.video-keyboard-height-mode-text == "aspect_ratio" : OptionChip {
-                    label: "0.12";
-                    active: root.video-keyboard-height-value-text == "0.12000";
-                    pressed => { root.update-control("keyboard_height_value", "0.12"); }
-                }
-                if root.video-keyboard-height-mode-text == "screen_percent" : OptionChip {
-                    label: "12%";
-                    active: root.video-keyboard-height-value-text == "0.12000";
-                    pressed => { root.update-control("keyboard_height_value", "0.12"); }
-                }
-                if root.video-keyboard-height-mode-text == "screen_percent" : OptionChip {
-                    label: "16%";
-                    active: root.video-keyboard-height-value-text == "0.16000";
-                    pressed => { root.update-control("keyboard_height_value", "0.16"); }
-                }
-                if root.video-keyboard-height-mode-text == "screen_percent" : OptionChip {
-                    label: "20%";
-                    active: root.video-keyboard-height-value-text == "0.20000";
-                    pressed => { root.update-control("keyboard_height_value", "0.20"); }
-                }
-            }
-
-            if root.is-pfa : Rectangle { height: 12px; }
-            if root.is-pfa : Separator { }
-            if root.is-pfa : Rectangle { height: 16px; }
-
-            if root.is-pfa : SectionHeader { title: "PFA NOTES"; }
-            if root.is-pfa : Rectangle { height: 8px; }
-
-            if root.is-pfa : InlineOptionRow {
-                label: "Note Width";
-                OptionChip { label: "Variable"; active: root.video-note-same-width-text == "off"; pressed => { root.update-control("pfa_note_same_width", "off"); } }
-                OptionChip { label: "Uniform"; active: root.video-note-same-width-text == "on"; pressed => { root.update-control("pfa_note_same_width", "on"); } }
-            }
-
-            if root.is-pfa : Rectangle { height: 4px; }
-
-            if root.is-pfa : InlineCustomRow {
-                label: "Border";
-                value: root.video-border-width-text;
-                is-preset:
-                    root.video-border-width-text == "0.0"
-                    || root.video-border-width-text == "1.0"
-                    || root.video-border-width-text == "2.0";
-                custom-submitted(val) => { root.update-control("pfa_border_width", val); }
-
-                OptionChip { label: "0"; active: root.video-border-width-text == "0.0"; pressed => { root.update-control("pfa_border_width", "0"); } }
-                OptionChip { label: "1"; active: root.video-border-width-text == "1.0"; pressed => { root.update-control("pfa_border_width", "1"); } }
-                OptionChip { label: "2"; active: root.video-border-width-text == "2.0"; pressed => { root.update-control("pfa_border_width", "2"); } }
-            }
-
-            if root.is-pfa : Rectangle { height: 12px; }
-
-            if root.is-pfa : SectionHeader { title: "PFA KEYBOARD"; }
-            if root.is-pfa : Rectangle { height: 8px; }
-
-            if root.is-pfa : InlineOptionRow {
-                label: "Key Width";
-                OptionChip { label: "Variable"; active: root.video-keyboard-same-width-text == "off"; pressed => { root.update-control("pfa_keyboard_same_width", "off"); } }
-                OptionChip { label: "Uniform"; active: root.video-keyboard-same-width-text == "on"; pressed => { root.update-control("pfa_keyboard_same_width", "on"); } }
-            }
-
-            if root.is-pfa : Rectangle { height: 4px; }
-
-            if root.is-pfa : InlineOptionRow {
-                label: "Middle C";
-                OptionChip { label: "Off"; active: root.video-middle-c-text == "off"; pressed => { root.update-control("pfa_middle_c", "off"); } }
-                OptionChip { label: "On";  active: root.video-middle-c-text == "on";  pressed => { root.update-control("pfa_middle_c", "on"); } }
-            }
-
-            if root.is-pfa : Rectangle { height: 4px; }
-
-            if root.is-pfa : InlineOptionRow {
-                label: "Top Color";
-                OptionChip { label: "Red";   active: root.video-top-color-text == "red";   pressed => { root.update-control("pfa_top_color", "red"); } }
-                OptionChip { label: "Blue";  active: root.video-top-color-text == "blue";  pressed => { root.update-control("pfa_top_color", "blue"); } }
-                OptionChip { label: "Green"; active: root.video-top-color-text == "green"; pressed => { root.update-control("pfa_top_color", "green"); } }
-            }
-
-            if root.is-pfa : Rectangle { height: 4px; }
-
-            if root.is-pfa : InlineCustomRow {
-                label: "Top RGB";
-                value: root.video-top-bar-rgb-text;
-                custom-submitted(val) => { root.update-control("pfa_top_bar_rgb", val); }
-                is-preset: false;
-            }
-
-            Rectangle { height: 12px; }
-            Separator { }
-            Rectangle { height: 16px; }
-
-            SectionHeader { title: "PALETTE"; }
-            Rectangle { height: 8px; }
-
-            InlineOptionRow {
-                label: "Source";
-                OptionChip { label: "Default"; active: root.video-palette-source-text == "default_track_colors"; pressed => { root.update-control("palette_source", "default_track_colors"); } }
-                OptionChip { label: "Zenith";  active: root.video-palette-source-text == "zenith_palette";        pressed => { root.update-control("palette_source", "zenith_palette"); } }
-            }
-
-            if root.uses-zenith-palette : Rectangle { height: 4px; }
-
-            if root.uses-zenith-palette : InlineOptionRow {
-                label: "Kind";
-                OptionChip { label: "Random";      active: root.video-palette-kind-text == "random";           pressed => { root.update-control("palette_kind", "random"); } }
-                OptionChip { label: "Gradients";   active: root.video-palette-kind-text == "random_gradients"; pressed => { root.update-control("palette_kind", "random_gradients"); } }
-                OptionChip { label: "PNG";         active: root.video-palette-kind-text == "png_file";         pressed => { root.update-control("palette_kind", "png_file"); } }
-            }
-
-            if root.uses-zenith-palette : Rectangle { height: 4px; }
-
-            if root.uses-zenith-palette : InlineOptionRow {
-                label: "Shuffle";
-                OptionChip { label: "On";  active: root.video-palette-randomize-text == "on";  pressed => { root.update-control("palette_randomize", "on"); } }
-                OptionChip { label: "Off"; active: root.video-palette-randomize-text == "off"; pressed => { root.update-control("palette_randomize", "off"); } }
-            }
-
-            if root.uses-zenith-palette && root.uses-palette-png : Rectangle { height: 6px; }
-
-            if root.uses-zenith-palette && root.uses-palette-png : FilePicker {
-                file-name: root.video-palette-path-text;
-                file-label: "16px/32px wide opaque RGB palette png";
-                browse => { root.browse-asset("palette_png"); }
-                reset => { root.reset-asset("palette_png"); }
-            }
-
-            if root.is-3d : Rectangle { height: 12px; }
-            if root.is-3d : Separator { }
-            if root.is-3d : Rectangle { height: 16px; }
-
-            if root.is-3d : SectionHeader { title: "3D CAMERA"; }
-            if root.is-3d : Rectangle { height: 8px; }
-
-            if root.is-3d : InlineCustomRow {
-                label: "FOV";
-                value: root.video-ptc-fov-text;
-                is-preset: root.video-ptc-fov-text == "45.0" || root.video-ptc-fov-text == "60.0" || root.video-ptc-fov-text == "75.0";
-                custom-submitted(val) => { root.update-control("ptc_fov", val); }
-                OptionChip { label: "45"; active: root.video-ptc-fov-text == "45.0"; pressed => { root.update-control("ptc_fov", "45"); } }
-                OptionChip { label: "60"; active: root.video-ptc-fov-text == "60.0"; pressed => { root.update-control("ptc_fov", "60"); } }
-                OptionChip { label: "75"; active: root.video-ptc-fov-text == "75.0"; pressed => { root.update-control("ptc_fov", "75"); } }
-            }
-
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineCustomRow { label: "Height"; value: root.video-ptc-view-height-text; is-preset: false; custom-submitted(val) => { root.update-control("ptc_view_height", val); } }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineCustomRow { label: "Offset"; value: root.video-ptc-view-offset-text; is-preset: false; custom-submitted(val) => { root.update-control("ptc_view_offset", val); } }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineCustomRow { label: "Pan"; value: root.video-ptc-view-pan-text; is-preset: false; custom-submitted(val) => { root.update-control("ptc_view_pan", val); } }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineCustomRow { label: "Cam Ang"; value: root.video-ptc-cam-ang-text; is-preset: false; custom-submitted(val) => { root.update-control("ptc_cam_ang", val); } }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineCustomRow { label: "Cam Rot"; value: root.video-ptc-cam-rot-text; is-preset: false; custom-submitted(val) => { root.update-control("ptc_cam_rot", val); } }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineCustomRow { label: "Cam Spin"; value: root.video-ptc-cam-spin-text; is-preset: false; custom-submitted(val) => { root.update-control("ptc_cam_spin", val); } }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineCustomRow { label: "Distance"; value: root.video-ptc-viewdist-text; is-preset: false; custom-submitted(val) => { root.update-control("ptc_viewdist", val); } }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineCustomRow { label: "Look Back"; value: root.video-ptc-viewback-text; is-preset: false; custom-submitted(val) => { root.update-control("ptc_viewback", val); } }
-
-            if root.is-3d : Rectangle { height: 12px; }
-            if root.is-3d : SectionHeader { title: "3D GEOMETRY"; }
-            if root.is-3d : Rectangle { height: 8px; }
-
-            if root.is-3d : InlineOptionRow {
-                label: "Note Width";
-                OptionChip { label: "Uniform";  active: root.video-ptc-same-width-text == "on";  pressed => { root.update-control("ptc_same_width_notes", "on"); } }
-                OptionChip { label: "Variable"; active: root.video-ptc-same-width-text == "off"; pressed => { root.update-control("ptc_same_width_notes", "off"); } }
-            }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineOptionRow {
-                label: "Vertical";
-                OptionChip { label: "Off"; active: root.video-ptc-vertical-notes-text == "off"; pressed => { root.update-control("ptc_vertical_notes", "off"); } }
-                OptionChip { label: "On";  active: root.video-ptc-vertical-notes-text == "on";  pressed => { root.update-control("ptc_vertical_notes", "on"); } }
-            }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineCustomRow { label: "Down Speed"; value: root.video-ptc-note-down-speed-text; is-preset: false; custom-submitted(val) => { root.update-control("ptc_note_down_speed", val); } }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineCustomRow { label: "Up Speed"; value: root.video-ptc-note-up-speed-text; is-preset: false; custom-submitted(val) => { root.update-control("ptc_note_up_speed", val); } }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineOptionRow {
-                label: "Box Notes";
-                OptionChip { label: "On";  active: root.video-ptc-box-notes-text == "on";  pressed => { root.update-control("ptc_box_notes", "on"); } }
-                OptionChip { label: "Off"; active: root.video-ptc-box-notes-text == "off"; pressed => { root.update-control("ptc_box_notes", "off"); } }
-            }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineOptionRow {
-                label: "Tilt Keys";
-                OptionChip { label: "On";  active: root.video-ptc-tilt-keys-text == "on";  pressed => { root.update-control("ptc_tilt_keys", "on"); } }
-                OptionChip { label: "Off"; active: root.video-ptc-tilt-keys-text == "off"; pressed => { root.update-control("ptc_tilt_keys", "off"); } }
-            }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineOptionRow {
-                label: "Eat Notes";
-                OptionChip { label: "Off"; active: root.video-ptc-eat-notes-text == "off"; pressed => { root.update-control("ptc_eat_notes", "off"); } }
-                OptionChip { label: "On";  active: root.video-ptc-eat-notes-text == "on";  pressed => { root.update-control("ptc_eat_notes", "on"); } }
-            }
-
-            if root.is-3d : Rectangle { height: 12px; }
-            if root.is-3d : SectionHeader { title: "3D STYLING"; }
-            if root.is-3d : Rectangle { height: 8px; }
-
-            if root.is-3d : InlineOptionRow {
-                label: "Keyboard";
-                OptionChip { label: "Show"; active: root.video-ptc-show-keyboard-text == "on";  pressed => { root.update-control("ptc_show_keyboard", "on"); } }
-                OptionChip { label: "Hide"; active: root.video-ptc-show-keyboard-text == "off"; pressed => { root.update-control("ptc_show_keyboard", "off"); } }
-            }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineOptionRow {
-                label: "Shade";
-                OptionChip { label: "Off"; active: root.video-ptc-light-shade-text == "off"; pressed => { root.update-control("ptc_light_shade", "off"); } }
-                OptionChip { label: "On";  active: root.video-ptc-light-shade-text == "on";  pressed => { root.update-control("ptc_light_shade", "on"); } }
-            }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineOptionRow {
-                label: "Size by Vel";
-                OptionChip { label: "Off"; active: root.video-ptc-notes-change-size-text == "off"; pressed => { root.update-control("ptc_notes_change_size", "off"); } }
-                OptionChip { label: "On";  active: root.video-ptc-notes-change-size-text == "on";  pressed => { root.update-control("ptc_notes_change_size", "on"); } }
-            }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineOptionRow {
-                label: "Tint by Vel";
-                OptionChip { label: "On";  active: root.video-ptc-notes-change-tint-text == "on";  pressed => { root.update-control("ptc_notes_change_tint", "on"); } }
-                OptionChip { label: "Off"; active: root.video-ptc-notes-change-tint-text == "off"; pressed => { root.update-control("ptc_notes_change_tint", "off"); } }
-            }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineOptionRow {
-                label: "Use Velocity";
-                OptionChip { label: "Off"; active: root.video-ptc-use-vel-text == "off"; pressed => { root.update-control("ptc_use_vel", "off"); } }
-                OptionChip { label: "On";  active: root.video-ptc-use-vel-text == "on";  pressed => { root.update-control("ptc_use_vel", "on"); } }
-            }
-
-            if root.is-3d : Rectangle { height: 12px; }
-            if root.is-3d : SectionHeader { title: "AURA"; }
-            if root.is-3d : Rectangle { height: 8px; }
-
-            if root.is-3d : InlineOptionRow {
-                label: "Enabled";
-                OptionChip { label: "On";  active: root.video-ptc-aura-enabled-text == "on";  pressed => { root.update-control("ptc_aura_enabled", "on"); } }
-                OptionChip { label: "Off"; active: root.video-ptc-aura-enabled-text == "off"; pressed => { root.update-control("ptc_aura_enabled", "off"); } }
-            }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineCustomRow { label: "Strength"; value: root.video-ptc-aura-strength-text; is-preset: false; custom-submitted(val) => { root.update-control("ptc_aura_strength", val); } }
-            if root.is-3d : Rectangle { height: 4px; }
-            if root.is-3d : InlineOptionRow {
-                label: "Texture";
-                OptionChip { label: "Builtin"; active: root.video-ptc-aura-image-source-text == "builtin"; pressed => { root.update-control("ptc_aura_image_source", "builtin"); } }
-                OptionChip { label: "PNG";     active: root.video-ptc-aura-image-source-text == "png_file"; pressed => { root.update-control("ptc_aura_image_source", "png_file"); } }
-            }
-            if root.is-3d && root.video-ptc-aura-image-source-text == "builtin" : Rectangle { height: 4px; }
-            if root.is-3d && root.video-ptc-aura-image-source-text == "builtin" : InlineOptionRow {
-                label: "Builtin";
-                OptionChip { label: "Ring"; active: root.video-ptc-aura-image-name-text == "ring"; pressed => { root.update-control("ptc_aura_image_builtin", "ring"); } }
-            }
-            if root.is-3d && root.uses-aura-png : Rectangle { height: 6px; }
-            if root.is-3d && root.uses-aura-png : FilePicker {
-                file-name: root.video-ptc-aura-image-path-text;
-                file-label: "Aura texture PNG";
-                browse => { root.browse-asset("aura_png"); }
-                reset => { root.reset-asset("aura_png"); }
-            }
-
-            Rectangle { height: 12px; }
-            Separator { }
-            Rectangle { height: 16px; }
-
-            SectionHeader { title: "LIVE SUMMARY"; }
-            Rectangle { height: 4px; }
-            FieldRow { label: "View Range"; value: root.view-range-text; }
-            FieldRow { label: "Time Space"; value: root.time-space-text; }
-            FieldRow { label: "Scene"; value: root.scene-summary-text; }
-
-            Rectangle { height: 28px; }
         }
     }
 }

@@ -6,6 +6,7 @@ use std::{
 use meridian_core::{
     CoreHandle, MeridianError,
     audio::{AudioBackend, AudioConfig},
+    display::MIN_VIEW_RANGE_SECONDS,
     midi::MidiProcessingConfig,
     protocol::{CoreCommand, CoreEvent, ParsedMidiId, ProcessedMidiId},
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
@@ -189,7 +190,7 @@ impl UiCoreBridge {
             .clone();
         self.request(
             CoreCommand::SetViewRange {
-                seconds: (transport.view_range + delta).clamp(1.0, 30.0),
+                seconds: (transport.view_range + delta).max(MIN_VIEW_RANGE_SECONDS),
                 time_space: Some(transport.time_space),
             },
             model,
@@ -239,7 +240,7 @@ impl UiCoreBridge {
             .clone();
         self.request(
             CoreCommand::SetViewRange {
-                seconds: current.view_range.clamp(1.0, 30.0),
+                seconds: current.view_range.max(MIN_VIEW_RANGE_SECONDS),
                 time_space: Some(time_space),
             },
             model,

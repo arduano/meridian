@@ -9,7 +9,7 @@
 //   - panels/*.slint       (PreviewWelcome, DropOverlay, VideoPanel, …)
 // ═══════════════════════════════════════════════════════════
 
-import { InspectorRow, MidiLoadState, BarValue, EventCount } from "structs.slint";
+import { InspectorRow, MidiLoadState, BarValue, EventCount, SliderCurve } from "structs.slint";
 import { SectionHeader, FieldRow } from "primitives.slint";
 import { ProfileTab, TransportButton, TimeScrubber } from "chrome.slint";
 import { PreviewWelcome, DropOverlay } from "panels/preview.slint";
@@ -18,7 +18,7 @@ import { AudioPanel } from "panels/audio.slint";
 import { ModifyPanel } from "panels/modify.slint";
 import { AnalysisPanel } from "panels/analysis.slint";
 
-export { InspectorRow, MidiLoadState, BarValue, EventCount }
+export { InspectorRow, MidiLoadState, BarValue, EventCount, SliderCurve }
 
 export component App inherits Window {
     icon: @image-url("../../../assets/icons/meridian.png");
@@ -112,7 +112,7 @@ export component App inherits Window {
     in-out property <string> video-ptc-view-height-text: "0.50";
     in-out property <string> video-ptc-view-offset-text: "0.40";
     in-out property <string> video-ptc-view-pan-text: "0.00";
-    in-out property <string> video-ptc-cam-ang-text: "0.56";
+    in-out property <string> video-ptc-cam-ang-text: "32.09";
     in-out property <string> video-ptc-cam-rot-text: "0.00";
     in-out property <string> video-ptc-cam-spin-text: "0.00";
     in-out property <string> video-ptc-viewdist-text: "14.0";
@@ -133,6 +133,24 @@ export component App inherits Window {
     in-out property <string> video-ptc-aura-image-source-text: "builtin";
     in-out property <string> video-ptc-aura-image-name-text: "ring";
     in-out property <string> video-ptc-aura-image-path-text: "(aura png)";
+
+    // ── Video panel float values (for slider components) ──
+    in-out property <float> video-view-range-value-float: 8.0;
+    in-out property <float> video-border-width-float: 1.0;
+    in-out property <float> video-keyboard-height-value-float: 0.085;
+    in-out property <float> video-ptc-fov-float: 60.0;
+    in-out property <float> video-ptc-view-height-float: 0.5;
+    in-out property <float> video-ptc-view-offset-float: 0.4;
+    in-out property <float> video-ptc-view-pan-float: 0.0;
+    in-out property <float> video-ptc-cam-ang-float: 32.08564;
+    in-out property <float> video-ptc-cam-rot-float: 0.0;
+    in-out property <float> video-ptc-cam-spin-float: 0.0;
+    in-out property <float> video-ptc-viewdist-float: 14.0;
+    in-out property <float> video-ptc-viewback-float: 0.2;
+    in-out property <float> video-ptc-note-down-speed-float: 0.6;
+    in-out property <float> video-ptc-note-up-speed-float: 0.2;
+    in-out property <float> video-ptc-aura-strength-float: 2.0;
+
     in-out property <float> current-time-seconds: 0;
     in-out property <float> midi-length-seconds: 1;
     in-out property <[InspectorRow]> inspector-items;
@@ -288,6 +306,7 @@ export component App inherits Window {
     callback select-renderer(string);
     callback select-time-space(string);
     callback update-video-control(string, string);
+    callback update-video-control-float(string, float);
     callback browse-video-asset(string);
     callback reset-video-asset(string);
     callback select-audio-sample-rate(string);
@@ -504,9 +523,25 @@ export component App inherits Window {
                     video-ptc-aura-image-source-text: root.video-ptc-aura-image-source-text;
                     video-ptc-aura-image-name-text: root.video-ptc-aura-image-name-text;
                     video-ptc-aura-image-path-text: root.video-ptc-aura-image-path-text;
+                    video-view-range-value-float: root.video-view-range-value-float;
+                    video-border-width-float: root.video-border-width-float;
+                    video-keyboard-height-value-float: root.video-keyboard-height-value-float;
+                    video-ptc-fov-float: root.video-ptc-fov-float;
+                    video-ptc-view-height-float: root.video-ptc-view-height-float;
+                    video-ptc-view-offset-float: root.video-ptc-view-offset-float;
+                    video-ptc-view-pan-float: root.video-ptc-view-pan-float;
+                    video-ptc-cam-ang-float: root.video-ptc-cam-ang-float;
+                    video-ptc-cam-rot-float: root.video-ptc-cam-rot-float;
+                    video-ptc-cam-spin-float: root.video-ptc-cam-spin-float;
+                    video-ptc-viewdist-float: root.video-ptc-viewdist-float;
+                    video-ptc-viewback-float: root.video-ptc-viewback-float;
+                    video-ptc-note-down-speed-float: root.video-ptc-note-down-speed-float;
+                    video-ptc-note-up-speed-float: root.video-ptc-note-up-speed-float;
+                    video-ptc-aura-strength-float: root.video-ptc-aura-strength-float;
                     select-renderer(r)     => { root.select-renderer(r); }
                     select-time-space(ts)  => { root.select-time-space(ts); }
                     update-control(key, value) => { root.update-video-control(key, value); }
+                    update-control-float(key, value) => { root.update-video-control-float(key, value); }
                     browse-asset(target)   => { root.browse-video-asset(target); }
                     reset-asset(target)    => { root.reset-video-asset(target); }
                 }

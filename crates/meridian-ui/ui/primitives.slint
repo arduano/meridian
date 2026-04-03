@@ -35,9 +35,22 @@
 //        browse => { … } reset => { … }
 //    }
 //
+//  SLIDER + CUSTOM ENTRY (continuous slider with free-form fallback):
+//    SliderRow {
+//        label: "FOV";
+//        value: fov-float;               // float value from backend
+//        display-text: fov-text;          // formatted string for display
+//        minimum: 10; maximum: 150;
+//        curve: SliderCurve.linear;       // or quadratic
+//        changed(v) => { … }             // slider dragged
+//        custom-submitted(v) => { … }    // typed value submitted
+//    }
+//
 //  ACTIONS:
 //    PrimaryButton { label: "Go"; enabled: true; pressed => { … } }
 // ═══════════════════════════════════════════════════════════
+
+import { SliderCurve } from "structs.slint";
 
 
 // ── SectionHeader ──────────────────────────────────────────
@@ -450,7 +463,7 @@ export component InlineCustomRow inherits Rectangle {
                         clicked => {
                             root.editing = !root.editing;
                             if (root.editing) {
-                                root.draft = "";
+                                root.draft = root.value;
                             }
                         }
                     }
@@ -508,6 +521,327 @@ export component InlineCustomRow inherits Rectangle {
                 }
 
                 apply-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.custom-submitted(root.draft);
+                        root.editing = false;
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// ── SliderRow ──────────────────────────────────────────────
+// Label + horizontal slider + value chip with custom text entry.
+// Designed for continuous numeric parameters. The value chip
+// shows an amber dot with the formatted value; clicking it
+// opens an inline text input for precise entry.
+//
+// Required properties:
+//   label        — row label ("FOV")
+//   value        — current float value from backend
+//   display-text — formatted string shown on the chip
+//   edit-text    — optional raw value used when opening text edit
+//   minimum      — slider drag low bound
+//   maximum      — slider drag high bound
+//   curve        — SliderCurve.linear / .quadratic / .exponential
+//
+// Callbacks:
+//   changed(float)           — slider dragged to new value
+//   custom-submitted(string) — user typed + confirmed a value
+//   reset-requested()        — restore the parameter default
+//
+// The slider bounds are a UI affordance. Free-form custom entry
+// may exceed them if the backend accepts the value.
+//
+// Usage:
+//   SliderRow {
+//       label: "Distance";
+//       value: dist-float;
+//       display-text: dist-text;
+//       minimum: 0.1; maximum: 200;
+//       curve: SliderCurve.quadratic;
+//       changed(v)          => { set-dist(v); }
+//       custom-submitted(v) => { set-dist-str(v); }
+//   }
+
+export component SliderRow inherits Rectangle {
+    in property <string> label;
+    in property <float> value: 0;
+    in property <string> display-text: "";
+    in property <string> edit-text: "";
+    in property <float> minimum: 0;
+    in property <float> maximum: 100;
+    in property <SliderCurve> curve: linear;
+
+    callback changed(float);
+    callback custom-submitted(string);
+    callback reset-requested();
+
+    // ── internal state ──
+    private property <bool> editing: false;
+    private property <string> draft: "";
+    private property <string> resolved-edit-text:
+        root.edit-text != "" ? root.edit-text : root.display-text;
+    private property <float> exponential-scale: 6.0;
+    private property <float> exponential-denominator:
+        Math.exp(root.exponential-scale) - 1.0;
+
+    // Normalised 0‒1 value within [minimum, maximum]
+    private property <float> range: root.maximum - root.minimum;
+    private property <float> norm:
+        root.range <= 0 ? 0.0
+        : max(0.0, min(1.0, (root.value - root.minimum) / root.range));
+
+    // Slider thumb position (inverse curve applied)
+    private property <float> slider-pos:
+        root.curve == SliderCurve.quadratic
+            ? Math.sqrt(root.norm)
+            : root.curve == SliderCurve.exponential
+                ? Math.log(1.0 + root.norm * root.exponential-denominator, Math.exp(1.0))
+                    / root.exponential-scale
+                : root.norm;
+
+    height: root.editing ? 66px : 34px;
+    background: transparent;
+
+    VerticalLayout {
+        spacing: 4px;
+        alignment: center;
+
+        HorizontalLayout {
+            spacing: 6px;
+            height: 34px;
+
+            // Row label
+            Text {
+                text: root.label;
+                color: #7d8fa8;
+                font-size: 11px;
+                vertical-alignment: center;
+                min-width: 72px;
+                horizontal-stretch: 0;
+            }
+
+            // ── Slider track ──
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                spacing: 0px;
+
+                slider-track := Rectangle {
+                    horizontal-stretch: 1;
+                    height: 34px;
+
+                    // Background track
+                    Rectangle {
+                        y: parent.height / 2 - 2px;
+                        width: parent.width;
+                        height: 4px;
+                        border-radius: 2px;
+                        background: #141e2e;
+                    }
+                    // Fill
+                    Rectangle {
+                        y: parent.height / 2 - 2px;
+                        x: 0;
+                        width: parent.width * root.slider-pos;
+                        height: 4px;
+                        border-radius: 2px;
+                        background: #1e3a5f;
+                    }
+                    // Thumb
+                    Rectangle {
+                        x: max(0px, min(parent.width - self.width,
+                            parent.width * root.slider-pos - self.width / 2));
+                        y: parent.height / 2 - 5px;
+                        width: 10px;
+                        height: 10px;
+                        border-radius: 5px;
+                        background: slider-touch.has-hover || slider-touch.pressed
+                            ? #60a5fa : #3d5a80;
+                        drop-shadow-blur: 2px;
+                        drop-shadow-color: #00000030;
+                    }
+
+                    slider-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        moved => {
+                            if (self.pressed) {
+                                root.changed(
+                                    root.curve == SliderCurve.quadratic
+                                        ? root.minimum + root.range
+                                            * max(0.0, min(1.0, self.mouse-x / max(1px, slider-track.width)))
+                                            * max(0.0, min(1.0, self.mouse-x / max(1px, slider-track.width)))
+                                        : root.curve == SliderCurve.exponential
+                                            ? root.minimum + root.range
+                                                * ((Math.exp(
+                                                        root.exponential-scale
+                                                            * max(0.0, min(1.0, self.mouse-x / max(1px, slider-track.width)))
+                                                    ) - 1.0) / root.exponential-denominator)
+                                            : root.minimum + root.range
+                                                * max(0.0, min(1.0, self.mouse-x / max(1px, slider-track.width)))
+                                );
+                            }
+                        }
+                        clicked => {
+                            root.changed(
+                                root.curve == SliderCurve.quadratic
+                                    ? root.minimum + root.range
+                                        * max(0.0, min(1.0, self.mouse-x / max(1px, slider-track.width)))
+                                        * max(0.0, min(1.0, self.mouse-x / max(1px, slider-track.width)))
+                                    : root.curve == SliderCurve.exponential
+                                        ? root.minimum + root.range
+                                            * ((Math.exp(
+                                                    root.exponential-scale
+                                                        * max(0.0, min(1.0, self.mouse-x / max(1px, slider-track.width)))
+                                                ) - 1.0) / root.exponential-denominator)
+                                        : root.minimum + root.range
+                                            * max(0.0, min(1.0, self.mouse-x / max(1px, slider-track.width)))
+                            );
+                        }
+                    }
+                }
+            }
+
+            // ── Value display chip ──
+            VerticalLayout {
+                alignment: center;
+                spacing: 0px;
+
+                HorizontalLayout {
+                    spacing: 4px;
+
+                    Rectangle {
+                        min-width: 48px;
+                        height: 26px;
+                        border-radius: 5px;
+                        background: root.editing
+                            ? #1a2d4d
+                            : value-touch.has-hover ? #352e1a : #2a2210;
+                        border-width: 1px;
+                        border-color: root.editing ? #1e3a5f : #4a3820;
+
+                        HorizontalLayout {
+                            padding-left: 6px;
+                            padding-right: 6px;
+                            spacing: 3px;
+                            alignment: center;
+
+                            // Amber dot indicator
+                            if !root.editing : VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    width: 5px;
+                                    height: 5px;
+                                    border-radius: 2.5px;
+                                    background: #f59e0b;
+                                }
+                            }
+
+                            Text {
+                                text: root.editing ? "Edit" : root.display-text;
+                                color: root.editing ? #60a5fa : #f59e0b;
+                                font-size: 10px;
+                                font-weight: 700;
+                                font-family: root.editing ? "" : "monospace";
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        value-touch := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.editing = !root.editing;
+                                if (root.editing) {
+                                    root.draft = root.resolved-edit-text;
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        width: 24px;
+                        height: 26px;
+                        border-radius: 5px;
+                        background: reset-touch.has-hover ? #162234 : #0f1724;
+                        border-width: 1px;
+                        border-color: reset-touch.has-hover ? #29415f : #1a2740;
+
+                        Text {
+                            text: "↺";
+                            color: reset-touch.has-hover ? #9ec5ff : #6b8bb3;
+                            font-size: 11px;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        reset-touch := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.editing = false;
+                                root.reset-requested();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Inline text input (visible while editing) ──
+        if root.editing : HorizontalLayout {
+            spacing: 6px;
+            height: 28px;
+
+            Rectangle {
+                horizontal-stretch: 1;
+                height: 28px;
+                border-radius: 5px;
+                background: #0a1018;
+                border-width: 1px;
+                border-color: slider-edit-input.has-focus ? #2563eb : #1a2740;
+
+                slider-edit-input := TextInput {
+                    text: root.draft;
+                    color: #b0c0d4;
+                    font-size: 11px;
+                    font-family: "monospace";
+                    horizontal-alignment: left;
+                    vertical-alignment: center;
+                    x: 8px;
+                    width: parent.width - 16px;
+                    height: parent.height;
+                    accepted => {
+                        root.custom-submitted(self.text);
+                        root.editing = false;
+                    }
+                    edited => {
+                        root.draft = self.text;
+                    }
+                }
+            }
+
+            // Apply button
+            Rectangle {
+                width: 48px;
+                height: 28px;
+                border-radius: 5px;
+                background: slider-apply-touch.has-hover ? #1e3a5f : #1a2d4d;
+
+                Text {
+                    text: "Apply";
+                    color: #60a5fa;
+                    font-size: 10px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                slider-apply-touch := TouchArea {
                     mouse-cursor: pointer;
                     clicked => {
                         root.custom-submitted(root.draft);
