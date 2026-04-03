@@ -12,7 +12,7 @@ use crate::{
         MidiProcessEvent, MidiProcessJobId, MidiProcessStatus, PROTOCOL_VERSION, ParsedMidiId,
         VideoRenderEvent, VideoRenderStatus,
     },
-    render::{DisplayTimeSpace, RendererKind, SceneLayout},
+    render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -32,7 +32,10 @@ pub struct ProtocolVideoRenderConfig {
     pub fps: f64,
     pub width: u32,
     pub height: u32,
-    pub renderer: RendererKind,
+    #[serde(default)]
+    pub renderer: Option<RendererKind>,
+    #[serde(default)]
+    pub scene: Option<SceneConfig>,
     pub view_range: Option<f64>,
     #[serde(default)]
     pub time_space: Option<DisplayTimeSpace>,
@@ -58,15 +61,20 @@ impl From<ProtocolAudioRenderConfig> for crate::audio::AudioRenderConfig {
 
 impl From<ProtocolVideoRenderConfig> for crate::protocol::VideoRenderConfig {
     fn from(value: ProtocolVideoRenderConfig) -> Self {
-        let mut layout = SceneLayout::default();
-        layout.set_renderer_kind(value.renderer);
+        let scene = value.scene.unwrap_or_else(|| {
+            let mut layout = SceneLayout::default();
+            if let Some(renderer) = value.renderer {
+                layout.set_renderer_kind(renderer);
+            }
+            layout.scene
+        });
         Self {
             midi_path: Some(value.midi_path),
             output: value.output,
             fps: value.fps,
             width: value.width,
             height: value.height,
-            scene: Some(layout.scene),
+            scene: Some(scene),
             view_range: value.view_range,
             time_space: value.time_space,
             first_key: value.first_key,

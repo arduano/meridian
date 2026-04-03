@@ -18,13 +18,13 @@ pub enum RendererKind {
     PianoTrailClassic,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 pub struct FlatNoteProjectorConfig {
     #[serde(default)]
     pub palette: NotePaletteConfig,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 pub struct PfaNoteProjectorConfig {
     #[serde(default)]
     pub same_width_notes: bool,
@@ -34,10 +34,10 @@ pub struct PfaNoteProjectorConfig {
     pub palette: NotePaletteConfig,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, TS)]
 pub struct FlatKeyboardProjectorConfig;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 pub struct PfaKeyboardProjectorConfig {
     #[serde(default)]
     pub same_width_notes: bool,
@@ -47,28 +47,28 @@ pub struct PfaKeyboardProjectorConfig {
     pub top_bar_color: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "projector", rename_all = "snake_case")]
 pub enum NoteProjectorConfig {
     Flat(FlatNoteProjectorConfig),
     Pfa(PfaNoteProjectorConfig),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "projector", rename_all = "snake_case")]
 pub enum KeyboardProjectorConfig {
     Flat(FlatKeyboardProjectorConfig),
     Pfa(PfaKeyboardProjectorConfig),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum KeyboardHeightSpec {
     ScreenPercent { height: f32 },
     AspectRatio { ratio: f32 },
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 pub struct TwoDSceneConfig {
     #[serde(default)]
     pub keyboard_height: KeyboardHeightSpec,
@@ -78,7 +78,7 @@ pub struct TwoDSceneConfig {
     pub keyboard: KeyboardProjectorConfig,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 pub struct PianoTrailClassicSceneConfig {
     #[serde(default = "default_piano_trail_classic_same_width_notes")]
     pub same_width_notes: bool,
@@ -132,14 +132,14 @@ pub struct PianoTrailClassicSceneConfig {
     pub aura_image: ProjectorImageConfig,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "projector", rename_all = "snake_case")]
 pub enum ThreeDSceneConfig {
     #[serde(rename = "piano_trail_classic")]
     PianoTrailClassic(PianoTrailClassicSceneConfig),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "scene_type", rename_all = "snake_case")]
 pub enum SceneConfig {
     TwoD(TwoDSceneConfig),
@@ -180,7 +180,7 @@ impl Default for DisplayTimeSpace {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
 pub struct SceneLayout {
     pub scene: SceneConfig,
     pub view_range: f64,
@@ -272,7 +272,7 @@ impl Default for SceneLayout {
     fn default() -> Self {
         Self {
             scene: SceneConfig::default(),
-            view_range: 8.0,
+            view_range: 0.5,
             time_space: DisplayTimeSpace::Time,
             first_key: 0,
             last_key: 127,

@@ -1,4 +1,4 @@
-import { type MidiAnalysisData } from "../src/index.ts";
+import { type MidiAnalysisData, type SceneConfig } from "../src/index.ts";
 import { createDenoMeridianClient } from "../src/runtime/deno_client.ts";
 import {
   defaultExecutablePath,
@@ -227,6 +227,82 @@ Deno.test("video render runs through the declarative SDK API", async () => {
       throw new Error(
         `Expected render_finished in event stream, got ${events.join(", ")}`,
       );
+    }
+  } finally {
+    await client.close();
+  }
+});
+
+Deno.test("video render accepts full scene config through the SDK API", async () => {
+  if (!(await hasCommand("ffmpeg"))) {
+    console.warn("skipping scene-config video render smoke because ffmpeg is unavailable");
+    return;
+  }
+
+  const executablePath = defaultExecutablePath();
+  await ensureExecutable(executablePath);
+
+  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-video-scene-" });
+  const midiPath = await resolveMidiFixture(
+    "piano/burgmuller-op100-no4-the-little-party.mid",
+    TWO_NOTE_MIDI,
+  );
+  const output = `${tempDir}/out-scene.mp4`;
+
+  const scene: SceneConfig = {
+    scene_type: "three_d",
+    projector: "piano_trail_classic",
+    same_width_notes: true,
+    fov: Math.PI / 3,
+    view_height: 0.55,
+    view_offset: 0.45,
+    view_pan: 0.12,
+    cam_ang: 0.68,
+    cam_rot: 0.04,
+    cam_spin: 0,
+    viewdist: 14,
+    viewback: 0.2,
+    vertical_notes: false,
+    note_down_speed: 0.6,
+    note_up_speed: 0.2,
+    box_notes: true,
+    light_shade: false,
+    show_keyboard: true,
+    tilt_keys: true,
+    eat_notes: false,
+    aura_strength: 0.25,
+    aura_enabled: true,
+    notes_change_size: false,
+    notes_change_tint: true,
+    use_vel: false,
+    palette: {
+      source: "default_track_colors",
+    },
+    aura_image: {
+      source: "builtin",
+      name: "ring",
+    },
+  };
+
+  const client = await createDenoMeridianClient(executablePath);
+  try {
+    const result = await client.video.render({
+      midiPath,
+      output,
+      fps: 4,
+      width: 160,
+      height: 90,
+      scene,
+      viewRange: 2,
+      ffmpegArgs: ["-y"],
+    });
+
+    if (result.output !== output) {
+      throw new Error(`Expected output ${output}, got ${result.output}`);
+    }
+    const stat = await Deno.stat(output);
+    if (!stat.isFile || stat.size === 0) {
+      throw new Error(`Expected non-empty video output at ${output}`);
     }
   } finally {
     await client.close();

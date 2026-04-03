@@ -1,0 +1,103 @@
+# API Overview
+
+This page is intentionally high level. It maps the public SDK surface without
+turning into per-function reference docs yet.
+
+## Main Entry Points
+
+### Client creation
+
+Core exports in [`sdk/typescript/src/index.ts`](../../sdk/typescript/src/index.ts):
+
+- `createMeridianClient(...)`
+- `createProtocolClient(...)`
+- `CreateClientOptions`
+
+Runtime-specific helpers:
+
+- Deno: [`runtime/deno_client.ts`](../../sdk/typescript/src/runtime/deno_client.ts)
+- Node: [`runtime/node_client.ts`](../../sdk/typescript/src/runtime/node_client.ts)
+- Bun: [`runtime/bun_client.ts`](../../sdk/typescript/src/runtime/bun_client.ts)
+
+### High-level client
+
+`MeridianClient` is the normal application entry point. Its surface groups into:
+
+- `analysis(...)`
+- `resources.*`
+- `modification.*`
+- `audio.render(...)`
+- `video.render(...)`
+- `close()`
+
+Detailed workflow docs:
+
+- [Audio Rendering](./audio-rendering.md)
+- [Video Rendering](./video-rendering.md)
+
+### Lower-level protocol client
+
+`MeridianProtocolClient` is the escape hatch for direct command/event work.
+
+Primary responsibilities:
+
+- spawn and manage the subprocess
+- send typed protocol requests
+- receive asynchronous events
+- shut down cleanly
+
+Detailed protocol workflow docs: TBD.
+
+## Task And Handle Model
+
+The high-level SDK does not expose everything as one-shot function calls.
+Several workflows are modeled as tasks and job handles.
+
+Current job/task concepts include:
+
+- `MidiAnalysisTask` / `MidiAnalysisJobHandle`
+- `MidiProcessTask` / `MidiProcessJobHandle`
+- `AudioRenderTask` / `AudioRenderJobHandle`
+- `VideoRenderTask` / `VideoRenderJobHandle`
+
+Reference page for lifecycle semantics, progress events, and cancellation: TBD.
+
+## Helpers And Builders
+
+Helper exports live in [`sdk/typescript/src/helpers.ts`](../../sdk/typescript/src/helpers.ts).
+
+Current helper areas:
+
+- default processing config builders
+- deep merge utilities
+- `midiTools` convenience builders for modification workflows
+
+Detailed helper docs: TBD.
+
+## Protocol Types
+
+Protocol types live in [`sdk/typescript/src/protocol.ts`](../../sdk/typescript/src/protocol.ts)
+and re-export generated schema types.
+
+This is the main place to look for:
+
+- request/response shapes
+- event unions
+- modifier tool types
+- analysis, audio, and video protocol types
+- scene config types for renderer-specific video customization
+
+Schema/type reference docs: TBD.
+
+## Suggested Reference Split
+
+When this scaffold grows into full docs, the likely split is:
+
+1. client creation and lifecycle
+2. analysis workflows
+3. MIDI modification workflows
+4. audio rendering
+5. video rendering
+6. raw protocol usage
+7. helper builders and config composition
+8. protocol type reference

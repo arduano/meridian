@@ -6,8 +6,9 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use ts_rs::TS;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "source", rename_all = "snake_case")]
 pub enum ProjectorImageConfig {
     Builtin { name: String },

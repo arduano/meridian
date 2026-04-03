@@ -1,13 +1,14 @@
 use std::{fs::File, io::BufReader, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::{
     MeridianError,
     midi::{MIDIColor, MIDIColorPair},
 };
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ZenithPaletteSpec {
     Random,
@@ -15,7 +16,7 @@ pub enum ZenithPaletteSpec {
     PngFile { path: PathBuf },
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "source", rename_all = "snake_case")]
 pub enum NotePaletteConfig {
     DefaultTrackColors,

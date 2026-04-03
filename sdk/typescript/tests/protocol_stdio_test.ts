@@ -94,6 +94,106 @@ Deno.test("stdio protocol smoke tests video render", async () => {
         width: 160,
         height: 90,
         renderer: "piano_trail_classic",
+        scene: null,
+        view_range: 2,
+        time_space: null,
+        first_key: null,
+        last_key: null,
+        ffmpeg_args: ["-y"],
+      },
+    });
+    const status = events[0];
+    if (
+      events.length !== 1 ||
+      !status ||
+      status.type !== "video_render_status" ||
+      status.status.state !== "running"
+    ) {
+      throw new Error(`Unexpected video start response: ${JSON.stringify(events)}`);
+    }
+
+    const finished = await waitForEvent(
+      client,
+      "video_render",
+      (event) => event.event.type === "render_finished",
+    );
+    if (finished.event.type !== "render_finished") {
+      throw new Error(`Unexpected video render event: ${JSON.stringify(finished)}`);
+    }
+    if (finished.event.output !== output) {
+      throw new Error(
+        `Expected video output ${output}, got ${finished.event.output}`,
+      );
+    }
+    const stat = await Deno.stat(output);
+    if (!stat.isFile || stat.size === 0) {
+      throw new Error(`Expected non-empty video output at ${output}`);
+    }
+  } finally {
+    await client.close();
+  }
+});
+
+Deno.test("stdio protocol accepts explicit scene config for video render", async () => {
+  if (!(await hasCommand("ffmpeg"))) {
+    console.warn("skipping scene-config video stdio smoke because ffmpeg is unavailable");
+    return;
+  }
+
+  const executablePath = defaultExecutablePath();
+  await ensureExecutable(executablePath);
+  const midiPath = await resolveMidiFixture(
+    "piano/burgmuller-op100-no4-the-little-party.mid",
+    TWO_NOTE_MIDI,
+  );
+  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-video-scene-" });
+  const output = `${tempDir}/video-scene.mp4`;
+
+  const client = await createDenoProtocolClient(executablePath);
+  try {
+    const events = await client.request({
+      type: "start_render_video",
+      config: {
+        midi_path: midiPath,
+        output,
+        fps: 4,
+        width: 160,
+        height: 90,
+        renderer: "piano_trail_classic",
+        scene: {
+          scene_type: "three_d",
+          projector: "piano_trail_classic",
+          same_width_notes: true,
+          fov: Math.PI / 3,
+          view_height: 0.55,
+          view_offset: 0.45,
+          view_pan: 0.12,
+          cam_ang: 0.68,
+          cam_rot: 0.04,
+          cam_spin: 0,
+          viewdist: 14,
+          viewback: 0.2,
+          vertical_notes: false,
+          note_down_speed: 0.6,
+          note_up_speed: 0.2,
+          box_notes: true,
+          light_shade: false,
+          show_keyboard: true,
+          tilt_keys: true,
+          eat_notes: false,
+          aura_strength: 0.25,
+          aura_enabled: true,
+          notes_change_size: false,
+          notes_change_tint: true,
+          use_vel: false,
+          palette: {
+            source: "default_track_colors",
+          },
+          aura_image: {
+            source: "builtin",
+            name: "ring",
+          },
+        },
         view_range: 2,
         time_space: null,
         first_key: null,

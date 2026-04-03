@@ -592,7 +592,8 @@ export interface VideoRenderOptions {
   fps: number;
   width: number;
   height: number;
-  renderer: ProtocolVideoRenderConfig["renderer"];
+  renderer?: ProtocolVideoRenderConfig["renderer"];
+  scene?: ProtocolVideoRenderConfig["scene"];
   viewRange?: number | null;
   timeSpace?: ProtocolVideoRenderConfig["time_space"];
   firstKey?: number | null;
@@ -620,6 +621,18 @@ type ToolConfig<T extends MidiModifierTool> = Omit<T, "tool">;
 
 function uniqueKinds(kinds: MidiAnalysisKind[]): MidiAnalysisKind[] {
   return [...new Set(kinds)];
+}
+
+function inferRendererFromScene(
+  scene: ProtocolVideoRenderConfig["scene"] | undefined,
+): ProtocolVideoRenderConfig["renderer"] {
+  if (!scene) {
+    return null;
+  }
+  if (scene.scene_type === "three_d") {
+    return "piano_trail_classic";
+  }
+  return scene.notes.projector === "flat" ? "flat" : "pfa";
 }
 
 function analysisOptionsToSpec(
@@ -971,13 +984,15 @@ export class VideoRenderTask
 
   constructor(client: MeridianClient, options: VideoRenderOptions) {
     this.#client = client;
+    const renderer = options.renderer ?? inferRendererFromScene(options.scene);
     this.#options = {
       midiPath: options.midiPath,
       output: options.output,
       fps: options.fps,
       width: options.width,
       height: options.height,
-      renderer: options.renderer,
+      renderer,
+      scene: options.scene ? structuredClone(options.scene) : null,
       viewRange: options.viewRange ?? null,
       timeSpace: options.timeSpace ?? null,
       firstKey: options.firstKey ?? null,
@@ -1034,7 +1049,8 @@ export class VideoRenderTask
       fps: this.#options.fps,
       width: this.#options.width,
       height: this.#options.height,
-      renderer: this.#options.renderer,
+      renderer: this.#options.renderer ?? null,
+      scene: this.#options.scene ? structuredClone(this.#options.scene) : null,
       viewRange: this.#options.viewRange ?? null,
       timeSpace: this.#options.timeSpace ?? null,
       firstKey: this.#options.firstKey ?? null,
@@ -1292,13 +1308,20 @@ export class MeridianClient {
   async startVideoRender(
     options: VideoRenderOptions,
   ): Promise<VideoRenderJobHandle> {
+    const renderer = options.renderer ?? inferRendererFromScene(options.scene);
+    if (!renderer && !options.scene) {
+      throw new MeridianSubprocessError(
+        "Video render requires either a renderer or a scene config",
+      );
+    }
     const config: ProtocolVideoRenderConfig = {
       midi_path: options.midiPath,
       output: options.output,
       fps: options.fps,
       width: options.width,
       height: options.height,
-      renderer: options.renderer,
+      renderer,
+      scene: options.scene ? structuredClone(options.scene) : null,
       view_range: options.viewRange ?? null,
       time_space: options.timeSpace ?? null,
       first_key: options.firstKey ?? null,
