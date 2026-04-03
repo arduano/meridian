@@ -153,7 +153,7 @@ mod tests {
         protocol::{CoreCommand, CoreEvent, StateSnapshot},
     };
 
-    use super::{spawn_core, CoreHandle};
+    use super::{CoreHandle, spawn_core};
 
     fn midi_fixture(relative_path: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))

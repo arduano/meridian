@@ -2,8 +2,8 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use crate::{
     midi::{
-        audio_cache::InRamAudioCache, display_cache::DisplayMidiCache, MidiCacheStack,
-        ProcessedMidi,
+        MidiCacheStack, ProcessedMidi, audio_cache::InRamAudioCache,
+        display_cache::DisplayMidiCache,
     },
     protocol::{
         AudioCacheId, AudioSessionId, DisplayCacheId, DisplaySessionId, ParsedMidiId,

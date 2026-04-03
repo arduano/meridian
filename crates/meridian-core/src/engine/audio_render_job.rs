@@ -1,15 +1,15 @@
 use std::{
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     thread,
 };
 
 use crate::{
     audio::{
-        render_audio_from_cache, AudioBackend, AudioRenderConfig, AudioRenderEvent,
-        MeridianSoundfont, SoundfontCache,
+        AudioBackend, AudioRenderConfig, AudioRenderEvent, MeridianSoundfont, SoundfontCache,
+        render_audio_from_cache,
     },
     protocol::{AudioRenderJobId, AudioRenderStatus, CoreErrorCode, CoreEvent},
 };

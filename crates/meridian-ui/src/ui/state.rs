@@ -39,7 +39,7 @@ impl Default for UiOptions {
             midi_path: None,
             renderer: RendererKind::Pfa,
             start_time: 0.0,
-            view_range: 8.0,
+            view_range: 0.5,
             first_key: 0,
             last_key: 127,
             disable_wgpu: matches!(
@@ -92,6 +92,25 @@ pub fn apply_frame_update_to_app(
     app.set_active_keys_text(update.active_keys.to_string().into());
     app.set_fps_text(update.fps_text.clone().into());
     app.set_status_text(status_text(&update.state).into());
+}
+
+fn format_view_range_label(seconds: f64) -> String {
+    if seconds < 1.0 {
+        format!("{:.0} ms", seconds * 1000.0)
+    } else {
+        format!("{} s", format_view_range_numeric(seconds))
+    }
+}
+
+fn format_view_range_numeric(seconds: f64) -> String {
+    let mut text = format!("{seconds:.2}");
+    while text.contains('.') && text.ends_with('0') {
+        text.pop();
+    }
+    if text.ends_with('.') {
+        text.pop();
+    }
+    text
 }
 
 fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: &StateSnapshot) {
@@ -169,7 +188,7 @@ fn apply_state_to_app(app: &App, shared_state: &Arc<Mutex<UiViewModel>>, state: 
     app.set_time_text(format!("{:.3} s", state.current_time).into());
     app.set_length_text(format!("{:.3} s", state.midi_length).into());
     app.set_note_count_text(state.total_notes.to_string().into());
-    app.set_view_range_text(format!("{:.1} s", state.view_range).into());
+    app.set_view_range_text(format_view_range_label(state.view_range).into());
     app.set_current_time_seconds(state.current_time as f32);
     app.set_midi_length_seconds(state.midi_length.max(0.001) as f32);
     app.set_scene_summary_text(scene_summary(&state.scene).into());
@@ -249,7 +268,7 @@ fn renderer_summary(scene: &SceneConfig) -> &'static str {
 }
 
 fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
-    app.set_video_view_range_value_text(format!("{:.1}", state.view_range).into());
+    app.set_video_view_range_value_text(format_view_range_numeric(state.view_range).into());
     app.set_video_view_range_value_float(state.view_range as f32);
     app.set_video_first_key_text(state.first_key.to_string().into());
     app.set_video_last_key_text(state.last_key.to_string().into());

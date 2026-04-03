@@ -10,7 +10,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import { InspectorRow, MidiLoadState, BarValue, EventCount, SliderCurve } from "structs.slint";
-import { SectionHeader, FieldRow } from "primitives.slint";
+import { SectionHeader, FieldRow, OptionChip } from "primitives.slint";
 import { ProfileTab, TransportButton, TimeScrubber } from "chrome.slint";
 import { PreviewWelcome, DropOverlay } from "panels/preview.slint";
 import { VideoPanel } from "panels/render.slint";
@@ -85,14 +85,14 @@ export component App inherits Window {
     in-out property <string> note-count-text: "0";
     in-out property <string> visible-note-count-text: "0";
     in-out property <string> active-keys-text: "0";
-    in-out property <string> view-range-text: "8.0 s";
+    in-out property <string> view-range-text: "500 ms";
     in-out property <string> play-label: "Play";
     in-out property <string> fps-text: "--";
     in-out property <string> scene-summary-text: "2D / PFA notes / PFA keyboard";
     in-out property <string> viewport-text: "1280 x 720";
     in-out property <string> current-renderer-text: "pfa";
     in-out property <string> time-space-text: "time";
-    in-out property <string> video-view-range-value-text: "8.0";
+    in-out property <string> video-view-range-value-text: "0.5";
     in-out property <string> video-first-key-text: "0";
     in-out property <string> video-last-key-text: "127";
     in-out property <string> video-keyboard-height-mode-text: "aspect_ratio";
@@ -135,7 +135,7 @@ export component App inherits Window {
     in-out property <string> video-ptc-aura-image-path-text: "(aura png)";
 
     // ── Video panel float values (for slider components) ──
-    in-out property <float> video-view-range-value-float: 8.0;
+    in-out property <float> video-view-range-value-float: 0.5;
     in-out property <float> video-border-width-float: 1.0;
     in-out property <float> video-keyboard-height-value-float: 0.085;
     in-out property <float> video-ptc-fov-float: 60.0;
@@ -293,6 +293,8 @@ export component App inherits Window {
                 : "";
     private property <bool> show-preview-welcome:
         root.active-profile == 0 && root.preview-load-state != MidiLoadState.loaded;
+    private property <bool> transport-hotkeys-enabled: !TextInputInterface.text-input-focused;
+    private property <float> transport-hotkey-step-seconds: 5.0;
 
     // ── Viewport pixel dimensions (consumed by Rust) ──
     out property <float> viewport-px-width:  viewport-box.width  / 1px;
@@ -334,103 +336,175 @@ export component App inherits Window {
     preferred-height: 940px;
     background: #060a11;
 
+    shortcut-scope := FocusScope {
+        width: 0px;
+        height: 0px;
+
+        init => {
+            self.focus();
+        }
+
+        capture-key-pressed(event) => {
+            if (!root.transport-hotkeys-enabled) {
+                return reject;
+            }
+            if (event.text == Key.Space || event.text == " ") {
+                root.toggle-play();
+                return accept;
+            }
+            if (event.text == Key.LeftArrow) {
+                root.step-time(-root.transport-hotkey-step-seconds);
+                return accept;
+            }
+            if (event.text == Key.RightArrow) {
+                root.step-time(root.transport-hotkey-step-seconds);
+                return accept;
+            }
+            if (event.text == "[" || event.text == "{" || event.text == "-" || event.text == "_") {
+                root.zoom(-1.0);
+                return accept;
+            }
+            if (event.text == "]" || event.text == "}" || event.text == "=" || event.text == "+") {
+                root.zoom(1.0);
+                return accept;
+            }
+            if (event.text == Key.Home) {
+                root.seek-time(0.0);
+                return accept;
+            }
+            if (event.text == Key.End) {
+                root.seek-time(root.midi-length-seconds);
+                return accept;
+            }
+            return reject;
+        }
+    }
+
     VerticalLayout {
         spacing: 0px;
 
-        // ══════════════════════════════════════════
-        //  TOP CHROME
-        // ══════════════════════════════════════════
+            // ══════════════════════════════════════════
+            //  TOP CHROME
+            // ══════════════════════════════════════════
 
-        Rectangle {
-            background: #0a1018;
-            min-height: 84px;
-            max-height: 84px;
+            Rectangle {
+                background: #0a1018;
+                min-height: 84px;
+                max-height: 84px;
 
-            VerticalLayout {
-                spacing: 0px;
+                VerticalLayout {
+                    spacing: 0px;
 
-                // ── Profile tabs ──
-                Rectangle {
-                    height: 36px;
+                    // ── Profile tabs ──
+                    Rectangle {
+                        height: 36px;
 
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        spacing: 4px;
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            spacing: 4px;
 
-                        ProfileTab { label: "Preview";  active: root.active-profile == 0; pressed => { root.active-profile = 0; } }
-                        ProfileTab { label: "Video";    active: root.active-profile == 1; pressed => { root.active-profile = 1; } }
-                        ProfileTab { label: "Audio";    active: root.active-profile == 2; pressed => { root.active-profile = 2; } }
-                        ProfileTab { label: "Modify";   active: root.active-profile == 3; pressed => { root.active-profile = 3; } }
-                        ProfileTab { label: "Analysis"; active: root.active-profile == 4; pressed => { root.active-profile = 4; } }
+                            ProfileTab { label: "Preview";  active: root.active-profile == 0; pressed => { root.active-profile = 0; } }
+                            ProfileTab { label: "Video";    active: root.active-profile == 1; pressed => { root.active-profile = 1; } }
+                            ProfileTab { label: "Audio";    active: root.active-profile == 2; pressed => { root.active-profile = 2; } }
+                            ProfileTab { label: "Modify";   active: root.active-profile == 3; pressed => { root.active-profile = 3; } }
+                            ProfileTab { label: "Analysis"; active: root.active-profile == 4; pressed => { root.active-profile = 4; } }
 
-                        Rectangle { horizontal-stretch: 1; }
+                            Rectangle { horizontal-stretch: 1; }
 
+
+                            VerticalLayout {
+                                alignment: center;
+
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    alignment: center;
+
+                                    Image {
+                                        width: 16px;
+                                        height: 16px;
+                                        source: @image-url("../../../assets/icons/meridian.png");
+                                        image-fit: contain;
+                                        vertical-alignment: center;
+                                    }
+
+                                    Text { text: "Meridian"; color: #2d3d52; font-size: 12px; font-weight: 600; vertical-alignment: center; }
+                                }
+                            }
+                        }
+
+                        Rectangle { y: parent.height - 1px; height: 1px; background: #141e2e; }
+                    }
+
+                    // ── Transport rail ──
+                    Rectangle {
+                        height: 48px;
 
                         VerticalLayout {
                             alignment: center;
 
                             HorizontalLayout {
-                                spacing: 6px;
-                                alignment: center;
-
-                                Image {
-                                    width: 16px;
-                                    height: 16px;
-                                    source: @image-url("../../../assets/icons/meridian.png");
-                                    image-fit: contain;
-                                    vertical-alignment: center;
-                                }
-
-                                Text { text: "Meridian"; color: #2d3d52; font-size: 12px; font-weight: 600; vertical-alignment: center; }
-                            }
-                        }
-                    }
-
-                    Rectangle { y: parent.height - 1px; height: 1px; background: #141e2e; }
-                }
-
-                // ── Transport rail ──
-                Rectangle {
-                    height: 48px;
-
-                    VerticalLayout {
-                        alignment: center;
-
-                        HorizontalLayout {
-                            padding-left: 12px;
-                            padding-right: 16px;
-                            spacing: 6px;
-
-                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 16px;
                                 spacing: 6px;
 
-                                TransportButton {
-                                    icon: root.play-label == "Pause" ? "⏸" : "▶";
-                                    active: root.play-label == "Pause";
-                                    pressed => { root.toggle-play(); }
+                                HorizontalLayout {
+                                    spacing: 6px;
+
+                                    TransportButton {
+                                        icon: root.play-label == "Pause" ? "⏸" : "▶";
+                                        active: root.play-label == "Pause";
+                                        pressed => { root.toggle-play(); }
+                                    }
+
+                                    TimeScrubber {
+                                        horizontal-stretch: 1;
+                                        min-width: 200px;
+                                        value: root.current-time-seconds;
+                                        maximum: root.midi-length-seconds;
+                                        scrubbed(v) => { root.seek-time(v); }
+                                    }
                                 }
 
-                                TimeScrubber {
-                                    horizontal-stretch: 1;
-                                    min-width: 200px;
-                                    value: root.current-time-seconds;
-                                    maximum: root.midi-length-seconds;
-                                    scrubbed(v) => { root.seek-time(v); }
+                                // Time readout
+                                Text { text: root.time-text;   color: #b0c0d4; font-family: "monospace"; font-size: 11px; font-weight: 600; vertical-alignment: center; min-width: 58px; horizontal-alignment: right; }
+                                Text { text: "/";              color: #2d3d52; font-size: 11px; vertical-alignment: center; }
+                                Text { text: root.length-text; color: #4d6580; font-family: "monospace"; font-size: 11px; vertical-alignment: center; min-width: 58px; }
+
+                                Rectangle { width: 1px; background: #1a2740; }
+
+                                VerticalLayout {
+                                    alignment: center;
+
+                                    HorizontalLayout {
+                                        spacing: 4px;
+
+                                        OptionChip {
+                                            label: "250ms";
+                                            active: root.video-view-range-value-float == 0.25;
+                                            pressed => { root.update-video-control-float("view_range", 0.25); }
+                                        }
+
+                                        OptionChip {
+                                            label: "500ms";
+                                            active: root.video-view-range-value-float == 0.5;
+                                            pressed => { root.update-video-control-float("view_range", 0.5); }
+                                        }
+
+                                        OptionChip {
+                                            label: "2s";
+                                            active: root.video-view-range-value-float == 2.0;
+                                            pressed => { root.update-video-control-float("view_range", 2.0); }
+                                        }
+
+                                        OptionChip {
+                                            label: "8s";
+                                            active: root.video-view-range-value-float == 8.0;
+                                            pressed => { root.update-video-control-float("view_range", 8.0); }
+                                        }
+                                    }
                                 }
                             }
-
-                            // Time readout
-                            Text { text: root.time-text;   color: #b0c0d4; font-family: "monospace"; font-size: 11px; font-weight: 600; vertical-alignment: center; min-width: 58px; horizontal-alignment: right; }
-                            Text { text: "/";              color: #2d3d52; font-size: 11px; vertical-alignment: center; }
-                            Text { text: root.length-text; color: #4d6580; font-family: "monospace"; font-size: 11px; vertical-alignment: center; min-width: 58px; }
-
-                            Rectangle { width: 1px; background: #1a2740; }
-
-                            TransportButton { icon: "−"; pressed => { root.zoom(-1.0); } }
-                            TransportButton { icon: "+"; pressed => { root.zoom(1.0); } }
-
-                            Text { text: root.view-range-text; color: #6b7d94; font-family: "monospace"; font-size: 11px; font-weight: 600; vertical-alignment: center; min-width: 42px; horizontal-alignment: right; }
                         }
                     }
                 }
@@ -888,7 +962,6 @@ export component App inherits Window {
                 }
             }
         }
-    }
 
     // ══════════════════════════════════════════
     //  DROP OVERLAY (topmost layer)

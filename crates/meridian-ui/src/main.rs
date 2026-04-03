@@ -13,7 +13,7 @@ struct Cli {
     midi: Option<PathBuf>,
     #[arg(long, default_value_t = 0.0)]
     time: f64,
-    #[arg(long, default_value_t = 8.0)]
+    #[arg(long, default_value_t = 0.5)]
     view_range: f64,
     #[arg(long, default_value_t = 0)]
     first_key: u8,

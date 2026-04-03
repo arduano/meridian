@@ -2,8 +2,8 @@ use std::thread;
 
 use crate::{
     midi::analysis::{
-        analyze_cached_midi, build_buckets_from_parsed_with_progress, select_analysis_kinds,
-        MidiAnalysisKind,
+        MidiAnalysisKind, analyze_cached_midi, build_buckets_from_parsed_with_progress,
+        select_analysis_kinds,
     },
     protocol::{
         AnalysisJobId, CoreErrorCode, CoreEvent, DisplayCacheId, MidiAnalysisJobEvent,

@@ -9,27 +9,28 @@ use std::{
 };
 
 use meridian_core::{
+    CoreHandle, MeridianError,
     audio::{
-        AudioConfig, ChannelCount, EnvelopeCurveType, Interpolator, MeridianSoundfont, ThreadCount,
-        DEFAULT_SOUNDFONT,
+        AudioConfig, ChannelCount, DEFAULT_SOUNDFONT, EnvelopeCurveType, Interpolator,
+        MeridianSoundfont, ThreadCount,
     },
     display::MIN_VIEW_RANGE_SECONDS,
     midi::MidiProcessingConfig,
     protocol::{CoreEvent, ParsedMidiId, ProcessedMidiId},
     render::{
         DisplayTimeSpace, KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig,
-        NoteProjectorConfig, PfaKeyboardProjectorConfig, PianoTrailClassicSceneConfig,
+        NoteProjectorConfig, PFA_BLUE_TOP_BAR_COLOR, PFA_GREEN_TOP_BAR_COLOR,
+        PFA_RED_TOP_BAR_COLOR, PfaKeyboardProjectorConfig, PianoTrailClassicSceneConfig,
         ProjectorImageConfig, RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
-        PFA_BLUE_TOP_BAR_COLOR, PFA_GREEN_TOP_BAR_COLOR, PFA_RED_TOP_BAR_COLOR,
     },
-    spawn_core, CoreHandle, MeridianError,
+    spawn_core,
 };
-use slint::winit_030::{winit, EventResult, WinitWindowAccessor};
 use slint::ComponentHandle;
+use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
 
 use super::{
     core_bridge::UiCoreBridge,
-    state::{apply_events_to_app, UiOptions},
+    state::{UiOptions, apply_events_to_app},
     view::{App, MidiLoadState},
     view_model::UiViewModel,
     viewport::ViewportRenderer,

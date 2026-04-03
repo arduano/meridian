@@ -1,14 +1,14 @@
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     thread,
 };
 
 use crate::{
-    midi::{file_processing::process_midi_files_job, MidiFileProcessingConfig, MidiFileSelection},
+    midi::{MidiFileProcessingConfig, MidiFileSelection, file_processing::process_midi_files_job},
     protocol::{CoreErrorCode, CoreEvent, MidiProcessEvent, MidiProcessJobId, MidiProcessStatus},
 };
 

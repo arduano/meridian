@@ -81,7 +81,7 @@ export component VideoPanel inherits Rectangle {
     in property <string> video-ptc-aura-image-path-text;
 
     // ── Float properties (numeric values for sliders from Rust) ──
-    in property <float> video-view-range-value-float: 8.0;
+    in property <float> video-view-range-value-float: 0.5;
     in property <float> video-border-width-float: 1.0;
     in property <float> video-keyboard-height-value-float: 0.085;
     in property <float> video-ptc-fov-float: 60.0;
@@ -195,12 +195,12 @@ export component VideoPanel inherits Rectangle {
                         value: root.video-view-range-value-float;
                         display-text: root.video-view-range-value-text + " s";
                         edit-text: root.video-view-range-value-text;
-                        minimum: 1.0;
+                        minimum: 0.1;
                         maximum: 30.0;
                         curve: quadratic;
                         changed(v) => { root.update-control-float("view_range", v); }
                         custom-submitted(v) => { root.update-control("view_range", v); }
-                        reset-requested() => { root.update-control("view_range", "8.0"); }
+                        reset-requested() => { root.update-control("view_range", "0.5"); }
                     }
 
                     Rectangle { height: 4px; }

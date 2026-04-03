@@ -4,12 +4,12 @@ use std::{
 };
 
 use meridian_core::{
+    CoreHandle, MeridianError,
     audio::{AudioBackend, AudioConfig},
     display::MIN_VIEW_RANGE_SECONDS,
     midi::MidiProcessingConfig,
     protocol::{CoreCommand, CoreEvent, ParsedMidiId, ProcessedMidiId},
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
-    CoreHandle, MeridianError,
 };
 
 use super::{state::UiOptions, view_model::UiViewModel};
@@ -174,9 +174,10 @@ impl UiCoreBridge {
             .expect("ui model mutex poisoned")
             .transport
             .clone();
+        let zoom_factor = std::f64::consts::SQRT_2.powf(delta);
         self.request(
             CoreCommand::SetViewRange {
-                seconds: (transport.view_range + delta).max(MIN_VIEW_RANGE_SECONDS),
+                seconds: (transport.view_range * zoom_factor).max(MIN_VIEW_RANGE_SECONDS),
                 time_space: Some(transport.time_space),
             },
             model,

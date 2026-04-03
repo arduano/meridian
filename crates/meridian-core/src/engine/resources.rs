@@ -2,8 +2,8 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use crate::{
     midi::{
-        analysis::{analyze_midi, analyze_parsed_midi_with_progress},
         MidiCacheStack, MidiProcessingConfig, ProcessedMidi,
+        analysis::{analyze_midi, analyze_parsed_midi_with_progress},
     },
     protocol::{
         AudioCacheId, AudioSessionId, CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId,
@@ -433,9 +433,11 @@ impl CoreState {
                 );
             });
         let display_cache_id = match display_events.as_slice() {
-            [event @ CoreEvent::DisplayCacheBuilt {
-                display_cache_id, ..
-            }] => {
+            [
+                event @ CoreEvent::DisplayCacheBuilt {
+                    display_cache_id, ..
+                },
+            ] => {
                 self.broadcast(event.clone());
                 self.broadcast_midi_load_progress(&path, 0.70, "Building audio cache…");
                 *display_cache_id
@@ -894,9 +896,11 @@ impl CoreState {
                 );
             });
         match events.as_slice() {
-            [event @ CoreEvent::DisplayCacheBuilt {
-                display_cache_id, ..
-            }] => {
+            [
+                event @ CoreEvent::DisplayCacheBuilt {
+                    display_cache_id, ..
+                },
+            ] => {
                 self.broadcast(event.clone());
                 Ok(*display_cache_id)
             }
