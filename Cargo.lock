@@ -3440,7 +3440,7 @@ dependencies = [
  "thiserror 2.0.18",
  "ts-rs",
  "wgpu",
- "xsynth-core",
+ "xsynth-core 0.4.0",
  "xsynth-realtime",
  "xsynth-render",
 ]
@@ -3506,6 +3506,8 @@ dependencies = [
 [[package]]
 name = "midi-toolkit-rs"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b1b037ca8c9cae1131dd8e0dbb8ce0f226fdb002e75422ec18dc1aa48b21a69"
 dependencies = [
  "crossbeam-channel",
  "midi-toolkit-rs-derive 0.2.0",
@@ -3531,6 +3533,8 @@ dependencies = [
 [[package]]
 name = "midi-toolkit-rs-derive"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d6c35c95f4d575c6540b9942b892dc99dc8b8ab4183d8c5aa26edfbfa7d0ab7"
 dependencies = [
  "convert_case 0.4.0",
  "num-traits",
@@ -5261,6 +5265,16 @@ name = "simdeez"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e08cb8b1603106d47fbd32f34f5e4f332bb07c02c7b2c6ebad893e6f6ba53f9e"
+dependencies = [
+ "cfg-if",
+ "paste",
+]
+
+[[package]]
+name = "simdeez"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35bc92272e09cdb506befe0c48f5f865fdda52e77bbe1738f74bed79f29c4733"
 dependencies = [
  "cfg-if",
  "paste",
@@ -7748,7 +7762,30 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xsynth-core"
-version = "0.3.2"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e3ed32f276e6de65a085af26811ec4640cc29bc2686270c3ba4a7f804998757"
+dependencies = [
+ "atomic_refcell",
+ "biquad",
+ "bytemuck",
+ "crossbeam-channel",
+ "lazy_static",
+ "proc-macro2",
+ "rayon",
+ "simdeez 2.0.0",
+ "spin_sleep",
+ "symphonia",
+ "thiserror 1.0.69",
+ "to_vec",
+ "xsynth-soundfonts 0.3.4",
+]
+
+[[package]]
+name = "xsynth-core"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1dba7af545df823e7813bf8b78d9e0578444cd7aedec6bbc7f0281308d6aac01"
 dependencies = [
  "atomic_refcell",
  "biquad",
@@ -7758,17 +7795,19 @@ dependencies = [
  "proc-macro2",
  "rayon",
  "serde",
- "simdeez",
+ "simdeez 3.0.1",
  "spin_sleep",
  "symphonia",
  "thiserror 1.0.69",
  "to_vec",
- "xsynth-soundfonts",
+ "xsynth-soundfonts 0.4.0",
 ]
 
 [[package]]
 name = "xsynth-realtime"
-version = "0.3.2"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4ec69757457467ce8b72a2512bd5bbca3cd3e029bd9338517ec9c171ebd12fa"
 dependencies = [
  "atomic_refcell",
  "bytemuck",
@@ -7779,14 +7818,17 @@ dependencies = [
  "rayon",
  "serde",
  "spin_sleep",
+ "thiserror 1.0.69",
  "to_vec",
  "wav",
- "xsynth-core",
+ "xsynth-core 0.4.0",
 ]
 
 [[package]]
 name = "xsynth-render"
-version = "0.3.2"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8023761a210cd4d2421ef1b252d9910f79b367af3a81d7e6e379785c3dfc8dfb"
 dependencies = [
  "atomic_float",
  "clap 4.6.0",
@@ -7797,19 +7839,37 @@ dependencies = [
  "rayon",
  "spin_sleep",
  "thiserror 1.0.69",
- "xsynth-core",
+ "xsynth-core 0.3.4",
 ]
 
 [[package]]
 name = "xsynth-soundfonts"
-version = "0.3.2"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bc5700f1bb7750cffb2f84c2e6735672c654241317edffba2e5ca505465a70b"
 dependencies = [
  "encoding_rs",
  "encoding_rs_io",
  "lazy-regex",
  "regex-bnf",
  "rubato",
- "simdeez",
+ "simdeez 2.0.0",
+ "soundfont",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "xsynth-soundfonts"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24f08d93774a60ec88ecf416295d1303d2df286667111625e9fe90760ff04f14"
+dependencies = [
+ "encoding_rs",
+ "encoding_rs_io",
+ "lazy-regex",
+ "regex-bnf",
+ "rubato",
+ "simdeez 3.0.1",
  "soundfont",
  "thiserror 1.0.69",
 ]
