@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use midi_toolkit::{
-    events::{Event, MIDIEventEnum, TextEventKind},
+    events::{Event, MIDIEventEnum},
     pipe,
     sequence::{
         TimeCaster,
@@ -87,7 +87,6 @@ impl ProcessedMidi {
 struct OpenNote {
     start: f64,
     track_chan: TrackAndChannel,
-    explicit_colors: Option<MIDIColorPair>,
 }
 
 #[derive(Clone)]
@@ -95,7 +94,6 @@ struct FinishedNote {
     start: f64,
     end: f64,
     track_chan: TrackAndChannel,
-    explicit_colors: Option<MIDIColorPair>,
 }
 
 fn build_processed_midi(
@@ -120,7 +118,6 @@ fn build_processed_midi(
 
     let track_count = midi.track_count().max(1);
     let mut time = 0.0;
-    let mut current_colors = vec![None; track_count * 16];
     let mut open_notes: FxHashMap<(u8, TrackAndChannel), VecDeque<OpenNote>> = FxHashMap::default();
     let mut finished_notes = vec![Vec::<FinishedNote>::new(); 256];
     let mut analysis = MidiAnalysisAccumulator::new(track_count);
@@ -182,7 +179,6 @@ fn build_processed_midi(
                     .push_back(OpenNote {
                         start: output_time,
                         track_chan,
-                        explicit_colors: current_colors[track_chan.as_usize()],
                     });
                 current_audio_data.extend_from_slice(&[0x90 | note_on.channel, key, velocity]);
             }
@@ -254,24 +250,6 @@ fn build_processed_midi(
                 current_audio_data.extend_from_slice(&bytes);
                 current_audio_control.extend_from_slice(&bytes);
             }
-            Event::Text(text) if text.kind == TextEventKind::Undefined => {
-                if let Some((channel, pair)) = parse_color_event(&text.bytes) {
-                    let track = track as usize;
-                    match channel {
-                        Some(channel) => {
-                            let index = track * 16 + channel as usize;
-                            if index < current_colors.len() {
-                                current_colors[index] = Some(pair);
-                            }
-                        }
-                        None => {
-                            let start = track * 16;
-                            let end = (start + 16).min(current_colors.len());
-                            current_colors[start..end].fill(Some(pair));
-                        }
-                    }
-                }
-            }
             _ => {}
         }
     }
@@ -283,7 +261,6 @@ fn build_processed_midi(
                 start: note.start,
                 end: current_audio_time.max(note.start),
                 track_chan: note.track_chan,
-                explicit_colors: note.explicit_colors,
             });
         }
     }
@@ -361,7 +338,6 @@ fn end_note(
             start: note.start,
             end: output_time,
             track_chan: note.track_chan,
-            explicit_colors: note.explicit_colors,
         });
     }
 }
@@ -380,9 +356,7 @@ fn notes_to_blocks(
         let mut block = InRamNoteBlock::new_from_notes(
             start,
             0,
-            notes[index..end]
-                .iter()
-                .map(|note| (note.track_chan, note.explicit_colors)),
+            notes[index..end].iter().map(|note| note.track_chan),
         );
         for (note_index, note) in notes[index..end].iter().enumerate() {
             block.set_note_end_time(note_index, note.end, 0);
@@ -434,22 +408,4 @@ fn columns_length(columns: &[Arc<[InRamNoteBlock]>]) -> f64 {
         .flat_map(|column| column.iter())
         .map(|block| block.max_end(crate::render::DisplayTimeSpace::Time))
         .fold(0.0, f64::max)
-}
-
-fn parse_color_event(data: &[u8]) -> Option<(Option<u8>, MIDIColorPair)> {
-    if !(data.len() == 8 || data.len() == 12) || data[0] != 0x00 || data[1] != 0x0F {
-        return None;
-    }
-    let channel = match data[2] {
-        0x00..=0x0F => Some(data[2]),
-        0x7F => None,
-        _ => return None,
-    };
-    let left = MIDIColor::new(data[4], data[5], data[6]);
-    let right = if data.len() == 12 {
-        MIDIColor::new(data[8], data[9], data[10])
-    } else {
-        left
-    };
-    Some((channel, MIDIColorPair::new(left, right)))
 }

@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use midi_toolkit::{
-    events::{Event, MIDIEventEnum, TextEventKind},
+    events::{Event, MIDIEventEnum},
     pipe,
     sequence::{
         event::{Delta, Track},
@@ -13,7 +13,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     error::MeridianError,
     midi::{
-        MIDI_KEY_COUNT, MIDIColor, MIDIColorPair, TrackAndChannel,
+        MIDI_KEY_COUNT, TrackAndChannel,
         analysis::{CachedMidiAnalysis, MidiAnalysisAccumulator},
         parsed::ParsedMidiFile,
         ram::{block::InRamNoteBlock, cache::InRamMidiCache},
@@ -28,7 +28,7 @@ struct UnendedNote {
 
 struct KeyBuilder {
     column: Vec<InRamNoteBlock>,
-    block_builder: Vec<(TrackAndChannel, Option<MIDIColorPair>)>,
+    block_builder: Vec<TrackAndChannel>,
     unended_notes: FxHashMap<TrackAndChannel, VecDeque<UnendedNote>>,
 }
 
@@ -41,10 +41,10 @@ impl KeyBuilder {
         }
     }
 
-    fn add_note(&mut self, track_chan: TrackAndChannel, explicit_colors: Option<MIDIColorPair>) {
+    fn add_note(&mut self, track_chan: TrackAndChannel) {
         let block_index = self.block_builder.len();
         let column_index = self.column.len();
-        self.block_builder.push((track_chan, explicit_colors));
+        self.block_builder.push(track_chan);
         self.unended_notes
             .entry(track_chan)
             .or_default()
@@ -142,7 +142,6 @@ pub(crate) fn build_in_ram_cache_with_progress(
     let mut time_seconds = 0.0;
     let mut time_ticks = 0_u64;
     let mut notes = 0_u64;
-    let mut current_colors = vec![None; midi.track_count().max(1) * 16];
     let mut tempo_map = TempoMap::new(ppq);
     let mut micros_per_quarter = 500_000_u32;
     let mut analysis = MidiAnalysisAccumulator::new(midi.track_count().max(1));
@@ -186,7 +185,7 @@ pub(crate) fn build_in_ram_cache_with_progress(
                             &mut analysis,
                         );
                     } else {
-                        keys[key_index].add_note(track_chan, current_colors[track_chan.as_usize()]);
+                        keys[key_index].add_note(track_chan);
                         analysis.observe_note_start(time_seconds, key_index, track_chan);
                         notes += 1;
                     }
@@ -198,24 +197,6 @@ pub(crate) fn build_in_ram_cache_with_progress(
                 if key_index < MIDI_KEY_COUNT {
                     let track_chan = TrackAndChannel::new(track, note_off.channel);
                     keys[key_index].end_note(track_chan, time_seconds, time_ticks, &mut analysis);
-                }
-            }
-            Event::Text(text) if text.kind == TextEventKind::Undefined => {
-                if let Some((channel, pair)) = parse_color_event(&text.bytes) {
-                    let track = track as usize;
-                    match channel {
-                        Some(channel) => {
-                            let index = track * 16 + channel as usize;
-                            if index < current_colors.len() {
-                                current_colors[index] = Some(pair);
-                            }
-                        }
-                        None => {
-                            let start = track * 16;
-                            let end = (start + 16).min(current_colors.len());
-                            current_colors[start..end].fill(Some(pair));
-                        }
-                    }
                 }
             }
             _ => {}
@@ -254,22 +235,4 @@ pub(crate) fn build_in_ram_cache_with_progress(
         ),
         cached_analysis,
     ))
-}
-
-fn parse_color_event(data: &[u8]) -> Option<(Option<u8>, MIDIColorPair)> {
-    if !(data.len() == 8 || data.len() == 12) || data[0] != 0x00 || data[1] != 0x0F {
-        return None;
-    }
-    let channel = match data[2] {
-        0x00..=0x0F => Some(data[2]),
-        0x7F => None,
-        _ => return None,
-    };
-    let left = MIDIColor::new(data[4], data[5], data[6]);
-    let right = if data.len() == 12 {
-        MIDIColor::new(data[8], data[9], data[10])
-    } else {
-        left
-    };
-    Some((channel, MIDIColorPair::new(left, right)))
 }

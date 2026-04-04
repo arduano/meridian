@@ -311,9 +311,7 @@ impl<'a> MIDINoteColumnView for InRamNoteColumnView<'a> {
                                     (note.len_ticks as f64 * self.view_range.scale) as f32
                                 }
                             },
-                            color: note
-                                .explicit_colors
-                                .unwrap_or(colors[note.track_chan.as_usize()]),
+                            color: colors[note.track_chan.as_usize()],
                         };
                     }
                 }
@@ -365,9 +363,7 @@ impl InRamNoteColumnView<'_> {
                             (note.len_ticks as f64 * self.view_range.scale) as f32
                         }
                     },
-                    color: note
-                        .explicit_colors
-                        .unwrap_or(colors[note.track_chan.as_usize()]),
+                    color: colors[note.track_chan.as_usize()],
                 });
             }
         }

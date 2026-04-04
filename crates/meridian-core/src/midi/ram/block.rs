@@ -1,4 +1,4 @@
-use crate::midi::{MIDIColorPair, TrackAndChannel};
+use crate::midi::TrackAndChannel;
 use crate::render::DisplayTimeSpace;
 
 pub struct InRamNoteBlock {
@@ -14,7 +14,6 @@ pub(crate) struct BasicMIDINote {
     pub(crate) len_seconds: f32,
     pub(crate) len_ticks: u32,
     pub(crate) track_chan: TrackAndChannel,
-    pub(crate) explicit_colors: Option<MIDIColorPair>,
 }
 
 impl InRamNoteBlock {
@@ -23,15 +22,14 @@ impl InRamNoteBlock {
     pub(crate) fn new_from_notes(
         start_seconds: f64,
         start_ticks: u64,
-        notes: impl ExactSizeIterator<Item = (TrackAndChannel, Option<MIDIColorPair>)>,
+        notes: impl ExactSizeIterator<Item = TrackAndChannel>,
     ) -> Self {
         let mut built = Vec::with_capacity(notes.len());
-        for (track_chan, explicit_colors) in notes {
+        for track_chan in notes {
             built.push(BasicMIDINote {
                 len_seconds: 0.0,
                 len_ticks: 0,
                 track_chan,
-                explicit_colors,
             });
         }
 
