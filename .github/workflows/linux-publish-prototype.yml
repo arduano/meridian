@@ -67,20 +67,39 @@ jobs:
 
       - name: Build package
         run: |
+          set -euo pipefail
           mkdir -p publish/linux/artifacts/logs
           "${{ matrix.build_script }}" | tee "publish/linux/artifacts/logs/${{ matrix.target }}-build.log"
 
       - name: Smoke package in Docker
         run: |
+          set -euo pipefail
           "${{ matrix.smoke_script }}" | tee "publish/linux/artifacts/logs/${{ matrix.target }}-smoke.log"
+
+      - name: Verify package artifact exists
+        run: |
+          shopt -s nullglob globstar
+          files=( ${{ matrix.artifact_glob }} )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "missing package artifact for ${{ matrix.target }}: ${{ matrix.artifact_glob }}" >&2
+            exit 1
+          fi
 
       - name: Upload package artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          if-no-files-found: ignore
+          if-no-files-found: error
           path: |
             ${{ matrix.artifact_glob }}
+
+      - name: Upload package logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-logs
+          if-no-files-found: error
+          path: |
             publish/linux/artifacts/logs/${{ matrix.target }}-build.log
             publish/linux/artifacts/logs/${{ matrix.target }}-smoke.log
