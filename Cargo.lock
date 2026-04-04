@@ -3453,6 +3453,8 @@ dependencies = [
  "meridian-core",
  "open",
  "rfd",
+ "serde",
+ "serde_json",
  "slint",
  "slint-build",
  "winresource",

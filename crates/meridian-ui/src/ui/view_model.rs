@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use meridian_core::{
     audio::AudioStatus,
     protocol::{
-        AudioRenderStatus, CoreEvent, MidiAnalysisData, ProcessedMidiId, StateSnapshot,
-        VideoRenderStatus,
+        AudioRenderStatus, CoreEvent, MidiAnalysisData, MidiProcessEvent, MidiProcessStatus,
+        ProcessedMidiId, StateSnapshot, VideoRenderStatus,
     },
     render::{DisplayTimeSpace, SceneConfig},
 };
@@ -57,6 +57,7 @@ pub struct UiViewModel {
     pub audio: AudioViewModel,
     pub render_jobs: RenderJobsViewModel,
     pub analysis: AnalysisViewModel,
+    pub modify: ModifyViewModel,
     pub snapshot: Option<StateSnapshot>,
 }
 
@@ -65,6 +66,21 @@ pub struct AnalysisViewModel {
     pub processed_midi_id: Option<ProcessedMidiId>,
     pub data: Option<MidiAnalysisData>,
     pub track_count: Option<usize>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModifyViewModel {
+    pub process_status: MidiProcessStatus,
+    pub latest_event: Option<MidiProcessEvent>,
+}
+
+impl Default for ModifyViewModel {
+    fn default() -> Self {
+        Self {
+            process_status: MidiProcessStatus::Idle,
+            latest_event: None,
+        }
+    }
 }
 
 impl UiViewModel {
@@ -122,6 +138,8 @@ impl UiViewModel {
                 self.analysis.data = Some(analysis.clone());
             }
             CoreEvent::AudioStatus { status } => self.audio.status = status.clone(),
+            CoreEvent::MidiProcess { event } => self.modify.latest_event = Some(event.clone()),
+            CoreEvent::MidiProcessStatus { status } => self.modify.process_status = status.clone(),
             CoreEvent::VideoRenderStatus { status } => self.render_jobs.video = status.clone(),
             CoreEvent::AudioRenderStatus { status } => self.render_jobs.audio = status.clone(),
             CoreEvent::VideoRender { .. }
@@ -135,8 +153,6 @@ impl UiViewModel {
             | CoreEvent::MidiAnalysisJob { .. }
             | CoreEvent::MidiAnalysisJobStatus { .. }
             | CoreEvent::MidiFilesProcessed { .. }
-            | CoreEvent::MidiProcess { .. }
-            | CoreEvent::MidiProcessStatus { .. }
             | CoreEvent::Error { .. }
             | CoreEvent::ShutdownComplete => {}
         }

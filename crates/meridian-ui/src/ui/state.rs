@@ -7,7 +7,10 @@ use std::{
 
 use meridian_core::{
     audio::{AudioBackend, EnvelopeCurveType, ThreadCount},
-    protocol::{AudioRenderStatus, CoreEvent, MidiAnalysisData, StateSnapshot, VideoRenderStatus},
+    protocol::{
+        AudioRenderStatus, CoreEvent, MidiAnalysisData, MidiProcessEvent, MidiProcessStatus,
+        StateSnapshot, VideoRenderStatus,
+    },
     render::{
         KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
         PFA_RED_TOP_BAR_COLOR, ProjectorImageConfig, RendererKind, SceneConfig, ThreeDSceneConfig,
@@ -172,12 +175,14 @@ fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: &StateSnaps
 }
 
 fn apply_state_to_app(app: &App, shared_state: &Arc<Mutex<UiViewModel>>, state: &StateSnapshot) {
-    let (audio_render_status, video_render_status) = {
+    let (audio_render_status, video_render_status, modify_process_status, modify_latest_event) = {
         let mut model = shared_state.lock().expect("shared UI state mutex poisoned");
         model.apply_snapshot(state);
         (
             model.render_jobs.audio.clone(),
             model.render_jobs.video.clone(),
+            model.modify.process_status.clone(),
+            model.modify.latest_event.clone(),
         )
     };
     app.set_midi_path_text(
@@ -212,6 +217,7 @@ fn apply_state_to_app(app: &App, shared_state: &Arc<Mutex<UiViewModel>>, state: 
     });
     apply_audio_to_app(app, state, &audio_render_status);
     apply_video_render_status_to_app(app, &video_render_status);
+    apply_modify_process_to_app(app, &modify_process_status, modify_latest_event.as_ref());
 }
 
 fn status_text(state: &StateSnapshot) -> String {
@@ -734,6 +740,160 @@ fn file_name_or_full(path: &Path) -> String {
         .and_then(|name| name.to_str())
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| path.display().to_string())
+}
+
+fn apply_modify_process_to_app(
+    app: &App,
+    status: &MidiProcessStatus,
+    latest_event: Option<&MidiProcessEvent>,
+) {
+    app.set_modify_job_active(matches!(
+        status,
+        MidiProcessStatus::Running { .. } | MidiProcessStatus::Cancelling { .. }
+    ));
+    app.set_modify_result_input_count_text("—".into());
+    app.set_modify_result_track_count_text("—".into());
+    app.set_modify_result_ppq_text("—".into());
+    app.set_modify_result_event_count_text("—".into());
+
+    match status {
+        MidiProcessStatus::Running {
+            output,
+            processed_inputs,
+            total_inputs,
+            current_input,
+            ..
+        } => {
+            let progress = if *total_inputs == 0 {
+                0.0
+            } else {
+                *processed_inputs as f32 / *total_inputs as f32
+            };
+            app.set_modify_progress(progress);
+            app.set_modify_status_text("Processing MIDI".into());
+            let detail = current_input
+                .as_ref()
+                .map(|path| format!("Working on {}", file_name_or_full(path)))
+                .unwrap_or_else(|| format!("Writing {}", output.display()));
+            app.set_modify_detail_text(detail.into());
+            app.set_modify_result_output_text(file_name_or_full(output).into());
+        }
+        MidiProcessStatus::Cancelling {
+            output,
+            processed_inputs,
+            total_inputs,
+            current_input,
+            ..
+        } => {
+            let progress = if *total_inputs == 0 {
+                0.0
+            } else {
+                *processed_inputs as f32 / *total_inputs as f32
+            };
+            app.set_modify_progress(progress);
+            app.set_modify_status_text("Cancelling".into());
+            let detail = current_input
+                .as_ref()
+                .map(|path| format!("Stopping after {}", file_name_or_full(path)))
+                .unwrap_or_else(|| format!("Stopping {}", output.display()));
+            app.set_modify_detail_text(detail.into());
+            app.set_modify_result_output_text(file_name_or_full(output).into());
+        }
+        MidiProcessStatus::Idle => {
+            app.set_modify_progress(0.0);
+            match latest_event {
+                Some(MidiProcessEvent::ProcessFinished {
+                    output,
+                    input_count,
+                    output_track_count,
+                    output_ppq,
+                    total_events,
+                    ..
+                }) => {
+                    app.set_modify_status_text("Finished".into());
+                    app.set_modify_detail_text(format!("Wrote {}", output.display()).into());
+                    app.set_modify_result_output_text(file_name_or_full(output).into());
+                    app.set_modify_result_input_count_text(
+                        format_number(*input_count as u64).into(),
+                    );
+                    app.set_modify_result_track_count_text(
+                        format_number(*output_track_count as u64).into(),
+                    );
+                    app.set_modify_result_ppq_text(output_ppq.to_string().into());
+                    app.set_modify_result_event_count_text(
+                        format_number(*total_events as u64).into(),
+                    );
+                }
+                Some(MidiProcessEvent::ProcessFailed {
+                    output, message, ..
+                }) => {
+                    app.set_modify_status_text("Failed".into());
+                    app.set_modify_detail_text(message.clone().into());
+                    app.set_modify_result_output_text(file_name_or_full(output).into());
+                }
+                Some(MidiProcessEvent::ProcessCancelled {
+                    output,
+                    processed_inputs,
+                    total_inputs,
+                    ..
+                }) => {
+                    app.set_modify_status_text("Cancelled".into());
+                    app.set_modify_detail_text(
+                        format!(
+                            "Stopped after {} of {} input{}",
+                            processed_inputs,
+                            total_inputs,
+                            if *total_inputs == 1 { "" } else { "s" }
+                        )
+                        .into(),
+                    );
+                    app.set_modify_result_output_text(file_name_or_full(output).into());
+                    app.set_modify_result_input_count_text(
+                        format_number(*processed_inputs as u64).into(),
+                    );
+                }
+                Some(MidiProcessEvent::ProcessStarted {
+                    output,
+                    total_inputs,
+                    ..
+                }) => {
+                    app.set_modify_status_text("Ready".into());
+                    app.set_modify_detail_text(
+                        format!(
+                            "Configured for {} input{} -> {}",
+                            total_inputs,
+                            if *total_inputs == 1 { "" } else { "s" },
+                            output.display()
+                        )
+                        .into(),
+                    );
+                    app.set_modify_result_output_text(file_name_or_full(output).into());
+                }
+                Some(MidiProcessEvent::InputProgress {
+                    current_input,
+                    processed_inputs,
+                    total_inputs,
+                    ..
+                }) => {
+                    app.set_modify_status_text("Ready".into());
+                    let detail = current_input
+                        .as_ref()
+                        .map(|path| format!("Last input: {}", file_name_or_full(path)))
+                        .unwrap_or_else(|| {
+                            format!("Last run processed {processed_inputs} of {total_inputs}")
+                        });
+                    app.set_modify_detail_text(detail.into());
+                }
+                None => {
+                    app.set_modify_status_text("Ready".into());
+                    app.set_modify_detail_text(
+                        "Pick a pass, review the JSON config, and write a new MIDI file.".into(),
+                    );
+                    app.set_modify_result_output_text("output.mid".into());
+                }
+            }
+        }
+    }
 }
 
 fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {

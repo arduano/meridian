@@ -44,18 +44,18 @@
           freetype
           libGL
           libxkbcommon
+          libx11
+          libxcursor
+          libxext
+          libxfixes
+          libxi
+          libxrandr
+          libxrender
+          libxcb
+          libxkbfile
           mesa
           vulkan-loader
           wayland
-          xorg.libX11
-          xorg.libXcursor
-          xorg.libXext
-          xorg.libXfixes
-          xorg.libXi
-          xorg.libXrandr
-          xorg.libXrender
-          xorg.libxcb
-          xorg.libxkbfile
         ];
         mkMeridianPackage = { pname, cargoBuildFlags, installPhase }:
           pkgs.rustPlatform.buildRustPackage {

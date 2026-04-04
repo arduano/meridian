@@ -281,6 +281,112 @@ export component App inherits Window {
     in-out property <string> render-export-status: "Ready";
     in-out property <string> render-export-detail-text: "Choose a mode and output path.";
 
+    in-out property <string> modify-pass-key-text: "quantize";
+    in-out property <string> modify-pass-title-text: "Quantize";
+    in-out property <string> modify-pass-description-text: "Snap notes toward a timing grid while keeping the rest of the processing config editable.";
+    in-out property <string> modify-pass-hint-text: "The JSON editor contains the full backend process config, including common filtering and structure options.";
+    in-out property <string> modify-config-text: "";
+    in-out property <string> modify-last-valid-config-text: "";
+    in-out property <bool> modify-config-valid: true;
+    in-out property <string> modify-config-status-text: "Ready";
+    in-out property <string> modify-output-path-text: "";
+    in-out property <float> modify-progress: 0;
+    in-out property <bool> modify-job-active: false;
+    in-out property <string> modify-status-text: "Ready";
+    in-out property <string> modify-detail-text: "Pick a pass, review the JSON config, and write a new MIDI file.";
+    in-out property <string> modify-result-output-text: "output.mid";
+    in-out property <string> modify-result-input-count-text: "—";
+    in-out property <string> modify-result-track-count-text: "—";
+    in-out property <string> modify-result-ppq-text: "—";
+    in-out property <string> modify-result-event-count-text: "—";
+    in-out property <string> modify-time-offset-ticks-text: "0";
+    in-out property <string> modify-time-ppq-override-text: "";
+    in-out property <string> modify-time-tempo-override-text: "";
+    in-out property <string> modify-trim-start-tick-text: "";
+    in-out property <string> modify-trim-end-tick-text: "";
+    in-out property <string> modify-trim-inject-edge-text: "on";
+    in-out property <string> modify-trim-close-open-text: "on";
+    in-out property <string> modify-min-key-text: "0";
+    in-out property <string> modify-max-key-text: "127";
+    in-out property <string> modify-transpose-text: "0";
+    in-out property <string> modify-note-velocity-scale-text: "1.0";
+    in-out property <string> modify-piano-only-text: "off";
+    in-out property <string> modify-zero-velocity-mode-text: "note_off";
+    in-out property <string> modify-merge-mode-text: "preserve_tracks";
+    in-out property <string> modify-split-channels-text: "off";
+    in-out property <string> modify-collapse-tracks-text: "off";
+    in-out property <string> modify-remove-empty-tracks-text: "on";
+    in-out property <string> modify-drop-orphan-note-offs-text: "on";
+    in-out property <string> modify-range-track-min-text: "";
+    in-out property <string> modify-range-track-max-text: "";
+    in-out property <string> modify-range-channel-min-text: "";
+    in-out property <string> modify-range-channel-max-text: "";
+    in-out property <string> modify-range-key-min-text: "";
+    in-out property <string> modify-range-key-max-text: "";
+    in-out property <string> modify-range-velocity-min-text: "";
+    in-out property <string> modify-range-velocity-max-text: "";
+    in-out property <string> modify-range-tick-start-text: "";
+    in-out property <string> modify-range-tick-end-text: "";
+    in-out property <string> modify-range-event-kinds-text: "";
+    in-out property <string> modify-tempo-mode-text: "scale_bpm";
+    in-out property <string> modify-tempo-flatten-tempo-text: "500000";
+    in-out property <string> modify-tempo-scale-factor-text: "1.0";
+    in-out property <string> modify-tempo-replace-points-text: "";
+    in-out property <string> modify-time-warp-points-text: "";
+    in-out property <string> modify-channel-remap-mappings-text: "";
+    in-out property <string> modify-track-route-mode-text: "preserve";
+    in-out property <string> modify-track-route-mappings-text: "";
+    in-out property <string> modify-program-force-program-text: "";
+    in-out property <string> modify-program-strip-changes-text: "off";
+    in-out property <string> modify-program-startup-programs-text: "";
+    in-out property <string> modify-program-keep-only-startup-text: "off";
+    in-out property <string> modify-control-strip-controllers-text: "";
+    in-out property <string> modify-control-remap-controllers-text: "";
+    in-out property <string> modify-control-scale-controllers-text: "";
+    in-out property <string> modify-control-inject-start-text: "";
+    in-out property <string> modify-pitch-strip-text: "off";
+    in-out property <string> modify-pitch-scale-text: "1.0";
+    in-out property <string> modify-pitch-offset-text: "0";
+    in-out property <string> modify-pitch-min-bend-text: "-8192";
+    in-out property <string> modify-pitch-max-bend-text: "8191";
+    in-out property <string> modify-pitch-reset-at-start-text: "off";
+    in-out property <string> modify-velocity-mode-text: "scale";
+    in-out property <string> modify-velocity-scale-text: "1.0";
+    in-out property <string> modify-velocity-gamma-text: "1.0";
+    in-out property <string> modify-velocity-points-text: "";
+    in-out property <string> modify-note-length-min-ticks-text: "";
+    in-out property <string> modify-note-length-max-ticks-text: "";
+    in-out property <string> modify-note-length-scale-text: "1.0";
+    in-out property <string> modify-note-length-fixed-ticks-text: "";
+    in-out property <string> modify-overlap-repeated-policy-text: "close_previous";
+    in-out property <string> modify-overlap-orphan-policy-text: "drop";
+    in-out property <string> modify-quantize-grid-ticks-text: "120";
+    in-out property <string> modify-quantize-strength-text: "1.0";
+    in-out property <string> modify-quantize-note-ends-text: "off";
+    in-out property <string> modify-quantize-swing-text: "0.0";
+    in-out property <string> modify-humanize-start-jitter-text: "8";
+    in-out property <string> modify-humanize-length-jitter-text: "6";
+    in-out property <string> modify-humanize-velocity-jitter-text: "5";
+    in-out property <string> modify-humanize-seed-text: "1";
+    in-out property <string> modify-key-map-mappings-text: "";
+    in-out property <string> modify-key-map-fold-range-text: "";
+    in-out property <string> modify-key-map-drop-unmapped-text: "off";
+    in-out property <string> modify-dedupe-notes-text: "on";
+    in-out property <string> modify-dedupe-controls-text: "off";
+    in-out property <string> modify-dedupe-tempo-text: "off";
+    in-out property <string> modify-dedupe-meta-text: "off";
+    in-out property <string> modify-meta-strip-all-text: "off";
+    in-out property <string> modify-meta-keep-kinds-text: "";
+    in-out property <string> modify-meta-prefix-track-names-text: "";
+    in-out property <string> modify-sysex-strip-all-text: "off";
+    in-out property <string> modify-sysex-prepend-text: "";
+    in-out property <string> modify-merge-balance-deconflict-text: "on";
+    in-out property <string> modify-merge-balance-strip-duplicate-text: "on";
+    in-out property <string> modify-merge-balance-prefer-first-text: "on";
+    in-out property <string> modify-analysis-guard-min-note-count-text: "1";
+    in-out property <string> modify-analysis-guard-max-note-count-text: "";
+    in-out property <string> modify-analysis-guard-min-track-count-text: "";
+    in-out property <string> modify-analysis-guard-max-track-count-text: "";
 
     // ── Profile (0=Preview 1=Video 2=Render 3=Audio 4=Modify 5=Analysis) ──
     in-out property <int> active-profile: 0;
@@ -389,6 +495,13 @@ export component App inherits Window {
     callback cancel-render;
     callback start-audio-render;
     callback cancel-audio-render;
+    callback select-modify-pass(string);
+    callback update-modify-control(string, string);
+    callback edit-modify-config(string);
+    callback reset-modify-config();
+    callback browse-modify-output();
+    callback start-modify-job();
+    callback cancel-modify-job();
 
     title: root.window-title;
     preferred-width: 1540px;
@@ -994,27 +1107,140 @@ export component App inherits Window {
                     visible: root.active-profile == 4;
                     x: 0; y: 0; width: parent.width; height: parent.height;
 
-                    midi-state:               root.analysis-load-state;
-                    selected-midi-name:       root.selected-midi-name;
-                    loading-status:           root.analysis-loading-status;
-                    loading-progress:         root.analysis-loading-progress;
-                    load-error:               root.analysis-load-error;
-                    select-file               => { root.select-midi-file(); }
-                    load-midi                 => { root.load-for-analysis(); }
-                    cancel-load               => { root.cancel-load-analysis(); }
-                    unload-midi               => { root.unload-analysis(); }
-                    retry-load                => { root.retry-load-analysis(); }
+                    midi-state:                    root.analysis-load-state;
+                    selected-midi-name:            root.selected-midi-name;
+                    loading-status:                root.analysis-loading-status;
+                    loading-progress:              root.analysis-loading-progress;
+                    load-error:                    root.analysis-load-error;
+                    select-file                    => { root.select-midi-file(); }
+                    load-midi                      => { root.load-for-analysis(); }
+                    cancel-load                    => { root.cancel-load-analysis(); }
+                    unload-midi                    => { root.unload-analysis(); }
+                    retry-load                     => { root.retry-load-analysis(); }
 
-                    current-renderer-text:    root.current-renderer-text;
-                    time-space-text:          root.time-space-text;
-                    note-count-text:          root.note-count-text;
-                    visible-note-count-text:  root.visible-note-count-text;
-                    active-keys-text:         root.active-keys-text;
-                    viewport-text:            root.viewport-text;
-                    fps-text:                 root.fps-text;
-                    inspector-items:          root.inspector-items;
-                    select-renderer(r)        => { root.select-renderer(r); }
-                    select-time-space(ts)     => { root.select-time-space(ts); }
+                    modify-pass-key-text:          root.modify-pass-key-text;
+                    modify-pass-title-text:        root.modify-pass-title-text;
+                    modify-pass-description-text:  root.modify-pass-description-text;
+                    modify-pass-hint-text:         root.modify-pass-hint-text;
+                    modify-config-text:            root.modify-config-text;
+                    modify-config-valid:           root.modify-config-valid;
+                    modify-config-status-text:     root.modify-config-status-text;
+                    modify-output-path-text:       root.modify-output-path-text;
+                    modify-progress:               root.modify-progress;
+                    modify-job-active:             root.modify-job-active;
+                    modify-status-text:            root.modify-status-text;
+                    modify-detail-text:            root.modify-detail-text;
+                    modify-result-output-text:     root.modify-result-output-text;
+                    modify-result-input-count-text: root.modify-result-input-count-text;
+                    modify-result-track-count-text: root.modify-result-track-count-text;
+                    modify-result-ppq-text:        root.modify-result-ppq-text;
+                    modify-result-event-count-text: root.modify-result-event-count-text;
+                    modify-time-offset-ticks-text: root.modify-time-offset-ticks-text;
+                    modify-time-ppq-override-text: root.modify-time-ppq-override-text;
+                    modify-time-tempo-override-text: root.modify-time-tempo-override-text;
+                    modify-trim-start-tick-text:   root.modify-trim-start-tick-text;
+                    modify-trim-end-tick-text:     root.modify-trim-end-tick-text;
+                    modify-trim-inject-edge-text:  root.modify-trim-inject-edge-text;
+                    modify-trim-close-open-text:   root.modify-trim-close-open-text;
+                    modify-min-key-text:           root.modify-min-key-text;
+                    modify-max-key-text:           root.modify-max-key-text;
+                    modify-transpose-text:         root.modify-transpose-text;
+                    modify-note-velocity-scale-text: root.modify-note-velocity-scale-text;
+                    modify-piano-only-text:        root.modify-piano-only-text;
+                    modify-zero-velocity-mode-text: root.modify-zero-velocity-mode-text;
+                    modify-merge-mode-text:        root.modify-merge-mode-text;
+                    modify-split-channels-text:    root.modify-split-channels-text;
+                    modify-collapse-tracks-text:   root.modify-collapse-tracks-text;
+                    modify-remove-empty-tracks-text: root.modify-remove-empty-tracks-text;
+                    modify-drop-orphan-note-offs-text: root.modify-drop-orphan-note-offs-text;
+                    modify-range-track-min-text:   root.modify-range-track-min-text;
+                    modify-range-track-max-text:   root.modify-range-track-max-text;
+                    modify-range-channel-min-text: root.modify-range-channel-min-text;
+                    modify-range-channel-max-text: root.modify-range-channel-max-text;
+                    modify-range-key-min-text:     root.modify-range-key-min-text;
+                    modify-range-key-max-text:     root.modify-range-key-max-text;
+                    modify-range-velocity-min-text: root.modify-range-velocity-min-text;
+                    modify-range-velocity-max-text: root.modify-range-velocity-max-text;
+                    modify-range-tick-start-text:  root.modify-range-tick-start-text;
+                    modify-range-tick-end-text:    root.modify-range-tick-end-text;
+                    modify-range-event-kinds-text: root.modify-range-event-kinds-text;
+                    modify-tempo-mode-text:        root.modify-tempo-mode-text;
+                    modify-tempo-flatten-tempo-text: root.modify-tempo-flatten-tempo-text;
+                    modify-tempo-scale-factor-text: root.modify-tempo-scale-factor-text;
+                    modify-tempo-replace-points-text: root.modify-tempo-replace-points-text;
+                    modify-time-warp-points-text:  root.modify-time-warp-points-text;
+                    modify-channel-remap-mappings-text: root.modify-channel-remap-mappings-text;
+                    modify-track-route-mode-text:  root.modify-track-route-mode-text;
+                    modify-track-route-mappings-text: root.modify-track-route-mappings-text;
+                    modify-program-force-program-text: root.modify-program-force-program-text;
+                    modify-program-strip-changes-text: root.modify-program-strip-changes-text;
+                    modify-program-startup-programs-text: root.modify-program-startup-programs-text;
+                    modify-program-keep-only-startup-text: root.modify-program-keep-only-startup-text;
+                    modify-control-strip-controllers-text: root.modify-control-strip-controllers-text;
+                    modify-control-remap-controllers-text: root.modify-control-remap-controllers-text;
+                    modify-control-scale-controllers-text: root.modify-control-scale-controllers-text;
+                    modify-control-inject-start-text: root.modify-control-inject-start-text;
+                    modify-pitch-strip-text:       root.modify-pitch-strip-text;
+                    modify-pitch-scale-text:       root.modify-pitch-scale-text;
+                    modify-pitch-offset-text:      root.modify-pitch-offset-text;
+                    modify-pitch-min-bend-text:    root.modify-pitch-min-bend-text;
+                    modify-pitch-max-bend-text:    root.modify-pitch-max-bend-text;
+                    modify-pitch-reset-at-start-text: root.modify-pitch-reset-at-start-text;
+                    modify-velocity-mode-text:     root.modify-velocity-mode-text;
+                    modify-velocity-scale-text:    root.modify-velocity-scale-text;
+                    modify-velocity-gamma-text:    root.modify-velocity-gamma-text;
+                    modify-velocity-points-text:   root.modify-velocity-points-text;
+                    modify-note-length-min-ticks-text: root.modify-note-length-min-ticks-text;
+                    modify-note-length-max-ticks-text: root.modify-note-length-max-ticks-text;
+                    modify-note-length-scale-text: root.modify-note-length-scale-text;
+                    modify-note-length-fixed-ticks-text: root.modify-note-length-fixed-ticks-text;
+                    modify-overlap-repeated-policy-text: root.modify-overlap-repeated-policy-text;
+                    modify-overlap-orphan-policy-text: root.modify-overlap-orphan-policy-text;
+                    modify-quantize-grid-ticks-text: root.modify-quantize-grid-ticks-text;
+                    modify-quantize-strength-text: root.modify-quantize-strength-text;
+                    modify-quantize-note-ends-text: root.modify-quantize-note-ends-text;
+                    modify-quantize-swing-text:    root.modify-quantize-swing-text;
+                    modify-humanize-start-jitter-text: root.modify-humanize-start-jitter-text;
+                    modify-humanize-length-jitter-text: root.modify-humanize-length-jitter-text;
+                    modify-humanize-velocity-jitter-text: root.modify-humanize-velocity-jitter-text;
+                    modify-humanize-seed-text:     root.modify-humanize-seed-text;
+                    modify-key-map-mappings-text:  root.modify-key-map-mappings-text;
+                    modify-key-map-fold-range-text: root.modify-key-map-fold-range-text;
+                    modify-key-map-drop-unmapped-text: root.modify-key-map-drop-unmapped-text;
+                    modify-dedupe-notes-text:      root.modify-dedupe-notes-text;
+                    modify-dedupe-controls-text:   root.modify-dedupe-controls-text;
+                    modify-dedupe-tempo-text:      root.modify-dedupe-tempo-text;
+                    modify-dedupe-meta-text:       root.modify-dedupe-meta-text;
+                    modify-meta-strip-all-text:    root.modify-meta-strip-all-text;
+                    modify-meta-keep-kinds-text:   root.modify-meta-keep-kinds-text;
+                    modify-meta-prefix-track-names-text: root.modify-meta-prefix-track-names-text;
+                    modify-sysex-strip-all-text:   root.modify-sysex-strip-all-text;
+                    modify-sysex-prepend-text:     root.modify-sysex-prepend-text;
+                    modify-merge-balance-deconflict-text: root.modify-merge-balance-deconflict-text;
+                    modify-merge-balance-strip-duplicate-text: root.modify-merge-balance-strip-duplicate-text;
+                    modify-merge-balance-prefer-first-text: root.modify-merge-balance-prefer-first-text;
+                    modify-analysis-guard-min-note-count-text: root.modify-analysis-guard-min-note-count-text;
+                    modify-analysis-guard-max-note-count-text: root.modify-analysis-guard-max-note-count-text;
+                    modify-analysis-guard-min-track-count-text: root.modify-analysis-guard-min-track-count-text;
+                    modify-analysis-guard-max-track-count-text: root.modify-analysis-guard-max-track-count-text;
+
+                    analysis-note-count-text:      root.analysis-note-count-text;
+                    analysis-track-count-text:     root.analysis-track-count-text;
+                    analysis-midi-length-text:     root.analysis-midi-length-text;
+                    analysis-tempo-text:           root.analysis-tempo-text;
+                    analysis-key-range-text:       root.analysis-key-range-text;
+                    analysis-avg-velocity-text:    root.analysis-avg-velocity-text;
+                    analysis-note-density-text:    root.analysis-note-density-text;
+                    analysis-total-events-text:    root.analysis-total-events-text;
+                    analysis-ticks-per-quarter-text: root.analysis-ticks-per-quarter-text;
+
+                    select-pass(key)               => { root.select-modify-pass(key); }
+                    update-control(key, value)     => { root.update-modify-control(key, value); }
+                    edit-config(text)              => { root.edit-modify-config(text); }
+                    reset-config                   => { root.reset-modify-config(); }
+                    browse-output                  => { root.browse-modify-output(); }
+                    start-job                      => { root.start-modify-job(); }
+                    cancel-job                     => { root.cancel-modify-job(); }
                 }
 
                 AnalysisPanel {

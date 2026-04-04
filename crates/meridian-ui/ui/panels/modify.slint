@@ -1,143 +1,1214 @@
 // ═══════════════════════════════════════════════════════════
-//  Modify panel (profile 3) — right sidebar.
+//  Modify panel (profile 3).
 //
-//  Scene configuration and real-time inspector. Uses the
-//  *analysis* MIDI loading mode (no display/audio caches,
-//  just parsed + processed MIDI).
+//  Workflow:
+//   1. Load a MIDI file
+//   2. Pick a modifier pass from the library
+//   3. Tune pass-specific settings (and optionally common preprocessing)
+//   4. Set output path → Write modified MIDI
 //
-//  This panel is for tweaking scene parameters and inspecting
-//  the current configuration — not for rendering.
+//  Layout:  single-column scroll, progressive disclosure.
+//   • Pass library — fixed 3-column grid, always visible for discovery
+//   • Pass settings — full-width card for the active pass
+//   • Common preprocessing — collapsible accordion sections
+//   • Output & Run — unified action area
+//   • Advanced JSON — collapsed escape hatch at the bottom
 // ═══════════════════════════════════════════════════════════
 
-import { MidiLoadState, InspectorRow } from "../structs.slint";
-import { SectionHeader, Separator, FieldRow, ToggleButton, InspectorLine } from "../primitives.slint";
+import { MidiLoadState } from "../structs.slint";
+import {
+    FieldRow, InlineOptionRow, OptionChip, PrimaryButton, ProgressBar,
+    SectionHeader, Separator, StatusBadge
+} from "../primitives.slint";
 import { MidiStateSection } from "../midi_loading.slint";
+import { TextEdit } from "std-widgets.slint";
+
+
+// ── ModifyPassButton ───────────────────────────────────────
+// Grid tile for the pass library. Stretches to fill its column.
+
+component ModifyPassButton inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <bool> active: false;
+    callback pressed;
+
+    horizontal-stretch: 1;
+    height: 62px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: root.active ? #1f4b86 : #132031;
+    background: root.active ? #11243f : touch.has-hover ? #0e1724 : #0a1018;
+
+    VerticalLayout {
+        padding: 10px;
+        spacing: 2px;
+        alignment: start;
+
+        Text {
+            text: root.title;
+            color: root.active ? #8cc2ff : #b0c0d4;
+            font-size: 11px;
+            font-weight: 700;
+            overflow: elide;
+        }
+        Text {
+            text: root.subtitle;
+            color: root.active ? #6d97c8 : #4d6580;
+            font-size: 9px;
+            wrap: word-wrap;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.pressed(); }
+    }
+}
+
+// Invisible placeholder to keep the 3-column grid aligned.
+component PassButtonPlaceholder inherits Rectangle {
+    horizontal-stretch: 1;
+    height: 62px;
+    background: transparent;
+}
+
+
+// ── ModifyTextRow ──────────────────────────────────────────
+// Label + text input + Apply button.
+
+component ModifyTextRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <string> hint: "";
+    callback submitted(string);
+
+    private property <string> draft: root.value;
+
+    changed value => {
+        root.draft = root.value;
+    }
+
+    height: root.hint != "" ? 56px : 36px;
+    background: transparent;
+
+    VerticalLayout {
+        spacing: 3px;
+        alignment: start;
+
+        HorizontalLayout {
+            spacing: 8px;
+            height: 30px;
+
+            Text {
+                text: root.label;
+                color: #7d8fa8;
+                font-size: 11px;
+                vertical-alignment: center;
+                min-width: 100px;
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+                height: 28px;
+                border-radius: 6px;
+                background: #0a1018;
+                border-width: 1px;
+                border-color: editor.has-focus ? #2563eb : #1a2740;
+
+                editor := TextInput {
+                    text: root.draft;
+                    color: #b0c0d4;
+                    font-size: 11px;
+                    font-family: "monospace";
+                    x: 8px;
+                    width: parent.width - 16px;
+                    height: parent.height;
+                    edited => { root.draft = self.text; }
+                    accepted => { root.submitted(root.draft); }
+                }
+            }
+
+            Rectangle {
+                width: 44px;
+                height: 28px;
+                border-radius: 6px;
+                background: apply-touch.has-hover ? #1e3a5f : #1a2d4d;
+
+                Text {
+                    text: "Apply";
+                    color: #60a5fa;
+                    font-size: 10px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                apply-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.submitted(root.draft); }
+                }
+            }
+        }
+
+        if root.hint != "" : Text {
+            text: root.hint;
+            color: #4d6580;
+            font-size: 9px;
+            wrap: word-wrap;
+        }
+    }
+}
+
+
+// ── ModifyCard ─────────────────────────────────────────────
+
+component ModifyCard inherits Rectangle {
+    border-radius: 10px;
+    background: #0c1420;
+    border-width: 1px;
+    border-color: #132031;
+
+    VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+        alignment: start;
+
+        @children
+    }
+}
+
+
+// ── AccordionHeader ────────────────────────────────────────
+// Clickable chevron row that toggles a collapsible section.
+
+component AccordionHeader inherits Rectangle {
+    in property <string> title;
+    in property <bool> expanded: false;
+    in property <string> summary: "";
+    callback toggle;
+
+    height: 30px;
+    border-radius: 6px;
+    background: touch.has-hover ? #0e1724 : transparent;
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.toggle(); }
+    }
+
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 4px;
+        spacing: 6px;
+
+        Text {
+            text: root.expanded ? "▾" : "▸";
+            color: #4d6580;
+            font-size: 10px;
+            font-weight: 700;
+            vertical-alignment: center;
+            width: 12px;
+        }
+
+        Text {
+            text: root.title;
+            color: #7d8fa8;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.6px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+
+        if !root.expanded && root.summary != "" : Text {
+            text: root.summary;
+            color: #3d5068;
+            font-size: 10px;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  Main panel
+// ═══════════════════════════════════════════════════════════
 
 export component ModifyPanel inherits Rectangle {
-    // ── MIDI state bindings ──
+    // ── MIDI loading ──
     in property <MidiLoadState> midi-state: no-midi;
     in property <string> selected-midi-name: "";
     in property <string> loading-status: "Loading…";
     in property <float> loading-progress: 0;
     in property <string> load-error: "";
 
-    // ── MIDI state callbacks ──
+    // ── Pass metadata ──
+    in property <string> modify-pass-key-text: "quantize";
+    in property <string> modify-pass-title-text: "Quantize";
+    in property <string> modify-pass-description-text: "";
+    in property <string> modify-pass-hint-text: "";
+
+    // ── Config / job state ──
+    in property <string> modify-config-text: "";
+    in property <bool> modify-config-valid: true;
+    in property <string> modify-config-status-text: "Ready";
+    in property <string> modify-output-path-text: "";
+    in property <float> modify-progress: 0;
+    in property <bool> modify-job-active: false;
+    in property <string> modify-status-text: "Ready";
+    in property <string> modify-detail-text: "";
+
+    // ── Result ──
+    in property <string> modify-result-output-text: "output.mid";
+    in property <string> modify-result-input-count-text: "—";
+    in property <string> modify-result-track-count-text: "—";
+    in property <string> modify-result-ppq-text: "—";
+    in property <string> modify-result-event-count-text: "—";
+
+    // ── Common: merge & time ──
+    in property <string> modify-time-offset-ticks-text: "0";
+    in property <string> modify-time-ppq-override-text: "";
+    in property <string> modify-time-tempo-override-text: "";
+    in property <string> modify-merge-mode-text: "preserve_tracks";
+
+    // ── Common: trim ──
+    in property <string> modify-trim-start-tick-text: "";
+    in property <string> modify-trim-end-tick-text: "";
+    in property <string> modify-trim-inject-edge-text: "on";
+    in property <string> modify-trim-close-open-text: "on";
+
+    // ── Common: note filter ──
+    in property <string> modify-min-key-text: "0";
+    in property <string> modify-max-key-text: "127";
+    in property <string> modify-transpose-text: "0";
+    in property <string> modify-note-velocity-scale-text: "1.0";
+    in property <string> modify-piano-only-text: "off";
+    in property <string> modify-zero-velocity-mode-text: "note_off";
+
+    // ── Common: structure ──
+    in property <string> modify-split-channels-text: "off";
+    in property <string> modify-collapse-tracks-text: "off";
+    in property <string> modify-remove-empty-tracks-text: "on";
+    in property <string> modify-drop-orphan-note-offs-text: "on";
+
+    // ── Pass: range select ──
+    in property <string> modify-range-track-min-text: "";
+    in property <string> modify-range-track-max-text: "";
+    in property <string> modify-range-channel-min-text: "";
+    in property <string> modify-range-channel-max-text: "";
+    in property <string> modify-range-key-min-text: "";
+    in property <string> modify-range-key-max-text: "";
+    in property <string> modify-range-velocity-min-text: "";
+    in property <string> modify-range-velocity-max-text: "";
+    in property <string> modify-range-tick-start-text: "";
+    in property <string> modify-range-tick-end-text: "";
+    in property <string> modify-range-event-kinds-text: "";
+
+    // ── Pass: tempo ──
+    in property <string> modify-tempo-mode-text: "scale_bpm";
+    in property <string> modify-tempo-flatten-tempo-text: "500000";
+    in property <string> modify-tempo-scale-factor-text: "1.0";
+    in property <string> modify-tempo-replace-points-text: "";
+
+    // ── Pass: time warp, channel remap ──
+    in property <string> modify-time-warp-points-text: "";
+    in property <string> modify-channel-remap-mappings-text: "";
+
+    // ── Pass: track route ──
+    in property <string> modify-track-route-mode-text: "preserve";
+    in property <string> modify-track-route-mappings-text: "";
+
+    // ── Pass: program ──
+    in property <string> modify-program-force-program-text: "";
+    in property <string> modify-program-strip-changes-text: "off";
+    in property <string> modify-program-startup-programs-text: "";
+    in property <string> modify-program-keep-only-startup-text: "off";
+
+    // ── Pass: control change ──
+    in property <string> modify-control-strip-controllers-text: "";
+    in property <string> modify-control-remap-controllers-text: "";
+    in property <string> modify-control-scale-controllers-text: "";
+    in property <string> modify-control-inject-start-text: "";
+
+    // ── Pass: pitch bend ──
+    in property <string> modify-pitch-strip-text: "off";
+    in property <string> modify-pitch-scale-text: "1.0";
+    in property <string> modify-pitch-offset-text: "0";
+    in property <string> modify-pitch-min-bend-text: "-8192";
+    in property <string> modify-pitch-max-bend-text: "8191";
+    in property <string> modify-pitch-reset-at-start-text: "off";
+
+    // ── Pass: velocity map ──
+    in property <string> modify-velocity-mode-text: "scale";
+    in property <string> modify-velocity-scale-text: "1.0";
+    in property <string> modify-velocity-gamma-text: "1.0";
+    in property <string> modify-velocity-points-text: "";
+
+    // ── Pass: note length ──
+    in property <string> modify-note-length-min-ticks-text: "";
+    in property <string> modify-note-length-max-ticks-text: "";
+    in property <string> modify-note-length-scale-text: "1.0";
+    in property <string> modify-note-length-fixed-ticks-text: "";
+
+    // ── Pass: overlap repair ──
+    in property <string> modify-overlap-repeated-policy-text: "close_previous";
+    in property <string> modify-overlap-orphan-policy-text: "drop";
+
+    // ── Pass: quantize ──
+    in property <string> modify-quantize-grid-ticks-text: "120";
+    in property <string> modify-quantize-strength-text: "1.0";
+    in property <string> modify-quantize-note-ends-text: "off";
+    in property <string> modify-quantize-swing-text: "0.0";
+
+    // ── Pass: humanize ──
+    in property <string> modify-humanize-start-jitter-text: "8";
+    in property <string> modify-humanize-length-jitter-text: "6";
+    in property <string> modify-humanize-velocity-jitter-text: "5";
+    in property <string> modify-humanize-seed-text: "1";
+
+    // ── Pass: key map ──
+    in property <string> modify-key-map-mappings-text: "";
+    in property <string> modify-key-map-fold-range-text: "";
+    in property <string> modify-key-map-drop-unmapped-text: "off";
+
+    // ── Pass: dedupe ──
+    in property <string> modify-dedupe-notes-text: "on";
+    in property <string> modify-dedupe-controls-text: "off";
+    in property <string> modify-dedupe-tempo-text: "off";
+    in property <string> modify-dedupe-meta-text: "off";
+
+    // ── Pass: meta text ──
+    in property <string> modify-meta-strip-all-text: "off";
+    in property <string> modify-meta-keep-kinds-text: "";
+    in property <string> modify-meta-prefix-track-names-text: "";
+
+    // ── Pass: sysex ──
+    in property <string> modify-sysex-strip-all-text: "off";
+    in property <string> modify-sysex-prepend-text: "";
+
+    // ── Pass: merge balance ──
+    in property <string> modify-merge-balance-deconflict-text: "on";
+    in property <string> modify-merge-balance-strip-duplicate-text: "on";
+    in property <string> modify-merge-balance-prefer-first-text: "on";
+
+    // ── Pass: analysis guard ──
+    in property <string> modify-analysis-guard-min-note-count-text: "1";
+    in property <string> modify-analysis-guard-max-note-count-text: "";
+    in property <string> modify-analysis-guard-min-track-count-text: "";
+    in property <string> modify-analysis-guard-max-track-count-text: "";
+
+    // ── Reference analytics (cheap subset) ──
+    in property <string> analysis-note-count-text: "—";
+    in property <string> analysis-track-count-text: "—";
+    in property <string> analysis-midi-length-text: "—";
+    in property <string> analysis-tempo-text: "—";
+    in property <string> analysis-key-range-text: "—";
+    in property <string> analysis-avg-velocity-text: "—";
+    in property <string> analysis-note-density-text: "—";
+    in property <string> analysis-total-events-text: "—";
+    in property <string> analysis-ticks-per-quarter-text: "—";
+
+    // ── Callbacks ──
     callback select-file;
     callback load-midi;
     callback cancel-load;
     callback unload-midi;
     callback retry-load;
+    callback select-pass(string);
+    callback update-control(string, string);
+    callback edit-config(string);
+    callback reset-config;
+    callback browse-output;
+    callback start-job;
+    callback cancel-job;
 
-    // ── Scene config bindings ──
-    in property <string> current-renderer-text;
-    in property <string> time-space-text;
+    // ── Derived / private ──
+    private property <bool> has-midi: root.selected-midi-name != "";
+    private property <bool> has-output: root.modify-output-path-text != "";
+    private property <bool> start-enabled:
+        root.has-midi && root.has-output && root.modify-config-valid && !root.modify-job-active;
+    private property <bool> is-custom: root.modify-pass-key-text == "custom";
+    private property <bool> advanced-open: false;
 
-    // ── Stats bindings ──
-    in property <string> note-count-text;
-    in property <string> visible-note-count-text;
-    in property <string> active-keys-text;
-    in property <string> viewport-text;
-    in property <string> fps-text;
+    // Accordion states (all collapsed by default)
+    private property <bool> section-merge-time-open: false;
+    private property <bool> section-trim-open: false;
+    private property <bool> section-note-filter-open: false;
+    private property <bool> section-structure-open: false;
 
-    // ── Inspector ──
-    in property <[InspectorRow]> inspector-items;
+    clip: true;
 
-    // ── Callbacks ──
-    callback select-renderer(string);
-    callback select-time-space(string);
+    Flickable {
+        width: parent.width;
+        height: parent.height;
 
-    VerticalLayout {
-        padding: 16px;
-        padding-left: 20px;
-        spacing: 12px;
-        alignment: start;
-
-        // ── MIDI FILE ──
-        MidiStateSection {
-            midi-state: root.midi-state;
-            file-name: root.selected-midi-name;
-            load-description: "Parses MIDI for scene configuration and inspection.";
-            load-label: "Load for Modify";
-            mode-label: "modify";
-            show-unload: false;
-            loading-status: root.loading-status;
-            loading-progress: root.loading-progress;
-            error-message: root.load-error;
-            select-file => { root.select-file(); }
-            load => { root.load-midi(); }
-            cancel-load => { root.cancel-load(); }
-            unload => { root.unload-midi(); }
-            retry-load => { root.retry-load(); }
-        }
-
-        Separator { }
-
-        // ── Scene config ──
         VerticalLayout {
-            spacing: 8px;
-            SectionHeader { title: "RENDERER"; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "PFA";      active: root.current-renderer-text == "pfa";  pressed => { root.select-renderer("pfa"); } }
-                ToggleButton { label: "Flat";     active: root.current-renderer-text == "flat"; pressed => { root.select-renderer("flat"); } }
-                ToggleButton { label: "3D Trail"; active: root.current-renderer-text == "3d";   pressed => { root.select-renderer("3d"); } }
+            width: parent.width;
+            padding: 20px;
+            padding-right: 24px;
+            spacing: 0px;
+            alignment: start;
+
+            // ══════════════════════════════════════
+            //  1 · MIDI FILE LOADING
+            // ══════════════════════════════════════
+
+            MidiStateSection {
+                midi-state: root.midi-state;
+                file-name: root.selected-midi-name;
+                load-description: "Parses MIDI data for the modify workflow. Processing writes a separate file — the source is never touched.";
+                load-label: "Load for Modify";
+                mode-label: "modify";
+                show-unload: true;
+                loading-status: root.loading-status;
+                loading-progress: root.loading-progress;
+                error-message: root.load-error;
+                select-file => { root.select-file(); }
+                load => { root.load-midi(); }
+                cancel-load => { root.cancel-load(); }
+                unload => { root.unload-midi(); }
+                retry-load => { root.retry-load(); }
             }
-        }
 
-        VerticalLayout {
-            spacing: 8px;
-            SectionHeader { title: "TIME SPACE"; }
-            HorizontalLayout {
-                spacing: 4px;
-                ToggleButton { label: "Time"; active: root.time-space-text == "time"; pressed => { root.select-time-space("time"); } }
-                ToggleButton { label: "Tick"; active: root.time-space-text == "tick"; pressed => { root.select-time-space("tick"); } }
-            }
-        }
+            // ── Source file quick-reference strip ──
+            if root.has-midi && root.analysis-note-count-text != "—" : Rectangle {
+                height: 28px;
+                border-radius: 6px;
+                background: #0a1220;
+                border-width: 1px;
+                border-color: #111a28;
 
-        Separator { }
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 16px;
+                    alignment: center;
 
-        // ── Stats ──
-        VerticalLayout {
-            spacing: 4px;
-            SectionHeader { title: "STATS"; }
-            FieldRow { label: "Total notes"; value: root.note-count-text; }
-            FieldRow { label: "Visible";     value: root.visible-note-count-text; }
-            FieldRow { label: "Active keys"; value: root.active-keys-text; }
-            FieldRow { label: "Viewport";    value: root.viewport-text; }
-            FieldRow { label: "FPS";         value: root.fps-text; }
-        }
-
-        Separator { }
-
-        // ── Inspector ──
-        VerticalLayout {
-            spacing: 8px;
-            vertical-stretch: 1;
-
-            SectionHeader { title: "INSPECTOR"; }
-
-            Rectangle {
-                vertical-stretch: 1;
-                clip: true;
-
-                Flickable {
-                    width: parent.width;
-                    height: parent.height;
-                    viewport-height: root.inspector-items.length * 34px;
-
-                    VerticalLayout {
-                        width: parent.width;
-                        spacing: 2px;
-                        alignment: start;
-
-                        for row in root.inspector-items : InspectorLine {
-                            section: row.section;
-                            label: row.label;
-                            value: row.value;
-                        }
+                    HorizontalLayout {
+                        spacing: 4px;
+                        Text { text: "Notes"; color: #3d5068; font-size: 9px; font-weight: 600; vertical-alignment: center; }
+                        Text { text: root.analysis-note-count-text; color: #6b7d94; font-size: 9px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; }
+                    }
+                    HorizontalLayout {
+                        spacing: 4px;
+                        Text { text: "Tracks"; color: #3d5068; font-size: 9px; font-weight: 600; vertical-alignment: center; }
+                        Text { text: root.analysis-track-count-text; color: #6b7d94; font-size: 9px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; }
+                    }
+                    HorizontalLayout {
+                        spacing: 4px;
+                        Text { text: "PPQ"; color: #3d5068; font-size: 9px; font-weight: 600; vertical-alignment: center; }
+                        Text { text: root.analysis-ticks-per-quarter-text; color: #6b7d94; font-size: 9px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; }
+                    }
+                    HorizontalLayout {
+                        spacing: 4px;
+                        Text { text: "Length"; color: #3d5068; font-size: 9px; font-weight: 600; vertical-alignment: center; }
+                        Text { text: root.analysis-midi-length-text; color: #6b7d94; font-size: 9px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; }
                     }
                 }
             }
+
+            Rectangle { height: 16px; }
+            Separator { }
+            Rectangle { height: 16px; }
+
+            // ══════════════════════════════════════
+            //  2 · PASS LIBRARY
+            // ══════════════════════════════════════
+
+            SectionHeader { title: "SELECT A PASS"; }
+            Rectangle { height: 4px; }
+            Text {
+                text: "Choose a modifier to configure. Each pass transforms the MIDI in a specific way.";
+                color: #4d6580;
+                font-size: 10px;
+                wrap: word-wrap;
+            }
+            Rectangle { height: 10px; }
+
+            // ── Selection + Timing ──
+            VerticalLayout {
+                spacing: 6px;
+                Text { text: "SELECTION + TIMING"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; }
+                HorizontalLayout {
+                    spacing: 6px;
+                    ModifyPassButton { title: "Range Select"; subtitle: "Scope tools to tracks, keys, ticks, or event kinds."; active: root.modify-pass-key-text == "range_select"; pressed => { root.select-pass("range_select"); } }
+                    ModifyPassButton { title: "Tempo Map"; subtitle: "Flatten, scale, or replace tempo events."; active: root.modify-pass-key-text == "tempo_map"; pressed => { root.select-pass("tempo_map"); } }
+                    ModifyPassButton { title: "Time Warp"; subtitle: "Remap ticks through source/dest points."; active: root.modify-pass-key-text == "time_warp"; pressed => { root.select-pass("time_warp"); } }
+                }
+                HorizontalLayout {
+                    spacing: 6px;
+                    ModifyPassButton { title: "Quantize"; subtitle: "Snap note timing toward a rhythmic grid."; active: root.modify-pass-key-text == "quantize"; pressed => { root.select-pass("quantize"); } }
+                    ModifyPassButton { title: "Humanize"; subtitle: "Add deterministic jitter to timing and velocity."; active: root.modify-pass-key-text == "humanize"; pressed => { root.select-pass("humanize"); } }
+                    ModifyPassButton { title: "Note Length"; subtitle: "Clamp, scale, or set note durations."; active: root.modify-pass-key-text == "note_length"; pressed => { root.select-pass("note_length"); } }
+                }
+            }
+
+            Rectangle { height: 10px; }
+
+            // ── Routing + Pitch ──
+            VerticalLayout {
+                spacing: 6px;
+                Text { text: "ROUTING + PITCH"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; }
+                HorizontalLayout {
+                    spacing: 6px;
+                    ModifyPassButton { title: "Channel Remap"; subtitle: "Map source channels onto new destinations."; active: root.modify-pass-key-text == "channel_remap"; pressed => { root.select-pass("channel_remap"); } }
+                    ModifyPassButton { title: "Track Route"; subtitle: "Preserve, collapse, split, or map tracks."; active: root.modify-pass-key-text == "track_route"; pressed => { root.select-pass("track_route"); } }
+                    ModifyPassButton { title: "Key Map"; subtitle: "Remap pitches, fold range, or drop unmapped."; active: root.modify-pass-key-text == "key_map"; pressed => { root.select-pass("key_map"); } }
+                }
+                HorizontalLayout {
+                    spacing: 6px;
+                    ModifyPassButton { title: "Velocity Map"; subtitle: "Scale, gamma-shape, or redraw velocity."; active: root.modify-pass-key-text == "velocity_map"; pressed => { root.select-pass("velocity_map"); } }
+                    ModifyPassButton { title: "Pitch Bend"; subtitle: "Scale, offset, clamp, or strip bends."; active: root.modify-pass-key-text == "pitch_bend"; pressed => { root.select-pass("pitch_bend"); } }
+                    ModifyPassButton { title: "Program"; subtitle: "Force startup programs or strip changes."; active: root.modify-pass-key-text == "program"; pressed => { root.select-pass("program"); } }
+                }
+            }
+
+            Rectangle { height: 10px; }
+
+            // ── Controllers + Cleanup ──
+            VerticalLayout {
+                spacing: 6px;
+                Text { text: "CONTROLLERS + CLEANUP"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; }
+                HorizontalLayout {
+                    spacing: 6px;
+                    ModifyPassButton { title: "Control Change"; subtitle: "Strip, remap, scale, or inject CC."; active: root.modify-pass-key-text == "control_change"; pressed => { root.select-pass("control_change"); } }
+                    ModifyPassButton { title: "Overlap Repair"; subtitle: "Fix repeated note-ons and orphan offs."; active: root.modify-pass-key-text == "overlap_repair"; pressed => { root.select-pass("overlap_repair"); } }
+                    ModifyPassButton { title: "Dedupe"; subtitle: "Remove duplicate note/tempo/CC events."; active: root.modify-pass-key-text == "dedupe"; pressed => { root.select-pass("dedupe"); } }
+                }
+                HorizontalLayout {
+                    spacing: 6px;
+                    ModifyPassButton { title: "Meta Text"; subtitle: "Strip text events or rewrite prefixes."; active: root.modify-pass-key-text == "meta_text"; pressed => { root.select-pass("meta_text"); } }
+                    ModifyPassButton { title: "Sysex"; subtitle: "Strip SysEx or prepend device messages."; active: root.modify-pass-key-text == "sysex"; pressed => { root.select-pass("sysex"); } }
+                    ModifyPassButton { title: "Analysis Guard"; subtitle: "Fail fast if thresholds are broken."; active: root.modify-pass-key-text == "analysis_guard"; pressed => { root.select-pass("analysis_guard"); } }
+                }
+            }
+
+            Rectangle { height: 10px; }
+
+            // ── Merge + Export ──
+            VerticalLayout {
+                spacing: 6px;
+                Text { text: "MERGE + EXPORT"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; }
+                HorizontalLayout {
+                    spacing: 6px;
+                    ModifyPassButton { title: "Merge Balance"; subtitle: "Deconflict merged inputs and state."; active: root.modify-pass-key-text == "merge_balance"; pressed => { root.select-pass("merge_balance"); } }
+                    PassButtonPlaceholder { }
+                    PassButtonPlaceholder { }
+                }
+            }
+
+            Rectangle { height: 16px; }
+            Separator { }
+            Rectangle { height: 16px; }
+
+            // ══════════════════════════════════════
+            //  3 · PASS SETTINGS
+            // ══════════════════════════════════════
+
+            ModifyCard {
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: center;
+
+                    Text {
+                        text: root.modify-pass-title-text;
+                        color: #e4eefc;
+                        font-size: 14px;
+                        font-weight: 700;
+                        horizontal-stretch: 1;
+                    }
+
+                    StatusBadge {
+                        label: root.modify-config-valid ? "Config OK" : "Error";
+                        active: root.modify-config-valid;
+                    }
+                }
+
+                if root.modify-pass-description-text != "" : Text {
+                    text: root.modify-pass-description-text;
+                    color: #6b7d94;
+                    font-size: 11px;
+                    wrap: word-wrap;
+                }
+
+                if root.is-custom : Text {
+                    text: "JSON contains a custom pipeline. Pick a pass above to use the structured controls.";
+                    color: #6b7d94;
+                    font-size: 11px;
+                    wrap: word-wrap;
+                }
+
+                // ── range_select ──
+                if root.modify-pass-key-text == "range_select" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ModifyTextRow { label: "Track min"; value: root.modify-range-track-min-text; hint: "Optional lower track index bound."; submitted(text) => { root.update-control("range.track_min", text); } }
+                    ModifyTextRow { label: "Track max"; value: root.modify-range-track-max-text; submitted(text) => { root.update-control("range.track_max", text); } }
+                    ModifyTextRow { label: "Channel min"; value: root.modify-range-channel-min-text; submitted(text) => { root.update-control("range.channel_min", text); } }
+                    ModifyTextRow { label: "Channel max"; value: root.modify-range-channel-max-text; submitted(text) => { root.update-control("range.channel_max", text); } }
+                    ModifyTextRow { label: "Key min"; value: root.modify-range-key-min-text; submitted(text) => { root.update-control("range.key_min", text); } }
+                    ModifyTextRow { label: "Key max"; value: root.modify-range-key-max-text; submitted(text) => { root.update-control("range.key_max", text); } }
+                    ModifyTextRow { label: "Vel min"; value: root.modify-range-velocity-min-text; submitted(text) => { root.update-control("range.velocity_min", text); } }
+                    ModifyTextRow { label: "Vel max"; value: root.modify-range-velocity-max-text; submitted(text) => { root.update-control("range.velocity_max", text); } }
+                    ModifyTextRow { label: "Tick start"; value: root.modify-range-tick-start-text; submitted(text) => { root.update-control("range.tick_start", text); } }
+                    ModifyTextRow { label: "Tick end"; value: root.modify-range-tick-end-text; submitted(text) => { root.update-control("range.tick_end", text); } }
+                    ModifyTextRow { label: "Event kinds"; value: root.modify-range-event-kinds-text; hint: "Comma-separated: note, tempo, text, ..."; submitted(text) => { root.update-control("range.event_kinds", text); } }
+                }
+
+                // ── tempo_map ──
+                if root.modify-pass-key-text == "tempo_map" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    InlineOptionRow {
+                        label: "Mode";
+                        OptionChip { label: "Scale"; active: root.modify-tempo-mode-text == "scale_bpm"; pressed => { root.update-control("tempo.mode", "scale_bpm"); } }
+                        OptionChip { label: "Flatten"; active: root.modify-tempo-mode-text == "flatten"; pressed => { root.update-control("tempo.mode", "flatten"); } }
+                        OptionChip { label: "Replace"; active: root.modify-tempo-mode-text == "replace"; pressed => { root.update-control("tempo.mode", "replace"); } }
+                    }
+                    if root.modify-tempo-mode-text == "flatten" : ModifyTextRow { label: "Tempo"; value: root.modify-tempo-flatten-tempo-text; hint: "Microseconds per quarter note."; submitted(text) => { root.update-control("tempo.flatten_tempo", text); } }
+                    if root.modify-tempo-mode-text == "scale_bpm" : ModifyTextRow { label: "Factor"; value: root.modify-tempo-scale-factor-text; hint: "1.0 keeps original BPM."; submitted(text) => { root.update-control("tempo.scale_factor", text); } }
+                    if root.modify-tempo-mode-text == "replace" : ModifyTextRow { label: "Points"; value: root.modify-tempo-replace-points-text; hint: "tick:tempo pairs."; submitted(text) => { root.update-control("tempo.replace_points", text); } }
+                }
+
+                // ── time_warp ──
+                if root.modify-pass-key-text == "time_warp" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ModifyTextRow { label: "Warp points"; value: root.modify-time-warp-points-text; hint: "source->dest tick pairs."; submitted(text) => { root.update-control("time_warp.points", text); } }
+                }
+
+                // ── channel_remap ──
+                if root.modify-pass-key-text == "channel_remap" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ModifyTextRow { label: "Mappings"; value: root.modify-channel-remap-mappings-text; hint: "from->to channel pairs."; submitted(text) => { root.update-control("channel_remap.mappings", text); } }
+                }
+
+                // ── track_route ──
+                if root.modify-pass-key-text == "track_route" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    InlineOptionRow {
+                        label: "Mode";
+                        OptionChip { label: "Preserve"; active: root.modify-track-route-mode-text == "preserve"; pressed => { root.update-control("track_route.mode", "preserve"); } }
+                        OptionChip { label: "Collapse"; active: root.modify-track-route-mode-text == "collapse_all"; pressed => { root.update-control("track_route.mode", "collapse_all"); } }
+                        OptionChip { label: "Split"; active: root.modify-track-route-mode-text == "split_by_channel"; pressed => { root.update-control("track_route.mode", "split_by_channel"); } }
+                        OptionChip { label: "Map"; active: root.modify-track-route-mode-text == "map"; pressed => { root.update-control("track_route.mode", "map"); } }
+                    }
+                    if root.modify-track-route-mode-text == "map" : ModifyTextRow { label: "Mappings"; value: root.modify-track-route-mappings-text; hint: "from->to track pairs."; submitted(text) => { root.update-control("track_route.mappings", text); } }
+                }
+
+                // ── program ──
+                if root.modify-pass-key-text == "program" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ModifyTextRow { label: "Force program"; value: root.modify-program-force-program-text; hint: "Blank = keep originals."; submitted(text) => { root.update-control("program.force_program", text); } }
+                    ModifyTextRow { label: "Startup progs"; value: root.modify-program-startup-programs-text; hint: "channel:program pairs."; submitted(text) => { root.update-control("program.startup_programs", text); } }
+                    InlineOptionRow {
+                        label: "Strip changes";
+                        OptionChip { label: "Off"; active: root.modify-program-strip-changes-text == "off"; pressed => { root.update-control("program.strip_program_changes", "off"); } }
+                        OptionChip { label: "On"; active: root.modify-program-strip-changes-text == "on"; pressed => { root.update-control("program.strip_program_changes", "on"); } }
+                    }
+                    InlineOptionRow {
+                        label: "Keep startup";
+                        OptionChip { label: "Off"; active: root.modify-program-keep-only-startup-text == "off"; pressed => { root.update-control("program.keep_only_startup", "off"); } }
+                        OptionChip { label: "On"; active: root.modify-program-keep-only-startup-text == "on"; pressed => { root.update-control("program.keep_only_startup", "on"); } }
+                    }
+                }
+
+                // ── control_change ──
+                if root.modify-pass-key-text == "control_change" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ModifyTextRow { label: "Strip ctrls"; value: root.modify-control-strip-controllers-text; hint: "Comma-separated controller numbers."; submitted(text) => { root.update-control("control_change.strip_controllers", text); } }
+                    ModifyTextRow { label: "Remap ctrls"; value: root.modify-control-remap-controllers-text; hint: "from->to controller pairs."; submitted(text) => { root.update-control("control_change.remap_controllers", text); } }
+                    ModifyTextRow { label: "Scale ctrls"; value: root.modify-control-scale-controllers-text; hint: "controller:scale pairs."; submitted(text) => { root.update-control("control_change.scale_controllers", text); } }
+                    ModifyTextRow { label: "Inject start"; value: root.modify-control-inject-start-text; hint: "channel:controller=value states."; submitted(text) => { root.update-control("control_change.inject_start", text); } }
+                }
+
+                // ── pitch_bend ──
+                if root.modify-pass-key-text == "pitch_bend" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    InlineOptionRow {
+                        label: "Strip bends";
+                        OptionChip { label: "Off"; active: root.modify-pitch-strip-text == "off"; pressed => { root.update-control("pitch_bend.strip", "off"); } }
+                        OptionChip { label: "On"; active: root.modify-pitch-strip-text == "on"; pressed => { root.update-control("pitch_bend.strip", "on"); } }
+                    }
+                    InlineOptionRow {
+                        label: "Reset start";
+                        OptionChip { label: "Off"; active: root.modify-pitch-reset-at-start-text == "off"; pressed => { root.update-control("pitch_bend.reset_at_start", "off"); } }
+                        OptionChip { label: "On"; active: root.modify-pitch-reset-at-start-text == "on"; pressed => { root.update-control("pitch_bend.reset_at_start", "on"); } }
+                    }
+                    ModifyTextRow { label: "Scale"; value: root.modify-pitch-scale-text; submitted(text) => { root.update-control("pitch_bend.scale", text); } }
+                    ModifyTextRow { label: "Offset"; value: root.modify-pitch-offset-text; submitted(text) => { root.update-control("pitch_bend.offset", text); } }
+                    ModifyTextRow { label: "Min bend"; value: root.modify-pitch-min-bend-text; submitted(text) => { root.update-control("pitch_bend.min_bend", text); } }
+                    ModifyTextRow { label: "Max bend"; value: root.modify-pitch-max-bend-text; submitted(text) => { root.update-control("pitch_bend.max_bend", text); } }
+                }
+
+                // ── velocity_map ──
+                if root.modify-pass-key-text == "velocity_map" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    InlineOptionRow {
+                        label: "Mode";
+                        OptionChip { label: "Scale"; active: root.modify-velocity-mode-text == "scale"; pressed => { root.update-control("velocity_map.mode", "scale"); } }
+                        OptionChip { label: "Gamma"; active: root.modify-velocity-mode-text == "gamma"; pressed => { root.update-control("velocity_map.mode", "gamma"); } }
+                        OptionChip { label: "Polyline"; active: root.modify-velocity-mode-text == "polyline"; pressed => { root.update-control("velocity_map.mode", "polyline"); } }
+                    }
+                    if root.modify-velocity-mode-text == "scale" : ModifyTextRow { label: "Scale"; value: root.modify-velocity-scale-text; submitted(text) => { root.update-control("velocity_map.scale", text); } }
+                    if root.modify-velocity-mode-text == "gamma" : ModifyTextRow { label: "Gamma"; value: root.modify-velocity-gamma-text; submitted(text) => { root.update-control("velocity_map.gamma", text); } }
+                    if root.modify-velocity-mode-text == "polyline" : ModifyTextRow { label: "Points"; value: root.modify-velocity-points-text; hint: "input:output points."; submitted(text) => { root.update-control("velocity_map.points", text); } }
+                }
+
+                // ── note_length ──
+                if root.modify-pass-key-text == "note_length" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ModifyTextRow { label: "Min ticks"; value: root.modify-note-length-min-ticks-text; submitted(text) => { root.update-control("note_length.min_ticks", text); } }
+                    ModifyTextRow { label: "Max ticks"; value: root.modify-note-length-max-ticks-text; submitted(text) => { root.update-control("note_length.max_ticks", text); } }
+                    ModifyTextRow { label: "Scale"; value: root.modify-note-length-scale-text; submitted(text) => { root.update-control("note_length.scale", text); } }
+                    ModifyTextRow { label: "Fixed ticks"; value: root.modify-note-length-fixed-ticks-text; hint: "Set all notes to this length."; submitted(text) => { root.update-control("note_length.fixed_ticks", text); } }
+                }
+
+                // ── overlap_repair ──
+                if root.modify-pass-key-text == "overlap_repair" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    InlineOptionRow {
+                        label: "Repeat note";
+                        OptionChip { label: "Close"; active: root.modify-overlap-repeated-policy-text == "close_previous"; pressed => { root.update-control("overlap.repeated_note_on", "close_previous"); } }
+                        OptionChip { label: "Keep"; active: root.modify-overlap-repeated-policy-text == "keep"; pressed => { root.update-control("overlap.repeated_note_on", "keep"); } }
+                    }
+                    InlineOptionRow {
+                        label: "Orphan offs";
+                        OptionChip { label: "Drop"; active: root.modify-overlap-orphan-policy-text == "drop"; pressed => { root.update-control("overlap.orphan_note_offs", "drop"); } }
+                        OptionChip { label: "Keep"; active: root.modify-overlap-orphan-policy-text == "keep"; pressed => { root.update-control("overlap.orphan_note_offs", "keep"); } }
+                    }
+                }
+
+                // ── quantize ──
+                if root.modify-pass-key-text == "quantize" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ModifyTextRow { label: "Grid ticks"; value: root.modify-quantize-grid-ticks-text; hint: "Quantization grid in ticks."; submitted(text) => { root.update-control("quantize.grid_ticks", text); } }
+                    ModifyTextRow { label: "Strength"; value: root.modify-quantize-strength-text; hint: "0.0 to 1.0"; submitted(text) => { root.update-control("quantize.strength", text); } }
+                    ModifyTextRow { label: "Swing"; value: root.modify-quantize-swing-text; hint: "0.0 = straight"; submitted(text) => { root.update-control("quantize.swing", text); } }
+                    InlineOptionRow {
+                        label: "Note ends";
+                        OptionChip { label: "Off"; active: root.modify-quantize-note-ends-text == "off"; pressed => { root.update-control("quantize.note_ends", "off"); } }
+                        OptionChip { label: "On"; active: root.modify-quantize-note-ends-text == "on"; pressed => { root.update-control("quantize.note_ends", "on"); } }
+                    }
+                }
+
+                // ── humanize ──
+                if root.modify-pass-key-text == "humanize" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ModifyTextRow { label: "Start jitter"; value: root.modify-humanize-start-jitter-text; submitted(text) => { root.update-control("humanize.start_jitter", text); } }
+                    ModifyTextRow { label: "Length jitter"; value: root.modify-humanize-length-jitter-text; submitted(text) => { root.update-control("humanize.length_jitter", text); } }
+                    ModifyTextRow { label: "Vel jitter"; value: root.modify-humanize-velocity-jitter-text; submitted(text) => { root.update-control("humanize.velocity_jitter", text); } }
+                    ModifyTextRow { label: "Seed"; value: root.modify-humanize-seed-text; submitted(text) => { root.update-control("humanize.seed", text); } }
+                }
+
+                // ── key_map ──
+                if root.modify-pass-key-text == "key_map" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ModifyTextRow { label: "Mappings"; value: root.modify-key-map-mappings-text; hint: "from->to key pairs."; submitted(text) => { root.update-control("key_map.mappings", text); } }
+                    ModifyTextRow { label: "Fold range"; value: root.modify-key-map-fold-range-text; hint: "min-max range."; submitted(text) => { root.update-control("key_map.fold_range", text); } }
+                    InlineOptionRow {
+                        label: "Drop unmapped";
+                        OptionChip { label: "Off"; active: root.modify-key-map-drop-unmapped-text == "off"; pressed => { root.update-control("key_map.drop_unmapped", "off"); } }
+                        OptionChip { label: "On"; active: root.modify-key-map-drop-unmapped-text == "on"; pressed => { root.update-control("key_map.drop_unmapped", "on"); } }
+                    }
+                }
+
+                // ── dedupe ──
+                if root.modify-pass-key-text == "dedupe" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    InlineOptionRow { label: "Notes";    OptionChip { label: "On"; active: root.modify-dedupe-notes-text == "on"; pressed => { root.update-control("dedupe.notes", "on"); } } OptionChip { label: "Off"; active: root.modify-dedupe-notes-text == "off"; pressed => { root.update-control("dedupe.notes", "off"); } } }
+                    InlineOptionRow { label: "Controls"; OptionChip { label: "On"; active: root.modify-dedupe-controls-text == "on"; pressed => { root.update-control("dedupe.controls", "on"); } } OptionChip { label: "Off"; active: root.modify-dedupe-controls-text == "off"; pressed => { root.update-control("dedupe.controls", "off"); } } }
+                    InlineOptionRow { label: "Tempo";    OptionChip { label: "On"; active: root.modify-dedupe-tempo-text == "on"; pressed => { root.update-control("dedupe.tempo", "on"); } } OptionChip { label: "Off"; active: root.modify-dedupe-tempo-text == "off"; pressed => { root.update-control("dedupe.tempo", "off"); } } }
+                    InlineOptionRow { label: "Meta";     OptionChip { label: "On"; active: root.modify-dedupe-meta-text == "on"; pressed => { root.update-control("dedupe.meta", "on"); } } OptionChip { label: "Off"; active: root.modify-dedupe-meta-text == "off"; pressed => { root.update-control("dedupe.meta", "off"); } } }
+                }
+
+                // ── meta_text ──
+                if root.modify-pass-key-text == "meta_text" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    InlineOptionRow {
+                        label: "Strip all";
+                        OptionChip { label: "Off"; active: root.modify-meta-strip-all-text == "off"; pressed => { root.update-control("meta.strip_all", "off"); } }
+                        OptionChip { label: "On"; active: root.modify-meta-strip-all-text == "on"; pressed => { root.update-control("meta.strip_all", "on"); } }
+                    }
+                    ModifyTextRow { label: "Keep kinds"; value: root.modify-meta-keep-kinds-text; hint: "track_name, marker, lyric, ..."; submitted(text) => { root.update-control("meta.keep_kinds", text); } }
+                    ModifyTextRow { label: "Track prefix"; value: root.modify-meta-prefix-track-names-text; hint: "Prefix for track-name events."; submitted(text) => { root.update-control("meta.prefix_track_names", text); } }
+                }
+
+                // ── sysex ──
+                if root.modify-pass-key-text == "sysex" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    InlineOptionRow {
+                        label: "Strip all";
+                        OptionChip { label: "Off"; active: root.modify-sysex-strip-all-text == "off"; pressed => { root.update-control("sysex.strip_all", "off"); } }
+                        OptionChip { label: "On"; active: root.modify-sysex-strip-all-text == "on"; pressed => { root.update-control("sysex.strip_all", "on"); } }
+                    }
+                    ModifyTextRow { label: "Prepend"; value: root.modify-sysex-prepend-text; hint: "Pipe-separated messages, space-separated bytes."; submitted(text) => { root.update-control("sysex.prepend", text); } }
+                }
+
+                // ── merge_balance ──
+                if root.modify-pass-key-text == "merge_balance" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    InlineOptionRow { label: "Deconflict";   OptionChip { label: "On"; active: root.modify-merge-balance-deconflict-text == "on"; pressed => { root.update-control("merge_balance.deconflict_channels", "on"); } } OptionChip { label: "Off"; active: root.modify-merge-balance-deconflict-text == "off"; pressed => { root.update-control("merge_balance.deconflict_channels", "off"); } } }
+                    InlineOptionRow { label: "Strip dupes";  OptionChip { label: "On"; active: root.modify-merge-balance-strip-duplicate-text == "on"; pressed => { root.update-control("merge_balance.strip_duplicate_start_state", "on"); } } OptionChip { label: "Off"; active: root.modify-merge-balance-strip-duplicate-text == "off"; pressed => { root.update-control("merge_balance.strip_duplicate_start_state", "off"); } } }
+                    InlineOptionRow { label: "Prefer tempo"; OptionChip { label: "On"; active: root.modify-merge-balance-prefer-first-text == "on"; pressed => { root.update-control("merge_balance.prefer_first_tempo_map", "on"); } } OptionChip { label: "Off"; active: root.modify-merge-balance-prefer-first-text == "off"; pressed => { root.update-control("merge_balance.prefer_first_tempo_map", "off"); } } }
+                }
+
+                // ── analysis_guard ──
+                if root.modify-pass-key-text == "analysis_guard" : VerticalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ModifyTextRow { label: "Min notes"; value: root.modify-analysis-guard-min-note-count-text; submitted(text) => { root.update-control("analysis_guard.min_note_count", text); } }
+                    ModifyTextRow { label: "Max notes"; value: root.modify-analysis-guard-max-note-count-text; submitted(text) => { root.update-control("analysis_guard.max_note_count", text); } }
+                    ModifyTextRow { label: "Min tracks"; value: root.modify-analysis-guard-min-track-count-text; submitted(text) => { root.update-control("analysis_guard.min_track_count", text); } }
+                    ModifyTextRow { label: "Max tracks"; value: root.modify-analysis-guard-max-track-count-text; submitted(text) => { root.update-control("analysis_guard.max_track_count", text); } }
+                }
+            }
+
+            Rectangle { height: 16px; }
+            Separator { }
+            Rectangle { height: 16px; }
+
+            // ══════════════════════════════════════
+            //  4 · PREPROCESSING (accordion)
+            // ══════════════════════════════════════
+
+            SectionHeader { title: "PREPROCESSING"; }
+            Rectangle { height: 2px; }
+            Text {
+                text: "Global settings applied before the selected pass. Defaults are pre-filled — expand only what you need.";
+                color: #3d5068;
+                font-size: 10px;
+                wrap: word-wrap;
+            }
+            Rectangle { height: 8px; }
+
+            ModifyCard {
+
+                // ── Merge & Time ──
+                AccordionHeader {
+                    title: "MERGE & TIME";
+                    expanded: root.section-merge-time-open;
+                    summary: root.modify-merge-mode-text == "preserve_tracks" ? "preserve" : root.modify-merge-mode-text == "flatten_to_single_track" ? "flatten" : "index";
+                    toggle => { root.section-merge-time-open = !root.section-merge-time-open; }
+                }
+                if root.section-merge-time-open : VerticalLayout {
+                    spacing: 6px;
+                    alignment: start;
+                    InlineOptionRow {
+                        label: "Merge";
+                        OptionChip { label: "Preserve"; active: root.modify-merge-mode-text == "preserve_tracks"; pressed => { root.update-control("merge.mode", "preserve_tracks"); } }
+                        OptionChip { label: "Flatten"; active: root.modify-merge-mode-text == "flatten_to_single_track"; pressed => { root.update-control("merge.mode", "flatten_to_single_track"); } }
+                        OptionChip { label: "Index"; active: root.modify-merge-mode-text == "merge_by_track_index"; pressed => { root.update-control("merge.mode", "merge_by_track_index"); } }
+                    }
+                    ModifyTextRow { label: "Offset ticks"; value: root.modify-time-offset-ticks-text; hint: "Signed tick offset before merge."; submitted(text) => { root.update-control("time.offset_ticks", text); } }
+                    ModifyTextRow { label: "PPQ override"; value: root.modify-time-ppq-override-text; hint: "Blank = keep source PPQ."; submitted(text) => { root.update-control("time.ppq_override", text); } }
+                    ModifyTextRow { label: "Tempo override"; value: root.modify-time-tempo-override-text; hint: "us/qn. Blank = keep tempo map."; submitted(text) => { root.update-control("time.tempo_override", text); } }
+                }
+
+                Separator { }
+
+                // ── Trim ──
+                AccordionHeader {
+                    title: "TRIM";
+                    expanded: root.section-trim-open;
+                    summary: root.modify-trim-start-tick-text == "" && root.modify-trim-end-tick-text == "" ? "off" : "active";
+                    toggle => { root.section-trim-open = !root.section-trim-open; }
+                }
+                if root.section-trim-open : VerticalLayout {
+                    spacing: 6px;
+                    alignment: start;
+                    ModifyTextRow { label: "Start tick"; value: root.modify-trim-start-tick-text; hint: "Blank = no trim."; submitted(text) => { root.update-control("time.trim.start_tick", text); } }
+                    ModifyTextRow { label: "End tick"; value: root.modify-trim-end-tick-text; submitted(text) => { root.update-control("time.trim.end_tick", text); } }
+                    InlineOptionRow {
+                        label: "Edge state";
+                        OptionChip { label: "Inject"; active: root.modify-trim-inject-edge-text == "on"; pressed => { root.update-control("time.trim.inject_edge_state", "on"); } }
+                        OptionChip { label: "Skip"; active: root.modify-trim-inject-edge-text == "off"; pressed => { root.update-control("time.trim.inject_edge_state", "off"); } }
+                    }
+                    InlineOptionRow {
+                        label: "Close notes";
+                        OptionChip { label: "Yes"; active: root.modify-trim-close-open-text == "on"; pressed => { root.update-control("time.trim.close_open_notes_at_end", "on"); } }
+                        OptionChip { label: "No"; active: root.modify-trim-close-open-text == "off"; pressed => { root.update-control("time.trim.close_open_notes_at_end", "off"); } }
+                    }
+                }
+
+                Separator { }
+
+                // ── Note Filter ──
+                AccordionHeader {
+                    title: "NOTE FILTER";
+                    expanded: root.section-note-filter-open;
+                    summary: root.modify-piano-only-text == "on" ? "piano only" : "all notes";
+                    toggle => { root.section-note-filter-open = !root.section-note-filter-open; }
+                }
+                if root.section-note-filter-open : VerticalLayout {
+                    spacing: 6px;
+                    alignment: start;
+                    InlineOptionRow {
+                        label: "Piano only";
+                        OptionChip { label: "Off"; active: root.modify-piano-only-text == "off"; pressed => { root.update-control("piano_only", "off"); } }
+                        OptionChip { label: "On"; active: root.modify-piano-only-text == "on"; pressed => { root.update-control("piano_only", "on"); } }
+                    }
+                    InlineOptionRow {
+                        label: "Zero vel";
+                        OptionChip { label: "NoteOff"; active: root.modify-zero-velocity-mode-text == "note_off"; pressed => { root.update-control("zero_velocity_note_on", "note_off"); } }
+                        OptionChip { label: "Keep"; active: root.modify-zero-velocity-mode-text == "keep_as_note_on"; pressed => { root.update-control("zero_velocity_note_on", "keep_as_note_on"); } }
+                    }
+                    ModifyTextRow { label: "Min key"; value: root.modify-min-key-text; hint: "0-127"; submitted(text) => { root.update-control("notes.min_key", text); } }
+                    ModifyTextRow { label: "Max key"; value: root.modify-max-key-text; hint: "0-127"; submitted(text) => { root.update-control("notes.max_key", text); } }
+                    ModifyTextRow { label: "Transpose"; value: root.modify-transpose-text; hint: "Signed semitones."; submitted(text) => { root.update-control("notes.transpose", text); } }
+                    ModifyTextRow { label: "Velocity scale"; value: root.modify-note-velocity-scale-text; submitted(text) => { root.update-control("notes.velocity_scale", text); } }
+                }
+
+                Separator { }
+
+                // ── Structure ──
+                AccordionHeader {
+                    title: "STRUCTURE";
+                    expanded: root.section-structure-open;
+                    summary: "defaults";
+                    toggle => { root.section-structure-open = !root.section-structure-open; }
+                }
+                if root.section-structure-open : VerticalLayout {
+                    spacing: 6px;
+                    alignment: start;
+                    InlineOptionRow {
+                        label: "Split chans";
+                        OptionChip { label: "Off"; active: root.modify-split-channels-text == "off"; pressed => { root.update-control("structure.split_channels", "off"); } }
+                        OptionChip { label: "On"; active: root.modify-split-channels-text == "on"; pressed => { root.update-control("structure.split_channels", "on"); } }
+                    }
+                    InlineOptionRow {
+                        label: "Collapse";
+                        OptionChip { label: "Off"; active: root.modify-collapse-tracks-text == "off"; pressed => { root.update-control("structure.collapse_tracks", "off"); } }
+                        OptionChip { label: "On"; active: root.modify-collapse-tracks-text == "on"; pressed => { root.update-control("structure.collapse_tracks", "on"); } }
+                    }
+                    InlineOptionRow {
+                        label: "Remove empty";
+                        OptionChip { label: "On"; active: root.modify-remove-empty-tracks-text == "on"; pressed => { root.update-control("structure.remove_empty_tracks", "on"); } }
+                        OptionChip { label: "Off"; active: root.modify-remove-empty-tracks-text == "off"; pressed => { root.update-control("structure.remove_empty_tracks", "off"); } }
+                    }
+                    InlineOptionRow {
+                        label: "Drop orphan";
+                        OptionChip { label: "On"; active: root.modify-drop-orphan-note-offs-text == "on"; pressed => { root.update-control("structure.drop_orphan_note_offs", "on"); } }
+                        OptionChip { label: "Off"; active: root.modify-drop-orphan-note-offs-text == "off"; pressed => { root.update-control("structure.drop_orphan_note_offs", "off"); } }
+                    }
+                }
+            }
+
+            Rectangle { height: 16px; }
+            Separator { }
+            Rectangle { height: 16px; }
+
+            // ══════════════════════════════════════
+            //  5 · OUTPUT & RUN
+            // ══════════════════════════════════════
+
+            SectionHeader { title: "OUTPUT & RUN"; }
+            Rectangle { height: 8px; }
+
+            ModifyCard {
+                // ── Output path ──
+                Rectangle {
+                    height: 48px;
+                    border-radius: 8px;
+                    background: #08111b;
+
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 10px;
+                        spacing: 10px;
+                        alignment: center;
+
+                        VerticalLayout {
+                            spacing: 2px;
+                            horizontal-stretch: 1;
+                            alignment: center;
+
+                            Text {
+                                text: root.has-output ? root.modify-output-path-text : "(choose output path)";
+                                color: root.has-output ? #b0c0d4 : #4d6580;
+                                font-size: 11px;
+                                font-weight: 600;
+                                overflow: elide;
+                            }
+                            Text {
+                                text: "MIDI file (.mid)";
+                                color: #3d5068;
+                                font-size: 9px;
+                            }
+                        }
+
+                        Rectangle {
+                            width: 56px;
+                            height: 26px;
+                            border-radius: 5px;
+                            background: browse-touch.has-hover ? #1a2b40 : #141e2e;
+
+                            Text {
+                                text: "Browse";
+                                color: #8899b0;
+                                font-size: 10px;
+                                font-weight: 600;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+
+                            browse-touch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { root.browse-output(); }
+                            }
+                        }
+                    }
+                }
+
+                // ── Buttons + progress ──
+                HorizontalLayout {
+                    spacing: 8px;
+
+                    PrimaryButton {
+                        label: root.modify-job-active ? "Processing..." : "Write Modified MIDI";
+                        enabled: root.start-enabled;
+                        pressed => { root.start-job(); }
+                    }
+
+                    Rectangle {
+                        width: 100px;
+                        height: 36px;
+                        border-radius: 8px;
+                        background: root.modify-job-active
+                            ? (cancel-touch.has-hover ? #3a1820 : #261218)
+                            : #111822;
+
+                        Text {
+                            text: "Cancel";
+                            color: root.modify-job-active ? #ef6b73 : #415269;
+                            font-size: 12px;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        cancel-touch := TouchArea {
+                            mouse-cursor: root.modify-job-active ? pointer : default;
+                            clicked => {
+                                if (root.modify-job-active) {
+                                    root.cancel-job();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                ProgressBar { progress: root.modify-progress; }
+
+                if root.modify-detail-text != "" : Text {
+                    text: root.modify-detail-text;
+                    color: #6b7d94;
+                    font-size: 10px;
+                    wrap: word-wrap;
+                }
+
+                // ── Compact last-result ──
+                if root.modify-result-track-count-text != "---" : Rectangle {
+                    height: 1px;
+                    background: #111a28;
+                }
+                if root.modify-result-track-count-text != "---" : VerticalLayout {
+                    spacing: 2px;
+                    Text { text: "Last result"; color: #4d6580; font-size: 9px; font-weight: 700; letter-spacing: 0.6px; }
+                    HorizontalLayout {
+                        spacing: 16px;
+                        HorizontalLayout { spacing: 4px; Text { text: "Tracks"; color: #3d5068; font-size: 10px; vertical-alignment: center; } Text { text: root.modify-result-track-count-text; color: #6b7d94; font-size: 10px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; } }
+                        HorizontalLayout { spacing: 4px; Text { text: "PPQ"; color: #3d5068; font-size: 10px; vertical-alignment: center; } Text { text: root.modify-result-ppq-text; color: #6b7d94; font-size: 10px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; } }
+                        HorizontalLayout { spacing: 4px; Text { text: "Events"; color: #3d5068; font-size: 10px; vertical-alignment: center; } Text { text: root.modify-result-event-count-text; color: #6b7d94; font-size: 10px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; } }
+                    }
+                }
+            }
+
+            Rectangle { height: 16px; }
+            Separator { }
+            Rectangle { height: 16px; }
+
+            // ══════════════════════════════════════
+            //  6 · ADVANCED JSON
+            // ══════════════════════════════════════
+
+            ModifyCard {
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: center;
+
+                    Text {
+                        text: "Advanced JSON";
+                        color: #7d8fa8;
+                        font-size: 11px;
+                        font-weight: 700;
+                        horizontal-stretch: 1;
+                    }
+
+                    OptionChip {
+                        label: root.advanced-open ? "Hide" : "Show";
+                        active: root.advanced-open;
+                        pressed => { root.advanced-open = !root.advanced-open; }
+                    }
+                    OptionChip {
+                        label: "Reset";
+                        active: false;
+                        pressed => { root.reset-config(); }
+                    }
+                }
+
+                Text {
+                    text: root.modify-config-status-text;
+                    color: root.modify-config-valid ? #4d6580 : #ef6b73;
+                    font-size: 10px;
+                    wrap: word-wrap;
+                }
+
+                if root.advanced-open : Rectangle {
+                    height: 300px;
+                    border-radius: 8px;
+                    background: #08111b;
+                    border-width: 1px;
+                    border-color: root.modify-config-valid ? #132031 : #4a1f2a;
+                    clip: true;
+
+                    config-edit := TextEdit {
+                        text: root.modify-config-text;
+                        placeholder-text: "{\n  \"tools\": []\n}";
+                        x: 10px;
+                        y: 10px;
+                        width: parent.width - 20px;
+                        height: parent.height - 20px;
+                        edited => { root.edit-config(self.text); }
+                    }
+                }
+
+                if !root.advanced-open : Text {
+                    text: "Synchronized with controls above. Escape hatch for uncommon fields and multi-tool pipelines.";
+                    color: #3d5068;
+                    font-size: 10px;
+                    wrap: word-wrap;
+                }
+            }
+
+            Rectangle { height: 24px; }
         }
     }
 }

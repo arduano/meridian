@@ -1,10 +1,12 @@
 use std::{
     cell::RefCell,
     ffi::OsStr,
+    fmt::Display,
     fs,
     path::{Path, PathBuf},
     process::Command,
     rc::Rc,
+    str::FromStr,
     sync::atomic::{AtomicU64, Ordering},
     sync::{Arc, LazyLock, Mutex},
     time::Duration,
@@ -17,7 +19,16 @@ use meridian_core::{
         Interpolator, MeridianSoundfont, ThreadCount,
     },
     display::MIN_VIEW_RANGE_SECONDS,
-    midi::MidiProcessingConfig,
+    midi::{
+        AnalysisGuardTool, ChannelMapEntry, ChannelProgram, ChannelRemapTool, ControlChangeTool,
+        ControlValue, ControllerMapEntry, ControllerScaleEntry, DedupeTool, HumanizeTool,
+        KeyMapEntry, KeyMapTool, KeyRange, MergeBalanceTool, MetaTextTool,
+        MidiFileProcessingConfig, MidiFileSelection, MidiModifierTool, MidiProcessingConfig,
+        NoteLengthTool, OverlapRepairTool, PitchBendTool, ProgramTool, QuantizeTool,
+        RangeSelectTool, SelectableEventKind, SysexTool, TempoMapTool, TempoPoint, TextKind,
+        TimeWarpPoint, TimeWarpTool, TrackMapEntry, TrackRouteTool, TrimProcessingConfig,
+        VelocityMapTool, VelocityPoint,
+    },
     protocol::{CoreEvent, ParsedMidiId, ProcessedMidiId, StateSnapshot, VideoRenderConfig},
     render::{
         DisplayTimeSpace, KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig,
@@ -27,6 +38,7 @@ use meridian_core::{
     },
     spawn_core,
 };
+use serde_json::Value;
 use slint::ComponentHandle;
 use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
 
@@ -151,7 +163,9 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let pending_viewport_image = Rc::new(RefCell::new(None));
     let viewport_size = Rc::new(RefCell::new((1280_u32, 720_u32)));
     initialize_core(&bridge, &options, &app, &shared_state)?;
+    initialize_modify_panel(&app, &bridge, &shared_state);
     install_core_event_listener(&app, bridge.core(), &shared_state, &export_state);
+    install_midi_process_listener(&app, bridge.core(), &shared_state);
     wire_callbacks(
         &app,
         &bridge,
@@ -216,6 +230,7 @@ fn wire_callbacks(
     wire_video_callbacks(app, bridge, shared_state);
     wire_audio_config_callbacks(app, bridge, shared_state);
     wire_render_export_callbacks(app, bridge, shared_state, export_state);
+    wire_modify_callbacks(app, bridge, shared_state);
     wire_midi_callbacks(
         app,
         bridge,
@@ -389,6 +404,16 @@ fn set_selected_midi(app: &App, selected_midi_name: slint::SharedString) {
     app.set_selected_midi_name(selected_midi_name.clone());
     app.set_window_title(window_title_for_selected(selected_midi_name.as_str()));
     set_default_render_output_path(app);
+    if selected_midi_name.is_empty() {
+        app.set_modify_output_path_text(Default::default());
+    } else {
+        app.set_modify_output_path_text(
+            default_modify_output_path(selected_midi_name.as_str())
+                .display()
+                .to_string()
+                .into(),
+        );
+    }
 }
 
 fn window_title_for_selected(selected_midi_name: &str) -> slint::SharedString {
@@ -1591,6 +1616,1807 @@ fn wire_audio_config_callbacks(
             }
         });
     }
+}
+
+fn initialize_modify_panel(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+) {
+    load_modify_pass_into_app(app, "quantize");
+    if app.get_modify_output_path_text().is_empty() && !app.get_selected_midi_name().is_empty() {
+        app.set_modify_output_path_text(
+            default_modify_output_path(app.get_selected_midi_name().as_str())
+                .display()
+                .to_string()
+                .into(),
+        );
+    }
+    if let Ok(status) = bridge.get_process_midi_status(shared_state) {
+        apply_events_to_app(
+            app,
+            shared_state,
+            &[CoreEvent::MidiProcessStatus { status }],
+        );
+    }
+}
+
+fn wire_modify_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mutex<UiViewModel>>) {
+    {
+        let app_weak = app.as_weak();
+        app.on_select_modify_pass(move |key| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            load_modify_pass_into_app(&app, key.as_str());
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_update_modify_control(move |key, value| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            match update_modify_control(&app, key.as_str(), value.as_str()) {
+                Ok(()) => app.window().request_redraw(),
+                Err(message) => {
+                    app.set_modify_config_status_text(
+                        format!("Input error: {message}. Config unchanged.").into(),
+                    );
+                    app.window().request_redraw();
+                }
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_edit_modify_config(move |text| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_modify_config_text(text);
+            validate_modify_config(&app);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_reset_modify_config(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let current_key = app.get_modify_pass_key_text();
+            let key = match current_key.as_str() {
+                "" | "custom" => "quantize",
+                other => other,
+            };
+            load_modify_pass_into_app(&app, key);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_browse_modify_output(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let app_weak = app_weak.clone();
+            let suggested_output = current_modify_output_path(&app).unwrap_or_else(|_| {
+                default_modify_output_path(app.get_selected_midi_name().as_str())
+            });
+            std::thread::spawn(move || {
+                let mut dialog = rfd::FileDialog::new().add_filter("MIDI", &["mid", "midi"]);
+                if let Some(name) = suggested_output.file_name().and_then(OsStr::to_str) {
+                    dialog = dialog.set_file_name(name);
+                }
+                let Some(path) = dialog.save_file() else {
+                    return;
+                };
+                let _ = app_weak.upgrade_in_event_loop(move |app| {
+                    let normalized = normalize_modify_output_path(&path);
+                    app.set_modify_output_path_text(normalized.display().to_string().into());
+                    app.window().request_redraw();
+                });
+            });
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_start_modify_job(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            if app.get_modify_job_active() {
+                return;
+            }
+
+            let selected = app.get_selected_midi_name();
+            if selected.is_empty() {
+                set_modify_ui_failure(&app, "choose a MIDI file first");
+                app.window().request_redraw();
+                return;
+            }
+
+            let output = match current_modify_output_path(&app) {
+                Ok(path) => path,
+                Err(message) => {
+                    set_modify_ui_failure(&app, &message);
+                    app.window().request_redraw();
+                    return;
+                }
+            };
+            app.set_modify_output_path_text(output.display().to_string().into());
+
+            let config = match parse_modify_config(&app) {
+                Ok(config) => config,
+                Err(message) => {
+                    set_modify_ui_failure(&app, &message);
+                    app.window().request_redraw();
+                    return;
+                }
+            };
+
+            let events = match bridge.start_process_midi_files(
+                MidiFileSelection {
+                    inputs: vec![PathBuf::from(selected.as_str())],
+                },
+                output,
+                config,
+                &shared_state,
+            ) {
+                Ok(events) => events,
+                Err(error) => {
+                    set_modify_ui_failure(&app, &error.to_string());
+                    app.window().request_redraw();
+                    return;
+                }
+            };
+
+            if let Some(message) = events_error_message(&events) {
+                set_modify_ui_failure(&app, &message);
+            } else {
+                apply_events_to_app(&app, &shared_state, &events);
+            }
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_cancel_modify_job(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let events = match bridge.cancel_process_midi_files(&shared_state) {
+                Ok(events) => events,
+                Err(error) => {
+                    set_modify_ui_failure(&app, &error.to_string());
+                    app.window().request_redraw();
+                    return;
+                }
+            };
+            if let Some(message) = events_error_message(&events) {
+                set_modify_ui_failure(&app, &message);
+            } else {
+                apply_events_to_app(&app, &shared_state, &events);
+            }
+            app.window().request_redraw();
+        });
+    }
+}
+
+fn selected_modify_pass_key(app: &App) -> String {
+    match app.get_modify_pass_key_text().as_str() {
+        "" | "custom" => "quantize".to_string(),
+        key => key.to_string(),
+    }
+}
+
+fn serialize_modify_config(config: &MidiFileProcessingConfig) -> String {
+    serde_json::to_string_pretty(config).unwrap_or_else(|_| "{\n  \"tools\": []\n}".into())
+}
+
+fn parse_modify_config_text(raw: &str) -> Result<MidiFileProcessingConfig, String> {
+    if raw.trim().is_empty() {
+        return Err("modify config is empty".into());
+    }
+
+    let value: Value =
+        serde_json::from_str(raw).map_err(|error| format!("invalid JSON: {error}"))?;
+    serde_json::from_value(value).map_err(|error| format!("invalid process config: {error}"))
+}
+
+fn fallback_modify_config(app: &App) -> MidiFileProcessingConfig {
+    parse_modify_config_text(app.get_modify_config_text().as_str())
+        .or_else(|_| parse_modify_config_text(app.get_modify_last_valid_config_text().as_str()))
+        .unwrap_or_else(|_| default_modify_config(selected_modify_pass_key(app).as_str()))
+}
+
+fn set_modify_config(app: &App, config: &MidiFileProcessingConfig) {
+    app.set_modify_config_text(serialize_modify_config(config).into());
+    validate_modify_config(app);
+}
+
+fn option_text<T: ToString>(value: Option<T>) -> String {
+    value.map(|value| value.to_string()).unwrap_or_default()
+}
+
+fn toggle_text(value: bool) -> &'static str {
+    if value { "on" } else { "off" }
+}
+
+fn parse_value<T>(raw: &str, label: &str) -> Result<T, String>
+where
+    T: FromStr,
+    T::Err: Display,
+{
+    raw.trim()
+        .parse::<T>()
+        .map_err(|error| format!("invalid {label}: {error}"))
+}
+
+fn parse_optional_value<T>(raw: &str, label: &str) -> Result<Option<T>, String>
+where
+    T: FromStr,
+    T::Err: Display,
+{
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        Ok(None)
+    } else {
+        parse_value(trimmed, label).map(Some)
+    }
+}
+
+fn parse_bool_toggle(raw: &str, label: &str) -> Result<bool, String> {
+    match raw.trim() {
+        "on" | "yes" | "true" | "1" => Ok(true),
+        "off" | "no" | "false" | "0" => Ok(false),
+        other => Err(format!("invalid {label}: {other}")),
+    }
+}
+
+fn parse_serde_enum<T>(raw: &str, label: &str) -> Result<T, String>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(format!("{label} is required"));
+    }
+    serde_json::from_str::<T>(&format!("\"{trimmed}\""))
+        .map_err(|_| format!("invalid {label}: {trimmed}"))
+}
+
+fn format_serde_enum<T>(value: &T) -> String
+where
+    T: serde::Serialize,
+{
+    serde_json::to_string(value)
+        .unwrap_or_else(|_| "\"\"".into())
+        .trim_matches('"')
+        .to_string()
+}
+
+fn csv_parts<'a>(raw: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+    raw.split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+}
+
+fn parse_u8_token(raw: &str, label: &str) -> Result<u8, String> {
+    let trimmed = raw.trim();
+    if let Some(hex) = trimmed
+        .strip_prefix("0x")
+        .or_else(|| trimmed.strip_prefix("0X"))
+    {
+        u8::from_str_radix(hex, 16).map_err(|error| format!("invalid {label}: {error}"))
+    } else {
+        parse_value(trimmed, label)
+    }
+}
+
+fn parse_arrow_entries<T>(raw: &str, label: &str) -> Result<Vec<(T, T)>, String>
+where
+    T: FromStr,
+    T::Err: Display,
+{
+    let mut result = Vec::new();
+    for entry in csv_parts(raw) {
+        let Some((from, to)) = entry.split_once("->") else {
+            return Err(format!("invalid {label} entry: {entry}"));
+        };
+        result.push((
+            parse_value(from.trim(), label)?,
+            parse_value(to.trim(), label)?,
+        ));
+    }
+    Ok(result)
+}
+
+fn parse_event_kinds(raw: &str) -> Result<Vec<SelectableEventKind>, String> {
+    csv_parts(raw)
+        .map(|entry| parse_serde_enum(entry, "event kind"))
+        .collect()
+}
+
+fn format_event_kinds(kinds: &[SelectableEventKind]) -> String {
+    kinds
+        .iter()
+        .map(format_serde_enum)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_tempo_points(raw: &str) -> Result<Vec<TempoPoint>, String> {
+    let mut points = Vec::new();
+    for entry in csv_parts(raw) {
+        let Some((tick, tempo)) = entry.split_once(':') else {
+            return Err(format!("invalid tempo point: {entry}"));
+        };
+        points.push(TempoPoint {
+            tick: parse_value(tick.trim(), "tempo tick")?,
+            tempo: parse_value(tempo.trim(), "tempo value")?,
+        });
+    }
+    Ok(points)
+}
+
+fn format_tempo_points(points: &[TempoPoint]) -> String {
+    points
+        .iter()
+        .map(|point| format!("{}:{}", point.tick, point.tempo))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_time_warp_points(raw: &str) -> Result<Vec<TimeWarpPoint>, String> {
+    let mut points = Vec::new();
+    for (source_tick, dest_tick) in parse_arrow_entries::<u64>(raw, "time-warp point")? {
+        points.push(TimeWarpPoint {
+            source_tick,
+            dest_tick,
+        });
+    }
+    Ok(points)
+}
+
+fn format_time_warp_points(points: &[TimeWarpPoint]) -> String {
+    points
+        .iter()
+        .map(|point| format!("{}->{}", point.source_tick, point.dest_tick))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_channel_mappings(raw: &str) -> Result<Vec<ChannelMapEntry>, String> {
+    let mut mappings = Vec::new();
+    for (from, to) in parse_arrow_entries::<u8>(raw, "channel mapping")? {
+        mappings.push(ChannelMapEntry { from, to });
+    }
+    Ok(mappings)
+}
+
+fn format_channel_mappings(mappings: &[ChannelMapEntry]) -> String {
+    mappings
+        .iter()
+        .map(|mapping| format!("{}->{}", mapping.from, mapping.to))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_track_mappings(raw: &str) -> Result<Vec<TrackMapEntry>, String> {
+    let mut mappings = Vec::new();
+    for (from, to) in parse_arrow_entries::<usize>(raw, "track mapping")? {
+        mappings.push(TrackMapEntry { from, to });
+    }
+    Ok(mappings)
+}
+
+fn format_track_mappings(mappings: &[TrackMapEntry]) -> String {
+    mappings
+        .iter()
+        .map(|mapping| format!("{}->{}", mapping.from, mapping.to))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_channel_programs(raw: &str) -> Result<Vec<ChannelProgram>, String> {
+    let mut programs = Vec::new();
+    for entry in csv_parts(raw) {
+        let Some((channel, program)) = entry.split_once(':') else {
+            return Err(format!("invalid startup program: {entry}"));
+        };
+        programs.push(ChannelProgram {
+            channel: parse_value(channel.trim(), "startup channel")?,
+            program: parse_value(program.trim(), "startup program")?,
+        });
+    }
+    Ok(programs)
+}
+
+fn format_channel_programs(programs: &[ChannelProgram]) -> String {
+    programs
+        .iter()
+        .map(|program| format!("{}:{}", program.channel, program.program))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_u8_list(raw: &str, label: &str) -> Result<Vec<u8>, String> {
+    csv_parts(raw)
+        .map(|entry| parse_value(entry, label))
+        .collect()
+}
+
+fn format_u8_list(values: &[u8]) -> String {
+    values
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_controller_mappings(raw: &str) -> Result<Vec<ControllerMapEntry>, String> {
+    let mut mappings = Vec::new();
+    for (from, to) in parse_arrow_entries::<u8>(raw, "controller mapping")? {
+        mappings.push(ControllerMapEntry { from, to });
+    }
+    Ok(mappings)
+}
+
+fn format_controller_mappings(mappings: &[ControllerMapEntry]) -> String {
+    mappings
+        .iter()
+        .map(|mapping| format!("{}->{}", mapping.from, mapping.to))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_controller_scales(raw: &str) -> Result<Vec<ControllerScaleEntry>, String> {
+    let mut entries = Vec::new();
+    for entry in csv_parts(raw) {
+        let Some((controller, scale)) = entry.split_once(':') else {
+            return Err(format!("invalid controller scale: {entry}"));
+        };
+        entries.push(ControllerScaleEntry {
+            controller: parse_value(controller.trim(), "scale controller")?,
+            scale: parse_value(scale.trim(), "scale factor")?,
+        });
+    }
+    Ok(entries)
+}
+
+fn format_controller_scales(entries: &[ControllerScaleEntry]) -> String {
+    entries
+        .iter()
+        .map(|entry| format!("{}:{}", entry.controller, entry.scale))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_control_values(raw: &str) -> Result<Vec<ControlValue>, String> {
+    let mut values = Vec::new();
+    for entry in csv_parts(raw) {
+        let Some((channel, controller_value)) = entry.split_once(':') else {
+            return Err(format!("invalid controller value: {entry}"));
+        };
+        let Some((controller, value)) = controller_value.split_once('=') else {
+            return Err(format!("invalid controller value: {entry}"));
+        };
+        values.push(ControlValue {
+            channel: parse_value(channel.trim(), "inject channel")?,
+            controller: parse_value(controller.trim(), "inject controller")?,
+            value: parse_value(value.trim(), "inject value")?,
+        });
+    }
+    Ok(values)
+}
+
+fn format_control_values(values: &[ControlValue]) -> String {
+    values
+        .iter()
+        .map(|value| format!("{}:{}={}", value.channel, value.controller, value.value))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_velocity_points(raw: &str) -> Result<Vec<VelocityPoint>, String> {
+    let mut points = Vec::new();
+    for entry in csv_parts(raw) {
+        let Some((input, output)) = entry.split_once(':') else {
+            return Err(format!("invalid velocity point: {entry}"));
+        };
+        points.push(VelocityPoint {
+            input: parse_value(input.trim(), "velocity input")?,
+            output: parse_value(output.trim(), "velocity output")?,
+        });
+    }
+    Ok(points)
+}
+
+fn format_velocity_points(points: &[VelocityPoint]) -> String {
+    points
+        .iter()
+        .map(|point| format!("{}:{}", point.input, point.output))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_key_mappings(raw: &str) -> Result<Vec<KeyMapEntry>, String> {
+    let mut mappings = Vec::new();
+    for (from, to) in parse_arrow_entries::<u8>(raw, "key mapping")? {
+        mappings.push(KeyMapEntry { from, to });
+    }
+    Ok(mappings)
+}
+
+fn format_key_mappings(mappings: &[KeyMapEntry]) -> String {
+    mappings
+        .iter()
+        .map(|mapping| format!("{}->{}", mapping.from, mapping.to))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_key_range(raw: &str) -> Result<Option<KeyRange>, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let Some((min, max)) = trimmed.split_once('-') else {
+        return Err(format!("invalid fold range: {trimmed}"));
+    };
+    Ok(Some(KeyRange {
+        min: parse_value(min.trim(), "fold range min")?,
+        max: parse_value(max.trim(), "fold range max")?,
+    }))
+}
+
+fn format_key_range(range: &Option<KeyRange>) -> String {
+    range
+        .as_ref()
+        .map(|range| format!("{}-{}", range.min, range.max))
+        .unwrap_or_default()
+}
+
+fn parse_text_kinds(raw: &str) -> Result<Vec<TextKind>, String> {
+    csv_parts(raw)
+        .map(|entry| parse_serde_enum(entry, "text kind"))
+        .collect()
+}
+
+fn format_text_kinds(kinds: &[TextKind]) -> String {
+    kinds
+        .iter()
+        .map(format_serde_enum)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn parse_sysex_messages(raw: &str) -> Result<Vec<Vec<u8>>, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut messages = Vec::new();
+    for message in trimmed
+        .split('|')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+    {
+        let mut bytes = Vec::new();
+        for token in message
+            .split(|character: char| character.is_ascii_whitespace() || character == ',')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+        {
+            bytes.push(parse_u8_token(token, "sysex byte")?);
+        }
+        messages.push(bytes);
+    }
+    Ok(messages)
+}
+
+fn format_sysex_messages(messages: &[Vec<u8>]) -> String {
+    messages
+        .iter()
+        .map(|message| {
+            message
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
+fn ensure_trim_mut(config: &mut MidiFileProcessingConfig) -> &mut TrimProcessingConfig {
+    config
+        .time
+        .trim
+        .get_or_insert_with(TrimProcessingConfig::default)
+}
+
+fn ensure_tool_for_pass<'a>(
+    config: &'a mut MidiFileProcessingConfig,
+    pass_key: &str,
+) -> &'a mut MidiModifierTool {
+    let should_replace = !matches!(config.tools.as_slice(), [tool] if tool_key(tool) == pass_key);
+    if should_replace {
+        config.tools = vec![tool_for_pass(pass_key)];
+    }
+    &mut config.tools[0]
+}
+
+fn reset_modify_pass_control_fields(app: &App) {
+    app.set_modify_range_track_min_text("".into());
+    app.set_modify_range_track_max_text("".into());
+    app.set_modify_range_channel_min_text("".into());
+    app.set_modify_range_channel_max_text("".into());
+    app.set_modify_range_key_min_text("".into());
+    app.set_modify_range_key_max_text("".into());
+    app.set_modify_range_velocity_min_text("".into());
+    app.set_modify_range_velocity_max_text("".into());
+    app.set_modify_range_tick_start_text("".into());
+    app.set_modify_range_tick_end_text("".into());
+    app.set_modify_range_event_kinds_text("".into());
+    app.set_modify_tempo_mode_text("scale_bpm".into());
+    app.set_modify_tempo_flatten_tempo_text("500000".into());
+    app.set_modify_tempo_scale_factor_text("1.0".into());
+    app.set_modify_tempo_replace_points_text("".into());
+    app.set_modify_time_warp_points_text("".into());
+    app.set_modify_channel_remap_mappings_text("".into());
+    app.set_modify_track_route_mode_text("preserve".into());
+    app.set_modify_track_route_mappings_text("".into());
+    app.set_modify_program_force_program_text("".into());
+    app.set_modify_program_strip_changes_text("off".into());
+    app.set_modify_program_startup_programs_text("".into());
+    app.set_modify_program_keep_only_startup_text("off".into());
+    app.set_modify_control_strip_controllers_text("".into());
+    app.set_modify_control_remap_controllers_text("".into());
+    app.set_modify_control_scale_controllers_text("".into());
+    app.set_modify_control_inject_start_text("".into());
+    app.set_modify_pitch_strip_text("off".into());
+    app.set_modify_pitch_scale_text("1.0".into());
+    app.set_modify_pitch_offset_text("0".into());
+    app.set_modify_pitch_min_bend_text("-8192".into());
+    app.set_modify_pitch_max_bend_text("8191".into());
+    app.set_modify_pitch_reset_at_start_text("off".into());
+    app.set_modify_velocity_mode_text("scale".into());
+    app.set_modify_velocity_scale_text("1.0".into());
+    app.set_modify_velocity_gamma_text("1.0".into());
+    app.set_modify_velocity_points_text("".into());
+    app.set_modify_note_length_min_ticks_text("".into());
+    app.set_modify_note_length_max_ticks_text("".into());
+    app.set_modify_note_length_scale_text("1.0".into());
+    app.set_modify_note_length_fixed_ticks_text("".into());
+    app.set_modify_overlap_repeated_policy_text("close_previous".into());
+    app.set_modify_overlap_orphan_policy_text("drop".into());
+    app.set_modify_quantize_grid_ticks_text("120".into());
+    app.set_modify_quantize_strength_text("1.0".into());
+    app.set_modify_quantize_note_ends_text("off".into());
+    app.set_modify_quantize_swing_text("0.0".into());
+    app.set_modify_humanize_start_jitter_text("8".into());
+    app.set_modify_humanize_length_jitter_text("6".into());
+    app.set_modify_humanize_velocity_jitter_text("5".into());
+    app.set_modify_humanize_seed_text("1".into());
+    app.set_modify_key_map_mappings_text("".into());
+    app.set_modify_key_map_fold_range_text("".into());
+    app.set_modify_key_map_drop_unmapped_text("off".into());
+    app.set_modify_dedupe_notes_text("on".into());
+    app.set_modify_dedupe_controls_text("off".into());
+    app.set_modify_dedupe_tempo_text("off".into());
+    app.set_modify_dedupe_meta_text("off".into());
+    app.set_modify_meta_strip_all_text("off".into());
+    app.set_modify_meta_keep_kinds_text("".into());
+    app.set_modify_meta_prefix_track_names_text("".into());
+    app.set_modify_sysex_strip_all_text("off".into());
+    app.set_modify_sysex_prepend_text("".into());
+    app.set_modify_merge_balance_deconflict_text("on".into());
+    app.set_modify_merge_balance_strip_duplicate_text("on".into());
+    app.set_modify_merge_balance_prefer_first_text("on".into());
+    app.set_modify_analysis_guard_min_note_count_text("1".into());
+    app.set_modify_analysis_guard_max_note_count_text("".into());
+    app.set_modify_analysis_guard_min_track_count_text("".into());
+    app.set_modify_analysis_guard_max_track_count_text("".into());
+}
+
+fn sync_modify_common_controls(app: &App, config: &MidiFileProcessingConfig) {
+    app.set_modify_time_offset_ticks_text(config.time.offset_ticks.to_string().into());
+    app.set_modify_time_ppq_override_text(option_text(config.time.ppq_override).into());
+    app.set_modify_time_tempo_override_text(option_text(config.time.tempo_override).into());
+
+    if let Some(trim) = &config.time.trim {
+        app.set_modify_trim_start_tick_text(trim.start_tick.to_string().into());
+        app.set_modify_trim_end_tick_text(option_text(trim.end_tick).into());
+        app.set_modify_trim_inject_edge_text(toggle_text(trim.inject_edge_state).into());
+        app.set_modify_trim_close_open_text(toggle_text(trim.close_open_notes_at_end).into());
+    } else {
+        app.set_modify_trim_start_tick_text("".into());
+        app.set_modify_trim_end_tick_text("".into());
+        app.set_modify_trim_inject_edge_text("on".into());
+        app.set_modify_trim_close_open_text("on".into());
+    }
+
+    app.set_modify_min_key_text(config.notes.min_key.to_string().into());
+    app.set_modify_max_key_text(config.notes.max_key.to_string().into());
+    app.set_modify_transpose_text(config.notes.transpose.to_string().into());
+    app.set_modify_note_velocity_scale_text(config.notes.velocity_scale.to_string().into());
+    app.set_modify_piano_only_text(toggle_text(config.piano_only).into());
+    app.set_modify_zero_velocity_mode_text(format_serde_enum(&config.zero_velocity_note_on).into());
+    app.set_modify_merge_mode_text(format_serde_enum(&config.merge.mode).into());
+    app.set_modify_split_channels_text(toggle_text(config.structure.split_channels).into());
+    app.set_modify_collapse_tracks_text(toggle_text(config.structure.collapse_tracks).into());
+    app.set_modify_remove_empty_tracks_text(
+        toggle_text(config.structure.remove_empty_tracks).into(),
+    );
+    app.set_modify_drop_orphan_note_offs_text(
+        toggle_text(config.structure.drop_orphan_note_offs).into(),
+    );
+}
+
+fn sync_modify_pass_controls(app: &App, config: &MidiFileProcessingConfig) {
+    reset_modify_pass_control_fields(app);
+
+    let [tool] = config.tools.as_slice() else {
+        return;
+    };
+
+    match tool {
+        MidiModifierTool::RangeSelect(tool) => {
+            app.set_modify_range_track_min_text(option_text(tool.track_min).into());
+            app.set_modify_range_track_max_text(option_text(tool.track_max).into());
+            app.set_modify_range_channel_min_text(option_text(tool.channel_min).into());
+            app.set_modify_range_channel_max_text(option_text(tool.channel_max).into());
+            app.set_modify_range_key_min_text(option_text(tool.key_min).into());
+            app.set_modify_range_key_max_text(option_text(tool.key_max).into());
+            app.set_modify_range_velocity_min_text(option_text(tool.velocity_min).into());
+            app.set_modify_range_velocity_max_text(option_text(tool.velocity_max).into());
+            app.set_modify_range_tick_start_text(option_text(tool.tick_start).into());
+            app.set_modify_range_tick_end_text(option_text(tool.tick_end).into());
+            app.set_modify_range_event_kinds_text(format_event_kinds(&tool.event_kinds).into());
+        }
+        MidiModifierTool::TempoMap(tool) => match tool {
+            TempoMapTool::Flatten { tempo } => {
+                app.set_modify_tempo_mode_text("flatten".into());
+                app.set_modify_tempo_flatten_tempo_text(tempo.to_string().into());
+            }
+            TempoMapTool::ScaleBpm { factor } => {
+                app.set_modify_tempo_mode_text("scale_bpm".into());
+                app.set_modify_tempo_scale_factor_text(factor.to_string().into());
+            }
+            TempoMapTool::Replace { points } => {
+                app.set_modify_tempo_mode_text("replace".into());
+                app.set_modify_tempo_replace_points_text(format_tempo_points(points).into());
+            }
+        },
+        MidiModifierTool::TimeWarp(tool) => {
+            app.set_modify_time_warp_points_text(format_time_warp_points(&tool.points).into());
+        }
+        MidiModifierTool::ChannelRemap(tool) => {
+            app.set_modify_channel_remap_mappings_text(
+                format_channel_mappings(&tool.mappings).into(),
+            );
+        }
+        MidiModifierTool::TrackRoute(tool) => match tool {
+            TrackRouteTool::Preserve => {
+                app.set_modify_track_route_mode_text("preserve".into());
+            }
+            TrackRouteTool::CollapseAll => {
+                app.set_modify_track_route_mode_text("collapse_all".into());
+            }
+            TrackRouteTool::SplitByChannel => {
+                app.set_modify_track_route_mode_text("split_by_channel".into());
+            }
+            TrackRouteTool::Map { mappings } => {
+                app.set_modify_track_route_mode_text("map".into());
+                app.set_modify_track_route_mappings_text(format_track_mappings(mappings).into());
+            }
+        },
+        MidiModifierTool::Program(tool) => {
+            app.set_modify_program_force_program_text(option_text(tool.force_program).into());
+            app.set_modify_program_strip_changes_text(
+                toggle_text(tool.strip_program_changes).into(),
+            );
+            app.set_modify_program_startup_programs_text(
+                format_channel_programs(&tool.startup_programs).into(),
+            );
+            app.set_modify_program_keep_only_startup_text(
+                toggle_text(tool.keep_only_startup).into(),
+            );
+        }
+        MidiModifierTool::ControlChange(tool) => {
+            app.set_modify_control_strip_controllers_text(
+                format_u8_list(&tool.strip_controllers).into(),
+            );
+            app.set_modify_control_remap_controllers_text(
+                format_controller_mappings(&tool.remap_controllers).into(),
+            );
+            app.set_modify_control_scale_controllers_text(
+                format_controller_scales(&tool.scale_controllers).into(),
+            );
+            app.set_modify_control_inject_start_text(
+                format_control_values(&tool.inject_start).into(),
+            );
+        }
+        MidiModifierTool::PitchBend(tool) => {
+            app.set_modify_pitch_strip_text(toggle_text(tool.strip).into());
+            app.set_modify_pitch_scale_text(tool.scale.to_string().into());
+            app.set_modify_pitch_offset_text(tool.offset.to_string().into());
+            app.set_modify_pitch_min_bend_text(tool.min_bend.to_string().into());
+            app.set_modify_pitch_max_bend_text(tool.max_bend.to_string().into());
+            app.set_modify_pitch_reset_at_start_text(toggle_text(tool.reset_at_start).into());
+        }
+        MidiModifierTool::VelocityMap(tool) => match tool {
+            VelocityMapTool::Scale { scale } => {
+                app.set_modify_velocity_mode_text("scale".into());
+                app.set_modify_velocity_scale_text(scale.to_string().into());
+            }
+            VelocityMapTool::Gamma { gamma } => {
+                app.set_modify_velocity_mode_text("gamma".into());
+                app.set_modify_velocity_gamma_text(gamma.to_string().into());
+            }
+            VelocityMapTool::Polyline { points } => {
+                app.set_modify_velocity_mode_text("polyline".into());
+                app.set_modify_velocity_points_text(format_velocity_points(points).into());
+            }
+        },
+        MidiModifierTool::NoteLength(tool) => {
+            app.set_modify_note_length_min_ticks_text(option_text(tool.min_ticks).into());
+            app.set_modify_note_length_max_ticks_text(option_text(tool.max_ticks).into());
+            app.set_modify_note_length_scale_text(option_text(tool.scale).into());
+            app.set_modify_note_length_fixed_ticks_text(option_text(tool.fixed_ticks).into());
+        }
+        MidiModifierTool::OverlapRepair(tool) => {
+            app.set_modify_overlap_repeated_policy_text(
+                format_serde_enum(&tool.repeated_note_on).into(),
+            );
+            app.set_modify_overlap_orphan_policy_text(
+                format_serde_enum(&tool.orphan_note_offs).into(),
+            );
+        }
+        MidiModifierTool::Quantize(tool) => {
+            app.set_modify_quantize_grid_ticks_text(tool.grid_ticks.to_string().into());
+            app.set_modify_quantize_strength_text(tool.strength.to_string().into());
+            app.set_modify_quantize_note_ends_text(toggle_text(tool.quantize_note_ends).into());
+            app.set_modify_quantize_swing_text(tool.swing.to_string().into());
+        }
+        MidiModifierTool::Humanize(tool) => {
+            app.set_modify_humanize_start_jitter_text(tool.start_jitter.to_string().into());
+            app.set_modify_humanize_length_jitter_text(tool.length_jitter.to_string().into());
+            app.set_modify_humanize_velocity_jitter_text(tool.velocity_jitter.to_string().into());
+            app.set_modify_humanize_seed_text(tool.seed.to_string().into());
+        }
+        MidiModifierTool::KeyMap(tool) => {
+            app.set_modify_key_map_mappings_text(format_key_mappings(&tool.mappings).into());
+            app.set_modify_key_map_fold_range_text(format_key_range(&tool.fold_to_range).into());
+            app.set_modify_key_map_drop_unmapped_text(toggle_text(tool.drop_unmapped).into());
+        }
+        MidiModifierTool::Dedupe(tool) => {
+            app.set_modify_dedupe_notes_text(toggle_text(tool.notes).into());
+            app.set_modify_dedupe_controls_text(toggle_text(tool.controls).into());
+            app.set_modify_dedupe_tempo_text(toggle_text(tool.tempo).into());
+            app.set_modify_dedupe_meta_text(toggle_text(tool.meta).into());
+        }
+        MidiModifierTool::MetaText(tool) => {
+            app.set_modify_meta_strip_all_text(toggle_text(tool.strip_all_text).into());
+            app.set_modify_meta_keep_kinds_text(format_text_kinds(&tool.keep_kinds).into());
+            app.set_modify_meta_prefix_track_names_text(
+                tool.prefix_track_names.clone().unwrap_or_default().into(),
+            );
+        }
+        MidiModifierTool::Sysex(tool) => {
+            app.set_modify_sysex_strip_all_text(toggle_text(tool.strip_all).into());
+            app.set_modify_sysex_prepend_text(format_sysex_messages(&tool.prepend).into());
+        }
+        MidiModifierTool::MergeBalance(tool) => {
+            app.set_modify_merge_balance_deconflict_text(
+                toggle_text(tool.deconflict_channels).into(),
+            );
+            app.set_modify_merge_balance_strip_duplicate_text(
+                toggle_text(tool.strip_duplicate_start_state).into(),
+            );
+            app.set_modify_merge_balance_prefer_first_text(
+                toggle_text(tool.prefer_first_tempo_map).into(),
+            );
+        }
+        MidiModifierTool::AnalysisGuard(tool) => {
+            app.set_modify_analysis_guard_min_note_count_text(
+                option_text(tool.min_note_count).into(),
+            );
+            app.set_modify_analysis_guard_max_note_count_text(
+                option_text(tool.max_note_count).into(),
+            );
+            app.set_modify_analysis_guard_min_track_count_text(
+                option_text(tool.min_track_count).into(),
+            );
+            app.set_modify_analysis_guard_max_track_count_text(
+                option_text(tool.max_track_count).into(),
+            );
+        }
+    }
+}
+
+fn sync_modify_controls(app: &App, config: &MidiFileProcessingConfig) {
+    sync_modify_common_controls(app, config);
+    sync_modify_pass_controls(app, config);
+}
+
+fn update_modify_control(app: &App, key: &str, value: &str) -> Result<(), String> {
+    let mut config = fallback_modify_config(app);
+
+    match key {
+        "merge.mode" => {
+            config.merge.mode = parse_serde_enum(value, "merge mode")?;
+        }
+        "time.offset_ticks" => {
+            config.time.offset_ticks = parse_value(value, "time offset ticks")?;
+        }
+        "time.ppq_override" => {
+            config.time.ppq_override = parse_optional_value(value, "PPQ override")?;
+        }
+        "time.tempo_override" => {
+            config.time.tempo_override = parse_optional_value(value, "tempo override")?;
+        }
+        "time.trim.start_tick" => {
+            if value.trim().is_empty() {
+                config.time.trim = None;
+            } else {
+                ensure_trim_mut(&mut config).start_tick = parse_value(value, "trim start tick")?;
+            }
+        }
+        "time.trim.end_tick" => {
+            ensure_trim_mut(&mut config).end_tick = parse_optional_value(value, "trim end tick")?;
+        }
+        "time.trim.inject_edge_state" => {
+            ensure_trim_mut(&mut config).inject_edge_state =
+                parse_bool_toggle(value, "trim edge state")?;
+        }
+        "time.trim.close_open_notes_at_end" => {
+            ensure_trim_mut(&mut config).close_open_notes_at_end =
+                parse_bool_toggle(value, "trim note closing")?;
+        }
+        "piano_only" => {
+            config.piano_only = parse_bool_toggle(value, "piano-only toggle")?;
+        }
+        "zero_velocity_note_on" => {
+            config.zero_velocity_note_on = parse_serde_enum(value, "zero-velocity mode")?;
+        }
+        "notes.min_key" => {
+            config.notes.min_key = parse_value(value, "minimum key")?;
+        }
+        "notes.max_key" => {
+            config.notes.max_key = parse_value(value, "maximum key")?;
+        }
+        "notes.transpose" => {
+            config.notes.transpose = parse_value(value, "transpose")?;
+        }
+        "notes.velocity_scale" => {
+            config.notes.velocity_scale = parse_value(value, "velocity scale")?;
+        }
+        "structure.split_channels" => {
+            config.structure.split_channels = parse_bool_toggle(value, "split channels toggle")?;
+        }
+        "structure.collapse_tracks" => {
+            config.structure.collapse_tracks = parse_bool_toggle(value, "collapse tracks toggle")?;
+        }
+        "structure.remove_empty_tracks" => {
+            config.structure.remove_empty_tracks =
+                parse_bool_toggle(value, "remove empty tracks toggle")?;
+        }
+        "structure.drop_orphan_note_offs" => {
+            config.structure.drop_orphan_note_offs =
+                parse_bool_toggle(value, "drop orphan note-offs toggle")?;
+        }
+        "range.track_min" => {
+            if let MidiModifierTool::RangeSelect(tool) =
+                ensure_tool_for_pass(&mut config, "range_select")
+            {
+                tool.track_min = parse_optional_value(value, "range track min")?;
+            }
+        }
+        "range.track_max" => {
+            if let MidiModifierTool::RangeSelect(tool) =
+                ensure_tool_for_pass(&mut config, "range_select")
+            {
+                tool.track_max = parse_optional_value(value, "range track max")?;
+            }
+        }
+        "range.channel_min" => {
+            if let MidiModifierTool::RangeSelect(tool) =
+                ensure_tool_for_pass(&mut config, "range_select")
+            {
+                tool.channel_min = parse_optional_value(value, "range channel min")?;
+            }
+        }
+        "range.channel_max" => {
+            if let MidiModifierTool::RangeSelect(tool) =
+                ensure_tool_for_pass(&mut config, "range_select")
+            {
+                tool.channel_max = parse_optional_value(value, "range channel max")?;
+            }
+        }
+        "range.key_min" => {
+            if let MidiModifierTool::RangeSelect(tool) =
+                ensure_tool_for_pass(&mut config, "range_select")
+            {
+                tool.key_min = parse_optional_value(value, "range key min")?;
+            }
+        }
+        "range.key_max" => {
+            if let MidiModifierTool::RangeSelect(tool) =
+                ensure_tool_for_pass(&mut config, "range_select")
+            {
+                tool.key_max = parse_optional_value(value, "range key max")?;
+            }
+        }
+        "range.velocity_min" => {
+            if let MidiModifierTool::RangeSelect(tool) =
+                ensure_tool_for_pass(&mut config, "range_select")
+            {
+                tool.velocity_min = parse_optional_value(value, "range velocity min")?;
+            }
+        }
+        "range.velocity_max" => {
+            if let MidiModifierTool::RangeSelect(tool) =
+                ensure_tool_for_pass(&mut config, "range_select")
+            {
+                tool.velocity_max = parse_optional_value(value, "range velocity max")?;
+            }
+        }
+        "range.tick_start" => {
+            if let MidiModifierTool::RangeSelect(tool) =
+                ensure_tool_for_pass(&mut config, "range_select")
+            {
+                tool.tick_start = parse_optional_value(value, "range tick start")?;
+            }
+        }
+        "range.tick_end" => {
+            if let MidiModifierTool::RangeSelect(tool) =
+                ensure_tool_for_pass(&mut config, "range_select")
+            {
+                tool.tick_end = parse_optional_value(value, "range tick end")?;
+            }
+        }
+        "range.event_kinds" => {
+            if let MidiModifierTool::RangeSelect(tool) =
+                ensure_tool_for_pass(&mut config, "range_select")
+            {
+                tool.event_kinds = parse_event_kinds(value)?;
+            }
+        }
+        "tempo.mode" => {
+            let tool = match value.trim() {
+                "flatten" => MidiModifierTool::TempoMap(TempoMapTool::Flatten { tempo: 500000 }),
+                "scale_bpm" => MidiModifierTool::TempoMap(TempoMapTool::ScaleBpm { factor: 1.0 }),
+                "replace" => {
+                    MidiModifierTool::TempoMap(TempoMapTool::Replace { points: Vec::new() })
+                }
+                other => return Err(format!("invalid tempo mode: {other}")),
+            };
+            config.tools = vec![tool];
+        }
+        "tempo.flatten_tempo" => {
+            config.tools = vec![MidiModifierTool::TempoMap(TempoMapTool::Flatten {
+                tempo: parse_value(value, "flatten tempo")?,
+            })];
+        }
+        "tempo.scale_factor" => {
+            config.tools = vec![MidiModifierTool::TempoMap(TempoMapTool::ScaleBpm {
+                factor: parse_value(value, "tempo scale factor")?,
+            })];
+        }
+        "tempo.replace_points" => {
+            config.tools = vec![MidiModifierTool::TempoMap(TempoMapTool::Replace {
+                points: parse_tempo_points(value)?,
+            })];
+        }
+        "time_warp.points" => {
+            if let MidiModifierTool::TimeWarp(tool) = ensure_tool_for_pass(&mut config, "time_warp")
+            {
+                tool.points = parse_time_warp_points(value)?;
+            }
+        }
+        "channel_remap.mappings" => {
+            if let MidiModifierTool::ChannelRemap(tool) =
+                ensure_tool_for_pass(&mut config, "channel_remap")
+            {
+                tool.mappings = parse_channel_mappings(value)?;
+            }
+        }
+        "track_route.mode" => {
+            let tool = match value.trim() {
+                "preserve" => MidiModifierTool::TrackRoute(TrackRouteTool::Preserve),
+                "collapse_all" => MidiModifierTool::TrackRoute(TrackRouteTool::CollapseAll),
+                "split_by_channel" => MidiModifierTool::TrackRoute(TrackRouteTool::SplitByChannel),
+                "map" => MidiModifierTool::TrackRoute(TrackRouteTool::Map {
+                    mappings: Vec::new(),
+                }),
+                other => return Err(format!("invalid track-route mode: {other}")),
+            };
+            config.tools = vec![tool];
+        }
+        "track_route.mappings" => {
+            config.tools = vec![MidiModifierTool::TrackRoute(TrackRouteTool::Map {
+                mappings: parse_track_mappings(value)?,
+            })];
+        }
+        "program.force_program" => {
+            if let MidiModifierTool::Program(tool) = ensure_tool_for_pass(&mut config, "program") {
+                tool.force_program = parse_optional_value(value, "force program")?;
+            }
+        }
+        "program.strip_program_changes" => {
+            if let MidiModifierTool::Program(tool) = ensure_tool_for_pass(&mut config, "program") {
+                tool.strip_program_changes = parse_bool_toggle(value, "strip program changes")?;
+            }
+        }
+        "program.startup_programs" => {
+            if let MidiModifierTool::Program(tool) = ensure_tool_for_pass(&mut config, "program") {
+                tool.startup_programs = parse_channel_programs(value)?;
+            }
+        }
+        "program.keep_only_startup" => {
+            if let MidiModifierTool::Program(tool) = ensure_tool_for_pass(&mut config, "program") {
+                tool.keep_only_startup = parse_bool_toggle(value, "keep only startup")?;
+            }
+        }
+        "control_change.strip_controllers" => {
+            if let MidiModifierTool::ControlChange(tool) =
+                ensure_tool_for_pass(&mut config, "control_change")
+            {
+                tool.strip_controllers = parse_u8_list(value, "controller number")?;
+            }
+        }
+        "control_change.remap_controllers" => {
+            if let MidiModifierTool::ControlChange(tool) =
+                ensure_tool_for_pass(&mut config, "control_change")
+            {
+                tool.remap_controllers = parse_controller_mappings(value)?;
+            }
+        }
+        "control_change.scale_controllers" => {
+            if let MidiModifierTool::ControlChange(tool) =
+                ensure_tool_for_pass(&mut config, "control_change")
+            {
+                tool.scale_controllers = parse_controller_scales(value)?;
+            }
+        }
+        "control_change.inject_start" => {
+            if let MidiModifierTool::ControlChange(tool) =
+                ensure_tool_for_pass(&mut config, "control_change")
+            {
+                tool.inject_start = parse_control_values(value)?;
+            }
+        }
+        "pitch_bend.strip" => {
+            if let MidiModifierTool::PitchBend(tool) =
+                ensure_tool_for_pass(&mut config, "pitch_bend")
+            {
+                tool.strip = parse_bool_toggle(value, "pitch-bend strip toggle")?;
+            }
+        }
+        "pitch_bend.scale" => {
+            if let MidiModifierTool::PitchBend(tool) =
+                ensure_tool_for_pass(&mut config, "pitch_bend")
+            {
+                tool.scale = parse_value(value, "pitch-bend scale")?;
+            }
+        }
+        "pitch_bend.offset" => {
+            if let MidiModifierTool::PitchBend(tool) =
+                ensure_tool_for_pass(&mut config, "pitch_bend")
+            {
+                tool.offset = parse_value(value, "pitch-bend offset")?;
+            }
+        }
+        "pitch_bend.min_bend" => {
+            if let MidiModifierTool::PitchBend(tool) =
+                ensure_tool_for_pass(&mut config, "pitch_bend")
+            {
+                tool.min_bend = parse_value(value, "minimum bend")?;
+            }
+        }
+        "pitch_bend.max_bend" => {
+            if let MidiModifierTool::PitchBend(tool) =
+                ensure_tool_for_pass(&mut config, "pitch_bend")
+            {
+                tool.max_bend = parse_value(value, "maximum bend")?;
+            }
+        }
+        "pitch_bend.reset_at_start" => {
+            if let MidiModifierTool::PitchBend(tool) =
+                ensure_tool_for_pass(&mut config, "pitch_bend")
+            {
+                tool.reset_at_start = parse_bool_toggle(value, "reset-at-start toggle")?;
+            }
+        }
+        "velocity_map.mode" => {
+            let tool = match value.trim() {
+                "scale" => MidiModifierTool::VelocityMap(VelocityMapTool::Scale { scale: 1.0 }),
+                "gamma" => MidiModifierTool::VelocityMap(VelocityMapTool::Gamma { gamma: 1.0 }),
+                "polyline" => {
+                    MidiModifierTool::VelocityMap(VelocityMapTool::Polyline { points: Vec::new() })
+                }
+                other => return Err(format!("invalid velocity-map mode: {other}")),
+            };
+            config.tools = vec![tool];
+        }
+        "velocity_map.scale" => {
+            config.tools = vec![MidiModifierTool::VelocityMap(VelocityMapTool::Scale {
+                scale: parse_value(value, "velocity scale")?,
+            })];
+        }
+        "velocity_map.gamma" => {
+            config.tools = vec![MidiModifierTool::VelocityMap(VelocityMapTool::Gamma {
+                gamma: parse_value(value, "velocity gamma")?,
+            })];
+        }
+        "velocity_map.points" => {
+            config.tools = vec![MidiModifierTool::VelocityMap(VelocityMapTool::Polyline {
+                points: parse_velocity_points(value)?,
+            })];
+        }
+        "note_length.min_ticks" => {
+            if let MidiModifierTool::NoteLength(tool) =
+                ensure_tool_for_pass(&mut config, "note_length")
+            {
+                tool.min_ticks = parse_optional_value(value, "minimum note length")?;
+            }
+        }
+        "note_length.max_ticks" => {
+            if let MidiModifierTool::NoteLength(tool) =
+                ensure_tool_for_pass(&mut config, "note_length")
+            {
+                tool.max_ticks = parse_optional_value(value, "maximum note length")?;
+            }
+        }
+        "note_length.scale" => {
+            if let MidiModifierTool::NoteLength(tool) =
+                ensure_tool_for_pass(&mut config, "note_length")
+            {
+                tool.scale = parse_optional_value(value, "note-length scale")?;
+            }
+        }
+        "note_length.fixed_ticks" => {
+            if let MidiModifierTool::NoteLength(tool) =
+                ensure_tool_for_pass(&mut config, "note_length")
+            {
+                tool.fixed_ticks = parse_optional_value(value, "fixed note length")?;
+            }
+        }
+        "overlap.repeated_note_on" => {
+            if let MidiModifierTool::OverlapRepair(tool) =
+                ensure_tool_for_pass(&mut config, "overlap_repair")
+            {
+                tool.repeated_note_on = parse_serde_enum(value, "repeated-note policy")?;
+            }
+        }
+        "overlap.orphan_note_offs" => {
+            if let MidiModifierTool::OverlapRepair(tool) =
+                ensure_tool_for_pass(&mut config, "overlap_repair")
+            {
+                tool.orphan_note_offs = parse_serde_enum(value, "orphan-note-off policy")?;
+            }
+        }
+        "quantize.grid_ticks" => {
+            if let MidiModifierTool::Quantize(tool) = ensure_tool_for_pass(&mut config, "quantize")
+            {
+                tool.grid_ticks = parse_value(value, "quantize grid")?;
+            }
+        }
+        "quantize.strength" => {
+            if let MidiModifierTool::Quantize(tool) = ensure_tool_for_pass(&mut config, "quantize")
+            {
+                tool.strength = parse_value(value, "quantize strength")?;
+            }
+        }
+        "quantize.note_ends" => {
+            if let MidiModifierTool::Quantize(tool) = ensure_tool_for_pass(&mut config, "quantize")
+            {
+                tool.quantize_note_ends = parse_bool_toggle(value, "quantize note-ends toggle")?;
+            }
+        }
+        "quantize.swing" => {
+            if let MidiModifierTool::Quantize(tool) = ensure_tool_for_pass(&mut config, "quantize")
+            {
+                tool.swing = parse_value(value, "quantize swing")?;
+            }
+        }
+        "humanize.start_jitter" => {
+            if let MidiModifierTool::Humanize(tool) = ensure_tool_for_pass(&mut config, "humanize")
+            {
+                tool.start_jitter = parse_value(value, "humanize start jitter")?;
+            }
+        }
+        "humanize.length_jitter" => {
+            if let MidiModifierTool::Humanize(tool) = ensure_tool_for_pass(&mut config, "humanize")
+            {
+                tool.length_jitter = parse_value(value, "humanize length jitter")?;
+            }
+        }
+        "humanize.velocity_jitter" => {
+            if let MidiModifierTool::Humanize(tool) = ensure_tool_for_pass(&mut config, "humanize")
+            {
+                tool.velocity_jitter = parse_value(value, "humanize velocity jitter")?;
+            }
+        }
+        "humanize.seed" => {
+            if let MidiModifierTool::Humanize(tool) = ensure_tool_for_pass(&mut config, "humanize")
+            {
+                tool.seed = parse_value(value, "humanize seed")?;
+            }
+        }
+        "key_map.mappings" => {
+            if let MidiModifierTool::KeyMap(tool) = ensure_tool_for_pass(&mut config, "key_map") {
+                tool.mappings = parse_key_mappings(value)?;
+            }
+        }
+        "key_map.fold_range" => {
+            if let MidiModifierTool::KeyMap(tool) = ensure_tool_for_pass(&mut config, "key_map") {
+                tool.fold_to_range = parse_key_range(value)?;
+            }
+        }
+        "key_map.drop_unmapped" => {
+            if let MidiModifierTool::KeyMap(tool) = ensure_tool_for_pass(&mut config, "key_map") {
+                tool.drop_unmapped = parse_bool_toggle(value, "drop-unmapped toggle")?;
+            }
+        }
+        "dedupe.notes" => {
+            if let MidiModifierTool::Dedupe(tool) = ensure_tool_for_pass(&mut config, "dedupe") {
+                tool.notes = parse_bool_toggle(value, "dedupe notes toggle")?;
+            }
+        }
+        "dedupe.controls" => {
+            if let MidiModifierTool::Dedupe(tool) = ensure_tool_for_pass(&mut config, "dedupe") {
+                tool.controls = parse_bool_toggle(value, "dedupe controls toggle")?;
+            }
+        }
+        "dedupe.tempo" => {
+            if let MidiModifierTool::Dedupe(tool) = ensure_tool_for_pass(&mut config, "dedupe") {
+                tool.tempo = parse_bool_toggle(value, "dedupe tempo toggle")?;
+            }
+        }
+        "dedupe.meta" => {
+            if let MidiModifierTool::Dedupe(tool) = ensure_tool_for_pass(&mut config, "dedupe") {
+                tool.meta = parse_bool_toggle(value, "dedupe meta toggle")?;
+            }
+        }
+        "meta.strip_all" => {
+            if let MidiModifierTool::MetaText(tool) = ensure_tool_for_pass(&mut config, "meta_text")
+            {
+                tool.strip_all_text = parse_bool_toggle(value, "meta strip-all toggle")?;
+            }
+        }
+        "meta.keep_kinds" => {
+            if let MidiModifierTool::MetaText(tool) = ensure_tool_for_pass(&mut config, "meta_text")
+            {
+                tool.keep_kinds = parse_text_kinds(value)?;
+            }
+        }
+        "meta.prefix_track_names" => {
+            if let MidiModifierTool::MetaText(tool) = ensure_tool_for_pass(&mut config, "meta_text")
+            {
+                tool.prefix_track_names =
+                    Some(value.trim().to_string()).filter(|text| !text.is_empty());
+            }
+        }
+        "sysex.strip_all" => {
+            if let MidiModifierTool::Sysex(tool) = ensure_tool_for_pass(&mut config, "sysex") {
+                tool.strip_all = parse_bool_toggle(value, "sysex strip-all toggle")?;
+            }
+        }
+        "sysex.prepend" => {
+            if let MidiModifierTool::Sysex(tool) = ensure_tool_for_pass(&mut config, "sysex") {
+                tool.prepend = parse_sysex_messages(value)?;
+            }
+        }
+        "merge_balance.deconflict_channels" => {
+            if let MidiModifierTool::MergeBalance(tool) =
+                ensure_tool_for_pass(&mut config, "merge_balance")
+            {
+                tool.deconflict_channels = parse_bool_toggle(value, "deconflict toggle")?;
+            }
+        }
+        "merge_balance.strip_duplicate_start_state" => {
+            if let MidiModifierTool::MergeBalance(tool) =
+                ensure_tool_for_pass(&mut config, "merge_balance")
+            {
+                tool.strip_duplicate_start_state =
+                    parse_bool_toggle(value, "strip-duplicate-state toggle")?;
+            }
+        }
+        "merge_balance.prefer_first_tempo_map" => {
+            if let MidiModifierTool::MergeBalance(tool) =
+                ensure_tool_for_pass(&mut config, "merge_balance")
+            {
+                tool.prefer_first_tempo_map =
+                    parse_bool_toggle(value, "prefer-first-tempo toggle")?;
+            }
+        }
+        "analysis_guard.min_note_count" => {
+            if let MidiModifierTool::AnalysisGuard(tool) =
+                ensure_tool_for_pass(&mut config, "analysis_guard")
+            {
+                tool.min_note_count = parse_optional_value(value, "minimum note count")?;
+            }
+        }
+        "analysis_guard.max_note_count" => {
+            if let MidiModifierTool::AnalysisGuard(tool) =
+                ensure_tool_for_pass(&mut config, "analysis_guard")
+            {
+                tool.max_note_count = parse_optional_value(value, "maximum note count")?;
+            }
+        }
+        "analysis_guard.min_track_count" => {
+            if let MidiModifierTool::AnalysisGuard(tool) =
+                ensure_tool_for_pass(&mut config, "analysis_guard")
+            {
+                tool.min_track_count = parse_optional_value(value, "minimum track count")?;
+            }
+        }
+        "analysis_guard.max_track_count" => {
+            if let MidiModifierTool::AnalysisGuard(tool) =
+                ensure_tool_for_pass(&mut config, "analysis_guard")
+            {
+                tool.max_track_count = parse_optional_value(value, "maximum track count")?;
+            }
+        }
+        other => return Err(format!("unknown modify control: {other}")),
+    }
+
+    set_modify_config(app, &config);
+    Ok(())
+}
+
+fn pass_metadata(pass_key: &str) -> (&'static str, &'static str, &'static str) {
+    match pass_key {
+        "range_select" => (
+            "Range Select",
+            "Limit later tools to a subset of tracks, channels, keys, ticks, velocities, or event kinds.",
+            "Useful as the first tool in a multi-pass pipeline when you only want to touch one region of the file.",
+        ),
+        "tempo_map" => (
+            "Tempo Map",
+            "Flatten, scale, or fully replace tempo events while leaving the rest of the file intact.",
+            "The preset starts with a no-op tempo scale so you can switch modes or edit values in place.",
+        ),
+        "time_warp" => (
+            "Time Warp",
+            "Remap absolute ticks through custom control points for rubato fixes or structural timing edits.",
+            "Edit the `points` array with `source_tick` and `dest_tick` values in ascending order.",
+        ),
+        "channel_remap" => (
+            "Channel Remap",
+            "Move note and controller data between MIDI channels without rebuilding the file by hand.",
+            "Add mapping entries like `{ \"from\": 0, \"to\": 1 }` to retarget channels.",
+        ),
+        "track_route" => (
+            "Track Route",
+            "Preserve, collapse, split, or explicitly remap tracks before the file is written back out.",
+            "The default preset preserves tracks. Switch the `mode` field to `collapse_all`, `split_by_channel`, or `map`.",
+        ),
+        "program" => (
+            "Program",
+            "Force startup programs, strip later program changes, or keep only the initial setup state.",
+            "Use this when a synth or export target needs deterministic instrument assignments.",
+        ),
+        "control_change" => (
+            "Control Change",
+            "Strip, remap, scale, or inject controller values at the start of playback.",
+            "Good for fixing sustain pedals, volume curves, expression, or target-device controller layouts.",
+        ),
+        "pitch_bend" => (
+            "Pitch Bend",
+            "Scale, offset, clamp, reset, or strip pitch-bend data without touching note timing.",
+            "The preset keeps bends intact with full-range limits so you can dial in corrections safely.",
+        ),
+        "velocity_map" => (
+            "Velocity Map",
+            "Re-shape note-on velocities with a scale, gamma curve, or custom polyline.",
+            "Start with a simple scale, or replace the tool variant in JSON for more detailed curves.",
+        ),
+        "note_length" => (
+            "Note Length",
+            "Clamp, scale, or replace note durations across the selected note set.",
+            "Combine with `range_select` if only part of the arrangement should be resized.",
+        ),
+        "overlap_repair" => (
+            "Overlap Repair",
+            "Close repeated note-ons cleanly and drop orphan note-offs that can confuse playback engines.",
+            "This is a good cleanup pass before export or before applying timing-sensitive tools.",
+        ),
+        "quantize" => (
+            "Quantize",
+            "Snap notes toward a grid with optional swing and note-end handling.",
+            "The default preset uses a 120-tick grid at full strength; edit it for your project PPQ and feel.",
+        ),
+        "humanize" => (
+            "Humanize",
+            "Add deterministic timing, duration, and velocity variation using a reproducible seed.",
+            "Use small values first. The preset is intentionally gentle so you can hear the change without wrecking alignment.",
+        ),
+        "key_map" => (
+            "Key Map",
+            "Remap source notes to new pitches, fold them into a target range, or drop unmapped notes.",
+            "Useful for keyboard reductions, drum remaps, and narrowing orchestral parts into a playable register.",
+        ),
+        "dedupe" => (
+            "Dedupe",
+            "Remove duplicate notes, controllers, tempo changes, or meta events after merges or cleanup.",
+            "The preset focuses on note duplicates first; expand the booleans if the file has duplicated control state too.",
+        ),
+        "meta_text" => (
+            "Meta Text",
+            "Strip lyric/text metadata or rewrite track-name prefixes without touching musical events.",
+            "Helpful when preparing clean delivery files or standardizing merged project metadata.",
+        ),
+        "sysex" => (
+            "SysEx",
+            "Strip SysEx entirely or prepend specific setup messages at the start of the file.",
+            "Use raw byte arrays in decimal form inside `prepend`, for example `[[67,16,76]]`.",
+        ),
+        "merge_balance" => (
+            "Merge Balance",
+            "Clean up collisions created by multi-input merges, including duplicate startup state and channel conflicts.",
+            "This matters most when you feed more than one input file into the processing config.",
+        ),
+        "analysis_guard" => (
+            "Analysis Guard",
+            "Abort the job if the processed result violates simple note-count or track-count thresholds.",
+            "This is useful as a safety rail in automated pipelines where a bad transform should fail loudly.",
+        ),
+        _ => (
+            "Custom Pipeline",
+            "The current JSON does not map cleanly to one preset button.",
+            "You can still run the job. Use a pass preset again if you want to reseed the draft.",
+        ),
+    }
+}
+
+fn tool_key(tool: &MidiModifierTool) -> &'static str {
+    match tool {
+        MidiModifierTool::RangeSelect(_) => "range_select",
+        MidiModifierTool::TempoMap(_) => "tempo_map",
+        MidiModifierTool::TimeWarp(_) => "time_warp",
+        MidiModifierTool::ChannelRemap(_) => "channel_remap",
+        MidiModifierTool::TrackRoute(_) => "track_route",
+        MidiModifierTool::Program(_) => "program",
+        MidiModifierTool::ControlChange(_) => "control_change",
+        MidiModifierTool::PitchBend(_) => "pitch_bend",
+        MidiModifierTool::VelocityMap(_) => "velocity_map",
+        MidiModifierTool::NoteLength(_) => "note_length",
+        MidiModifierTool::OverlapRepair(_) => "overlap_repair",
+        MidiModifierTool::Quantize(_) => "quantize",
+        MidiModifierTool::Humanize(_) => "humanize",
+        MidiModifierTool::KeyMap(_) => "key_map",
+        MidiModifierTool::Dedupe(_) => "dedupe",
+        MidiModifierTool::MetaText(_) => "meta_text",
+        MidiModifierTool::Sysex(_) => "sysex",
+        MidiModifierTool::MergeBalance(_) => "merge_balance",
+        MidiModifierTool::AnalysisGuard(_) => "analysis_guard",
+    }
+}
+
+fn tool_for_pass(pass_key: &str) -> MidiModifierTool {
+    match pass_key {
+        "range_select" => MidiModifierTool::RangeSelect(RangeSelectTool::default()),
+        "tempo_map" => MidiModifierTool::TempoMap(TempoMapTool::ScaleBpm { factor: 1.0 }),
+        "time_warp" => MidiModifierTool::TimeWarp(TimeWarpTool::default()),
+        "channel_remap" => MidiModifierTool::ChannelRemap(ChannelRemapTool::default()),
+        "track_route" => MidiModifierTool::TrackRoute(TrackRouteTool::Preserve),
+        "program" => MidiModifierTool::Program(ProgramTool {
+            force_program: None,
+            strip_program_changes: false,
+            startup_programs: Vec::new(),
+            keep_only_startup: false,
+        }),
+        "control_change" => MidiModifierTool::ControlChange(ControlChangeTool::default()),
+        "pitch_bend" => MidiModifierTool::PitchBend(PitchBendTool {
+            strip: false,
+            scale: 1.0,
+            offset: 0,
+            min_bend: -8192,
+            max_bend: 8191,
+            reset_at_start: false,
+        }),
+        "velocity_map" => MidiModifierTool::VelocityMap(VelocityMapTool::Scale { scale: 1.0 }),
+        "note_length" => MidiModifierTool::NoteLength(NoteLengthTool {
+            min_ticks: None,
+            max_ticks: None,
+            scale: Some(1.0),
+            fixed_ticks: None,
+        }),
+        "overlap_repair" => MidiModifierTool::OverlapRepair(OverlapRepairTool::default()),
+        "quantize" => MidiModifierTool::Quantize(QuantizeTool {
+            grid_ticks: 120,
+            strength: 1.0,
+            quantize_note_ends: false,
+            swing: 0.0,
+        }),
+        "humanize" => MidiModifierTool::Humanize(HumanizeTool {
+            start_jitter: 8,
+            length_jitter: 6,
+            velocity_jitter: 5,
+            seed: 1,
+        }),
+        "key_map" => MidiModifierTool::KeyMap(KeyMapTool::default()),
+        "dedupe" => MidiModifierTool::Dedupe(DedupeTool {
+            notes: true,
+            controls: false,
+            tempo: false,
+            meta: false,
+        }),
+        "meta_text" => MidiModifierTool::MetaText(MetaTextTool::default()),
+        "sysex" => MidiModifierTool::Sysex(SysexTool::default()),
+        "merge_balance" => MidiModifierTool::MergeBalance(MergeBalanceTool {
+            deconflict_channels: true,
+            strip_duplicate_start_state: true,
+            prefer_first_tempo_map: true,
+        }),
+        "analysis_guard" => MidiModifierTool::AnalysisGuard(AnalysisGuardTool {
+            min_note_count: Some(1),
+            max_note_count: None,
+            min_track_count: None,
+            max_track_count: None,
+        }),
+        _ => MidiModifierTool::Quantize(QuantizeTool {
+            grid_ticks: 120,
+            strength: 1.0,
+            quantize_note_ends: false,
+            swing: 0.0,
+        }),
+    }
+}
+
+fn default_modify_config(pass_key: &str) -> MidiFileProcessingConfig {
+    let mut config = MidiFileProcessingConfig::default();
+    config.tools = vec![tool_for_pass(pass_key)];
+    config
+}
+
+fn load_modify_pass_into_app(app: &App, pass_key: &str) {
+    let mut config = fallback_modify_config(app);
+    config.tools = vec![tool_for_pass(pass_key)];
+    set_modify_config(app, &config);
+}
+
+fn sync_modify_pass_metadata(app: &App, pass_key: &str) {
+    let (title, description, hint) = pass_metadata(pass_key);
+    app.set_modify_pass_key_text(pass_key.into());
+    app.set_modify_pass_title_text(title.into());
+    app.set_modify_pass_description_text(description.into());
+    app.set_modify_pass_hint_text(hint.into());
+}
+
+fn sync_modify_pass_metadata_from_config(app: &App, config: &MidiFileProcessingConfig) {
+    match config.tools.as_slice() {
+        [tool] => sync_modify_pass_metadata(app, tool_key(tool)),
+        [] => sync_modify_pass_metadata(app, "custom"),
+        _ => sync_modify_pass_metadata(app, "custom"),
+    }
+}
+
+fn validate_modify_config(app: &App) {
+    match parse_modify_config_text(app.get_modify_config_text().as_str()) {
+        Ok(config) => {
+            app.set_modify_last_valid_config_text(serialize_modify_config(&config).into());
+            sync_modify_pass_metadata_from_config(app, &config);
+            sync_modify_controls(app, &config);
+            app.set_modify_config_valid(true);
+            let tool_count = config.tools.len();
+            let status = if tool_count == 0 {
+                "Valid JSON. No modifier tools configured; only the shared process config will run."
+                    .to_string()
+            } else {
+                format!(
+                    "Valid JSON. {} tool{} configured.",
+                    tool_count,
+                    if tool_count == 1 { "" } else { "s" }
+                )
+            };
+            app.set_modify_config_status_text(status.into());
+        }
+        Err(error) => {
+            app.set_modify_config_valid(false);
+            app.set_modify_config_status_text(format!("JSON parse error: {error}").into());
+        }
+    }
+}
+
+fn default_modify_output_path(selected_midi_name: &str) -> PathBuf {
+    let selected_path = PathBuf::from(selected_midi_name);
+    let stem = selected_path
+        .file_stem()
+        .and_then(OsStr::to_str)
+        .filter(|name| !name.is_empty())
+        .unwrap_or("modified-output");
+    let file_name = format!("{stem}-modified.mid");
+    selected_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(|parent| parent.join(file_name.clone()))
+        .unwrap_or_else(|| PathBuf::from(file_name))
+}
+
+fn normalize_modify_output_path(path: &std::path::Path) -> PathBuf {
+    let mut normalized = path.to_path_buf();
+    let has_midi_extension = normalized
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("mid") || ext.eq_ignore_ascii_case("midi"));
+    if !has_midi_extension {
+        normalized.set_extension("mid");
+    }
+    normalized
+}
+
+fn current_modify_output_path(app: &App) -> Result<PathBuf, String> {
+    let raw = app.get_modify_output_path_text();
+    if raw.is_empty() {
+        return Err("choose an output path".into());
+    }
+    Ok(normalize_modify_output_path(std::path::Path::new(
+        raw.as_str(),
+    )))
+}
+
+fn parse_modify_config(app: &App) -> Result<MidiFileProcessingConfig, String> {
+    parse_modify_config_text(app.get_modify_config_text().as_str())
+}
+
+fn set_modify_ui_failure(app: &App, message: &str) {
+    app.set_modify_job_active(false);
+    app.set_modify_progress(0.0);
+    app.set_modify_status_text("Failed".into());
+    app.set_modify_detail_text(message.into());
+}
+
+fn events_error_message(events: &[CoreEvent]) -> Option<String> {
+    events.iter().find_map(|event| match event {
+        CoreEvent::Error { message, .. } => Some(message.clone()),
+        _ => None,
+    })
+}
+
+fn install_midi_process_listener(
+    app: &App,
+    core: &CoreHandle,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+) {
+    let receiver = core.subscribe_events();
+    let app_weak = app.as_weak();
+    let shared_state = Arc::clone(shared_state);
+    std::thread::spawn(move || {
+        for event in receiver {
+            let is_modify_event = matches!(
+                event,
+                CoreEvent::MidiProcess { .. } | CoreEvent::MidiProcessStatus { .. }
+            );
+            if !is_modify_event {
+                continue;
+            }
+
+            shared_state
+                .lock()
+                .expect("shared UI state mutex poisoned")
+                .reduce_events(std::slice::from_ref(&event));
+
+            let event_for_ui = event.clone();
+            let shared_state = Arc::clone(&shared_state);
+            let _ = app_weak.upgrade_in_event_loop(move |app| {
+                apply_events_to_app(&app, &shared_state, std::slice::from_ref(&event_for_ui));
+                app.window().request_redraw();
+            });
+        }
+    });
 }
 
 fn envelope_curve_from_label(label: &str) -> EnvelopeCurveType {
@@ -3168,13 +4994,6 @@ fn install_core_event_listener(
             }
         }
     });
-}
-
-fn events_error_message(events: &[CoreEvent]) -> Option<String> {
-    events.iter().find_map(|event| match event {
-        CoreEvent::Error { message, .. } => Some(message.clone()),
-        _ => None,
-    })
 }
 
 fn update_export_state_from_event(

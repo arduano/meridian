@@ -7,8 +7,10 @@ use meridian_core::{
     CoreHandle, MeridianError,
     audio::{AudioBackend, AudioConfig, AudioRenderConfig},
     display::MIN_VIEW_RANGE_SECONDS,
-    midi::MidiProcessingConfig,
-    protocol::{CoreCommand, CoreEvent, ParsedMidiId, ProcessedMidiId, VideoRenderConfig},
+    midi::{MidiFileProcessingConfig, MidiFileSelection, MidiProcessingConfig},
+    protocol::{
+        CoreCommand, CoreEvent, MidiProcessStatus, ParsedMidiId, ProcessedMidiId, VideoRenderConfig,
+    },
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
 };
 
@@ -154,6 +156,44 @@ impl UiCoreBridge {
             },
             model,
         )
+    }
+
+    pub fn start_process_midi_files(
+        &self,
+        selection: MidiFileSelection,
+        output: PathBuf,
+        config: MidiFileProcessingConfig,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(
+            CoreCommand::StartProcessMidiFiles {
+                selection,
+                output,
+                config,
+            },
+            model,
+        )
+    }
+
+    pub fn cancel_process_midi_files(
+        &self,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::CancelProcessMidiFiles, model)
+    }
+
+    pub fn get_process_midi_status(
+        &self,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<MidiProcessStatus, MeridianError> {
+        let events = self.request(CoreCommand::GetProcessMidiStatus, model)?;
+        events
+            .into_iter()
+            .find_map(|event| match event {
+                CoreEvent::MidiProcessStatus { status } => Some(status),
+                _ => None,
+            })
+            .ok_or_else(|| MeridianError::Protocol("missing midi process status".into()))
     }
 
     pub fn step_time(

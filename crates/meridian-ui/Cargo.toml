@@ -28,6 +28,8 @@ clap.workspace = true
 meridian-core = { path = "../meridian-core" }
 open = "5"
 rfd.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 slint.workspace = true
 
 [build-dependencies]

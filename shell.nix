@@ -8,15 +8,15 @@ pkgs.mkShell {
     freetype
     libxkbcommon
     wayland
-    xorg.libX11
-    xorg.libXcursor
-    xorg.libXi
-    xorg.libXrandr
-    xorg.libXext
-    xorg.libxcb
-    xorg.libXrender
-    xorg.libXfixes
-    xorg.libxkbfile
+    libx11
+    libxcursor
+    libxi
+    libxrandr
+    libxext
+    libxcb
+    libxrender
+    libxfixes
+    libxkbfile
     mesa
     vulkan-loader
     libGL
@@ -30,15 +30,15 @@ pkgs.mkShell {
       pkgs.freetype
       pkgs.libxkbcommon
       pkgs.wayland
-      pkgs.xorg.libX11
-      pkgs.xorg.libXcursor
-      pkgs.xorg.libXi
-      pkgs.xorg.libXrandr
-      pkgs.xorg.libXext
-      pkgs.xorg.libxcb
-      pkgs.xorg.libXrender
-      pkgs.xorg.libXfixes
-      pkgs.xorg.libxkbfile
+      pkgs.libx11
+      pkgs.libxcursor
+      pkgs.libxi
+      pkgs.libxrandr
+      pkgs.libxext
+      pkgs.libxcb
+      pkgs.libxrender
+      pkgs.libxfixes
+      pkgs.libxkbfile
       pkgs.mesa
       pkgs.vulkan-loader
       pkgs.libGL
