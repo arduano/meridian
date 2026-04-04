@@ -6,14 +6,15 @@
 //   - primitives.slint     (SectionHeader, FieldRow, …)
 //   - chrome.slint         (ProfileTab, TransportButton, TimeScrubber)
 //   - midi_loading.slint   (MidiStateSection, MidiFileBar, …)
-//   - panels/*.slint       (PreviewWelcome, DropOverlay, VideoPanel, …)
+//   - panels/*.slint       (PreviewWelcome, DropOverlay, VideoPanel, RenderPanel, …)
 // ═══════════════════════════════════════════════════════════
 
 import { InspectorRow, MidiLoadState, BarValue, EventCount, SliderCurve } from "structs.slint";
 import { SectionHeader, FieldRow, OptionChip } from "primitives.slint";
 import { ProfileTab, TransportButton, TimeScrubber } from "chrome.slint";
 import { PreviewWelcome, DropOverlay } from "panels/preview.slint";
-import { VideoPanel } from "panels/render.slint";
+import { VideoPanel } from "panels/video.slint";
+import { RenderPanel } from "panels/render.slint";
 import { AudioPanel } from "panels/audio.slint";
 import { ModifyPanel } from "panels/modify.slint";
 import { AnalysisPanel } from "panels/analysis.slint";
@@ -239,28 +240,53 @@ export component App inherits Window {
     in-out property <string> audio-decay-curve-text: "linear";
     in-out property <string> audio-release-curve-text: "linear";
     in-out property <string> audio-parallelism-text: "Auto / Auto";
+    in-out property <float> video-render-progress: 0;
+    in-out property <string> video-render-status: "Idle";
+    in-out property <string> video-render-elapsed: "—";
+    in-out property <string> video-render-output-text: "output.mp4";
     in-out property <float> audio-render-progress: 0;
     in-out property <string> audio-render-status: "Idle";
     in-out property <string> audio-render-elapsed: "—";
     in-out property <string> audio-render-output-text: "output.wav";
+    in-out property <string> render-mode-text: "video_audio";
+    in-out property <string> render-output-path-text: "";
+    in-out property <string> render-video-resolution-text: "1920x1080";
+    in-out property <string> render-video-width-text: "1920";
+    in-out property <string> render-video-height-text: "1080";
+    in-out property <string> render-video-fps-text: "60";
+    in-out property <string> render-audio-format-text: "wav";
+    in-out property <string> render-audio-sample-rate-text: "48000";
+    in-out property <string> render-audio-channel-count-text: "stereo";
+    in-out property <string> render-video-ffmpeg-args-text: "";
+    in-out property <string> render-audio-ffmpeg-args-text: "";
+    in-out property <string> render-video-codec-text: "libx264";
+    in-out property <string> render-video-crf-text: "18";
+    in-out property <string> render-video-preset-text: "medium";
+    in-out property <string> render-video-pix-fmt-text: "yuv420p";
+    in-out property <string> render-audio-bitrate-text: "192k";
+    in-out property <bool> render-use-limiter: false;
+    in-out property <bool> render-open-after-export: false;
+    in-out property <float> render-export-progress: 0;
+    in-out property <string> render-export-status: "Ready";
+    in-out property <string> render-export-detail-text: "Choose a mode and output path.";
 
 
-    // ── Profile (0=Preview 1=Render 2=Audio 3=Modify 4=Analysis) ──
+    // ── Profile (0=Preview 1=Video 2=Render 3=Audio 4=Modify 5=Analysis) ──
     in-out property <int> active-profile: 0;
 
     // ── Derived layout flags ──
-    //   has-viewport:     profiles that show the wgpu viewport (Preview, Render, Audio)
+    //   has-viewport:     profiles that show the wgpu viewport (Preview, Video, Audio)
     //   compact-viewport: viewport is small with a settings panel beside it
     //   full-viewport:    viewport fills the content area
     //   panel-only:       no viewport at all, just a full-width panel
     private property <bool> has-viewport:
-        root.active-profile == 0 || root.active-profile == 1 || root.active-profile == 2;
+        root.active-profile == 0 || root.active-profile == 1 || root.active-profile == 3;
     private property <bool> compact-viewport:
-        root.active-profile == 1 || root.active-profile == 2;
+        root.active-profile == 1 || root.active-profile == 3;
     private property <bool> full-viewport:
         root.active-profile == 0;
     private property <bool> panel-only:
-        root.active-profile == 3 || root.active-profile == 4;
+        root.active-profile == 2 || root.active-profile == 4 || root.active-profile == 5;
 
     // Whether the Preview page shows the welcome hero (no MIDI loaded)
     private property <MidiLoadState> preview-load-state:
@@ -326,6 +352,28 @@ export component App inherits Window {
     callback select-audio-attack-curve(string);
     callback select-audio-decay-curve(string);
     callback select-audio-release-curve(string);
+    callback select-render-mode(string);
+    callback browse-render-output;
+    callback select-render-resolution(string);
+    callback submit-custom-render-resolution(string);
+    callback select-render-fps(string);
+    callback submit-custom-render-fps(string);
+    callback select-render-audio-format(string);
+    callback select-render-audio-sample-rate(string);
+    callback select-render-audio-channel-count(string);
+    callback change-render-video-ffmpeg-args(string);
+    callback change-render-audio-ffmpeg-args(string);
+    callback select-render-video-codec(string);
+    callback select-render-video-crf(string);
+    callback submit-custom-render-video-crf(string);
+    callback select-render-video-preset(string);
+    callback select-render-video-pix-fmt(string);
+    callback select-render-audio-bitrate(string);
+    callback submit-custom-render-audio-bitrate(string);
+    callback toggle-render-use-limiter;
+    callback toggle-render-open-after-export;
+    callback start-export;
+    callback cancel-export;
     callback start-render;
     callback cancel-render;
     callback start-audio-render;
@@ -406,9 +454,10 @@ export component App inherits Window {
 
                             ProfileTab { label: "Preview";  active: root.active-profile == 0; pressed => { root.active-profile = 0; } }
                             ProfileTab { label: "Video";    active: root.active-profile == 1; pressed => { root.active-profile = 1; } }
-                            ProfileTab { label: "Audio";    active: root.active-profile == 2; pressed => { root.active-profile = 2; } }
-                            ProfileTab { label: "Modify";   active: root.active-profile == 3; pressed => { root.active-profile = 3; } }
-                            ProfileTab { label: "Analysis"; active: root.active-profile == 4; pressed => { root.active-profile = 4; } }
+                            ProfileTab { label: "Render";   active: root.active-profile == 2; pressed => { root.active-profile = 2; } }
+                            ProfileTab { label: "Audio";    active: root.active-profile == 3; pressed => { root.active-profile = 3; } }
+                            ProfileTab { label: "Modify";   active: root.active-profile == 4; pressed => { root.active-profile = 4; } }
+                            ProfileTab { label: "Analysis"; active: root.active-profile == 5; pressed => { root.active-profile = 5; } }
 
                             Rectangle { horizontal-stretch: 1; }
 
@@ -524,7 +573,7 @@ export component App inherits Window {
             vertical-stretch: 1;
 
             // ──────────────────────────────────────
-            //  LEFT: Settings panel (Render / Audio)
+            //  LEFT: Settings panel (Video / Audio)
             // ──────────────────────────────────────
             Rectangle {
                 visible: root.compact-viewport;
@@ -620,7 +669,7 @@ export component App inherits Window {
                 }
 
                 AudioPanel {
-                    visible: root.active-profile == 2;
+                    visible: root.active-profile == 3;
                     x: 0; y: 0; width: parent.width; height: parent.height;
 
                     midi-state:            root.audio-load-state;
@@ -684,7 +733,7 @@ export component App inherits Window {
 
             // ──────────────────────────────────────
             //  CENTER: Viewport column
-            //  (Preview / Render / Audio)
+            //  (Preview / Video / Audio)
             // ──────────────────────────────────────
             VerticalLayout {
                 visible: root.has-viewport;
@@ -851,7 +900,7 @@ export component App inherits Window {
 
             // ──────────────────────────────────────
             //  FULL-WIDTH: Panel-only profiles
-            //  (Modify / Analysis — no viewport)
+            //  (Render / Modify / Analysis — no viewport)
             // ──────────────────────────────────────
             Rectangle {
                 visible: root.panel-only;
@@ -860,8 +909,76 @@ export component App inherits Window {
                 max-width: root.panel-only ? 100000px : 0px;
                 background: #0a1018;
 
+                RenderPanel {
+                    visible: root.active-profile == 2;
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+
+                    selected-midi-name: root.selected-midi-name;
+                    midi-length-text: root.length-text;
+                    scene-summary-text: root.scene-summary-text;
+                    render-load-state: root.render-load-state;
+                    audio-load-state: root.audio-load-state;
+                    render-mode-text: root.render-mode-text;
+                    render-output-path-text: root.render-output-path-text;
+                    render-video-resolution-text: root.render-video-resolution-text;
+                    render-video-fps-text: root.render-video-fps-text;
+                    render-audio-format-text: root.render-audio-format-text;
+                    render-audio-sample-rate-text: root.render-audio-sample-rate-text;
+                    render-audio-channel-count-text: root.render-audio-channel-count-text;
+                    render-video-ffmpeg-args-text: root.render-video-ffmpeg-args-text;
+                    render-audio-ffmpeg-args-text: root.render-audio-ffmpeg-args-text;
+                    render-video-codec-text: root.render-video-codec-text;
+                    render-video-crf-text: root.render-video-crf-text;
+                    render-video-preset-text: root.render-video-preset-text;
+                    render-video-pix-fmt-text: root.render-video-pix-fmt-text;
+                    render-audio-bitrate-text: root.render-audio-bitrate-text;
+                    render-use-limiter: root.render-use-limiter;
+                    render-open-after-export: root.render-open-after-export;
+                    audio-supports-44100: root.audio-supports-44100;
+                    audio-supports-48000: root.audio-supports-48000;
+                    audio-supports-88200: root.audio-supports-88200;
+                    audio-supports-96000: root.audio-supports-96000;
+                    audio-supports-176400: root.audio-supports-176400;
+                    audio-supports-192000: root.audio-supports-192000;
+                    audio-supports-mono: root.audio-supports-mono;
+                    audio-supports-stereo: root.audio-supports-stereo;
+                    video-render-progress: root.video-render-progress;
+                    video-render-status: root.video-render-status;
+                    video-render-elapsed: root.video-render-elapsed;
+                    video-render-output-text: root.video-render-output-text;
+                    audio-render-progress: root.audio-render-progress;
+                    audio-render-status: root.audio-render-status;
+                    audio-render-elapsed: root.audio-render-elapsed;
+                    audio-render-output-text: root.audio-render-output-text;
+                    export-progress: root.render-export-progress;
+                    export-status: root.render-export-status;
+                    export-detail-text: root.render-export-detail-text;
+                    select-mode(mode) => { root.select-render-mode(mode); }
+                    browse-output => { root.browse-render-output(); }
+                    select-resolution(preset) => { root.select-render-resolution(preset); }
+                    submit-custom-resolution(val) => { root.submit-custom-render-resolution(val); }
+                    select-fps(fps) => { root.select-render-fps(fps); }
+                    submit-custom-fps(val) => { root.submit-custom-render-fps(val); }
+                    select-audio-format(format) => { root.select-render-audio-format(format); }
+                    select-audio-sample-rate(rate) => { root.select-render-audio-sample-rate(rate); }
+                    select-audio-channel-count(channels) => { root.select-render-audio-channel-count(channels); }
+                    change-video-ffmpeg-args(args) => { root.change-render-video-ffmpeg-args(args); }
+                    change-audio-ffmpeg-args(args) => { root.change-render-audio-ffmpeg-args(args); }
+                    select-video-codec(codec) => { root.select-render-video-codec(codec); }
+                    select-video-crf(crf) => { root.select-render-video-crf(crf); }
+                    submit-custom-crf(val) => { root.submit-custom-render-video-crf(val); }
+                    select-video-preset(preset) => { root.select-render-video-preset(preset); }
+                    select-video-pix-fmt(fmt) => { root.select-render-video-pix-fmt(fmt); }
+                    select-audio-bitrate(rate) => { root.select-render-audio-bitrate(rate); }
+                    submit-custom-audio-bitrate(val) => { root.submit-custom-render-audio-bitrate(val); }
+                    toggle-use-limiter => { root.toggle-render-use-limiter(); }
+                    toggle-open-after-export => { root.toggle-render-open-after-export(); }
+                    start-export => { root.start-export(); }
+                    cancel-export => { root.cancel-export(); }
+                }
+
                 ModifyPanel {
-                    visible: root.active-profile == 3;
+                    visible: root.active-profile == 4;
                     x: 0; y: 0; width: parent.width; height: parent.height;
 
                     midi-state:               root.analysis-load-state;
@@ -888,7 +1005,7 @@ export component App inherits Window {
                 }
 
                 AnalysisPanel {
-                    visible: root.active-profile == 4;
+                    visible: root.active-profile == 5;
                     x: 0; y: 0; width: parent.width; height: parent.height;
 
                     midi-state:            root.analysis-load-state;

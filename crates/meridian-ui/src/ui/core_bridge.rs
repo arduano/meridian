@@ -5,10 +5,10 @@ use std::{
 
 use meridian_core::{
     CoreHandle, MeridianError,
-    audio::{AudioBackend, AudioConfig},
+    audio::{AudioBackend, AudioConfig, AudioRenderConfig},
     display::MIN_VIEW_RANGE_SECONDS,
     midi::MidiProcessingConfig,
-    protocol::{CoreCommand, CoreEvent, ParsedMidiId, ProcessedMidiId},
+    protocol::{CoreCommand, CoreEvent, ParsedMidiId, ProcessedMidiId, VideoRenderConfig},
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
 };
 
@@ -306,6 +306,36 @@ impl UiCoreBridge {
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
         self.request(CoreCommand::GetState, model)
+    }
+
+    pub fn start_render_audio(
+        &self,
+        config: AudioRenderConfig,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::StartRenderAudio { config }, model)
+    }
+
+    pub fn cancel_render_audio(
+        &self,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::CancelRenderAudio, model)
+    }
+
+    pub fn start_render_video(
+        &self,
+        config: VideoRenderConfig,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::StartRenderVideo { config }, model)
+    }
+
+    pub fn cancel_render_video(
+        &self,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::CancelRenderVideo, model)
     }
 
     fn request(

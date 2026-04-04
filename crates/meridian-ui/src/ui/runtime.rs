@@ -1,7 +1,9 @@
 use std::{
     cell::RefCell,
     ffi::OsStr,
-    path::PathBuf,
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
     rc::Rc,
     sync::atomic::{AtomicU64, Ordering},
     sync::{Arc, LazyLock, Mutex},
@@ -11,12 +13,12 @@ use std::{
 use meridian_core::{
     CoreHandle, MeridianError,
     audio::{
-        AudioConfig, ChannelCount, DEFAULT_SOUNDFONT, EnvelopeCurveType, Interpolator,
-        MeridianSoundfont, ThreadCount,
+        AudioConfig, AudioRenderConfig, ChannelCount, DEFAULT_SOUNDFONT, EnvelopeCurveType,
+        Interpolator, MeridianSoundfont, ThreadCount,
     },
     display::MIN_VIEW_RANGE_SECONDS,
     midi::MidiProcessingConfig,
-    protocol::{CoreEvent, ParsedMidiId, ProcessedMidiId},
+    protocol::{CoreEvent, ParsedMidiId, ProcessedMidiId, StateSnapshot, VideoRenderConfig},
     render::{
         DisplayTimeSpace, KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig,
         NoteProjectorConfig, PFA_BLUE_TOP_BAR_COLOR, PFA_GREEN_TOP_BAR_COLOR,
@@ -38,6 +40,92 @@ use super::{
 
 static LAST_PALETTE_PNG: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
 static LAST_AURA_PNG: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
+static EXPORT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RenderExportMode {
+    VideoAudio,
+    VideoOnly,
+    AudioOnly,
+}
+
+impl RenderExportMode {
+    fn from_text(value: &str) -> Self {
+        match value {
+            "video_only" => Self::VideoOnly,
+            "audio_only" => Self::AudioOnly,
+            _ => Self::VideoAudio,
+        }
+    }
+
+    fn wants_video(self) -> bool {
+        matches!(self, Self::VideoAudio | Self::VideoOnly)
+    }
+
+    fn wants_audio(self) -> bool {
+        matches!(self, Self::VideoAudio | Self::AudioOnly)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AudioOnlyFormat {
+    Wav,
+    Flac,
+    Mp3,
+}
+
+impl AudioOnlyFormat {
+    fn from_text(value: &str) -> Self {
+        match value {
+            "flac" => Self::Flac,
+            "mp3" => Self::Mp3,
+            _ => Self::Wav,
+        }
+    }
+
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Wav => "wav",
+            Self::Flac => "flac",
+            Self::Mp3 => "mp3",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum RenderJobOutcome {
+    Finished,
+    Cancelled,
+    Failed(String),
+}
+
+#[derive(Debug, Clone)]
+enum FinalizeSpec {
+    MuxMp4 {
+        video_input: PathBuf,
+        audio_input: PathBuf,
+        extra_args: Vec<String>,
+    },
+    EncodeAudio {
+        wav_input: PathBuf,
+        format: AudioOnlyFormat,
+        extra_args: Vec<String>,
+    },
+}
+
+#[derive(Debug, Clone, Default)]
+struct RenderExportCoordinator {
+    active: bool,
+    mode: Option<RenderExportMode>,
+    final_output: Option<PathBuf>,
+    video_job_output: Option<PathBuf>,
+    audio_job_output: Option<PathBuf>,
+    video_outcome: Option<RenderJobOutcome>,
+    audio_outcome: Option<RenderJobOutcome>,
+    finalize_spec: Option<FinalizeSpec>,
+    finalizing: bool,
+    finalize_result: Option<Result<(), String>>,
+}
 
 pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let backend_selector = slint::BackendSelector::new();
@@ -59,10 +147,11 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let render_load_generation = Arc::new(AtomicU64::new(0));
     let audio_load_generation = Arc::new(AtomicU64::new(0));
     let analysis_load_generation = Arc::new(AtomicU64::new(0));
+    let export_state = Arc::new(Mutex::new(RenderExportCoordinator::default()));
     let pending_viewport_image = Rc::new(RefCell::new(None));
     let viewport_size = Rc::new(RefCell::new((1280_u32, 720_u32)));
     initialize_core(&bridge, &options, &app, &shared_state)?;
-    install_load_progress_listener(&app, bridge.core());
+    install_core_event_listener(&app, bridge.core(), &shared_state, &export_state);
     wire_callbacks(
         &app,
         &bridge,
@@ -71,6 +160,7 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
         &render_load_generation,
         &audio_load_generation,
         &analysis_load_generation,
+        &export_state,
     );
     install_drag_drop(&app);
     install_viewport(
@@ -88,6 +178,7 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
         &pending_viewport_image,
         &viewport_size,
         options.disable_wgpu,
+        &export_state,
     );
 
     app.window().request_redraw();
@@ -119,10 +210,12 @@ fn wire_callbacks(
     render_load_generation: &Arc<AtomicU64>,
     audio_load_generation: &Arc<AtomicU64>,
     analysis_load_generation: &Arc<AtomicU64>,
+    export_state: &Arc<Mutex<RenderExportCoordinator>>,
 ) {
     wire_transport_callbacks(app, bridge, shared_state);
     wire_video_callbacks(app, bridge, shared_state);
     wire_audio_config_callbacks(app, bridge, shared_state);
+    wire_render_export_callbacks(app, bridge, shared_state, export_state);
     wire_midi_callbacks(
         app,
         bridge,
@@ -295,6 +388,7 @@ fn primary_soundfont(config: &mut AudioConfig) -> &mut MeridianSoundfont {
 fn set_selected_midi(app: &App, selected_midi_name: slint::SharedString) {
     app.set_selected_midi_name(selected_midi_name.clone());
     app.set_window_title(window_title_for_selected(selected_midi_name.as_str()));
+    set_default_render_output_path(app);
 }
 
 fn window_title_for_selected(selected_midi_name: &str) -> slint::SharedString {
@@ -308,6 +402,310 @@ fn window_title_for_selected(selected_midi_name: &str) -> slint::SharedString {
     };
 
     format!("Meridian - {file_name}").into()
+}
+
+fn set_default_render_output_path(app: &App) {
+    let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
+    let audio_format = AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
+    app.set_render_output_path_text(
+        default_render_output_path(app.get_selected_midi_name().as_str(), mode, audio_format)
+            .into(),
+    );
+}
+
+fn default_render_output_path(
+    selected_midi_name: &str,
+    mode: RenderExportMode,
+    audio_format: AudioOnlyFormat,
+) -> String {
+    if selected_midi_name.is_empty() {
+        return String::new();
+    }
+
+    let selected = PathBuf::from(selected_midi_name);
+    let stem = selected
+        .file_stem()
+        .and_then(OsStr::to_str)
+        .filter(|name| !name.is_empty())
+        .unwrap_or("render");
+    let ext = if mode == RenderExportMode::AudioOnly {
+        audio_format.extension()
+    } else {
+        "mp4"
+    };
+    format!("{stem}.{ext}")
+}
+
+fn normalize_output_path(
+    path: &Path,
+    mode: RenderExportMode,
+    audio_format: AudioOnlyFormat,
+) -> PathBuf {
+    let extension = if mode == RenderExportMode::AudioOnly {
+        audio_format.extension()
+    } else {
+        "mp4"
+    };
+    let mut normalized = path.to_path_buf();
+    normalized.set_extension(extension);
+    normalized
+}
+
+fn sync_render_output_path(app: &App) {
+    let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
+    let audio_format = AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
+    let current = app.get_render_output_path_text();
+    let next = if current.is_empty() {
+        default_render_output_path(app.get_selected_midi_name().as_str(), mode, audio_format)
+    } else {
+        normalize_output_path(Path::new(current.as_str()), mode, audio_format)
+            .display()
+            .to_string()
+    };
+    app.set_render_output_path_text(next.into());
+}
+
+/// Split a string on whitespace into individual arguments.
+/// Respects basic quoting (double-quotes only) so users can
+/// pass args like `-metadata title="My Song"`.
+fn shell_words(input: &str) -> Vec<String> {
+    let input = input.trim();
+    if input.is_empty() {
+        return Vec::new();
+    }
+    let mut words = Vec::new();
+    let mut current = String::new();
+    let mut in_quote = false;
+    for ch in input.chars() {
+        match ch {
+            '"' => in_quote = !in_quote,
+            c if c.is_whitespace() && !in_quote => {
+                if !current.is_empty() {
+                    words.push(std::mem::take(&mut current));
+                }
+            }
+            c => current.push(c),
+        }
+    }
+    if !current.is_empty() {
+        words.push(current);
+    }
+    words
+}
+
+fn parse_render_resolution(text: &str) -> Result<(u32, u32), String> {
+    let Some((width, height)) = text.split_once('x') else {
+        return Err(format!("invalid resolution `{text}`"));
+    };
+    let width = width
+        .parse::<u32>()
+        .map_err(|_| format!("invalid width in `{text}`"))?;
+    let height = height
+        .parse::<u32>()
+        .map_err(|_| format!("invalid height in `{text}`"))?;
+    if width == 0 || height == 0 {
+        return Err("resolution must be non-zero".into());
+    }
+    Ok((width, height))
+}
+
+fn parse_render_fps(text: &str) -> Result<f64, String> {
+    let fps = text
+        .parse::<f64>()
+        .map_err(|_| format!("invalid fps `{text}`"))?;
+    if fps <= 0.0 {
+        return Err("fps must be > 0".into());
+    }
+    Ok(fps)
+}
+
+fn parse_render_channels(text: &str) -> Result<u16, String> {
+    match text {
+        "mono" => Ok(1),
+        "stereo" => Ok(2),
+        other => Err(format!("unsupported channel count `{other}`")),
+    }
+}
+
+fn next_export_temp_path(final_output: &Path, label: &str, extension: &str) -> PathBuf {
+    let id = EXPORT_SEQUENCE.fetch_add(1, Ordering::SeqCst);
+    let stem = final_output
+        .file_stem()
+        .and_then(OsStr::to_str)
+        .filter(|name| !name.is_empty())
+        .unwrap_or("render");
+    let dir = final_output
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    dir.join(format!(".{stem}.meridian-{id}.{label}.{extension}"))
+}
+
+fn current_export_output_path(app: &App) -> Result<PathBuf, String> {
+    let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
+    let audio_format = AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
+    let raw = if app.get_render_output_path_text().is_empty() {
+        default_render_output_path(app.get_selected_midi_name().as_str(), mode, audio_format)
+    } else {
+        app.get_render_output_path_text().to_string()
+    };
+    if raw.is_empty() {
+        return Err("select a MIDI before exporting".into());
+    }
+    Ok(normalize_output_path(Path::new(&raw), mode, audio_format))
+}
+
+fn build_video_render_config(
+    app: &App,
+    snapshot: &StateSnapshot,
+    output: PathBuf,
+) -> Result<VideoRenderConfig, String> {
+    let (width, height) = parse_render_resolution(app.get_render_video_resolution_text().as_str())?;
+    let fps = parse_render_fps(app.get_render_video_fps_text().as_str())?;
+
+    // Build ffmpeg args from the structured encoding controls
+    let mut ffmpeg_args: Vec<String> = vec!["-y".into()];
+    let codec = app.get_render_video_codec_text();
+    if !codec.is_empty() {
+        ffmpeg_args.extend(["-c:v".into(), codec.to_string()]);
+    }
+    let pix_fmt = app.get_render_video_pix_fmt_text();
+    if !pix_fmt.is_empty() {
+        ffmpeg_args.extend(["-pix_fmt".into(), pix_fmt.to_string()]);
+    }
+    let crf = app.get_render_video_crf_text();
+    if !crf.is_empty() {
+        ffmpeg_args.extend(["-crf".into(), crf.to_string()]);
+    }
+    let preset = app.get_render_video_preset_text();
+    if !preset.is_empty() {
+        ffmpeg_args.extend(["-preset".into(), preset.to_string()]);
+    }
+
+    // Append any extra raw flags from the advanced text field
+    let extra = app.get_render_video_ffmpeg_args_text();
+    if !extra.is_empty() {
+        ffmpeg_args.extend(shell_words(extra.as_str()));
+    }
+    Ok(VideoRenderConfig {
+        midi_path: snapshot.midi_path.clone(),
+        output,
+        fps,
+        width,
+        height,
+        scene: Some(snapshot.scene.clone()),
+        view_range: Some(snapshot.view_range),
+        time_space: Some(snapshot.time_space),
+        first_key: Some(snapshot.first_key),
+        last_key: Some(snapshot.last_key),
+        ffmpeg_args,
+    })
+}
+
+fn build_audio_render_config(
+    app: &App,
+    snapshot: &StateSnapshot,
+    output: PathBuf,
+) -> Result<AudioRenderConfig, String> {
+    let sample_rate = app
+        .get_render_audio_sample_rate_text()
+        .parse::<u32>()
+        .map_err(|_| "invalid render audio sample rate".to_string())?;
+    let channels = parse_render_channels(app.get_render_audio_channel_count_text().as_str())?;
+    let use_limiter = app.get_render_use_limiter();
+    Ok(AudioRenderConfig {
+        midi_path: snapshot.midi_path.clone(),
+        audio: None,
+        output,
+        sample_rate: Some(sample_rate),
+        channels: Some(channels),
+        use_limiter: Some(use_limiter),
+        soundfonts: Vec::new(),
+    })
+}
+
+fn set_export_status(
+    app: &App,
+    status: &str,
+    detail: impl Into<slint::SharedString>,
+    progress: f32,
+) {
+    app.set_render_export_status(status.into());
+    app.set_render_export_detail_text(detail.into());
+    app.set_render_export_progress(progress);
+}
+
+fn run_ffmpeg(args: &[&str]) -> Result<(), String> {
+    let status = Command::new("ffmpeg")
+        .args(args)
+        .status()
+        .map_err(|error| format!("failed to launch ffmpeg: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("ffmpeg exited with status {status}"))
+    }
+}
+
+fn run_finalizer(spec: &FinalizeSpec, final_output: &Path) -> Result<(), String> {
+    match spec {
+        FinalizeSpec::MuxMp4 {
+            video_input,
+            audio_input,
+            extra_args,
+        } => {
+            let mut args = vec![
+                "-y".to_string(),
+                "-i".into(),
+                video_input.to_string_lossy().into_owned(),
+                "-i".into(),
+                audio_input.to_string_lossy().into_owned(),
+                "-c:v".into(),
+                "copy".into(),
+                "-c:a".into(),
+                "aac".into(),
+            ];
+            args.extend(extra_args.iter().cloned());
+            args.push(final_output.to_string_lossy().into_owned());
+            let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            run_ffmpeg(&arg_refs)
+        }
+        FinalizeSpec::EncodeAudio {
+            wav_input,
+            format,
+            extra_args,
+        } => match format {
+            AudioOnlyFormat::Wav => fs::copy(wav_input, final_output)
+                .map(|_| ())
+                .map_err(|error| format!("failed to copy wav output: {error}")),
+            AudioOnlyFormat::Flac => {
+                let mut args = vec![
+                    "-y".to_string(),
+                    "-i".into(),
+                    wav_input.to_string_lossy().into_owned(),
+                ];
+                args.extend(extra_args.iter().cloned());
+                args.push(final_output.to_string_lossy().into_owned());
+                let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                run_ffmpeg(&arg_refs)
+            }
+            AudioOnlyFormat::Mp3 => {
+                let mut args = vec![
+                    "-y".to_string(),
+                    "-i".into(),
+                    wav_input.to_string_lossy().into_owned(),
+                    "-codec:a".into(),
+                    "libmp3lame".into(),
+                    "-q:a".into(),
+                    "2".into(),
+                ];
+                args.extend(extra_args.iter().cloned());
+                args.push(final_output.to_string_lossy().into_owned());
+                let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                run_ffmpeg(&arg_refs)
+            }
+        },
+    }
 }
 
 fn wire_transport_callbacks(
@@ -1295,6 +1693,619 @@ fn update_ptc_f32(
     });
 }
 
+fn clear_export_state(export_state: &Arc<Mutex<RenderExportCoordinator>>) {
+    *export_state
+        .lock()
+        .expect("render export coordinator mutex poisoned") = RenderExportCoordinator::default();
+}
+
+fn fail_export(app: &App, export_state: &Arc<Mutex<RenderExportCoordinator>>, message: String) {
+    clear_export_state(export_state);
+    set_export_status(app, "Failed", message, 0.0);
+    app.window().request_redraw();
+}
+
+fn start_render_export_jobs(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    export_state: &Arc<Mutex<RenderExportCoordinator>>,
+) -> Result<(), String> {
+    let snapshot = shared_state
+        .lock()
+        .expect("shared UI state mutex poisoned")
+        .snapshot
+        .clone()
+        .ok_or_else(|| "load a MIDI before exporting".to_string())?;
+    if snapshot.midi_path.is_none() {
+        return Err("load a MIDI before exporting".into());
+    }
+
+    let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
+    let audio_format = AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
+    let final_output = {
+        let export = export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned");
+        if !export.active {
+            return Err("export was cancelled".into());
+        }
+        export
+            .final_output
+            .clone()
+            .ok_or_else(|| "missing final export path".to_string())?
+    };
+
+    let video_output = if mode == RenderExportMode::VideoAudio {
+        Some(next_export_temp_path(&final_output, "video", "mp4"))
+    } else if mode.wants_video() {
+        Some(final_output.clone())
+    } else {
+        None
+    };
+    let audio_output = if mode == RenderExportMode::VideoAudio {
+        Some(next_export_temp_path(&final_output, "audio", "wav"))
+    } else if mode == RenderExportMode::AudioOnly {
+        Some(if audio_format == AudioOnlyFormat::Wav {
+            final_output.clone()
+        } else {
+            next_export_temp_path(&final_output, "audio", "wav")
+        })
+    } else {
+        None
+    };
+    let finalize_spec = match mode {
+        RenderExportMode::VideoAudio => {
+            let mut extra_args = vec![];
+            let bitrate = app.get_render_audio_bitrate_text();
+            if !bitrate.is_empty() {
+                extra_args.extend(["-b:a".to_string(), bitrate.to_string()]);
+            }
+            extra_args.extend(shell_words(
+                app.get_render_audio_ffmpeg_args_text().as_str(),
+            ));
+            Some(FinalizeSpec::MuxMp4 {
+                video_input: video_output
+                    .clone()
+                    .expect("video+audio export must have a temporary video output"),
+                audio_input: audio_output
+                    .clone()
+                    .expect("video+audio export must have a temporary audio output"),
+                extra_args,
+            })
+        }
+        RenderExportMode::AudioOnly if audio_format != AudioOnlyFormat::Wav => {
+            let extra_args = shell_words(app.get_render_audio_ffmpeg_args_text().as_str());
+            Some(FinalizeSpec::EncodeAudio {
+                wav_input: audio_output
+                    .clone()
+                    .expect("encoded audio export must render a temporary wav"),
+                format: audio_format,
+                extra_args,
+            })
+        }
+        _ => None,
+    };
+
+    let video_config = video_output
+        .clone()
+        .map(|output| build_video_render_config(app, &snapshot, output))
+        .transpose()?;
+    let audio_config = audio_output
+        .clone()
+        .map(|output| build_audio_render_config(app, &snapshot, output))
+        .transpose()?;
+
+    {
+        let mut export = export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned");
+        if !export.active {
+            return Err("export was cancelled".into());
+        }
+        export.mode = Some(mode);
+        export.video_job_output = video_output;
+        export.audio_job_output = audio_output;
+        export.video_outcome = None;
+        export.audio_outcome = None;
+        export.finalize_spec = finalize_spec;
+        export.finalizing = false;
+        export.finalize_result = None;
+    }
+
+    if let Some(config) = video_config {
+        let events = bridge
+            .start_render_video(config, shared_state)
+            .map_err(|error| error.to_string())?;
+        if let Some(message) = events_error_message(&events) {
+            return Err(message);
+        }
+        apply_events_to_app(app, shared_state, &events);
+    }
+
+    if let Some(config) = audio_config {
+        let events = bridge
+            .start_render_audio(config, shared_state)
+            .map_err(|error| error.to_string())?;
+        if let Some(message) = events_error_message(&events) {
+            if app.get_video_render_status() != "Idle" {
+                if let Ok(cancel_events) = bridge.cancel_render_video(shared_state) {
+                    apply_events_to_app(app, shared_state, &cancel_events);
+                }
+            }
+            return Err(message);
+        }
+        apply_events_to_app(app, shared_state, &events);
+    }
+
+    let status = match mode {
+        RenderExportMode::VideoAudio => "Rendering video + audio",
+        RenderExportMode::VideoOnly => "Rendering video",
+        RenderExportMode::AudioOnly => "Rendering audio",
+    };
+    set_export_status(app, status, final_output.display().to_string(), 0.0);
+    app.window().request_redraw();
+    Ok(())
+}
+
+fn wire_render_export_callbacks(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    export_state: &Arc<Mutex<RenderExportCoordinator>>,
+) {
+    {
+        let app_weak = app.as_weak();
+        app.on_select_render_mode(move |mode| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let mode = match mode.as_str() {
+                "video_only" => "video_only",
+                "audio_only" => "audio_only",
+                _ => "video_audio",
+            };
+            app.set_render_mode_text(mode.into());
+            sync_render_output_path(&app);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_select_render_resolution(move |preset| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_video_resolution_text(preset.clone());
+            if let Ok((width, height)) = parse_render_resolution(preset.as_str()) {
+                app.set_render_video_width_text(width.to_string().into());
+                app.set_render_video_height_text(height.to_string().into());
+            }
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_submit_custom_render_resolution(move |val| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            // Accept "WxH" or "W×H" or "W H"
+            let normalized = val.replace('×', "x").replace(' ', "x");
+            if parse_render_resolution(&normalized).is_ok() {
+                app.set_render_video_resolution_text(normalized.into());
+                if let Ok((w, h)) =
+                    parse_render_resolution(app.get_render_video_resolution_text().as_str())
+                {
+                    app.set_render_video_width_text(w.to_string().into());
+                    app.set_render_video_height_text(h.to_string().into());
+                }
+            }
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_select_render_fps(move |fps| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_video_fps_text(fps);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_submit_custom_render_fps(move |val| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            if parse_render_fps(val.as_str()).is_ok() {
+                app.set_render_video_fps_text(val);
+            }
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_change_render_video_ffmpeg_args(move |args| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_video_ffmpeg_args_text(args);
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_change_render_audio_ffmpeg_args(move |args| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_audio_ffmpeg_args_text(args);
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_select_render_video_codec(move |codec| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_video_codec_text(codec);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_select_render_video_crf(move |crf| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_video_crf_text(crf);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_submit_custom_render_video_crf(move |val| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            // Validate CRF is a number 0-51
+            if let Ok(n) = val.trim().parse::<u32>() {
+                if n <= 51 {
+                    app.set_render_video_crf_text(n.to_string().into());
+                }
+            }
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_select_render_video_preset(move |preset| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_video_preset_text(preset);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_select_render_video_pix_fmt(move |fmt| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_video_pix_fmt_text(fmt);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_select_render_audio_bitrate(move |rate| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_audio_bitrate_text(rate);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_submit_custom_render_audio_bitrate(move |val| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let trimmed = val.trim().to_string();
+            if !trimmed.is_empty() {
+                app.set_render_audio_bitrate_text(trimmed.into());
+            }
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_toggle_render_use_limiter(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_use_limiter(!app.get_render_use_limiter());
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_toggle_render_open_after_export(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_open_after_export(!app.get_render_open_after_export());
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_select_render_audio_format(move |format| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let format = match format.as_str() {
+                "flac" => "flac",
+                "mp3" => "mp3",
+                _ => "wav",
+            };
+            app.set_render_audio_format_text(format.into());
+            sync_render_output_path(&app);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_select_render_audio_sample_rate(move |rate| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_audio_sample_rate_text(rate);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_select_render_audio_channel_count(move |channels| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_audio_channel_count_text(channels);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_browse_render_output(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let app_weak = app_weak.clone();
+            let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
+            let audio_format =
+                AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
+            let suggested_output = current_export_output_path(&app).unwrap_or_else(|_| {
+                PathBuf::from(default_render_output_path(
+                    app.get_selected_midi_name().as_str(),
+                    mode,
+                    audio_format,
+                ))
+            });
+            std::thread::spawn(move || {
+                let mut dialog = rfd::FileDialog::new();
+                if let Some(name) = suggested_output.file_name().and_then(OsStr::to_str) {
+                    dialog = dialog.set_file_name(name);
+                }
+                dialog = match mode {
+                    RenderExportMode::VideoAudio | RenderExportMode::VideoOnly => {
+                        dialog.add_filter("MP4", &["mp4"])
+                    }
+                    RenderExportMode::AudioOnly => match audio_format {
+                        AudioOnlyFormat::Wav => dialog.add_filter("WAV", &["wav"]),
+                        AudioOnlyFormat::Flac => dialog.add_filter("FLAC", &["flac"]),
+                        AudioOnlyFormat::Mp3 => dialog.add_filter("MP3", &["mp3"]),
+                    },
+                };
+                let Some(path) = dialog.save_file() else {
+                    return;
+                };
+                let _ = app_weak.upgrade_in_event_loop(move |app| {
+                    let normalized = normalize_output_path(&path, mode, audio_format);
+                    app.set_render_output_path_text(normalized.display().to_string().into());
+                    app.window().request_redraw();
+                });
+            });
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        let export_state = Arc::clone(export_state);
+        app.on_start_export(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
+            let final_output = match current_export_output_path(&app) {
+                Ok(path) => path,
+                Err(message) => {
+                    set_export_status(&app, "Failed", message, 0.0);
+                    app.window().request_redraw();
+                    return;
+                }
+            };
+
+            {
+                let mut export = export_state
+                    .lock()
+                    .expect("render export coordinator mutex poisoned");
+                if export.active {
+                    return;
+                }
+                *export = RenderExportCoordinator {
+                    active: true,
+                    mode: Some(mode),
+                    final_output: Some(final_output.clone()),
+                    ..RenderExportCoordinator::default()
+                };
+            }
+
+            app.set_render_output_path_text(final_output.display().to_string().into());
+
+            if mode.wants_audio() {
+                if app.get_audio_load_state() == MidiLoadState::Loading {
+                    fail_export(
+                        &app,
+                        &export_state,
+                        "audio cache is already loading; wait for it to finish first".into(),
+                    );
+                    return;
+                }
+                if app.get_audio_load_state() != MidiLoadState::Loaded {
+                    let midi_path = shared_state
+                        .lock()
+                        .expect("shared UI state mutex poisoned")
+                        .snapshot
+                        .as_ref()
+                        .and_then(|snapshot| snapshot.midi_path.clone())
+                        .or_else(|| {
+                            let selected = app.get_selected_midi_name();
+                            (!selected.is_empty()).then(|| PathBuf::from(selected.as_str()))
+                        });
+                    let Some(midi_path) = midi_path else {
+                        fail_export(&app, &export_state, "load a MIDI before exporting".into());
+                        return;
+                    };
+
+                    app.set_audio_load_state(MidiLoadState::Loading);
+                    app.set_audio_loading_progress(0.0);
+                    app.set_audio_loading_status("Preparing audio cache…".into());
+                    app.set_audio_load_error(Default::default());
+                    set_export_status(
+                        &app,
+                        "Preparing audio cache",
+                        final_output.display().to_string(),
+                        0.0,
+                    );
+                    app.window().request_redraw();
+
+                    let app_weak = app.as_weak();
+                    let bridge = bridge.clone();
+                    let shared_state = Arc::clone(&shared_state);
+                    let export_state = Arc::clone(&export_state);
+                    std::thread::spawn(move || {
+                        let result = bridge.load_audio_midi(midi_path, &shared_state);
+                        let _ = app_weak.upgrade_in_event_loop(move |app| match result {
+                            Ok(events) => {
+                                if let Some(message) = events_error_message(&events) {
+                                    app.set_audio_load_state(MidiLoadState::Error);
+                                    app.set_audio_load_error(message.clone().into());
+                                    app.set_audio_loading_status(Default::default());
+                                    fail_export(&app, &export_state, message);
+                                    return;
+                                }
+                                apply_events_to_app(&app, &shared_state, &events);
+                                app.set_audio_load_state(MidiLoadState::Loaded);
+                                app.set_audio_loading_progress(1.0);
+                                app.set_audio_loading_status("Audio ready".into());
+                                if export_state
+                                    .lock()
+                                    .expect("render export coordinator mutex poisoned")
+                                    .active
+                                {
+                                    if let Err(message) = start_render_export_jobs(
+                                        &app,
+                                        &bridge,
+                                        &shared_state,
+                                        &export_state,
+                                    ) {
+                                        fail_export(&app, &export_state, message);
+                                    }
+                                }
+                            }
+                            Err(error) => {
+                                app.set_audio_load_state(MidiLoadState::Error);
+                                app.set_audio_load_error(error.to_string().into());
+                                app.set_audio_loading_status(Default::default());
+                                fail_export(&app, &export_state, error.to_string());
+                            }
+                        });
+                    });
+                    return;
+                }
+            }
+
+            set_export_status(
+                &app,
+                "Preparing export",
+                final_output.display().to_string(),
+                0.0,
+            );
+            if let Err(message) =
+                start_render_export_jobs(&app, &bridge, &shared_state, &export_state)
+            {
+                fail_export(&app, &export_state, message);
+            }
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        let export_state = Arc::clone(export_state);
+        app.on_cancel_export(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+
+            let (active, finalizing) = {
+                let export = export_state
+                    .lock()
+                    .expect("render export coordinator mutex poisoned");
+                (export.active, export.finalizing)
+            };
+            if !active {
+                return;
+            }
+
+            if finalizing {
+                set_export_status(
+                    &app,
+                    "Finalizing output",
+                    "Cancel is unavailable during final mux/encode".to_string(),
+                    app.get_render_export_progress(),
+                );
+                app.window().request_redraw();
+                return;
+            }
+
+            let video_running = app.get_video_render_status() != "Idle";
+            let audio_running = app.get_audio_render_status() != "Idle";
+            if video_running {
+                if let Ok(events) = bridge.cancel_render_video(&shared_state) {
+                    apply_events_to_app(&app, &shared_state, &events);
+                }
+            }
+            if audio_running {
+                if let Ok(events) = bridge.cancel_render_audio(&shared_state) {
+                    apply_events_to_app(&app, &shared_state, &events);
+                }
+            }
+
+            if !video_running && !audio_running {
+                clear_export_state(&export_state);
+                set_export_status(&app, "Cancelled", "Render cancelled".to_string(), 0.0);
+            }
+            app.window().request_redraw();
+        });
+    }
+}
+
 /// Wire MIDI file selection, loading, unloading, and drag-drop callbacks.
 fn wire_midi_callbacks(
     app: &App,
@@ -1377,14 +2388,14 @@ fn wire_midi_callbacks(
                         &preview_load_generation,
                         &path,
                     ),
-                    1 => load_render_midi_async(
+                    1 | 2 => load_render_midi_async(
                         &app,
                         &bridge,
                         &shared_state,
                         &render_load_generation,
                         &path,
                     ),
-                    2 => load_audio_midi_async(
+                    3 => load_audio_midi_async(
                         &app,
                         &bridge,
                         &shared_state,
@@ -2100,38 +3111,289 @@ fn install_drag_drop(app: &App) {
         });
 }
 
-fn install_load_progress_listener(app: &App, core: &CoreHandle) {
+fn install_core_event_listener(
+    app: &App,
+    core: &CoreHandle,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    export_state: &Arc<Mutex<RenderExportCoordinator>>,
+) {
     let receiver = core.subscribe_events();
     let app_weak = app.as_weak();
+    let shared_state = Arc::clone(shared_state);
+    let export_state = Arc::clone(export_state);
     std::thread::spawn(move || {
         for event in receiver {
-            let CoreEvent::MidiLoadProgress {
-                path,
-                progress,
-                status,
-            } = event
-            else {
-                continue;
-            };
-
-            let path_text: slint::SharedString = path.display().to_string().into();
-            let status_text: slint::SharedString = status.into();
-            let _ = app_weak.upgrade_in_event_loop(move |app| {
-                if app.get_selected_midi_name() != path_text {
-                    return;
+            update_export_state_from_event(&export_state, &event);
+            match &event {
+                CoreEvent::MidiLoadProgress {
+                    path,
+                    progress,
+                    status,
+                } => {
+                    let path_text: slint::SharedString = path.display().to_string().into();
+                    let status_text: slint::SharedString = status.clone().into();
+                    let progress = *progress;
+                    let _ = app_weak.upgrade_in_event_loop(move |app| {
+                        if app.get_selected_midi_name() != path_text {
+                            return;
+                        }
+                        if app.get_render_load_state() == MidiLoadState::Loading {
+                            app.set_render_loading_progress(progress);
+                            app.set_render_loading_status(status_text.clone());
+                        }
+                        if app.get_audio_load_state() == MidiLoadState::Loading {
+                            app.set_audio_loading_progress(progress);
+                            app.set_audio_loading_status(status_text);
+                        }
+                        app.window().request_redraw();
+                    });
                 }
-                if app.get_render_load_state() == MidiLoadState::Loading {
-                    app.set_render_loading_progress(progress);
-                    app.set_render_loading_status(status_text.clone());
+                CoreEvent::AudioRender { .. }
+                | CoreEvent::AudioRenderStatus { .. }
+                | CoreEvent::VideoRender { .. }
+                | CoreEvent::VideoRenderStatus { .. }
+                | CoreEvent::Error { .. } => {
+                    let event = event.clone();
+                    let shared_state = Arc::clone(&shared_state);
+                    let _ = app_weak.upgrade_in_event_loop(move |app| {
+                        shared_state
+                            .lock()
+                            .expect("shared UI state mutex poisoned")
+                            .reduce_events(std::slice::from_ref(&event));
+                        apply_events_to_app(&app, &shared_state, &[event]);
+                        app.window().request_redraw();
+                    });
                 }
-                if app.get_audio_load_state() == MidiLoadState::Loading {
-                    app.set_audio_loading_progress(progress);
-                    app.set_audio_loading_status(status_text);
-                }
-                app.window().request_redraw();
-            });
+                _ => {}
+            }
         }
     });
+}
+
+fn events_error_message(events: &[CoreEvent]) -> Option<String> {
+    events.iter().find_map(|event| match event {
+        CoreEvent::Error { message, .. } => Some(message.clone()),
+        _ => None,
+    })
+}
+
+fn update_export_state_from_event(
+    export_state: &Arc<Mutex<RenderExportCoordinator>>,
+    event: &CoreEvent,
+) {
+    let mut export = export_state
+        .lock()
+        .expect("render export coordinator mutex poisoned");
+    if !export.active {
+        return;
+    }
+
+    match event {
+        CoreEvent::VideoRender { event } => match event {
+            meridian_core::protocol::VideoRenderEvent::RenderFinished { output, .. } => {
+                if export.video_job_output.as_ref() == Some(output) {
+                    export.video_outcome = Some(RenderJobOutcome::Finished);
+                }
+            }
+            meridian_core::protocol::VideoRenderEvent::RenderCancelled { .. } => {
+                if export.mode.is_some_and(RenderExportMode::wants_video) {
+                    export.video_outcome = Some(RenderJobOutcome::Cancelled);
+                }
+            }
+            meridian_core::protocol::VideoRenderEvent::RenderFailed { message } => {
+                if export.mode.is_some_and(RenderExportMode::wants_video) {
+                    export.video_outcome = Some(RenderJobOutcome::Failed(message.clone()));
+                }
+            }
+            _ => {}
+        },
+        CoreEvent::AudioRender { event } => match event {
+            meridian_core::audio::AudioRenderEvent::RenderFinished { output, .. } => {
+                if export.audio_job_output.as_ref() == Some(output) {
+                    export.audio_outcome = Some(RenderJobOutcome::Finished);
+                }
+            }
+            meridian_core::audio::AudioRenderEvent::RenderCancelled { .. } => {
+                if export.mode.is_some_and(RenderExportMode::wants_audio) {
+                    export.audio_outcome = Some(RenderJobOutcome::Cancelled);
+                }
+            }
+            meridian_core::audio::AudioRenderEvent::RenderFailed { message } => {
+                if export.mode.is_some_and(RenderExportMode::wants_audio) {
+                    export.audio_outcome = Some(RenderJobOutcome::Failed(message.clone()));
+                }
+            }
+            _ => {}
+        },
+        _ => {}
+    }
+}
+
+fn spawn_finalizer_task(
+    export_state: Arc<Mutex<RenderExportCoordinator>>,
+    spec: FinalizeSpec,
+    final_output: PathBuf,
+) {
+    std::thread::spawn(move || {
+        let result = run_finalizer(&spec, &final_output);
+        match &spec {
+            FinalizeSpec::MuxMp4 {
+                video_input,
+                audio_input,
+                ..
+            } => {
+                let _ = fs::remove_file(video_input);
+                let _ = fs::remove_file(audio_input);
+            }
+            FinalizeSpec::EncodeAudio { wav_input, .. } => {
+                let _ = fs::remove_file(wav_input);
+            }
+        }
+        export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned")
+            .finalize_result = Some(result);
+    });
+}
+
+fn update_render_export_ui(app: &App, export_state: &Arc<Mutex<RenderExportCoordinator>>) {
+    enum UiAction {
+        None,
+        Finalize { spec: FinalizeSpec, output: PathBuf },
+        Finished(PathBuf),
+        Failed(String),
+        Cancelled,
+    }
+
+    let action = {
+        let mut export = export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned");
+        if !export.active {
+            return;
+        }
+
+        if export.finalizing {
+            if let Some(result) = export.finalize_result.take() {
+                export.active = false;
+                export.finalizing = false;
+                export.mode = None;
+                match result {
+                    Ok(()) => UiAction::Finished(
+                        export
+                            .final_output
+                            .clone()
+                            .unwrap_or_else(|| PathBuf::from("(output)")),
+                    ),
+                    Err(message) => UiAction::Failed(message),
+                }
+            } else {
+                set_export_status(
+                    app,
+                    "Finalizing output",
+                    export
+                        .final_output
+                        .as_ref()
+                        .map(|path| path.display().to_string())
+                        .unwrap_or_else(|| "encoding final output".into()),
+                    0.98,
+                );
+                UiAction::None
+            }
+        } else {
+            let Some(mode) = export.mode else {
+                return;
+            };
+
+            if let Some(message) = match &export.video_outcome {
+                Some(RenderJobOutcome::Failed(message)) => Some(message.clone()),
+                _ => None,
+            } {
+                export.active = false;
+                UiAction::Failed(message)
+            } else if let Some(message) = match &export.audio_outcome {
+                Some(RenderJobOutcome::Failed(message)) => Some(message.clone()),
+                _ => None,
+            } {
+                export.active = false;
+                UiAction::Failed(message)
+            } else if matches!(export.video_outcome, Some(RenderJobOutcome::Cancelled))
+                || matches!(export.audio_outcome, Some(RenderJobOutcome::Cancelled))
+            {
+                export.active = false;
+                UiAction::Cancelled
+            } else {
+                let video_done = !mode.wants_video()
+                    || matches!(export.video_outcome, Some(RenderJobOutcome::Finished));
+                let audio_done = !mode.wants_audio()
+                    || matches!(export.audio_outcome, Some(RenderJobOutcome::Finished));
+
+                if video_done && audio_done {
+                    if let Some(spec) = export.finalize_spec.clone() {
+                        let output = export
+                            .final_output
+                            .clone()
+                            .unwrap_or_else(|| PathBuf::from("render.out"));
+                        export.finalizing = true;
+                        UiAction::Finalize { spec, output }
+                    } else {
+                        export.active = false;
+                        UiAction::Finished(
+                            export
+                                .final_output
+                                .clone()
+                                .unwrap_or_else(|| PathBuf::from("render.out")),
+                        )
+                    }
+                } else {
+                    let progress = match mode {
+                        RenderExportMode::VideoAudio => {
+                            (app.get_video_render_progress() + app.get_audio_render_progress())
+                                / 2.0
+                        }
+                        RenderExportMode::VideoOnly => app.get_video_render_progress(),
+                        RenderExportMode::AudioOnly => app.get_audio_render_progress(),
+                    };
+                    let status = match mode {
+                        RenderExportMode::VideoAudio => "Rendering video + audio",
+                        RenderExportMode::VideoOnly => "Rendering video",
+                        RenderExportMode::AudioOnly => "Rendering audio",
+                    };
+                    set_export_status(
+                        app,
+                        status,
+                        export
+                            .final_output
+                            .as_ref()
+                            .map(|path| path.display().to_string())
+                            .unwrap_or_else(|| "working".into()),
+                        progress,
+                    );
+                    UiAction::None
+                }
+            }
+        }
+    };
+
+    match action {
+        UiAction::None => {}
+        UiAction::Finalize { spec, output } => {
+            set_export_status(app, "Finalizing output", output.display().to_string(), 0.98);
+            spawn_finalizer_task(Arc::clone(export_state), spec, output);
+        }
+        UiAction::Finished(output) => {
+            set_export_status(app, "Finished", output.display().to_string(), 1.0);
+            if app.get_render_open_after_export() {
+                let _ = open::that_detached(&output);
+            }
+        }
+        UiAction::Failed(message) => {
+            set_export_status(app, "Failed", message, 0.0);
+        }
+        UiAction::Cancelled => {
+            set_export_status(app, "Cancelled", "Render cancelled".to_string(), 0.0);
+        }
+    }
 }
 
 fn install_viewport(
@@ -2172,6 +3434,7 @@ fn install_timer(
     pending_viewport_image: &Rc<RefCell<Option<slint::Image>>>,
     viewport_size: &Rc<RefCell<(u32, u32)>>,
     disable_wgpu: bool,
+    export_state: &Arc<Mutex<RenderExportCoordinator>>,
 ) -> slint::Timer {
     let animation_timer = slint::Timer::default();
     let app_for_timer = app.as_weak();
@@ -2179,6 +3442,7 @@ fn install_timer(
     let shared_state_for_timer = Arc::clone(shared_state);
     let pending_viewport_image_for_timer = Rc::clone(pending_viewport_image);
     let viewport_size_for_timer = Rc::clone(viewport_size);
+    let export_state_for_timer = Arc::clone(export_state);
 
     animation_timer.start(
         slint::TimerMode::Repeated,
@@ -2208,6 +3472,7 @@ fn install_timer(
                 if disable_wgpu || app.get_play_label() == "Pause" {
                     app.window().request_redraw();
                 }
+                update_render_export_ui(&app, &export_state_for_timer);
             }
         },
     );

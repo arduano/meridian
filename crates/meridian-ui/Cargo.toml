@@ -26,6 +26,7 @@ debug-snapshots = []
 [dependencies]
 clap.workspace = true
 meridian-core = { path = "../meridian-core" }
+open = "5"
 rfd.workspace = true
 slint.workspace = true
 

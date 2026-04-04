@@ -7,7 +7,7 @@ use std::{
 
 use meridian_core::{
     audio::{AudioBackend, EnvelopeCurveType, ThreadCount},
-    protocol::{AudioRenderStatus, CoreEvent, MidiAnalysisData, StateSnapshot},
+    protocol::{AudioRenderStatus, CoreEvent, MidiAnalysisData, StateSnapshot, VideoRenderStatus},
     render::{
         KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
         PFA_RED_TOP_BAR_COLOR, ProjectorImageConfig, RendererKind, SceneConfig, ThreeDSceneConfig,
@@ -172,10 +172,13 @@ fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: &StateSnaps
 }
 
 fn apply_state_to_app(app: &App, shared_state: &Arc<Mutex<UiViewModel>>, state: &StateSnapshot) {
-    let audio_render_status = {
+    let (audio_render_status, video_render_status) = {
         let mut model = shared_state.lock().expect("shared UI state mutex poisoned");
         model.apply_snapshot(state);
-        model.render_jobs.audio.clone()
+        (
+            model.render_jobs.audio.clone(),
+            model.render_jobs.video.clone(),
+        )
     };
     app.set_midi_path_text(
         state
@@ -208,6 +211,7 @@ fn apply_state_to_app(app: &App, shared_state: &Arc<Mutex<UiViewModel>>, state: 
         "Play".into()
     });
     apply_audio_to_app(app, state, &audio_render_status);
+    apply_video_render_status_to_app(app, &video_render_status);
 }
 
 fn status_text(state: &StateSnapshot) -> String {
@@ -676,6 +680,51 @@ fn apply_audio_render_status_to_app(app: &App, status: &AudioRenderStatus) {
             app.set_audio_render_status("Cancelling render".into());
             app.set_audio_render_elapsed(format!("{rendered_seconds:.1} s").into());
             app.set_audio_render_output_text(file_name_or_full(output).into());
+        }
+    }
+}
+
+fn apply_video_render_status_to_app(app: &App, status: &VideoRenderStatus) {
+    match status {
+        VideoRenderStatus::Idle => {
+            app.set_video_render_progress(0.0);
+            app.set_video_render_status("Idle".into());
+            app.set_video_render_elapsed("—".into());
+            app.set_video_render_output_text("output.mp4".into());
+        }
+        VideoRenderStatus::Running {
+            output,
+            total_frames,
+            frame_index,
+            elapsed_seconds,
+            ..
+        } => {
+            let progress = if *total_frames == 0 {
+                0.0
+            } else {
+                *frame_index as f32 / *total_frames as f32
+            };
+            app.set_video_render_progress(progress);
+            app.set_video_render_status("Rendering video".into());
+            app.set_video_render_elapsed(format!("{elapsed_seconds:.1} s").into());
+            app.set_video_render_output_text(file_name_or_full(output).into());
+        }
+        VideoRenderStatus::Cancelling {
+            output,
+            total_frames,
+            frame_index,
+            elapsed_seconds,
+            ..
+        } => {
+            let progress = if *total_frames == 0 {
+                0.0
+            } else {
+                *frame_index as f32 / *total_frames as f32
+            };
+            app.set_video_render_progress(progress);
+            app.set_video_render_status("Cancelling render".into());
+            app.set_video_render_elapsed(format!("{elapsed_seconds:.1} s").into());
+            app.set_video_render_output_text(file_name_or_full(output).into());
         }
     }
 }
