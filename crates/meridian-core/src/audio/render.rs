@@ -1,17 +1,20 @@
 use std::{
+    fs::File,
+    io::BufWriter,
     ops::RangeInclusive,
     path::PathBuf,
     sync::atomic::{AtomicBool, Ordering},
 };
 
+use hound::{SampleFormat, WavSpec, WavWriter};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use xsynth_core::{
-    AudioStreamParams, ChannelCount,
-    channel::{ChannelAudioEvent, ChannelEvent, ControlEvent},
-    channel_group::{ChannelGroupConfig, SynthEvent},
+    AudioPipe, AudioStreamParams, ChannelCount,
+    channel::{ChannelAudioEvent, ChannelConfigEvent, ChannelEvent, ControlEvent},
+    channel_group::{ChannelGroup, ChannelGroupConfig, SynthEvent},
+    effects::VolumeLimiter,
 };
-use xsynth_render::{OfflineRenderConfig, OfflineWavRenderer};
 
 use crate::{
     MeridianError,
@@ -266,7 +269,12 @@ fn render_audio_inner(
 }
 
 struct OfflineAudioRenderer {
-    inner: OfflineWavRenderer,
+    inner: ChannelGroup,
+    writer: WavWriter<BufWriter<File>>,
+    limiter: Option<VolumeLimiter>,
+    scratch: Vec<f32>,
+    missed_samples: f64,
+    channel_count: usize,
     frames_written: u64,
 }
 
@@ -290,32 +298,86 @@ impl OfflineAudioRenderer {
         } else {
             None
         };
-        let render_config = OfflineRenderConfig {
-            group_options,
-            use_limiter,
-        };
-        let inner =
-            OfflineWavRenderer::new(render_config, output, soundfonts, layers).map_err(|e| {
-                MeridianError::Platform(format!("failed to create xsynth wav renderer: {e}"))
-            })?;
+        let mut inner = ChannelGroup::new(group_options);
+        inner.send_event(SynthEvent::AllChannels(ChannelEvent::Config(
+            ChannelConfigEvent::SetSoundfonts(soundfonts),
+        )));
+        inner.send_event(SynthEvent::AllChannels(ChannelEvent::Config(
+            ChannelConfigEvent::SetLayerCount(layers),
+        )));
+
+        let writer = WavWriter::create(
+            output,
+            WavSpec {
+                channels: audio_params.channels.count(),
+                sample_rate: audio_params.sample_rate,
+                bits_per_sample: 32,
+                sample_format: SampleFormat::Float,
+            },
+        )
+        .map_err(|error| {
+            MeridianError::Platform(format!("failed to create output wav file: {error}"))
+        })?;
         Ok(Self {
             inner,
+            writer,
+            limiter: use_limiter.then(|| VolumeLimiter::new(audio_params.channels.count())),
+            scratch: Vec::new(),
+            missed_samples: 0.0,
+            channel_count: audio_params.channels.count() as usize,
             frames_written: 0,
         })
     }
 
     fn render_batch(&mut self, seconds: f64) -> Result<(), MeridianError> {
-        self.inner
-            .render_batch(seconds)
-            .map_err(|e| MeridianError::Platform(format!("xsynth render batch failed: {e}")))?;
-        self.frames_written = self.inner.frames_written();
+        if seconds > 10.0 {
+            let mut remaining = seconds;
+            while remaining > 10.0 {
+                self.render_batch(10.0)?;
+                remaining -= 10.0;
+            }
+            if remaining > 0.0 {
+                self.render_batch(remaining)?;
+            }
+            return Ok(());
+        }
+
+        let samples = self.stream_sample_count(seconds);
+        if samples == 0 {
+            return Ok(());
+        }
+
+        self.scratch.resize(samples, 0.0);
+        self.inner.read_samples(&mut self.scratch);
+        self.write_buffer()?;
         Ok(())
     }
 
-    fn finalize(self) -> Result<u64, MeridianError> {
-        self.inner.finalize().map_err(|e| {
-            MeridianError::Platform(format!("failed to finalize xsynth wav render: {e}"))
-        })
+    fn finalize(mut self) -> Result<u64, MeridianError> {
+        loop {
+            self.scratch
+                .resize(self.channel_count * self.output_sample_rate() as usize, 0.0);
+            self.inner.read_samples(&mut self.scratch);
+
+            if let Some(limiter) = &mut self.limiter {
+                limiter.limit(&mut self.scratch);
+            }
+
+            if self
+                .scratch
+                .iter()
+                .all(|sample| (-0.0001..=0.0001).contains(sample))
+            {
+                break;
+            }
+
+            self.write_samples_from_scratch()?;
+        }
+
+        self.writer.finalize().map_err(|error| {
+            MeridianError::Platform(format!("failed to finalize wav output: {error}"))
+        })?;
+        Ok(self.frames_written)
     }
 
     fn send_event(&mut self, event: SynthEvent) {
@@ -328,6 +390,33 @@ impl OfflineAudioRenderer {
 
     fn frames_written(&self) -> u64 {
         self.frames_written
+    }
+
+    fn stream_sample_count(&mut self, seconds: f64) -> usize {
+        let sample_frames = self.output_sample_rate() as f64 * seconds + self.missed_samples;
+        self.missed_samples = sample_frames.fract();
+        sample_frames.floor() as usize * self.channel_count
+    }
+
+    fn output_sample_rate(&self) -> u32 {
+        self.inner.stream_params().sample_rate
+    }
+
+    fn write_buffer(&mut self) -> Result<(), MeridianError> {
+        if let Some(limiter) = &mut self.limiter {
+            limiter.limit(&mut self.scratch);
+        }
+        self.write_samples_from_scratch()
+    }
+
+    fn write_samples_from_scratch(&mut self) -> Result<(), MeridianError> {
+        for &sample in &self.scratch {
+            self.writer.write_sample(sample).map_err(|error| {
+                MeridianError::Platform(format!("failed to write wav sample: {error}"))
+            })?;
+        }
+        self.frames_written += (self.scratch.len() / self.channel_count) as u64;
+        Ok(())
     }
 }
 

@@ -7,10 +7,12 @@ license = "LGPL-3.0-or-later"
 [dependencies]
 bytemuck.workspace = true
 clap.workspace = true
+cpal.workspace = true
 enum_dispatch.workspace = true
 flate2.workspace = true
 flume.workspace = true
 glam.workspace = true
+hound.workspace = true
 midi-toolkit-rs.workspace = true
 midly.workspace = true
 png.workspace = true
@@ -24,7 +26,6 @@ ts-rs.workspace = true
 wgpu.workspace = true
 xsynth-core.workspace = true
 xsynth-realtime.workspace = true
-xsynth-render.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

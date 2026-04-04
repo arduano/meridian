@@ -7,10 +7,10 @@ use std::{
 
 use meridian_core::{
     PROTOCOL_VERSION,
-    protocol::{JsonRequest, JsonResponse, ProtocolCommand, ProtocolEvent},
+    protocol::{ProtocolCommand, ProtocolEvent, ProtocolRequest, ProtocolResponse},
 };
 
-fn read_response(reader: &mut BufReader<std::process::ChildStdout>) -> JsonResponse {
+fn read_response(reader: &mut BufReader<std::process::ChildStdout>) -> ProtocolResponse {
     let mut line = String::new();
     reader.read_line(&mut line).expect("read response line");
     serde_json::from_str(line.trim()).expect("parse response json")
@@ -18,7 +18,7 @@ fn read_response(reader: &mut BufReader<std::process::ChildStdout>) -> JsonRespo
 
 fn send_request(
     stdin: &mut std::process::ChildStdin,
-    request: &JsonRequest,
+    request: &ProtocolRequest,
 ) -> std::io::Result<()> {
     writeln!(
         stdin,
@@ -45,7 +45,7 @@ fn stdio_transport_round_trips_core_events() {
 
     send_request(
         &mut stdin,
-        &JsonRequest {
+        &ProtocolRequest {
             protocol_version: PROTOCOL_VERSION,
             id: Some(1),
             command: ProtocolCommand::LoadParsedMidi { path: midi.clone() },
@@ -63,7 +63,7 @@ fn stdio_transport_round_trips_core_events() {
 
     send_request(
         &mut stdin,
-        &JsonRequest {
+        &ProtocolRequest {
             protocol_version: PROTOCOL_VERSION,
             id: Some(2),
             command: ProtocolCommand::LoadAudioMidi { path: midi.clone() },
@@ -80,7 +80,7 @@ fn stdio_transport_round_trips_core_events() {
 
     send_request(
         &mut stdin,
-        &JsonRequest {
+        &ProtocolRequest {
             protocol_version: PROTOCOL_VERSION,
             id: Some(3),
             command: ProtocolCommand::Shutdown,

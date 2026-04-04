@@ -1,6 +1,6 @@
 mod support;
 
-use std::{fs, path::PathBuf, time::Duration};
+use std::{fs, time::Duration};
 
 use meridian_core::{
     PROTOCOL_VERSION,
@@ -15,7 +15,7 @@ use meridian_core::{
     render::{DisplayTimeSpace, SceneLayout},
     spawn_core,
 };
-use midi_toolkit::{events::Event, io::MIDIFile as ToolkitMidiFile, sequence::event::Delta};
+use midi_toolkit::{events::Event, io::MIDIFile as ToolkitMidiFile};
 
 #[test]
 fn stateful_core_projects_a_frame() {
@@ -283,7 +283,7 @@ fn process_midi_files_merges_trims_and_writes_output() {
     let mut note_ons = Vec::new();
     let mut note_offs = Vec::new();
     let mut tick = 0u64;
-    for event in written.iter_track(0) {
+    for event in written.iter_track(0).expect("open written track") {
         let event = event.expect("parse written track");
         tick += event.delta;
         match event.event {

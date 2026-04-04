@@ -124,49 +124,6 @@ component MiniStat inherits Rectangle {
 }
 
 
-component InsightTile inherits Rectangle {
-    in property <string> title;
-    in property <string> value;
-    in property <string> detail;
-
-    height: 92px;
-    horizontal-stretch: 1;
-    border-radius: 8px;
-    background: #09111d;
-    border-width: 1px;
-    border-color: #101a28;
-
-    VerticalLayout {
-        padding: 12px;
-        spacing: 6px;
-
-        Text {
-            text: root.title;
-            color: #516983;
-            font-size: 9px;
-            font-weight: 800;
-            letter-spacing: 0.5px;
-        }
-
-        Text {
-            text: root.value;
-            color: #d7e3f2;
-            font-size: 16px;
-            font-weight: 800;
-            wrap: word-wrap;
-        }
-
-        Text {
-            text: root.detail;
-            color: #6f829b;
-            font-family: "monospace";
-            font-size: 10px;
-            wrap: word-wrap;
-        }
-    }
-}
-
-
 component HeroMetric inherits Rectangle {
     in property <string> value;
     in property <string> label;

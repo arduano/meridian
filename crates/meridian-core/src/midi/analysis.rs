@@ -506,11 +506,8 @@ pub fn build_cached_midi_analysis_with_progress(
     mut progress: impl FnMut(f32),
 ) -> Result<CachedMidiAnalysis, crate::error::MeridianError> {
     use midi_toolkit::{
-        pipe,
-        sequence::{
-            event::{Delta, Track},
-            unwrap_items,
-        },
+        prelude::ResultIterExt,
+        sequence::event::{Delta, Track},
     };
 
     let midi = parsed.midi();
@@ -521,7 +518,7 @@ pub fn build_cached_midi_analysis_with_progress(
         ));
     }
 
-    let merged = pipe!(midi.iter_all_track_events_merged() |> unwrap_items());
+    let merged = midi.iter_all_track_events_merged().unwrap_items();
     let track_count = midi.track_count().max(1);
     let mut keys: Vec<AnalysisKeyState> = (0..256).map(|_| AnalysisKeyState::new()).collect();
     let mut time_seconds = 0.0;
@@ -612,11 +609,8 @@ pub fn build_buckets_from_parsed_with_progress(
     mut progress: impl FnMut(f32),
 ) -> Result<Vec<MidiAnalysisBucket>, crate::error::MeridianError> {
     use midi_toolkit::{
-        pipe,
-        sequence::{
-            event::{Delta, Track},
-            unwrap_items,
-        },
+        prelude::ResultIterExt,
+        sequence::event::{Delta, Track},
     };
 
     let bucket_count = bucket_count.clamp(1, 8192);
@@ -636,7 +630,7 @@ pub fn build_buckets_from_parsed_with_progress(
         ));
     }
 
-    let merged = pipe!(midi.iter_all_track_events_merged() |> unwrap_items());
+    let merged = midi.iter_all_track_events_merged().unwrap_items();
     let total_events = parsed.total_event_count().max(1);
     let progress_stride = (total_events / 200).max(1);
     let bucket_width = midi_length / bucket_count as f64;

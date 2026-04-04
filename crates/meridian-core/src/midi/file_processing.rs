@@ -234,7 +234,9 @@ fn process_midi_files_to_file_inner(
                 total_events,
             });
         }
-        let mut track_writer = writer.open_next_track();
+        let mut track_writer = writer
+            .try_open_next_track()
+            .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
         total_events += track_writer
             .write_events_iter(track.iter().cloned())
             .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;

@@ -1,3 +1,7 @@
+use cpal::{
+    SampleRate,
+    traits::{DeviceTrait, HostTrait},
+};
 use xsynth_core::{
     AudioStreamParams,
     channel::{ChannelConfigEvent, ChannelEvent},
@@ -17,15 +21,9 @@ pub struct XSynthPlayer {
 
 impl XSynthPlayer {
     pub fn new(config: &AudioConfig) -> Result<Self, MeridianError> {
-        let synth = std::panic::catch_unwind(|| {
-            RealtimeSynth::open_with_default_output_and_params(
-                config.xsynth.config.clone(),
-                config.xsynth.render.audio_params,
-            )
-        })
-        .map_err(|_| {
-            MeridianError::MidiLoad("xsynth panicked during output initialization".into())
-        })?;
+        let synth = std::panic::catch_unwind(|| open_output_synth(config)).map_err(|_| {
+            MeridianError::Platform("xsynth panicked during output initialization".into())
+        })??;
         let sender = synth.get_sender_ref().clone();
         let stats = synth.get_stats();
         let stream_params = synth.stream_params();
@@ -36,6 +34,30 @@ impl XSynthPlayer {
             synth,
         })
     }
+}
+
+fn open_output_synth(config: &AudioConfig) -> Result<RealtimeSynth, MeridianError> {
+    let host = cpal::default_host();
+    let device = host.default_output_device().ok_or_else(|| {
+        MeridianError::Platform("no default audio output device is available".into())
+    })?;
+
+    let desired = config.xsynth.render.audio_params;
+    let stream_config = if let Ok(configs) = device.supported_output_configs() {
+        configs
+            .filter(|candidate| candidate.channels() == desired.channels.count())
+            .find_map(|candidate| candidate.try_with_sample_rate(SampleRate(desired.sample_rate)))
+    } else {
+        None
+    }
+    .or_else(|| device.default_output_config().ok())
+    .ok_or_else(|| {
+        MeridianError::Platform("failed to determine an output stream configuration".into())
+    })?;
+
+    RealtimeSynth::open(config.xsynth.config.clone(), &device, stream_config).map_err(|error| {
+        MeridianError::Platform(format!("xsynth output initialization failed: {error}"))
+    })
 }
 
 impl MidiAudioPlayer for XSynthPlayer {

@@ -2,19 +2,15 @@ use std::{collections::VecDeque, sync::Arc};
 
 use midi_toolkit::{
     events::{Event, MIDIEventEnum},
-    pipe,
-    sequence::{
-        TimeCaster,
-        event::{Delta, Track, cancel_tempo_events, scale_event_time},
-        unwrap_items,
-    },
+    prelude::{EventSequenceExt, ResultIterExt},
+    sequence::event::{Delta, Track},
 };
 use rustc_hash::FxHashMap;
 
 use crate::{
     error::MeridianError,
     midi::{
-        MIDIColor, MIDIColorPair, MIDIFileUniqueSignature, TrackAndChannel,
+        MIDIFileUniqueSignature, TrackAndChannel,
         analysis::{CachedMidiAnalysis, MidiAnalysisAccumulator},
         audio_cache::{CompressedAudio, InRamAudioCache},
         display_cache::DisplayMidiCache,
@@ -108,13 +104,12 @@ fn build_processed_midi(
         ));
     }
 
-    let merged = pipe!(
-        midi.iter_all_track_events_merged()
-        |>TimeCaster::<f64>::cast_event_delta()
-        |>cancel_tempo_events(250000)
-        |>scale_event_time(1.0 / ppq as f64)
-        |>unwrap_items()
-    );
+    let merged = midi
+        .iter_all_track_events_merged()
+        .cast_event_delta::<f64>()
+        .cancel_tempo_events(250000)
+        .scale_event_time(1.0 / ppq as f64)
+        .unwrap_items();
 
     let track_count = midi.track_count().max(1);
     let mut time = 0.0;

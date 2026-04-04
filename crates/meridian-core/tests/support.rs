@@ -1,14 +1,12 @@
+#![allow(dead_code)]
+
 use std::{
     fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use midi_toolkit::{
-    events::Event,
-    io::{MIDIFile as ToolkitMidiFile, MIDIWriter},
-    sequence::event::Delta,
-};
+use midi_toolkit::{events::Event, io::MIDIWriter, sequence::event::Delta};
 
 pub fn temp_dir(prefix: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
@@ -161,7 +159,7 @@ pub fn write_tempo_staircase_midi() -> PathBuf {
 pub fn write_toolkit_midi(path: &Path, ppq: u16, tracks: Vec<Vec<Delta<u64, Event>>>) {
     let writer = MIDIWriter::new(path.to_string_lossy().as_ref(), ppq).expect("create midi writer");
     for track in tracks {
-        let mut track_writer = writer.open_next_track();
+        let mut track_writer = writer.try_open_next_track().expect("open midi track");
         track_writer
             .write_events_iter(track.into_iter())
             .expect("write midi track");

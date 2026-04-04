@@ -1,11 +1,7 @@
 use midi_toolkit::{
     events::{Event, MIDIEventEnum},
-    pipe,
-    sequence::{
-        TimeCaster,
-        event::{Delta, EventBatch, Track, cancel_tempo_events, scale_event_time},
-        unwrap_items,
-    },
+    prelude::{EventSequenceExt, ResultIterExt},
+    sequence::event::{Delta, EventBatch, Track},
 };
 
 use crate::{error::MeridianError, midi::parsed::ParsedMidiFile};
@@ -50,13 +46,12 @@ impl InRamAudioCache {
             ));
         }
 
-        let merged = pipe!(
-            midi.iter_all_track_events_merged_batches()
-            |>TimeCaster::<f64>::cast_event_delta()
-            |>cancel_tempo_events(250000)
-            |>scale_event_time(1.0 / ppq as f64)
-            |>unwrap_items()
-        );
+        let merged = midi
+            .iter_all_track_events_merged_batches()
+            .cast_event_delta::<f64>()
+            .cancel_tempo_events(250000)
+            .scale_event_time(1.0 / ppq as f64)
+            .unwrap_items();
 
         type Ev = Delta<f64, Track<EventBatch<Event>>>;
         let mut time = 0.0;
