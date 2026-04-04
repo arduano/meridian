@@ -19,6 +19,7 @@ enum_dispatch = "0.3.13"
 flate2 = "1.1.4"
 flume = "0.11.1"
 glam = "0.30.8"
+hound = "3.5.1"
 midi-toolkit-rs = "0.2.0"
 midly = "0.5.3"
 png = "0.18.0"
@@ -42,7 +43,6 @@ ts-rs = { version = "12.0.1", features = ["no-serde-warnings"] }
 wgpu = "28.0.0"
 xsynth-core = { version = "0.4.0", features = ["serde"] }
 xsynth-realtime = { version = "0.4.0", features = ["serde"] }
-xsynth-render = "0.3.4"
 
 [profile.dev]
 opt-level = 2

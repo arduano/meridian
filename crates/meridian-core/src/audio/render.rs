@@ -1,17 +1,20 @@
 use std::{
+    fs::File,
+    io::BufWriter,
     ops::RangeInclusive,
     path::PathBuf,
     sync::atomic::{AtomicBool, Ordering},
 };
 
+use hound::{SampleFormat, WavSpec, WavWriter};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use xsynth_core::{
-    AudioStreamParams, ChannelCount,
-    channel::{ChannelAudioEvent, ChannelEvent, ControlEvent},
-    channel_group::{ChannelGroupConfig, SynthEvent},
+    AudioPipe, AudioStreamParams, ChannelCount,
+    channel::{ChannelAudioEvent, ChannelConfigEvent, ChannelEvent, ControlEvent},
+    channel_group::{ChannelGroup, ChannelGroupConfig, SynthEvent},
+    effects::VolumeLimiter,
 };
-use xsynth_render::{OfflineRenderConfig, OfflineWavRenderer};
 
 use crate::{
     MeridianError,
@@ -254,19 +257,26 @@ fn render_audio_inner(
         ChannelAudioEvent::ResetControl,
     )));
     let frames_written = renderer.finalize()?;
+    let rendered_seconds = frames_written as f64 / sample_rate as f64;
 
     callback(AudioRenderEvent::RenderFinished {
         job_id,
         output: render_config.output.clone(),
         frames_written,
-        rendered_seconds: current_time,
+        rendered_seconds,
     });
 
     Ok(())
 }
 
 struct OfflineAudioRenderer {
-    inner: OfflineWavRenderer,
+    channel_group: ChannelGroup,
+    writer: WavWriter<BufWriter<File>>,
+    limiter: Option<VolumeLimiter>,
+    output_vec: Vec<f32>,
+    missed_samples: f64,
+    sample_rate: u32,
+    channel_count: usize,
     frames_written: u64,
 }
 
@@ -290,44 +300,109 @@ impl OfflineAudioRenderer {
         } else {
             None
         };
-        let render_config = OfflineRenderConfig {
-            group_options,
-            use_limiter,
+        let spec = WavSpec {
+            channels: audio_params.channels.count(),
+            sample_rate: audio_params.sample_rate,
+            bits_per_sample: 32,
+            sample_format: SampleFormat::Float,
         };
-        let inner =
-            OfflineWavRenderer::new(render_config, output, soundfonts, layers).map_err(|e| {
-                MeridianError::Platform(format!("failed to create xsynth wav renderer: {e}"))
-            })?;
+        let writer = WavWriter::create(output, spec)
+            .map_err(|e| MeridianError::Platform(format!("failed to create wav writer: {e}")))?;
+        let mut channel_group = ChannelGroup::new(group_options);
+        channel_group.send_event(SynthEvent::AllChannels(ChannelEvent::Config(
+            ChannelConfigEvent::SetSoundfonts(soundfonts),
+        )));
+        channel_group.send_event(SynthEvent::AllChannels(ChannelEvent::Config(
+            ChannelConfigEvent::SetLayerCount(layers),
+        )));
+
         Ok(Self {
-            inner,
+            channel_group,
+            writer,
+            limiter: use_limiter.then(|| VolumeLimiter::new(audio_params.channels.count())),
+            output_vec: Vec::new(),
+            missed_samples: 0.0,
+            sample_rate: audio_params.sample_rate,
+            channel_count: audio_params.channels.count() as usize,
             frames_written: 0,
         })
     }
 
     fn render_batch(&mut self, seconds: f64) -> Result<(), MeridianError> {
-        self.inner
-            .render_batch(seconds)
-            .map_err(|e| MeridianError::Platform(format!("xsynth render batch failed: {e}")))?;
-        self.frames_written = self.inner.frames_written();
+        if seconds > 10.0 {
+            let mut remaining = seconds;
+            while remaining > 10.0 {
+                self.render_batch(10.0)?;
+                remaining -= 10.0;
+            }
+            return self.render_batch(remaining);
+        }
+
+        let samples = self.sample_count_for_seconds(seconds);
+        if samples == 0 {
+            return Ok(());
+        }
+        self.output_vec.resize(samples, 0.0);
+        self.channel_group.read_samples(&mut self.output_vec);
+        if let Some(limiter) = &mut self.limiter {
+            limiter.limit(&mut self.output_vec);
+        }
+        self.write_output()?;
         Ok(())
     }
 
-    fn finalize(self) -> Result<u64, MeridianError> {
-        self.inner.finalize().map_err(|e| {
-            MeridianError::Platform(format!("failed to finalize xsynth wav render: {e}"))
-        })
+    fn finalize(mut self) -> Result<u64, MeridianError> {
+        loop {
+            self.output_vec
+                .resize(self.sample_rate as usize * self.channel_count, 0.0);
+            self.channel_group.read_samples(&mut self.output_vec);
+            if let Some(limiter) = &mut self.limiter {
+                limiter.limit(&mut self.output_vec);
+            }
+            if self
+                .output_vec
+                .iter()
+                .all(|sample| (-0.0001..=0.0001).contains(sample))
+            {
+                break;
+            }
+            self.write_output()?;
+        }
+
+        self.writer
+            .finalize()
+            .map_err(|e| MeridianError::Platform(format!("failed to finalize wav output: {e}")))?;
+        Ok(self.frames_written)
     }
 
     fn send_event(&mut self, event: SynthEvent) {
-        self.inner.send_event(event);
+        self.channel_group.send_event(event);
     }
 
     fn voice_count(&self) -> u64 {
-        self.inner.voice_count()
+        self.channel_group.voice_count()
     }
 
     fn frames_written(&self) -> u64 {
         self.frames_written
+    }
+
+    fn sample_count_for_seconds(&mut self, seconds: f64) -> usize {
+        let samples =
+            (self.sample_rate as f64 * seconds * self.channel_count as f64) + self.missed_samples;
+        self.missed_samples = samples.fract();
+        samples.floor() as usize
+    }
+
+    fn write_output(&mut self) -> Result<(), MeridianError> {
+        let frames = (self.output_vec.len() / self.channel_count) as u64;
+        for sample in self.output_vec.drain(..) {
+            self.writer
+                .write_sample(sample)
+                .map_err(|e| MeridianError::Platform(format!("failed to write wav sample: {e}")))?;
+        }
+        self.frames_written += frames;
+        Ok(())
     }
 }
 

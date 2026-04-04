@@ -54,7 +54,7 @@ fn select_output_config(
     device: &cpal::Device,
     desired: AudioStreamParams,
 ) -> Result<SupportedStreamConfig, MeridianError> {
-    let configs = device
+    let mut configs = device
         .supported_output_configs()
         .map_err(|e| MeridianError::Platform(format!("failed to enumerate output configs: {e}")))?;
 
