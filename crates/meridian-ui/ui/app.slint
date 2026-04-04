@@ -4,14 +4,14 @@
 //  Imports components from:
 //   - structs.slint        (InspectorRow, MidiLoadState)
 //   - primitives.slint     (SectionHeader, FieldRow, …)
-//   - chrome.slint         (ProfileTab, TransportButton, TimeScrubber)
+//   - chrome.slint         (ProfileTab, TabGroupDivider, TransportButton, TimeScrubber)
 //   - midi_loading.slint   (MidiStateSection, MidiFileBar, …)
 //   - panels/*.slint       (PreviewWelcome, DropOverlay, VideoPanel, RenderPanel, …)
 // ═══════════════════════════════════════════════════════════
 
 import { InspectorRow, MidiLoadState, BarValue, EventCount, SliderCurve } from "structs.slint";
 import { SectionHeader, FieldRow, OptionChip } from "primitives.slint";
-import { ProfileTab, TransportButton, TimeScrubber } from "chrome.slint";
+import { ProfileTab, TabGroupDivider, TransportButton, TimeScrubber } from "chrome.slint";
 import { PreviewWelcome, DropOverlay } from "panels/preview.slint";
 import { VideoPanel } from "panels/video.slint";
 import { RenderPanel } from "panels/render.slint";
@@ -176,14 +176,6 @@ export component App inherits Window {
     in-out property <string> analysis-top-non-note-family-text: "—";
     in-out property <string> analysis-top-non-note-share-text: "—";
     in-out property <float> analysis-top-non-note-fraction: 0;
-    in-out property <string> analysis-event-release-style-text: "—";
-    in-out property <string> analysis-event-release-detail-text: "—";
-    in-out property <string> analysis-event-routing-style-text: "—";
-    in-out property <string> analysis-event-routing-detail-text: "—";
-    in-out property <string> analysis-event-expression-style-text: "—";
-    in-out property <string> analysis-event-expression-detail-text: "—";
-    in-out property <string> analysis-event-metadata-style-text: "—";
-    in-out property <string> analysis-event-metadata-detail-text: "—";
 
     // ── Analysis: File metrics ──
     in-out property <string> analysis-file-size-text: "—";
@@ -211,15 +203,10 @@ export component App inherits Window {
     in-out property <string> analysis-peak-nps-text: "—";
     in-out property <string> analysis-avg-nps-text: "—";
     in-out property <string> analysis-unique-onsets-text: "—";
-    in-out property <string> analysis-avg-notes-per-onset-text: "—";
 
     // ── Analysis: Summary ──
-    in-out property <string> analysis-total-blocks-text: "—";
-    in-out property <string> analysis-keys-with-notes-text: "—";
     in-out property <string> analysis-densest-key-text: "—";
     in-out property <string> analysis-densest-key-notes-text: "—";
-    in-out property <string> analysis-max-blocks-per-key-text: "—";
-    in-out property <string> analysis-max-notes-in-block-text: "—";
 
     // ── Analysis: Histograms (model arrays) ──
     in-out property <[BarValue]> analysis-key-histogram: [];
@@ -478,9 +465,11 @@ export component App inherits Window {
 
                             ProfileTab { label: "Preview";  active: root.active-profile == 0; pressed => { root.active-profile = 0; } }
                             ProfileTab { label: "Video";    active: root.active-profile == 1; pressed => { root.active-profile = 1; } }
-                            ProfileTab { label: "Render";   active: root.active-profile == 2; pressed => { root.active-profile = 2; } }
                             ProfileTab { label: "Audio";    active: root.active-profile == 3; pressed => { root.active-profile = 3; } }
+                            TabGroupDivider {}
+                            ProfileTab { label: "Render";   active: root.active-profile == 2; pressed => { root.active-profile = 2; } }
                             ProfileTab { label: "Modify";   active: root.active-profile == 4; pressed => { root.active-profile = 4; } }
+                            TabGroupDivider {}
                             ProfileTab { label: "Analysis"; active: root.active-profile == 5; pressed => { root.active-profile = 5; } }
 
                             Rectangle { horizontal-stretch: 1; }
@@ -1064,14 +1053,6 @@ export component App inherits Window {
                     top-non-note-family-text: root.analysis-top-non-note-family-text;
                     top-non-note-share-text: root.analysis-top-non-note-share-text;
                     top-non-note-fraction: root.analysis-top-non-note-fraction;
-                    event-release-style-text: root.analysis-event-release-style-text;
-                    event-release-detail-text: root.analysis-event-release-detail-text;
-                    event-routing-style-text: root.analysis-event-routing-style-text;
-                    event-routing-detail-text: root.analysis-event-routing-detail-text;
-                    event-expression-style-text: root.analysis-event-expression-style-text;
-                    event-expression-detail-text: root.analysis-event-expression-detail-text;
-                    event-metadata-style-text: root.analysis-event-metadata-style-text;
-                    event-metadata-detail-text: root.analysis-event-metadata-detail-text;
 
                     // File metrics
                     file-size-text:        root.analysis-file-size-text;
@@ -1099,15 +1080,10 @@ export component App inherits Window {
                     peak-nps-text:         root.analysis-peak-nps-text;
                     avg-nps-text:          root.analysis-avg-nps-text;
                     unique-onsets-text:    root.analysis-unique-onsets-text;
-                    avg-notes-per-onset-text: root.analysis-avg-notes-per-onset-text;
 
                     // Summary
-                    total-blocks-text:     root.analysis-total-blocks-text;
-                    keys-with-notes-text:  root.analysis-keys-with-notes-text;
                     densest-key-text:      root.analysis-densest-key-text;
                     densest-key-notes-text: root.analysis-densest-key-notes-text;
-                    max-blocks-per-key-text: root.analysis-max-blocks-per-key-text;
-                    max-notes-in-block-text: root.analysis-max-notes-in-block-text;
 
                     // Histograms
                     key-histogram:         root.analysis-key-histogram;

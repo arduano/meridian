@@ -38,6 +38,25 @@ export component ProfileTab inherits Rectangle {
 }
 
 
+// ── TabGroupDivider ───────────────────────────────────────
+// Subtle separator between top-level tab groups.
+
+export component TabGroupDivider inherits Rectangle {
+    width: 14px;
+    height: 36px;
+    background: transparent;
+
+    Rectangle {
+        x: parent.width / 2 - 0.5px;
+        y: 9px;
+        width: 1px;
+        height: parent.height - 18px;
+        border-radius: 0.5px;
+        background: #1a2740;
+    }
+}
+
+
 // ── TransportButton ────────────────────────────────────────
 // 32×32 icon button for play/pause, zoom ±.
 

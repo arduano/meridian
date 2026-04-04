@@ -1,4 +1,4 @@
-use crate::midi::{DisplacedMIDINote, MIDIColorPair, MIDINoteColumnView};
+use crate::midi::{DisplacedMIDINote, MIDIColorPair};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct VisibleNoteSpan {
@@ -10,8 +10,8 @@ pub(crate) struct VisibleNoteSpan {
     pub color: MIDIColorPair,
 }
 
-pub(crate) fn for_each_visible_note<C, F>(
-    column: C,
+pub(crate) fn for_each_visible_note<I, F>(
+    notes: I,
     render_start: f32,
     render_end: f32,
     clamp_start_to_zero: bool,
@@ -19,11 +19,11 @@ pub(crate) fn for_each_visible_note<C, F>(
     mut callback: F,
 ) -> usize
 where
-    C: MIDINoteColumnView,
+    I: IntoIterator<Item = DisplacedMIDINote>,
     F: FnMut(VisibleNoteSpan),
 {
     let mut visible = 0usize;
-    for note in column.iterate_displaced_notes() {
+    for note in notes {
         if let Some(note) = clip_visible_note(
             note,
             render_start,

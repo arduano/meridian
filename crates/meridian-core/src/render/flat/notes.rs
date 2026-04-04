@@ -1,4 +1,6 @@
-use crate::midi::{MIDINoteViews, ram::view::InRamCurrentNoteViews, views::MIDIFileViewsUnion};
+use crate::midi::{
+    MIDINoteColumnView, MIDINoteViews, ram::view::InRamCurrentNoteViews, views::MIDIFileViewsUnion,
+};
 
 use super::super::{
     SceneLayout,
@@ -65,8 +67,13 @@ fn project_flat_notes_in_ram(
         let column = views.get_column(key);
         let mut activity = KeyActivity::default();
 
-        scene.visible_notes +=
-            for_each_visible_note(column, 0.0, view_range, false, false, |note| {
+        scene.visible_notes += for_each_visible_note(
+            column.iterate_displaced_notes(),
+            0.0,
+            view_range,
+            false,
+            false,
+            |note| {
                 let average = note.color.average();
                 let color = average.to_rgba(if is_black { 0.94 } else { 0.88 });
                 scene.push_note_layer(
@@ -86,7 +93,8 @@ fn project_flat_notes_in_ram(
                     activity.right = color;
                 }
                 scene.note_quads += 1;
-            });
+            },
+        );
 
         if activity.pressed {
             scene.active_keys += 1;

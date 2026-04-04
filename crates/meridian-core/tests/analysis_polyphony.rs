@@ -1,6 +1,7 @@
 mod support;
 
 use meridian_core::midi::{
+    MidiProcessingConfig, ProcessedMidi,
     analysis::{build_buckets_from_parsed_with_progress, build_cached_midi_analysis_with_progress},
     parsed::ParsedMidiFile,
 };
@@ -44,4 +45,33 @@ fn zero_velocity_note_on_does_not_inflate_polyphony_metrics() {
             .unwrap_or(0),
         1
     );
+}
+
+#[test]
+fn processed_midi_polyphony_does_not_collapse_to_total_notes() {
+    let dir = support::temp_dir("meridian-core-processed-polyphony");
+    let midi = dir.join("processed-polyphony.mid");
+    support::write_toolkit_midi(
+        &midi,
+        96,
+        vec![vec![
+            Event::new_delta_tempo_event(0, 500_000),
+            Event::new_delta_note_on_event(0, 0, 60, 100),
+            Event::new_delta_note_off_event(96, 0, 60),
+            Event::new_delta_note_on_event(0, 0, 64, 100),
+            Event::new_delta_note_off_event(96, 0, 64),
+            Event::new_delta_note_on_event(0, 0, 67, 100),
+            Event::new_delta_note_off_event(96, 0, 67),
+        ]],
+    );
+
+    let parsed = ParsedMidiFile::load_from_file(&midi).expect("load parsed midi");
+    let processed = ProcessedMidi::from_parsed(&parsed, &MidiProcessingConfig::default())
+        .expect("build processed midi");
+    let analysis = processed.analysis_cache();
+
+    assert_eq!(processed.total_notes(), 3);
+    assert_eq!(analysis.total_notes(), 3);
+    assert_eq!(analysis.notes().max_simultaneous_notes, 1);
+    assert!((analysis.notes().avg_simultaneous_notes - 1.0).abs() < 1e-9);
 }

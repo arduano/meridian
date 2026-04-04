@@ -75,6 +75,7 @@ impl KeyBuilder {
                     time_ticks,
                 );
                 analysis.observe_note_end((time_seconds - start_seconds).max(0.0));
+                analysis.observe_note_release();
             }
         }
     }
@@ -111,6 +112,7 @@ impl KeyBuilder {
                     time_ticks,
                 );
                 analysis.observe_note_end((time_seconds - start_seconds).max(0.0));
+                analysis.observe_note_release();
             }
         }
     }

@@ -159,6 +159,7 @@ fn build_processed_midi(
                     end_note(
                         &mut open_notes,
                         &mut finished_notes,
+                        &mut analysis,
                         output_time,
                         note_on.key,
                         note_on.channel,
@@ -190,6 +191,7 @@ fn build_processed_midi(
                 end_note(
                     &mut open_notes,
                     &mut finished_notes,
+                    &mut analysis,
                     output_time,
                     note_off.key,
                     note_off.channel,
@@ -276,6 +278,7 @@ fn build_processed_midi(
 
     for ((key, _track_chan), queue) in &mut open_notes {
         while let Some(note) = queue.pop_front() {
+            analysis.observe_note_release();
             finished_notes[*key as usize].push(FinishedNote {
                 start: note.start,
                 end: current_audio_time.max(note.start),
@@ -334,6 +337,7 @@ fn build_processed_midi(
 fn end_note(
     open_notes: &mut FxHashMap<(u8, TrackAndChannel), VecDeque<OpenNote>>,
     finished_notes: &mut [Vec<FinishedNote>],
+    analysis: &mut MidiAnalysisAccumulator,
     output_time: f64,
     source_key: u8,
     channel: u8,
@@ -350,6 +354,7 @@ fn end_note(
     else {
         return;
     };
+    analysis.observe_note_release();
     if output_time >= note.start {
         // Duration stats are updated when the completed note is materialized.
         finished_notes[key as usize].push(FinishedNote {

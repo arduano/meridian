@@ -834,9 +834,6 @@ fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
         format!("{:.1}", analysis.notes.avg_simultaneous_notes).into(),
     );
     app.set_analysis_unique_onsets_text(format_number(analysis.notes.unique_onset_count).into());
-    app.set_analysis_avg_notes_per_onset_text(
-        format!("{:.2}", analysis.notes.avg_notes_per_onset).into(),
-    );
 
     // ── Average velocity (computed from histogram) ──
     let total_velocity_notes: u64 = analysis.notes.velocity_note_on_counts.iter().sum();
@@ -877,18 +874,10 @@ fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
         app.set_analysis_high_velocity_share_text("—".into());
     }
 
-    // ── Summary (block analysis) ──
-    app.set_analysis_total_blocks_text(format_number(analysis.summary.total_blocks).into());
-    app.set_analysis_keys_with_notes_text(analysis.summary.keys_with_notes.to_string().into());
+    // ── Summary ──
     app.set_analysis_densest_key_text(midi_note_name(analysis.summary.densest_key).into());
     app.set_analysis_densest_key_notes_text(
         format_number(analysis.summary.densest_key_notes).into(),
-    );
-    app.set_analysis_max_blocks_per_key_text(
-        format_number(analysis.summary.max_blocks_per_key as u64).into(),
-    );
-    app.set_analysis_max_notes_in_block_text(
-        format_number(analysis.summary.max_notes_in_block as u64).into(),
     );
 
     // ── Histograms ──
@@ -999,121 +988,6 @@ fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
         format_percentage_compact(other_events_count as f64 / total_accounted_events as f64).into(),
     );
     app.set_analysis_other_events_fraction(other_events_fraction);
-
-    let release_events = events.note_off_events + events.zero_velocity_note_on_events;
-    let release_style = if release_events == 0 {
-        "No releases".to_string()
-    } else if events.zero_velocity_note_on_events == 0 {
-        "Explicit offs".to_string()
-    } else if events.note_off_events == 0 {
-        "Zero-vel only".to_string()
-    } else if events.note_off_events >= events.zero_velocity_note_on_events * 4 {
-        "Mostly explicit".to_string()
-    } else if events.zero_velocity_note_on_events >= events.note_off_events * 4 {
-        "Mostly zero-vel".to_string()
-    } else {
-        "Mixed release".to_string()
-    };
-    app.set_analysis_event_release_style_text(release_style.into());
-    app.set_analysis_event_release_detail_text(
-        format!(
-            "{} off · {} zero-vel",
-            format_number(events.note_off_events),
-            format_number(events.zero_velocity_note_on_events),
-        )
-        .into(),
-    );
-
-    let routing_total = events.control_change_events + events.program_change_events;
-    let routing_style = if routing_total == 0 {
-        "No routing".to_string()
-    } else if events.control_change_events == 0 {
-        "Patch-switched".to_string()
-    } else if events.program_change_events == 0 {
-        "CC-driven".to_string()
-    } else if events.control_change_events >= events.program_change_events * 4 {
-        "CC-led".to_string()
-    } else if events.program_change_events >= events.control_change_events * 4 {
-        "Program-led".to_string()
-    } else {
-        "Mixed routing".to_string()
-    };
-    app.set_analysis_event_routing_style_text(routing_style.into());
-    app.set_analysis_event_routing_detail_text(
-        format!(
-            "{} CC · {} program",
-            format_number(events.control_change_events),
-            format_number(events.program_change_events),
-        )
-        .into(),
-    );
-
-    let expression_total = events.pitch_bend_events
-        + events.channel_pressure_events
-        + events.polyphonic_pressure_events;
-    let expression_style = if expression_total == 0 {
-        "No expression".to_string()
-    } else {
-        let mut dominant_name = "Pitch bend";
-        let mut dominant_count = events.pitch_bend_events;
-        if events.channel_pressure_events > dominant_count {
-            dominant_name = "Channel pressure";
-            dominant_count = events.channel_pressure_events;
-        }
-        if events.polyphonic_pressure_events > dominant_count {
-            dominant_name = "Poly pressure";
-            dominant_count = events.polyphonic_pressure_events;
-        }
-
-        if dominant_count * 10 >= expression_total * 8 {
-            format!("{dominant_name}-led")
-        } else if dominant_count * 10 >= expression_total * 6 {
-            format!("{dominant_name} heavy")
-        } else {
-            "Mixed expression".to_string()
-        }
-    };
-    app.set_analysis_event_expression_style_text(expression_style.into());
-    app.set_analysis_event_expression_detail_text(
-        format!(
-            "{} bend · {} ch · {} poly",
-            format_number(events.pitch_bend_events),
-            format_number(events.channel_pressure_events),
-            format_number(events.polyphonic_pressure_events),
-        )
-        .into(),
-    );
-
-    let text_meta_total = events.text_events
-        + events.lyric_events
-        + events.marker_events
-        + events.cue_point_events
-        + events.track_name_events
-        + events.instrument_name_events;
-    let timing_map_total =
-        events.tempo_events + events.time_signature_events + events.key_signature_events;
-    let metadata_style = if text_meta_total == 0 && timing_map_total == 0 {
-        "No score meta".to_string()
-    } else if timing_map_total == 0 {
-        "Text-led meta".to_string()
-    } else if text_meta_total == 0 {
-        "Timing map only".to_string()
-    } else if text_meta_total >= timing_map_total * 3 {
-        "Annotation-heavy".to_string()
-    } else if timing_map_total >= text_meta_total * 3 {
-        "Timing-led meta".to_string()
-    } else {
-        "Mixed score meta".to_string()
-    };
-    app.set_analysis_event_metadata_style_text(metadata_style.into());
-    app.set_analysis_event_metadata_detail_text(
-        format!(
-            "{} text/meta · {} map",
-            format_number(text_meta_total),
-            format_number(timing_map_total),
-        )
-        .into(),
-    );
 
     let grouped_event_pairs: Vec<(&str, u64)> = vec![
         (

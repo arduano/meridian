@@ -516,14 +516,6 @@ export component AnalysisPanel inherits Rectangle {
     in property <string> top-non-note-family-text: "—";
     in property <string> top-non-note-share-text: "—";
     in property <float> top-non-note-fraction: 0;
-    in property <string> event-release-style-text: "—";
-    in property <string> event-release-detail-text: "—";
-    in property <string> event-routing-style-text: "—";
-    in property <string> event-routing-detail-text: "—";
-    in property <string> event-expression-style-text: "—";
-    in property <string> event-expression-detail-text: "—";
-    in property <string> event-metadata-style-text: "—";
-    in property <string> event-metadata-detail-text: "—";
 
     in property <string> file-size-text: "—";
     in property <string> gzip-size-text: "—";
@@ -548,14 +540,9 @@ export component AnalysisPanel inherits Rectangle {
     in property <string> peak-nps-text: "—";
     in property <string> avg-nps-text: "—";
     in property <string> unique-onsets-text: "—";
-    in property <string> avg-notes-per-onset-text: "—";
 
-    in property <string> total-blocks-text: "—";
-    in property <string> keys-with-notes-text: "—";
     in property <string> densest-key-text: "—";
     in property <string> densest-key-notes-text: "—";
-    in property <string> max-blocks-per-key-text: "—";
-    in property <string> max-notes-in-block-text: "—";
 
     in property <[BarValue]> key-histogram: [];
     in property <[BarValue]> velocity-histogram: [];
@@ -729,8 +716,8 @@ export component AnalysisPanel inherits Rectangle {
                     SurfaceCard {
                         width: parent.width;
                         height: parent.height;
-                        title: "ONSET ACTIVITY";
-                        subtitle: "Bucketed note starts across the file. This stays wide because it is one of the clearest views of where the arrangement thickens or thins.";
+                        title: "NOTES PER SECOND";
+                        subtitle: "Note starts over time. This quickly shows where the file gets denser or lighter.";
 
                         DensityTimeline {
                             model: root.density-timeline;
@@ -743,8 +730,7 @@ export component AnalysisPanel inherits Rectangle {
                             spacing: 16px;
                             MiniStat { value: root.peak-nps-text + "/s"; label: "PEAK RATE"; }
                             MiniStat { value: root.avg-nps-text + "/s"; label: "AVG RATE"; }
-                            MiniStat { value: root.unique-onsets-text; label: "ONSET COUNT"; }
-                            MiniStat { value: root.avg-notes-per-onset-text; label: "NOTES / ONSET"; }
+                            MiniStat { value: root.unique-onsets-text; label: "UNIQUE NOTE START TIMES"; }
                         }
                     }
                 }
@@ -846,8 +832,7 @@ export component AnalysisPanel inherits Rectangle {
 
                         HorizontalLayout {
                             spacing: 8px;
-                            MiniStat { value: root.unique-onsets-text; label: "ONSET COUNT"; }
-                            MiniStat { value: root.avg-notes-per-onset-text; label: "NOTES / ONSET"; }
+                            MiniStat { value: root.unique-onsets-text; label: "UNIQUE NOTE START TIMES"; }
                         }
                     }
                 }
@@ -877,16 +862,16 @@ export component AnalysisPanel inherits Rectangle {
                 }
             }
 
-            if root.midi-state == MidiLoadState.loaded : HorizontalLayout {
+            if root.midi-state == MidiLoadState.loaded : VerticalLayout {
                 spacing: 12px;
 
-                VerticalLayout {
+                HorizontalLayout {
                     spacing: 12px;
-                    horizontal-stretch: 2;
 
                     SurfaceCard {
                         title: "NON-NOTE EVENT FAMILIES";
                         subtitle: "Note traffic is called out separately. The bars below compare only the remaining event families, normalized within that group.";
+                        horizontal-stretch: 2;
 
                         for ev in root.event-composition : ShareRow {
                             name: ev.name;
@@ -902,8 +887,34 @@ export component AnalysisPanel inherits Rectangle {
                     }
 
                     SurfaceCard {
+                        title: "EVENT READS";
+                        subtitle: "A compact split between note traffic and the rest of the MIDI event stream.";
+                        horizontal-stretch: 1;
+                        min-width: 280px;
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            MiniStat { value: root.event-total-text; label: "TOTAL EVENTS"; }
+                            MiniStat { value: root.note-traffic-count-text; label: "NOTE EVENTS"; }
+                            MiniStat { value: root.other-events-count-text; label: "NON-NOTE EVENTS"; }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            MiniStat { value: root.note-traffic-share-text; label: "NOTE SHARE"; }
+                            MiniStat { value: root.other-events-share-text; label: "NON-NOTE SHARE"; }
+                            MiniStat { value: root.top-non-note-family-text; label: "LEADING FAMILY"; }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+
+                    SurfaceCard {
                         title: "EVENT TYPE COUNTS";
                         subtitle: "Raw event counts compressed into a denser two-column table.";
+                        horizontal-stretch: 2;
 
                         HorizontalLayout {
                             spacing: 18px;
@@ -931,101 +942,25 @@ export component AnalysisPanel inherits Rectangle {
                             }
                         }
                     }
-                }
 
-                SurfaceCard {
-                    title: "EVENT READS";
-                    subtitle: "Quick interpretations of release handling, routing, expression, and score metadata.";
-                    horizontal-stretch: 1;
-                    min-width: 320px;
+                    SurfaceCard {
+                        title: "FILE METADATA";
+                        subtitle: "Technical file details kept visible, but secondary.";
+                        horizontal-stretch: 1;
+                        min-width: 340px;
 
-                    HorizontalLayout {
-                        spacing: 8px;
-                        
-                        VerticalLayout {
+                        HorizontalLayout {
                             spacing: 8px;
-                            horizontal-stretch: 1;
-
-                            MiniStat { value: root.event-total-text; label: "TOTAL EVENTS"; }
-                            MiniStat { value: root.note-traffic-count-text; label: "NOTE EVENTS"; }
-                            MiniStat { value: root.other-events-share-text; label: "NON-NOTE SHARE"; }
-
-                            InsightTile {
-                                title: "NOTE RELEASES";
-                                value: root.event-release-style-text;
-                                detail: root.event-release-detail-text;
-                            }
-
-                            InsightTile {
-                                title: "EXPRESSION DATA";
-                                value: root.event-expression-style-text;
-                                detail: root.event-expression-detail-text;
-                            }
+                            MiniStat { value: root.file-size-text; label: "FILE SIZE"; }
+                            MiniStat { value: root.gzip-size-text; label: "GZIP SIZE"; }
+                            MiniStat { value: root.gzip-ratio-text; label: "GZIP RATIO"; }
                         }
 
-                        VerticalLayout {
-                            spacing: 8px;
-                            horizontal-stretch: 1;
-
-                            MiniStat { value: root.note-traffic-share-text; label: "NOTE SHARE"; }
-                            MiniStat { value: root.other-events-count-text; label: "NON-NOTE EVENTS"; }
-                            MiniStat { value: root.top-non-note-family-text; label: "LEADING FAMILY"; }
-
-                            InsightTile {
-                                title: "ROUTING & PATCHES";
-                                value: root.event-routing-style-text;
-                                detail: root.event-routing-detail-text;
-                            }
-
-                            InsightTile {
-                                title: "SCORE METADATA";
-                                value: root.event-metadata-style-text;
-                                detail: root.event-metadata-detail-text;
-                            }
-                        }
+                        FieldRow { label: "MIDI Format"; value: root.format-text; }
+                        FieldRow { label: "Declared Tracks"; value: root.declared-tracks-text; }
+                        FieldRow { label: "Actual Tracks"; value: root.actual-tracks-text; }
+                        FieldRow { label: "Ticks / Quarter"; value: root.ticks-per-quarter-text; }
                     }
-                }
-            }
-
-            if root.midi-state == MidiLoadState.loaded : HorizontalLayout {
-                spacing: 12px;
-
-                SurfaceCard {
-                    title: "FILE METADATA";
-                    subtitle: "Technical file details kept visible, but secondary.";
-                    min-width: 340px;
-
-                    HorizontalLayout {
-                        spacing: 8px;
-                        MiniStat { value: root.file-size-text; label: "FILE SIZE"; }
-                        MiniStat { value: root.gzip-size-text; label: "GZIP SIZE"; }
-                        MiniStat { value: root.gzip-ratio-text; label: "GZIP RATIO"; }
-                    }
-
-                    FieldRow { label: "MIDI Format"; value: root.format-text; }
-                    FieldRow { label: "Declared Tracks"; value: root.declared-tracks-text; }
-                    FieldRow { label: "Actual Tracks"; value: root.actual-tracks-text; }
-                    FieldRow { label: "Ticks / Quarter"; value: root.ticks-per-quarter-text; }
-                }
-
-                SurfaceCard {
-                    title: "GRID SUMMARY";
-                    subtitle: "Internal block-grid stats kept as an appendix rather than part of the main musical read.";
-                    min-width: 340px;
-
-                    HorizontalLayout {
-                        spacing: 8px;
-                        MiniStat { value: root.total-blocks-text; label: "TOTAL BLOCKS"; }
-                        MiniStat { value: root.keys-with-notes-text; label: "KEYS WITH NOTES"; }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 8px;
-                        MiniStat { value: root.max-blocks-per-key-text; label: "MAX BLOCKS / KEY"; }
-                        MiniStat { value: root.max-notes-in-block-text; label: "MAX NOTES / BLOCK"; }
-                    }
-
-                    FieldRow { label: "Most Active Key"; value: root.densest-key-text + " (" + root.densest-key-notes-text + " notes)"; }
                 }
             }
 

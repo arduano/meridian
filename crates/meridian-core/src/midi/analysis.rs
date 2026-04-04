@@ -203,6 +203,7 @@ impl AnalysisKeyState {
         }
         let _ = key_index;
         analysis.observe_note_end((end_seconds - start_seconds).max(0.0));
+        analysis.observe_note_release();
     }
 
     fn flush_block(&mut self, key_index: usize, analysis: &mut MidiAnalysisAccumulator) {
@@ -216,6 +217,7 @@ impl AnalysisKeyState {
         for (_, mut queue) in self.open_notes.drain() {
             for start_seconds in queue.drain(..) {
                 analysis.observe_note_end((end_seconds - start_seconds).max(0.0));
+                analysis.observe_note_release();
             }
         }
     }
@@ -395,6 +397,9 @@ impl MidiAnalysisAccumulator {
         self.total_note_duration_seconds += duration_seconds;
         self.min_note_length_seconds = self.min_note_length_seconds.min(duration_seconds);
         self.max_note_length_seconds = self.max_note_length_seconds.max(duration_seconds);
+    }
+
+    pub fn observe_note_release(&mut self) {
         self.active_notes = self.active_notes.saturating_sub(1);
     }
 

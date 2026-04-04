@@ -1,5 +1,3 @@
-use std::ops::{Deref, DerefMut};
-
 use xsynth_core::{
     AudioStreamParams,
     channel::{ChannelConfigEvent, ChannelEvent},
@@ -10,41 +8,20 @@ use crate::error::MeridianError;
 
 use super::{config::AudioConfig, player::MidiAudioPlayer, soundfont_cache::SoundfontCache};
 
-#[repr(transparent)]
-struct SendSyncSynth<T>(T);
-
-// TODO: remove this wrapper once xsynth exposes a sound thread handle that is natively Send + Sync.
-// This mirrors Wasabi's workaround, but the real fix belongs upstream in xsynth.
-unsafe impl<T> Send for SendSyncSynth<T> {}
-unsafe impl<T> Sync for SendSyncSynth<T> {}
-
-impl<T> Deref for SendSyncSynth<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> DerefMut for SendSyncSynth<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 pub struct XSynthPlayer {
     sender: RealtimeEventSender,
     stats: RealtimeSynthStatsReader,
     stream_params: AudioStreamParams,
-    synth: SendSyncSynth<RealtimeSynth>,
+    synth: RealtimeSynth,
 }
 
 impl XSynthPlayer {
     pub fn new(config: &AudioConfig) -> Result<Self, MeridianError> {
         let synth = std::panic::catch_unwind(|| {
-            SendSyncSynth(RealtimeSynth::open_with_default_output_and_params(
+            RealtimeSynth::open_with_default_output_and_params(
                 config.xsynth.config.clone(),
                 config.xsynth.render.audio_params,
-            ))
+            )
         })
         .map_err(|_| {
             MeridianError::MidiLoad("xsynth panicked during output initialization".into())

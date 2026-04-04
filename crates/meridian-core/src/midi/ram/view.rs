@@ -324,6 +324,58 @@ impl<'a> MIDINoteColumnView for InRamNoteColumnView<'a> {
     }
 }
 
+impl InRamNoteColumnView<'_> {
+    pub fn iterate_displaced_notes_with_lookback(
+        &self,
+        displaced_start: f32,
+    ) -> std::vec::IntoIter<DisplacedMIDINote> {
+        let absolute_start = self.view_range.start
+            + displaced_start as f64 / self.view_range.scale.max(f64::EPSILON);
+        let mut block_start = self.column.data.block_range.start;
+        while block_start > 0 {
+            let previous = &self.column.blocks[block_start - 1];
+            if previous.max_end(self.view_range.time_space) < absolute_start {
+                break;
+            }
+            block_start -= 1;
+        }
+
+        let colors = &self.view.default_track_colors;
+        let mut notes = Vec::new();
+        for block_index in (block_start..self.column.data.block_range.end).rev() {
+            let block = &self.column.blocks[block_index];
+            let start = match self.view_range.time_space {
+                crate::render::DisplayTimeSpace::Time => {
+                    ((block.start_seconds - self.view_range.start) * self.view_range.scale) as f32
+                }
+                crate::render::DisplayTimeSpace::Tick => {
+                    ((block.start_ticks as f64 - self.view_range.start) * self.view_range.scale)
+                        as f32
+                }
+            };
+
+            for note in block.notes.iter().rev() {
+                notes.push(DisplacedMIDINote {
+                    start,
+                    len: match self.view_range.time_space {
+                        crate::render::DisplayTimeSpace::Time => {
+                            (note.len_seconds as f64 * self.view_range.scale) as f32
+                        }
+                        crate::render::DisplayTimeSpace::Tick => {
+                            (note.len_ticks as f64 * self.view_range.scale) as f32
+                        }
+                    },
+                    color: note
+                        .explicit_colors
+                        .unwrap_or(colors[note.track_chan.as_usize()]),
+                });
+            }
+        }
+
+        notes.into_iter()
+    }
+}
+
 impl<Iter: Iterator<Item = DisplacedMIDINote>> Iterator for InRamNoteBlockIter<'_, Iter> {
     type Item = DisplacedMIDINote;
 

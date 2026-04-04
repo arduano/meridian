@@ -77,34 +77,42 @@ fn project_note_pass_in_ram(
             let mut projected_key_color = KeyColorPair::default();
             let mut projected_key_pressed = false;
 
-            for_each_visible_note(column, 0.0, params.view_range, false, false, |note| {
-                let packed_left = note.color.left.to_rgba_packed(255);
-                let packed_right = note.color.right.to_rgba_packed(255);
-                if note.active {
-                    let pair = KeyColorPair {
-                        left: note.color.left.to_rgba(1.0),
-                        right: note.color.right.to_rgba(1.0),
-                    };
-                    if is_black {
-                        if !projected_key_pressed {
-                            projected_key_color = pair;
+            for_each_visible_note(
+                column.iterate_displaced_notes(),
+                0.0,
+                params.view_range,
+                false,
+                false,
+                |note| {
+                    let packed_left = note.color.left.to_rgba_packed(255);
+                    let packed_right = note.color.right.to_rgba_packed(255);
+                    if note.active {
+                        let pair = KeyColorPair {
+                            left: note.color.left.to_rgba(1.0),
+                            right: note.color.right.to_rgba(1.0),
+                        };
+                        if is_black {
+                            if !projected_key_pressed {
+                                projected_key_color = pair;
+                            }
+                        } else {
+                            projected_key_color.left =
+                                alpha_blend(projected_key_color.left, pair.left);
+                            projected_key_color.right =
+                                alpha_blend(projected_key_color.right, pair.right);
                         }
-                    } else {
-                        projected_key_color.left = alpha_blend(projected_key_color.left, pair.left);
-                        projected_key_color.right =
-                            alpha_blend(projected_key_color.right, pair.right);
+                        projected_key_pressed = true;
                     }
-                    projected_key_pressed = true;
-                }
 
-                notes.push(NoteInstance::new(
-                    key as u32,
-                    note.start,
-                    note.end,
-                    packed_left,
-                    packed_right,
-                ));
-            });
+                    notes.push(NoteInstance::new(
+                        key as u32,
+                        note.start,
+                        note.end,
+                        packed_left,
+                        packed_right,
+                    ));
+                },
+            );
 
             KeyNoteProjection {
                 key,

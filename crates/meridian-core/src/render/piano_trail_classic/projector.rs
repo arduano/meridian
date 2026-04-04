@@ -2,10 +2,7 @@ use glam::{Mat4, Vec3};
 use rayon::prelude::*;
 
 use crate::{
-    midi::{
-        MIDINoteColumnView, MIDINoteViews, ram::view::InRamCurrentNoteViews,
-        views::MIDIFileViewsUnion,
-    },
+    midi::{MIDINoteViews, ram::view::InRamCurrentNoteViews, views::MIDIFileViewsUnion},
     render::{
         SceneLayout,
         shared::{
@@ -163,9 +160,10 @@ fn collect_visible_notes_in_ram(
         .into_par_iter()
         .map(|key| {
             let column = views.get_column(key);
-            let mut notes = Vec::with_capacity(column.iterate_displaced_notes().len());
+            let displaced_notes = column.iterate_displaced_notes_with_lookback(render_start);
+            let mut notes = Vec::with_capacity(displaced_notes.len());
             for_each_visible_note(
-                column,
+                displaced_notes,
                 render_start,
                 view_range,
                 config.eat_notes,
@@ -1017,4 +1015,63 @@ fn scale_alpha(color: [f32; 4], strength: f32) -> [f32; 4] {
 fn blend_key_tint(base: [f32; 4], active: [f32; 4]) -> [f32; 4] {
     let blend = (active[3].clamp(0.0, 1.0) * 0.8).clamp(0.0, 1.0);
     mix(base, [active[0], active[1], active[2], 1.0], blend)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use crate::{
+        midi::backend::MIDIFileUnion,
+        render::{SceneConfig, SceneLayout, ThreeDSceneConfig, project_scene},
+    };
+
+    fn write_test_midi() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "meridian-ptc-lookback-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).expect("create temp test dir");
+        let path = dir.join("smoke-two-notes.mid");
+        fs::write(
+            &path,
+            [
+                0x4d, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x60,
+                0x4d, 0x54, 0x72, 0x6b, 0x00, 0x00, 0x00, 0x1b, 0x00, 0xff, 0x51, 0x03, 0x07, 0xa1,
+                0x20, 0x00, 0x90, 0x3c, 0x64, 0x30, 0x90, 0x40, 0x64, 0x30, 0x80, 0x3c, 0x40, 0x30,
+                0x80, 0x40, 0x40, 0x00, 0xff, 0x2f, 0x00,
+            ],
+        )
+        .expect("write test midi");
+        path
+    }
+
+    #[test]
+    fn trail_classic_look_back_keeps_passed_notes_visible() {
+        let midi_path = write_test_midi();
+        let mut midi = MIDIFileUnion::load_ram(&midi_path).expect("load midi");
+        let mut layout = SceneLayout::default();
+        let mut config = match ThreeDSceneConfig::default() {
+            ThreeDSceneConfig::PianoTrailClassic(config) => config,
+        };
+        layout.scene = SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config.clone()));
+        layout.view_range = 2.0;
+
+        config.viewback = 0.0;
+        layout.scene = SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config.clone()));
+        let without_look_back = project_scene(&mut midi, 0.6, None, &layout);
+        assert_eq!(without_look_back.visible_notes, 1);
+
+        config.viewback = 0.2;
+        layout.scene = SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config));
+        let with_look_back = project_scene(&mut midi, 0.6, None, &layout);
+        assert_eq!(with_look_back.visible_notes, 2);
+    }
 }
