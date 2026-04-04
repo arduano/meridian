@@ -1,0 +1,86 @@
+name: Linux Publish Prototype
+
+on:
+  push:
+    branches:
+      - "codex/linux-gha-publish-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-publish-prototype-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-package:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: tarball
+            build_script: publish/linux/archive/build.sh
+            smoke_script: publish/linux/docker/smoke-tarball.sh
+            artifact_name: linux-tarball
+            artifact_glob: publish/linux/artifacts/*.tar.gz
+          - target: deb
+            build_script: publish/linux/deb/build.sh
+            smoke_script: publish/linux/docker/smoke-deb.sh
+            artifact_name: linux-deb
+            artifact_glob: publish/linux/artifacts/*.deb
+          - target: rpm
+            build_script: publish/linux/rpm/build.sh
+            smoke_script: publish/linux/docker/smoke-rpm.sh
+            artifact_name: linux-rpm
+            artifact_glob: publish/linux/artifacts/**/*.rpm
+          - target: appimage
+            build_script: publish/linux/appimage/build.sh
+            smoke_script: publish/linux/docker/smoke-appimage.sh
+            artifact_name: linux-appimage
+            artifact_glob: publish/linux/artifacts/*.AppImage
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-03-29
+
+      - name: Restore publish caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            publish/linux/artifacts/.cargo-home
+            publish/linux/artifacts/.rustup-home
+          key: linux-publish-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
+          restore-keys: |
+            linux-publish-${{ runner.os }}-${{ matrix.target }}-
+
+      - name: Show Docker version
+        run: docker --version
+
+      - name: Build package
+        run: |
+          mkdir -p publish/linux/artifacts/logs
+          "${{ matrix.build_script }}" | tee "publish/linux/artifacts/logs/${{ matrix.target }}-build.log"
+
+      - name: Smoke package in Docker
+        run: |
+          "${{ matrix.smoke_script }}" | tee "publish/linux/artifacts/logs/${{ matrix.target }}-smoke.log"
+
+      - name: Upload package artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          if-no-files-found: ignore
+          path: |
+            ${{ matrix.artifact_glob }}
+            publish/linux/artifacts/logs/${{ matrix.target }}-build.log
+            publish/linux/artifacts/logs/${{ matrix.target }}-smoke.log

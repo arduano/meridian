@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-WORKSPACE_PARENT="${WORKSPACE_PARENT:-$(dirname "$ROOT")}"
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-$ROOT/publish/linux/artifacts}"
 BUILD_ROOT="$ARTIFACTS_DIR/build"
 CARGO_BUILD_PROFILE="${CARGO_BUILD_PROFILE:-release}"
@@ -134,17 +133,6 @@ require_cmd() {
     }
 }
 
-ensure_workspace_layout() {
-    [[ -d "$WORKSPACE_PARENT/midi-toolkit-rs" ]] || {
-        echo "missing sibling repo: $WORKSPACE_PARENT/midi-toolkit-rs" >&2
-        exit 1
-    }
-    [[ -d "$WORKSPACE_PARENT/xsynth" ]] || {
-        echo "missing sibling repo: $WORKSPACE_PARENT/xsynth" >&2
-        exit 1
-    }
-}
-
 ensure_artifacts_dir() {
     mkdir -p "$ARTIFACTS_DIR" "$BUILD_ROOT" "$CARGO_HOME_DIR" "$RUSTUP_HOME_DIR"
 }
@@ -184,11 +172,10 @@ docker_run() {
     local script="$2"
 
     require_cmd docker
-    ensure_workspace_layout
     ensure_artifacts_dir
 
     docker run --rm \
-        -v "$WORKSPACE_PARENT:$WORKSPACE_PARENT" \
+        -v "$ROOT:$ROOT" \
         -v "$CARGO_HOME_DIR:/root/.cargo" \
         -v "$RUSTUP_HOME_DIR:/root/.rustup" \
         -w "$ROOT" \
