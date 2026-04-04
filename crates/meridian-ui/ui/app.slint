@@ -162,7 +162,28 @@ export component App inherits Window {
     in-out property <string> analysis-time-signature-text: "—";
     in-out property <string> analysis-key-range-text: "—";
     in-out property <string> analysis-avg-velocity-text: "—";
+    in-out property <string> analysis-median-velocity-text: "—";
+    in-out property <string> analysis-p90-velocity-text: "—";
+    in-out property <string> analysis-low-velocity-share-text: "—";
+    in-out property <string> analysis-high-velocity-share-text: "—";
     in-out property <string> analysis-note-density-text: "—";
+    in-out property <string> analysis-note-traffic-count-text: "—";
+    in-out property <string> analysis-note-traffic-share-text: "—";
+    in-out property <float> analysis-note-traffic-fraction: 0;
+    in-out property <string> analysis-other-events-count-text: "—";
+    in-out property <string> analysis-other-events-share-text: "—";
+    in-out property <float> analysis-other-events-fraction: 0;
+    in-out property <string> analysis-top-non-note-family-text: "—";
+    in-out property <string> analysis-top-non-note-share-text: "—";
+    in-out property <float> analysis-top-non-note-fraction: 0;
+    in-out property <string> analysis-event-release-style-text: "—";
+    in-out property <string> analysis-event-release-detail-text: "—";
+    in-out property <string> analysis-event-routing-style-text: "—";
+    in-out property <string> analysis-event-routing-detail-text: "—";
+    in-out property <string> analysis-event-expression-style-text: "—";
+    in-out property <string> analysis-event-expression-detail-text: "—";
+    in-out property <string> analysis-event-metadata-style-text: "—";
+    in-out property <string> analysis-event-metadata-detail-text: "—";
 
     // ── Analysis: File metrics ──
     in-out property <string> analysis-file-size-text: "—";
@@ -209,7 +230,10 @@ export component App inherits Window {
     in-out property <[BarValue]> analysis-density-timeline: [];
 
     // ── Analysis: Event breakdown ──
+    in-out property <[EventCount]> analysis-event-composition: [];
     in-out property <[EventCount]> analysis-event-breakdown: [];
+    in-out property <[EventCount]> analysis-event-breakdown-left: [];
+    in-out property <[EventCount]> analysis-event-breakdown-right: [];
     in-out property <string> analysis-event-total-text: "—";
     in-out property <string> audio-backend-text: "xsynth";
     in-out property <string> audio-engine-status-text: "Idle";
@@ -1026,7 +1050,28 @@ export component App inherits Window {
                     time-signature-text:   root.analysis-time-signature-text;
                     key-range-text:        root.analysis-key-range-text;
                     avg-velocity-text:     root.analysis-avg-velocity-text;
+                    median-velocity-text:  root.analysis-median-velocity-text;
+                    p90-velocity-text:     root.analysis-p90-velocity-text;
+                    low-velocity-share-text: root.analysis-low-velocity-share-text;
+                    high-velocity-share-text: root.analysis-high-velocity-share-text;
                     note-density-text:     root.analysis-note-density-text;
+                    note-traffic-count-text: root.analysis-note-traffic-count-text;
+                    note-traffic-share-text: root.analysis-note-traffic-share-text;
+                    note-traffic-fraction: root.analysis-note-traffic-fraction;
+                    other-events-count-text: root.analysis-other-events-count-text;
+                    other-events-share-text: root.analysis-other-events-share-text;
+                    other-events-fraction: root.analysis-other-events-fraction;
+                    top-non-note-family-text: root.analysis-top-non-note-family-text;
+                    top-non-note-share-text: root.analysis-top-non-note-share-text;
+                    top-non-note-fraction: root.analysis-top-non-note-fraction;
+                    event-release-style-text: root.analysis-event-release-style-text;
+                    event-release-detail-text: root.analysis-event-release-detail-text;
+                    event-routing-style-text: root.analysis-event-routing-style-text;
+                    event-routing-detail-text: root.analysis-event-routing-detail-text;
+                    event-expression-style-text: root.analysis-event-expression-style-text;
+                    event-expression-detail-text: root.analysis-event-expression-detail-text;
+                    event-metadata-style-text: root.analysis-event-metadata-style-text;
+                    event-metadata-detail-text: root.analysis-event-metadata-detail-text;
 
                     // File metrics
                     file-size-text:        root.analysis-file-size-text;
@@ -1073,7 +1118,10 @@ export component App inherits Window {
                     density-timeline:      root.analysis-density-timeline;
 
                     // Event breakdown
+                    event-composition:     root.analysis-event-composition;
                     event-breakdown:       root.analysis-event-breakdown;
+                    event-breakdown-left:  root.analysis-event-breakdown-left;
+                    event-breakdown-right: root.analysis-event-breakdown-right;
                     event-total-text:      root.analysis-event-total-text;
                 }
             }

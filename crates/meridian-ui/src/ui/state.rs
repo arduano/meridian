@@ -852,7 +852,30 @@ fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
     } else {
         0.0
     };
-    app.set_analysis_avg_velocity_text(format!("{:.0}", avg_velocity).into());
+    if total_velocity_notes > 0 {
+        let median_velocity =
+            histogram_percentile(&analysis.notes.velocity_note_on_counts, 0.50).unwrap_or(0);
+        let p90_velocity =
+            histogram_percentile(&analysis.notes.velocity_note_on_counts, 0.90).unwrap_or(0);
+        let low_velocity_notes: u64 = analysis.notes.velocity_note_on_counts.iter().take(33).sum();
+        let high_velocity_notes: u64 = analysis.notes.velocity_note_on_counts.iter().skip(96).sum();
+
+        app.set_analysis_avg_velocity_text(format!("{:.0}", avg_velocity).into());
+        app.set_analysis_median_velocity_text(median_velocity.to_string().into());
+        app.set_analysis_p90_velocity_text(p90_velocity.to_string().into());
+        app.set_analysis_low_velocity_share_text(
+            format_percentage(low_velocity_notes as f64 / total_velocity_notes as f64).into(),
+        );
+        app.set_analysis_high_velocity_share_text(
+            format_percentage(high_velocity_notes as f64 / total_velocity_notes as f64).into(),
+        );
+    } else {
+        app.set_analysis_avg_velocity_text("—".into());
+        app.set_analysis_median_velocity_text("—".into());
+        app.set_analysis_p90_velocity_text("—".into());
+        app.set_analysis_low_velocity_share_text("—".into());
+        app.set_analysis_high_velocity_share_text("—".into());
+    }
 
     // ── Summary (block analysis) ──
     app.set_analysis_total_blocks_text(format_number(analysis.summary.total_blocks).into());
@@ -869,12 +892,11 @@ fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
     );
 
     // ── Histograms ──
-    app.set_analysis_key_histogram(build_bar_model(&analysis.key_note_counts, |i| {
+    app.set_analysis_key_histogram(build_key_bar_model(&analysis.key_note_counts, |i| {
         midi_note_name(i)
     }));
-    app.set_analysis_velocity_histogram(build_bar_model(
+    app.set_analysis_velocity_histogram(build_velocity_profile_model(
         &analysis.notes.velocity_note_on_counts,
-        |i| i.to_string(),
     ));
     app.set_analysis_pitch_class_histogram(build_bar_model(
         &analysis.notes.pitch_class_note_counts,
@@ -888,9 +910,11 @@ fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
     app.set_analysis_channel_histogram(build_bar_model(&analysis.notes.channel_note_counts, |i| {
         i.to_string()
     }));
-    app.set_analysis_track_histogram(build_bar_model(&analysis.notes.track_note_counts, |i| {
-        format!("T{}", i)
-    }));
+    app.set_analysis_track_histogram(build_bar_model_sparse(
+        &analysis.notes.track_note_counts,
+        |i| format!("T{}", i),
+        2,
+    ));
 
     // ── Density timeline ──
     let peak_bucket = analysis
@@ -935,23 +959,222 @@ fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
         ("Time Signature", events.time_signature_events),
         ("Key Signature", events.key_signature_events),
     ];
-    let max_event_count = event_pairs
-        .iter()
-        .map(|(_, c)| *c)
-        .max()
-        .unwrap_or(1)
-        .max(1);
+    let total_accounted_events = event_pairs.iter().map(|(_, c)| *c).sum::<u64>().max(1);
     let event_counts: Vec<EventCount> = event_pairs
         .into_iter()
         .filter(|(_, count)| *count > 0)
         .map(|(name, count)| EventCount {
             name: SharedString::from(name),
             count: count as i32,
-            fraction: count as f32 / max_event_count as f32,
+            fraction: count as f32 / total_accounted_events as f32,
+            share_text: SharedString::from(format_percentage_compact(
+                count as f64 / total_accounted_events as f64,
+            )),
         })
         .collect();
+    let split_index = event_counts.len().div_ceil(2);
+    let (left_counts, right_counts) = event_counts.split_at(split_index);
     app.set_analysis_event_breakdown(ModelRc::from(std::rc::Rc::new(VecModel::from(
-        event_counts,
+        event_counts.clone(),
+    ))));
+    app.set_analysis_event_breakdown_left(ModelRc::from(std::rc::Rc::new(VecModel::from(
+        left_counts.to_vec(),
+    ))));
+    app.set_analysis_event_breakdown_right(ModelRc::from(std::rc::Rc::new(VecModel::from(
+        right_counts.to_vec(),
+    ))));
+
+    let note_traffic_count =
+        events.note_on_events + events.note_off_events + events.zero_velocity_note_on_events;
+    let other_events_count = total_accounted_events.saturating_sub(note_traffic_count);
+    let note_traffic_fraction = note_traffic_count as f32 / total_accounted_events as f32;
+    let other_events_fraction = other_events_count as f32 / total_accounted_events as f32;
+    app.set_analysis_note_traffic_count_text(format_number(note_traffic_count).into());
+    app.set_analysis_note_traffic_share_text(
+        format_percentage_compact(note_traffic_count as f64 / total_accounted_events as f64).into(),
+    );
+    app.set_analysis_note_traffic_fraction(note_traffic_fraction);
+    app.set_analysis_other_events_count_text(format_number(other_events_count).into());
+    app.set_analysis_other_events_share_text(
+        format_percentage_compact(other_events_count as f64 / total_accounted_events as f64).into(),
+    );
+    app.set_analysis_other_events_fraction(other_events_fraction);
+
+    let release_events = events.note_off_events + events.zero_velocity_note_on_events;
+    let release_style = if release_events == 0 {
+        "No releases".to_string()
+    } else if events.zero_velocity_note_on_events == 0 {
+        "Explicit offs".to_string()
+    } else if events.note_off_events == 0 {
+        "Zero-vel only".to_string()
+    } else if events.note_off_events >= events.zero_velocity_note_on_events * 4 {
+        "Mostly explicit".to_string()
+    } else if events.zero_velocity_note_on_events >= events.note_off_events * 4 {
+        "Mostly zero-vel".to_string()
+    } else {
+        "Mixed release".to_string()
+    };
+    app.set_analysis_event_release_style_text(release_style.into());
+    app.set_analysis_event_release_detail_text(
+        format!(
+            "{} off · {} zero-vel",
+            format_number(events.note_off_events),
+            format_number(events.zero_velocity_note_on_events),
+        )
+        .into(),
+    );
+
+    let routing_total = events.control_change_events + events.program_change_events;
+    let routing_style = if routing_total == 0 {
+        "No routing".to_string()
+    } else if events.control_change_events == 0 {
+        "Patch-switched".to_string()
+    } else if events.program_change_events == 0 {
+        "CC-driven".to_string()
+    } else if events.control_change_events >= events.program_change_events * 4 {
+        "CC-led".to_string()
+    } else if events.program_change_events >= events.control_change_events * 4 {
+        "Program-led".to_string()
+    } else {
+        "Mixed routing".to_string()
+    };
+    app.set_analysis_event_routing_style_text(routing_style.into());
+    app.set_analysis_event_routing_detail_text(
+        format!(
+            "{} CC · {} program",
+            format_number(events.control_change_events),
+            format_number(events.program_change_events),
+        )
+        .into(),
+    );
+
+    let expression_total = events.pitch_bend_events
+        + events.channel_pressure_events
+        + events.polyphonic_pressure_events;
+    let expression_style = if expression_total == 0 {
+        "No expression".to_string()
+    } else {
+        let mut dominant_name = "Pitch bend";
+        let mut dominant_count = events.pitch_bend_events;
+        if events.channel_pressure_events > dominant_count {
+            dominant_name = "Channel pressure";
+            dominant_count = events.channel_pressure_events;
+        }
+        if events.polyphonic_pressure_events > dominant_count {
+            dominant_name = "Poly pressure";
+            dominant_count = events.polyphonic_pressure_events;
+        }
+
+        if dominant_count * 10 >= expression_total * 8 {
+            format!("{dominant_name}-led")
+        } else if dominant_count * 10 >= expression_total * 6 {
+            format!("{dominant_name} heavy")
+        } else {
+            "Mixed expression".to_string()
+        }
+    };
+    app.set_analysis_event_expression_style_text(expression_style.into());
+    app.set_analysis_event_expression_detail_text(
+        format!(
+            "{} bend · {} ch · {} poly",
+            format_number(events.pitch_bend_events),
+            format_number(events.channel_pressure_events),
+            format_number(events.polyphonic_pressure_events),
+        )
+        .into(),
+    );
+
+    let text_meta_total = events.text_events
+        + events.lyric_events
+        + events.marker_events
+        + events.cue_point_events
+        + events.track_name_events
+        + events.instrument_name_events;
+    let timing_map_total =
+        events.tempo_events + events.time_signature_events + events.key_signature_events;
+    let metadata_style = if text_meta_total == 0 && timing_map_total == 0 {
+        "No score meta".to_string()
+    } else if timing_map_total == 0 {
+        "Text-led meta".to_string()
+    } else if text_meta_total == 0 {
+        "Timing map only".to_string()
+    } else if text_meta_total >= timing_map_total * 3 {
+        "Annotation-heavy".to_string()
+    } else if timing_map_total >= text_meta_total * 3 {
+        "Timing-led meta".to_string()
+    } else {
+        "Mixed score meta".to_string()
+    };
+    app.set_analysis_event_metadata_style_text(metadata_style.into());
+    app.set_analysis_event_metadata_detail_text(
+        format!(
+            "{} text/meta · {} map",
+            format_number(text_meta_total),
+            format_number(timing_map_total),
+        )
+        .into(),
+    );
+
+    let grouped_event_pairs: Vec<(&str, u64)> = vec![
+        (
+            "Controllers",
+            events.control_change_events + events.program_change_events,
+        ),
+        (
+            "Expressive",
+            events.pitch_bend_events
+                + events.channel_pressure_events
+                + events.polyphonic_pressure_events,
+        ),
+        (
+            "Meta text",
+            events.text_events
+                + events.lyric_events
+                + events.marker_events
+                + events.cue_point_events
+                + events.track_name_events
+                + events.instrument_name_events,
+        ),
+        (
+            "Tempo/signature",
+            events.tempo_events + events.time_signature_events + events.key_signature_events,
+        ),
+        ("SysEx", events.sysex_events),
+    ];
+    let non_note_total = grouped_event_pairs
+        .iter()
+        .map(|(_, count)| *count)
+        .sum::<u64>()
+        .max(1);
+    if let Some((name, count)) = grouped_event_pairs
+        .iter()
+        .max_by_key(|(_, count)| *count)
+        .copied()
+    {
+        app.set_analysis_top_non_note_family_text(name.into());
+        app.set_analysis_top_non_note_share_text(
+            format_percentage_compact(count as f64 / non_note_total as f64).into(),
+        );
+        app.set_analysis_top_non_note_fraction(count as f32 / non_note_total as f32);
+    } else {
+        app.set_analysis_top_non_note_family_text("—".into());
+        app.set_analysis_top_non_note_share_text("—".into());
+        app.set_analysis_top_non_note_fraction(0.0);
+    }
+    let event_composition: Vec<EventCount> = grouped_event_pairs
+        .into_iter()
+        .filter(|(_, count)| *count > 0)
+        .map(|(name, count)| EventCount {
+            name: SharedString::from(name),
+            count: count as i32,
+            fraction: count as f32 / non_note_total as f32,
+            share_text: SharedString::from(format_percentage_compact(
+                count as f64 / non_note_total as f64,
+            )),
+        })
+        .collect();
+    app.set_analysis_event_composition(ModelRc::from(std::rc::Rc::new(VecModel::from(
+        event_composition,
     ))));
     app.set_analysis_event_total_text(format_number(analysis.file.total_event_count).into());
 }
@@ -994,6 +1217,23 @@ fn format_duration(seconds: f64) -> String {
     }
 }
 
+fn format_percentage(fraction: f64) -> String {
+    format!("{:.0}%", fraction * 100.0)
+}
+
+fn format_percentage_compact(fraction: f64) -> String {
+    let percent = fraction * 100.0;
+    if percent >= 10.0 {
+        format!("{:.1}%", percent)
+    } else if percent >= 1.0 {
+        format!("{:.2}%", percent)
+    } else if percent > 0.0 {
+        format!("<1%")
+    } else {
+        "0%".into()
+    }
+}
+
 fn format_duration_short(seconds: f64) -> String {
     if seconds >= 1.0 {
         format!("{:.2}s", seconds)
@@ -1011,6 +1251,88 @@ fn midi_note_name(key: usize) -> String {
     let octave = key as i32 / 12 - 1;
     let name = NAMES[key % 12];
     format!("{}{}", name, octave)
+}
+
+fn histogram_percentile(counts: &[u64], percentile: f64) -> Option<usize> {
+    let total = counts.iter().sum::<u64>();
+    if total == 0 {
+        return None;
+    }
+    let target = ((total as f64 * percentile).ceil() as u64).max(1);
+    let mut seen = 0u64;
+    for (i, count) in counts.iter().copied().enumerate() {
+        seen += count;
+        if seen >= target {
+            return Some(i);
+        }
+    }
+    counts.len().checked_sub(1)
+}
+
+fn build_velocity_profile_model(counts: &[u64]) -> ModelRc<BarValue> {
+    let bucket_size = 16usize;
+    let buckets: Vec<(String, u64)> = counts
+        .chunks(bucket_size)
+        .enumerate()
+        .map(|(i, chunk)| {
+            let start = i * bucket_size;
+            let end = start + chunk.len().saturating_sub(1);
+            let count = chunk.iter().sum();
+            (format!("{}-{}", start, end), count)
+        })
+        .collect();
+    let max = buckets
+        .iter()
+        .map(|(_, count)| *count)
+        .max()
+        .unwrap_or(1)
+        .max(1) as f32;
+    let bars: Vec<BarValue> = buckets
+        .into_iter()
+        .map(|(label, count)| {
+            let normalized = count as f32 / max;
+            BarValue {
+                value: normalized.sqrt(),
+                label: SharedString::from(label),
+                count: count as i32,
+            }
+        })
+        .collect();
+    ModelRc::from(std::rc::Rc::new(VecModel::from(bars)))
+}
+
+fn build_bar_model_sparse(
+    counts: &[u64],
+    label_fn: impl Fn(usize) -> String,
+    label_step: usize,
+) -> ModelRc<BarValue> {
+    let max = counts.iter().copied().max().unwrap_or(1).max(1) as f32;
+    let step = label_step.max(1);
+    let last_index = counts.len().saturating_sub(1);
+    let bars: Vec<BarValue> = counts
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| BarValue {
+            value: c as f32 / max,
+            label: SharedString::from(if i % step == 0 || i == last_index {
+                label_fn(i)
+            } else {
+                String::new()
+            }),
+            count: c as i32,
+        })
+        .collect();
+    ModelRc::from(std::rc::Rc::new(VecModel::from(bars)))
+}
+
+fn build_key_bar_model(counts: &[u64], label_fn: impl Fn(usize) -> String) -> ModelRc<BarValue> {
+    let default_visible_len = counts.len().min(128);
+    let highest_nonzero = counts.iter().rposition(|&c| c > 0);
+    let visible_len = highest_nonzero
+        .map(|idx| (idx + 1).max(default_visible_len))
+        .unwrap_or(default_visible_len)
+        .max(1);
+    build_bar_model(&counts[..visible_len.min(counts.len())], label_fn)
 }
 
 fn build_bar_model(counts: &[u64], label_fn: impl Fn(usize) -> String) -> ModelRc<BarValue> {
