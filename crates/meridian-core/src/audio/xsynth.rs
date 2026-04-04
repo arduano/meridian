@@ -1,3 +1,7 @@
+use cpal::{
+    SampleRate, SupportedStreamConfig,
+    traits::{DeviceTrait, HostTrait},
+};
 use xsynth_core::{
     AudioStreamParams,
     channel::{ChannelConfigEvent, ChannelEvent},
@@ -17,15 +21,10 @@ pub struct XSynthPlayer {
 
 impl XSynthPlayer {
     pub fn new(config: &AudioConfig) -> Result<Self, MeridianError> {
-        let synth = std::panic::catch_unwind(|| {
-            RealtimeSynth::open_with_default_output_and_params(
-                config.xsynth.config.clone(),
-                config.xsynth.render.audio_params,
-            )
-        })
-        .map_err(|_| {
-            MeridianError::MidiLoad("xsynth panicked during output initialization".into())
-        })?;
+        let synth =
+            std::panic::catch_unwind(|| open_default_output_synth(config)).map_err(|_| {
+                MeridianError::MidiLoad("xsynth panicked during output initialization".into())
+            })??;
         let sender = synth.get_sender_ref().clone();
         let stats = synth.get_stats();
         let stream_params = synth.stream_params();
@@ -36,6 +35,61 @@ impl XSynthPlayer {
             synth,
         })
     }
+}
+
+fn open_default_output_synth(config: &AudioConfig) -> Result<RealtimeSynth, MeridianError> {
+    let host = cpal::default_host();
+    let device = host
+        .default_output_device()
+        .ok_or_else(|| MeridianError::Platform("no default output device available".into()))?;
+
+    let stream_config = select_output_config(&device, config.xsynth.render.audio_params)
+        .or_else(|_| default_output_config(&device))?;
+
+    RealtimeSynth::open(config.xsynth.config.clone(), &device, stream_config)
+        .map_err(|e| MeridianError::Platform(format!("failed to open xsynth output: {e}")))
+}
+
+fn select_output_config(
+    device: &cpal::Device,
+    desired: AudioStreamParams,
+) -> Result<SupportedStreamConfig, MeridianError> {
+    let configs = device
+        .supported_output_configs()
+        .map_err(|e| MeridianError::Platform(format!("failed to enumerate output configs: {e}")))?;
+
+    configs
+        .find(|config| {
+            config.channels() == desired.channels.count()
+                && config.min_sample_rate().0 <= desired.sample_rate
+                && desired.sample_rate <= config.max_sample_rate().0
+        })
+        .map(|config| config.with_sample_rate(SampleRate(desired.sample_rate)))
+        .ok_or_else(|| {
+            MeridianError::Unsupported(format!(
+                "default output device does not support {} Hz {} output",
+                desired.sample_rate,
+                match desired.channels {
+                    xsynth_core::ChannelCount::Mono => "mono",
+                    xsynth_core::ChannelCount::Stereo => "stereo",
+                }
+            ))
+        })
+}
+
+fn default_output_config(device: &cpal::Device) -> Result<SupportedStreamConfig, MeridianError> {
+    let config = device.default_output_config().map_err(|e| {
+        MeridianError::Platform(format!("failed to query default output config: {e}"))
+    })?;
+
+    if xsynth_core::ChannelCount::from_count(config.channels()).is_none() {
+        return Err(MeridianError::Unsupported(format!(
+            "default output device uses unsupported channel count {}",
+            config.channels()
+        )));
+    }
+
+    Ok(config)
 }
 
 impl MidiAudioPlayer for XSynthPlayer {

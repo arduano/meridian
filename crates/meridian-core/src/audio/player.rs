@@ -1,8 +1,8 @@
 use std::sync::{Arc, RwLock};
 
+use cpal::traits::{DeviceTrait, HostTrait};
 use serde::{Deserialize, Serialize};
-use xsynth_core::AudioStreamParams;
-use xsynth_realtime::DefaultOutputSupport;
+use xsynth_core::{AudioStreamParams, ChannelCount};
 
 use crate::error::MeridianError;
 
@@ -62,6 +62,18 @@ impl Default for AudioStatus {
     }
 }
 
+#[derive(Default)]
+struct OutputSupport {
+    supports_44100_hz: bool,
+    supports_48000_hz: bool,
+    supports_88200_hz: bool,
+    supports_96000_hz: bool,
+    supports_176400_hz: bool,
+    supports_192000_hz: bool,
+    supports_mono: bool,
+    supports_stereo: bool,
+}
+
 struct EmptyPlayer;
 
 impl MidiAudioPlayer for EmptyPlayer {
@@ -105,8 +117,8 @@ impl MeridianAudioPlayer {
             AudioBackend::Xsynth => Box::new(XSynthPlayer::new(config)?),
         };
         let output_support = match config.backend {
-            AudioBackend::None => DefaultOutputSupport::default(),
-            AudioBackend::Xsynth => xsynth_realtime::RealtimeSynth::default_output_support(),
+            AudioBackend::None => OutputSupport::default(),
+            AudioBackend::Xsynth => default_output_support(),
         };
         new_player.configure(config, &self.cache)?;
         let status = AudioStatus {
@@ -150,6 +162,42 @@ impl MeridianAudioPlayer {
         status.stream_params = player.stream_params();
         status
     }
+}
+
+fn default_output_support() -> OutputSupport {
+    let Some(device) = cpal::default_host().default_output_device() else {
+        return OutputSupport::default();
+    };
+    let Ok(configs) = device.supported_output_configs() else {
+        return OutputSupport::default();
+    };
+
+    let mut support = OutputSupport::default();
+    for config in configs {
+        match ChannelCount::from_count(config.channels()) {
+            Some(ChannelCount::Mono) => support.supports_mono = true,
+            Some(ChannelCount::Stereo) => support.supports_stereo = true,
+            None => {}
+        }
+
+        for sample_rate in [44_100, 48_000, 88_200, 96_000, 176_400, 192_000] {
+            if config.min_sample_rate().0 <= sample_rate
+                && sample_rate <= config.max_sample_rate().0
+            {
+                match sample_rate {
+                    44_100 => support.supports_44100_hz = true,
+                    48_000 => support.supports_48000_hz = true,
+                    88_200 => support.supports_88200_hz = true,
+                    96_000 => support.supports_96000_hz = true,
+                    176_400 => support.supports_176400_hz = true,
+                    192_000 => support.supports_192000_hz = true,
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    support
 }
 
 fn read_lock<T>(lock: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T> {

@@ -3425,6 +3425,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "clap 4.6.0",
+ "cpal",
  "enum_dispatch",
  "flate2",
  "flume",
