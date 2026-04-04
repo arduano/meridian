@@ -2,6 +2,7 @@
 name = "meridian-ui"
 version.workspace = true
 edition.workspace = true
+license = "GPL-3.0-only"
 
 [package.metadata.bundle]
 name = "Meridian"

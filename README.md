@@ -132,3 +132,13 @@ So the current blocker is no longer compilation — it is the lack of a real des
 ## Headless and NAS notes
 
 See [NOTES.md](/home/arduano/programming/meridian/NOTES.md) for expected runtime blockers on headless NAS, Intel Arc, remote SSH, Wayland/X11, and display-server availability.
+
+## Licensing
+
+Meridian uses a mixed licensing model:
+
+- [`meridian-core`](/home/arduano/programming/meridian/crates/meridian-core/Cargo.toml) is licensed under `LGPL-3.0-or-later`.
+- [`meridian-cli`](/home/arduano/programming/meridian/crates/meridian-cli/Cargo.toml) is licensed under `GPL-3.0-only`.
+- [`meridian-ui`](/home/arduano/programming/meridian/crates/meridian-ui/Cargo.toml) is licensed under `GPL-3.0-only`.
+
+This split matches the current dependency constraints: the reusable core stays under the weaker copyleft already present in its `xsynth-*` dependencies, while the application frontends remain under GPL. See [LICENSE.md](/home/arduano/programming/meridian/LICENSE.md) for the repo-level summary and bundled license texts.
