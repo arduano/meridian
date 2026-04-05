@@ -31,7 +31,9 @@ pub use wire::{
     ProtocolSchemaDemo, ProtocolVideoRenderConfig, UnsupportedProtocolEvent,
 };
 
-pub use crate::midi::analysis::{MidiAnalysisBucket, MidiAnalysisData, MidiAnalysisKind};
+pub use crate::midi::analysis::{
+    MidiAnalysisBucket, MidiAnalysisData, MidiAnalysisKind, MidiFileInspection,
+};
 
 pub const PROTOCOL_VERSION: u32 = 1;
 

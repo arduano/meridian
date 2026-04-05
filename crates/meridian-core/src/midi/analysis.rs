@@ -2,6 +2,7 @@ use std::{
     collections::VecDeque,
     fs::File,
     io::{Read, Write},
+    path::PathBuf,
 };
 
 use flate2::{Compression, write::GzEncoder};
@@ -34,6 +35,24 @@ pub struct MidiAnalysisData {
     pub events: MidiAnalysisEventMetrics,
     pub notes: MidiAnalysisNoteMetrics,
     pub tempo: MidiAnalysisTempoMetrics,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct MidiFileInspection {
+    pub path: PathBuf,
+    pub file_bytes: u64,
+    pub midi_length: f64,
+    pub total_notes: u64,
+    pub total_event_count: u64,
+    pub declared_track_count: u16,
+    pub actual_track_count: usize,
+    pub ticks_per_quarter: Option<u16>,
+    pub tempo_event_count: u64,
+    pub time_signature_event_count: u64,
+    pub key_signature_event_count: u64,
+    pub track_name_event_count: u64,
+    pub initial_bpm: f64,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
@@ -771,6 +790,54 @@ pub fn analyze_parsed_midi_with_progress(
         progress,
     )?;
     Ok(analyze_cached_midi(parsed, cached, buckets))
+}
+
+pub fn inspect_midi_files(paths: &[PathBuf]) -> Vec<MidiFileInspection> {
+    paths.iter().cloned().map(inspect_midi_file).collect()
+}
+
+pub fn inspect_midi_file(path: PathBuf) -> MidiFileInspection {
+    let inspection = || -> Result<MidiFileInspection, crate::error::MeridianError> {
+        let parsed = ParsedMidiFile::load_from_file(path.clone())?;
+        let cached = build_cached_midi_analysis_with_progress(&parsed, |_| {})?;
+        let file = analyze_file_metrics(&parsed, cached.actual_track_count());
+        Ok(MidiFileInspection {
+            path: path.clone(),
+            file_bytes: file.source_bytes,
+            midi_length: cached.midi_length(),
+            total_notes: cached.total_notes(),
+            total_event_count: file.total_event_count,
+            declared_track_count: file.declared_track_count,
+            actual_track_count: file.actual_track_count,
+            ticks_per_quarter: file.ticks_per_quarter,
+            tempo_event_count: cached.events().tempo_events,
+            time_signature_event_count: cached.events().time_signature_events,
+            key_signature_event_count: cached.events().key_signature_events,
+            track_name_event_count: cached.events().track_name_events,
+            initial_bpm: cached.tempo().initial_bpm,
+            error: None,
+        })
+    };
+
+    match inspection() {
+        Ok(inspection) => inspection,
+        Err(error) => MidiFileInspection {
+            path,
+            file_bytes: 0,
+            midi_length: 0.0,
+            total_notes: 0,
+            total_event_count: 0,
+            declared_track_count: 0,
+            actual_track_count: 0,
+            ticks_per_quarter: None,
+            tempo_event_count: 0,
+            time_signature_event_count: 0,
+            key_signature_event_count: 0,
+            track_name_event_count: 0,
+            initial_bpm: 0.0,
+            error: Some(error.to_string()),
+        },
+    }
 }
 
 pub fn select_analysis_kinds(

@@ -14,8 +14,8 @@ use super::tools::{
     AnalysisGuardTool, ChannelRemapTool, ControlChangeTool, DedupeTool, KeyMapTool, KeyRange,
     MergeBalanceTool, MetaTextTool, MidiModifierTool, NoteLengthTool, OrphanNoteOffPolicy,
     OverlapRepairTool, PitchBendTool, ProgramTool, QuantizeTool, RangeSelectTool,
-    RepeatedNoteOnPolicy, SelectableEventKind, SysexTool, TempoMapTool, TextKind, TimeWarpPoint,
-    TimeWarpTool, TrackRouteTool, VelocityMapTool,
+    RepeatedNoteOnPolicy, SelectableEventKind, SharedMetadataTrackTool, SysexTool, TempoMapTool,
+    TextKind, TimeWarpPoint, TimeWarpTool, TrackRouteTool, VelocityMapTool,
 };
 
 #[derive(Debug, Clone)]
@@ -94,6 +94,9 @@ pub fn apply_modifier_tools(
             }
             MidiModifierTool::Sysex(tool) => apply_sysex_tool(&mut abs_tracks, &selection, tool),
             MidiModifierTool::MergeBalance(tool) => apply_merge_balance_tool(&mut abs_tracks, tool),
+            MidiModifierTool::SharedMetadataTrack(tool) => {
+                apply_shared_metadata_track_tool(&mut abs_tracks, tool)
+            }
             MidiModifierTool::AnalysisGuard(tool) => apply_analysis_guard_tool(&abs_tracks, tool)?,
         }
     }
@@ -948,6 +951,50 @@ fn apply_merge_balance_tool(tracks: &mut Vec<Vec<AbsoluteEvent>>, tool: &MergeBa
     }
 }
 
+fn apply_shared_metadata_track_tool(
+    tracks: &mut Vec<Vec<AbsoluteEvent>>,
+    tool: &SharedMetadataTrackTool,
+) {
+    let should_move = |event: &Event| match event {
+        Event::Tempo(_) => tool.move_tempo_events,
+        Event::TimeSignature(_) => tool.move_time_signatures,
+        Event::KeySignature(_) => tool.move_key_signatures,
+        Event::Text(_) => tool.move_text_events,
+        _ => false,
+    };
+    if !tracks
+        .iter()
+        .any(|track| track.iter().any(|event| should_move(&event.event)))
+    {
+        return;
+    }
+
+    while tracks.len() <= tool.target_track_index {
+        tracks.push(Vec::new());
+    }
+
+    let mut moved = Vec::new();
+    for (track_index, track) in tracks.iter_mut().enumerate() {
+        let mut kept = Vec::with_capacity(track.len());
+        for event in track.drain(..) {
+            if track_index == tool.target_track_index {
+                if should_move(&event.event) {
+                    moved.push(event);
+                } else {
+                    kept.push(event);
+                }
+            } else if should_move(&event.event) {
+                moved.push(event);
+            } else {
+                kept.push(event);
+            }
+        }
+        *track = kept;
+    }
+
+    tracks[tool.target_track_index].extend(moved);
+}
+
 fn apply_analysis_guard_tool(
     tracks: &[Vec<AbsoluteEvent>],
     tool: &AnalysisGuardTool,
@@ -1026,7 +1073,8 @@ fn apply_signed(value: u64, offset: i64) -> u64 {
 mod tests {
     use crate::midi::tools::{
         ChannelMapEntry, ChannelProgram, ControlValue, ControllerMapEntry, ControllerScaleEntry,
-        HumanizeTool, KeyMapEntry, TempoPoint, TextKind, TrackMapEntry, VelocityPoint,
+        HumanizeTool, KeyMapEntry, SharedMetadataTrackTool, TempoPoint, TextKind, TrackMapEntry,
+        VelocityPoint,
     };
     use midi_toolkit::{
         events::{
@@ -1696,6 +1744,58 @@ mod tests {
             })
             .collect::<Vec<_>>();
         assert_eq!(sysex, vec![vec![9, 9]]);
+
+        let mut shared_metadata_tracks = vec![
+            vec![
+                delta(0, Event::Tempo(Box::new(TempoEvent { tempo: 500_000 }))),
+                delta(
+                    0,
+                    Event::Text(Box::new(TextEvent {
+                        kind: TextEventKind::TrackName,
+                        bytes: b"Conductor".to_vec(),
+                    })),
+                ),
+                delta(10, note_on(0, 60, 100)),
+            ],
+            vec![
+                delta(0, Event::Tempo(Box::new(TempoEvent { tempo: 600_000 }))),
+                delta(
+                    0,
+                    Event::Text(Box::new(TextEvent {
+                        kind: TextEventKind::Marker,
+                        bytes: b"Verse".to_vec(),
+                    })),
+                ),
+                delta(0, note_on(1, 64, 100)),
+            ],
+        ];
+        apply_modifier_tools(
+            &mut shared_metadata_tracks,
+            &[MidiModifierTool::SharedMetadataTrack(
+                SharedMetadataTrackTool {
+                    target_track_index: 0,
+                    move_tempo_events: true,
+                    move_text_events: true,
+                    ..Default::default()
+                },
+            )],
+        )
+        .expect("shared metadata track");
+        let abs = absolute_ticks(&shared_metadata_tracks);
+        assert_eq!(
+            abs[0]
+                .iter()
+                .filter(|(_, event)| matches!(event, Event::Tempo(_) | Event::Text(_)))
+                .count(),
+            4
+        );
+        assert_eq!(
+            abs[1]
+                .iter()
+                .filter(|(_, event)| matches!(event, Event::Tempo(_) | Event::Text(_)))
+                .count(),
+            0
+        );
 
         let mut merge_tracks = vec![
             vec![

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use meridian_core::{
     audio::AudioStatus,
+    midi::MidiFileInspection,
     protocol::{
         AudioRenderStatus, CoreEvent, MidiAnalysisData, MidiProcessEvent, MidiProcessStatus,
         ProcessedMidiId, StateSnapshot, VideoRenderStatus,
@@ -58,6 +59,7 @@ pub struct UiViewModel {
     pub render_jobs: RenderJobsViewModel,
     pub analysis: AnalysisViewModel,
     pub modify: ModifyViewModel,
+    pub merge: MergeViewModel,
     pub snapshot: Option<StateSnapshot>,
 }
 
@@ -79,6 +81,33 @@ impl Default for ModifyViewModel {
         Self {
             process_status: MidiProcessStatus::Idle,
             latest_event: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MergeViewModel {
+    pub sources: Vec<MergeSourceViewModel>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MergeSourceViewModel {
+    pub path: PathBuf,
+    pub inspection: MergeSourceInspection,
+}
+
+#[derive(Debug, Clone)]
+pub enum MergeSourceInspection {
+    Loading,
+    Ready(MidiFileInspection),
+    Error(String),
+}
+
+impl MergeSourceViewModel {
+    pub fn new_loading(path: PathBuf) -> Self {
+        Self {
+            path,
+            inspection: MergeSourceInspection::Loading,
         }
     }
 }
@@ -146,6 +175,7 @@ impl UiViewModel {
             | CoreEvent::AudioRender { .. }
             | CoreEvent::MidiLoadProgress { .. }
             | CoreEvent::ParsedMidiLoaded { .. }
+            | CoreEvent::MidiFilesInspected { .. }
             | CoreEvent::DisplayCacheBuilt { .. }
             | CoreEvent::AudioCacheBuilt { .. }
             | CoreEvent::DisplaySessionCreated { .. }

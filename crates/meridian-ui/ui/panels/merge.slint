@@ -1,0 +1,539 @@
+import { MergeSourceRow } from "../structs.slint";
+import { FieldRow, OptionChip, PrimaryButton, ProgressBar, SectionHeader, Separator } from "../primitives.slint";
+
+component MiniActionButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback pressed;
+
+    height: 26px;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: root.enabled ? #1a2a40 : #111a28;
+    background: root.enabled ? (touch.has-hover ? #152338 : #0d1726) : #0a1018;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        alignment: center;
+
+        Text {
+            text: root.label;
+            color: root.enabled ? #8ea6c2 : #3d5068;
+            font-size: 10px;
+            font-weight: 700;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { if (root.enabled) { root.pressed(); } }
+    }
+}
+
+component MergeMetricCell inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+
+    height: 42px;
+    border-radius: 8px;
+    background: #0b1320;
+    border-width: 1px;
+    border-color: #111a28;
+
+    VerticalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 1px;
+
+        Text { text: root.label; color: #40536d; font-size: 9px; font-weight: 700; }
+        Text { text: root.value; color: #9fb2c8; font-size: 10px; font-family: "monospace"; font-weight: 600; }
+    }
+}
+
+component MergeToggleRow inherits Rectangle {
+    in property <string> label;
+    in property <string> hint;
+    in property <string> value: "off";
+    callback changed(string);
+
+    height: 42px;
+
+    HorizontalLayout {
+        spacing: 8px;
+
+        VerticalLayout {
+            spacing: 1px;
+            alignment: center;
+            horizontal-stretch: 1;
+
+            Text { text: root.label; color: #b0c0d4; font-size: 11px; font-weight: 600; }
+            Text { text: root.hint; color: #556b86; font-size: 9px; wrap: word-wrap; }
+        }
+
+        HorizontalLayout {
+            spacing: 4px;
+            alignment: center;
+
+            OptionChip { label: "Off"; active: root.value == "off"; pressed => { root.changed("off"); } }
+            OptionChip { label: "On"; active: root.value == "on"; pressed => { root.changed("on"); } }
+        }
+    }
+}
+
+component MergeSourceCard inherits Rectangle {
+    in property <MergeSourceRow> source-data;
+    in property <int> index: 0;
+    callback move-source(int, int);
+    callback remove-source(int);
+
+    border-radius: 12px;
+    background: source-data.is_error ? #1a1014 : #0c1420;
+    border-width: 1px;
+    border-color: source-data.is_error ? #38212c : source-data.is_loading ? #19304a : #111a28;
+
+    VerticalLayout {
+        padding: 14px;
+        spacing: 10px;
+
+        HorizontalLayout {
+            spacing: 10px;
+
+            VerticalLayout {
+                spacing: 2px;
+                horizontal-stretch: 1;
+
+                Text {
+                    text: source-data.name;
+                    color: source-data.is_error ? #f0b8ca : #d7e2f0;
+                    font-size: 14px;
+                    font-weight: 700;
+                    overflow: elide;
+                }
+                Text {
+                    text: source-data.path;
+                    color: #60748f;
+                    font-size: 9px;
+                    font-family: "monospace";
+                    overflow: elide;
+                }
+            }
+
+            Rectangle {
+                height: 24px;
+                border-radius: 12px;
+                background: source-data.is_error ? #31131f : source-data.is_loading ? #122337 : #0f2230;
+                border-width: 1px;
+                border-color: source-data.is_error ? #5a2437 : source-data.is_loading ? #1d4064 : #163145;
+
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    alignment: center;
+
+                    Text {
+                        text: source-data.status;
+                        color: source-data.is_error ? #ff9dbc : source-data.is_loading ? #8abff7 : #7fd1c4;
+                        font-size: 10px;
+                        font-weight: 700;
+                    }
+                }
+            }
+
+            MiniActionButton { label: "Up"; enabled: index > 0; pressed => { root.move-source(index, -1); } }
+            MiniActionButton { label: "Down"; pressed => { root.move-source(index, 1); } }
+            MiniActionButton { label: "Remove"; pressed => { root.remove-source(index); } }
+        }
+
+        HorizontalLayout {
+            spacing: 8px;
+            MergeMetricCell { label: "Tracks"; value: source-data.tracks_text; }
+            MergeMetricCell { label: "Notes"; value: source-data.notes_text; }
+            MergeMetricCell { label: "Tempo"; value: source-data.tempo_text; }
+            MergeMetricCell { label: "Length"; value: source-data.length_text; }
+            MergeMetricCell { label: "PPQ"; value: source-data.ppq_text; }
+        }
+
+        HorizontalLayout {
+            spacing: 20px;
+            Text { text: source-data.bpm_text; color: #87a0bc; font-size: 10px; font-family: "monospace"; }
+            Text { text: source-data.meta_text; color: #556b86; font-size: 10px; overflow: elide; }
+        }
+    }
+}
+
+export component MergePanel inherits Rectangle {
+    in property <[MergeSourceRow]> merge-sources: [];
+    in property <string> merge-source-count-text: "0";
+    in property <string> merge-track-total-text: "—";
+    in property <string> merge-note-total-text: "—";
+    in property <string> merge-tempo-total-text: "—";
+    in property <string> merge-layout-text: "preserve_tracks";
+    in property <string> merge-metadata-mode-text: "tempo_signatures";
+    in property <string> merge-remove-empty-tracks-text: "on";
+    in property <string> merge-strip-duplicate-start-text: "on";
+    in property <string> merge-prefer-first-tempo-text: "on";
+    in property <string> merge-deconflict-channels-text: "off";
+    in property <string> merge-dedupe-meta-text: "on";
+    in property <string> merge-dedupe-controls-text: "off";
+    in property <string> merge-dedupe-notes-text: "off";
+    in property <string> merge-output-path-text: "";
+    in property <float> merge-progress: 0;
+    in property <bool> merge-job-active: false;
+    in property <string> merge-status-text: "Ready";
+    in property <string> merge-detail-text: "Drop MIDI files here or browse to assemble a merge.";
+    in property <string> merge-result-output-text: "merged-output.mid";
+    in property <string> merge-result-input-count-text: "—";
+    in property <string> merge-result-track-count-text: "—";
+    in property <string> merge-result-ppq-text: "—";
+    in property <string> merge-result-event-count-text: "—";
+
+    callback select-merge-files;
+    callback clear-merge-files;
+    callback remove-merge-source(int);
+    callback move-merge-source(int, int);
+    callback update-merge-control(string, string);
+    callback browse-merge-output;
+    callback start-merge-job;
+    callback cancel-merge-job;
+
+    private property <bool> has-sources: root.merge-source-count-text != "0";
+    private property <bool> start-enabled:
+        root.has-sources && root.merge-output-path-text != "" && !root.merge-job-active;
+
+    clip: true;
+    background: #0a1018;
+
+    Flickable {
+        width: parent.width;
+        height: parent.height;
+
+        VerticalLayout {
+            width: parent.width;
+            padding: 24px;
+            padding-right: 28px;
+            spacing: 0px;
+            alignment: start;
+
+            Rectangle {
+                border-radius: 18px;
+                background: #0d1625;
+                border-width: 1px;
+                border-color: #152338;
+
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 14px;
+
+                    Text {
+                        text: "MERGE MIDI SOURCES";
+                        color: #e2ebf6;
+                        font-size: 20px;
+                        font-weight: 800;
+                    }
+                    Text {
+                        text: "Build a merge queue, inspect each source, then render a clean combined MIDI with track-layout and metadata rules baked in.";
+                        color: #7590ad;
+                        font-size: 11px;
+                        wrap: word-wrap;
+                    }
+
+                    Rectangle {
+                        border-radius: 14px;
+                        background: #0a1220;
+                        border-width: 1px;
+                        border-color: #17304a;
+
+                        VerticalLayout {
+                            padding: 18px;
+                            spacing: 10px;
+                            alignment: center;
+
+                            Text {
+                                text: "Drag MIDIs into the window to append them to this merge.";
+                                color: #9fb5cd;
+                                font-size: 12px;
+                                font-weight: 700;
+                                horizontal-alignment: center;
+                            }
+                            Text {
+                                text: "Each file gets a lightweight inspection pass first: track counts, tempo map activity, PPQ, note count, and rough timing.";
+                                color: #5d738e;
+                                font-size: 10px;
+                                wrap: word-wrap;
+                                horizontal-alignment: center;
+                            }
+
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: center;
+
+                                Rectangle {
+                                    width: 150px;
+                                    PrimaryButton {
+                                        width: parent.width;
+                                        label: "Add MIDI Files";
+                                        pressed => { root.select-merge-files(); }
+                                    }
+                                }
+                                MiniActionButton {
+                                    label: "Clear Queue";
+                                    enabled: root.has-sources && !root.merge-job-active;
+                                    pressed => { root.clear-merge-files(); }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.has-sources : HorizontalLayout {
+                        spacing: 8px;
+                        MergeMetricCell { label: "Sources"; value: root.merge-source-count-text; }
+                        MergeMetricCell { label: "Tracks"; value: root.merge-track-total-text; }
+                        MergeMetricCell { label: "Notes"; value: root.merge-note-total-text; }
+                        MergeMetricCell { label: "Tempo Events"; value: root.merge-tempo-total-text; }
+                    }
+                }
+            }
+
+            Rectangle { height: 18px; }
+            Separator {}
+            Rectangle { height: 18px; }
+
+            SectionHeader { title: "SOURCE QUEUE"; }
+            Rectangle { height: 6px; }
+            Text {
+                text: "Order matters for track stacking, first-tempo preference, and any shared metadata lane you enable below.";
+                color: #4d6580;
+                font-size: 10px;
+                wrap: word-wrap;
+            }
+            Rectangle { height: 12px; }
+
+            if !root.has-sources : Rectangle {
+                border-radius: 14px;
+                background: #0c1420;
+                border-width: 1px;
+                border-color: #111a28;
+                height: 120px;
+
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 6px;
+
+                    Text { text: "No MIDI files queued"; color: #93a8c1; font-size: 14px; font-weight: 700; }
+                    Text { text: "Drop files here or use Add MIDI Files above."; color: #506683; font-size: 10px; }
+                }
+            }
+
+            if root.has-sources : VerticalLayout {
+                spacing: 10px;
+
+                for source[index] in root.merge-sources : MergeSourceCard {
+                    source-data: source;
+                    index: index;
+                    move-source(i, delta) => { root.move-merge-source(i, delta); }
+                    remove-source(i) => { root.remove-merge-source(i); }
+                }
+            }
+
+            Rectangle { height: 18px; }
+            Separator {}
+            Rectangle { height: 18px; }
+
+            SectionHeader { title: "MERGE RECIPE"; }
+            Rectangle { height: 10px; }
+
+            HorizontalLayout {
+                spacing: 12px;
+
+                Rectangle {
+                    border-radius: 14px;
+                    background: #0c1420;
+                    border-width: 1px;
+                    border-color: #111a28;
+                    horizontal-stretch: 1;
+
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 10px;
+
+                        Text { text: "TRACK LAYOUT"; color: #d5deea; font-size: 12px; font-weight: 700; }
+                        Text { text: "Choose whether files stack whole tracks, collapse to one track, or merge matching track indexes together."; color: #5f7490; font-size: 10px; wrap: word-wrap; }
+
+                        HorizontalLayout {
+                            spacing: 6px;
+                            OptionChip { label: "Stack"; active: root.merge-layout-text == "preserve_tracks"; pressed => { root.update-merge-control("layout", "preserve_tracks"); } }
+                            OptionChip { label: "By Index"; active: root.merge-layout-text == "merge_by_track_index"; pressed => { root.update-merge-control("layout", "merge_by_track_index"); } }
+                            OptionChip { label: "Flatten"; active: root.merge-layout-text == "flatten_to_single_track"; pressed => { root.update-merge-control("layout", "flatten_to_single_track"); } }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    border-radius: 14px;
+                    background: #0c1420;
+                    border-width: 1px;
+                    border-color: #111a28;
+                    horizontal-stretch: 1;
+
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 10px;
+
+                        Text { text: "METADATA LANE"; color: #d5deea; font-size: 12px; font-weight: 700; }
+                        Text { text: "Keep conductor data where it lives, or pull shared tempo/signature/text events into track 1 for a cleaner merged file."; color: #5f7490; font-size: 10px; wrap: word-wrap; }
+
+                        HorizontalLayout {
+                            spacing: 6px;
+                            OptionChip { label: "Keep"; active: root.merge-metadata-mode-text == "keep"; pressed => { root.update-merge-control("metadata_mode", "keep"); } }
+                            OptionChip { label: "Tempo+Sig"; active: root.merge-metadata-mode-text == "tempo_signatures"; pressed => { root.update-merge-control("metadata_mode", "tempo_signatures"); } }
+                            OptionChip { label: "All Text"; active: root.merge-metadata-mode-text == "all_text_meta"; pressed => { root.update-merge-control("metadata_mode", "all_text_meta"); } }
+                        }
+                    }
+                }
+            }
+
+            Rectangle { height: 12px; }
+
+            Rectangle {
+                border-radius: 14px;
+                background: #0c1420;
+                border-width: 1px;
+                border-color: #111a28;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 10px;
+
+                    Text { text: "CLEANUP + COLLISION HANDLING"; color: #d5deea; font-size: 12px; font-weight: 700; }
+
+                    MergeToggleRow {
+                        label: "Strip empty tracks";
+                        hint: "Drop blank outputs after merging and metadata moves.";
+                        value: root.merge-remove-empty-tracks-text;
+                        changed(value) => { root.update-merge-control("remove_empty_tracks", value); }
+                    }
+                    MergeToggleRow {
+                        label: "Strip duplicate start state";
+                        hint: "Remove duplicate startup tempo, controller, and meta events at tick 0.";
+                        value: root.merge-strip-duplicate-start-text;
+                        changed(value) => { root.update-merge-control("strip_duplicate_start", value); }
+                    }
+                    MergeToggleRow {
+                        label: "Prefer first tempo map";
+                        hint: "Drop later tempo maps when the first file should be authoritative.";
+                        value: root.merge-prefer-first-tempo-text;
+                        changed(value) => { root.update-merge-control("prefer_first_tempo", value); }
+                    }
+                    MergeToggleRow {
+                        label: "Deconflict channels";
+                        hint: "Rewrite tracks onto distinct channels when stacked files collide.";
+                        value: root.merge-deconflict-channels-text;
+                        changed(value) => { root.update-merge-control("deconflict_channels", value); }
+                    }
+                    MergeToggleRow {
+                        label: "Deduplicate metadata";
+                        hint: "Collapse duplicate text, signature, and tempo events after the merge.";
+                        value: root.merge-dedupe-meta-text;
+                        changed(value) => { root.update-merge-control("dedupe_meta", value); }
+                    }
+                    MergeToggleRow {
+                        label: "Deduplicate controllers";
+                        hint: "Remove duplicate controller/program state if source tracks repeat setup messages.";
+                        value: root.merge-dedupe-controls-text;
+                        changed(value) => { root.update-merge-control("dedupe_controls", value); }
+                    }
+                    MergeToggleRow {
+                        label: "Deduplicate notes";
+                        hint: "Useful when sources overlap or were exported with repeated note blocks.";
+                        value: root.merge-dedupe-notes-text;
+                        changed(value) => { root.update-merge-control("dedupe_notes", value); }
+                    }
+                }
+            }
+
+            Rectangle { height: 18px; }
+            Separator {}
+            Rectangle { height: 18px; }
+
+            SectionHeader { title: "OUTPUT + RUN"; }
+            Rectangle { height: 10px; }
+
+            Rectangle {
+                border-radius: 14px;
+                background: #0c1420;
+                border-width: 1px;
+                border-color: #111a28;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 12px;
+
+                    Text { text: "OUTPUT FILE"; color: #d5deea; font-size: 12px; font-weight: 700; }
+
+                    Rectangle {
+                        border-radius: 10px;
+                        background: #09101a;
+                        border-width: 1px;
+                        border-color: #111a28;
+
+                        HorizontalLayout {
+                            padding-left: 12px;
+                            padding-right: 10px;
+                            padding-top: 10px;
+                            padding-bottom: 10px;
+                            spacing: 8px;
+
+                            Text {
+                                text: root.merge-output-path-text != "" ? root.merge-output-path-text : "Choose an output path";
+                                color: root.merge-output-path-text != "" ? #a6b8cd : #506683;
+                                font-size: 10px;
+                                font-family: "monospace";
+                                horizontal-stretch: 1;
+                                overflow: elide;
+                            }
+
+                            MiniActionButton { label: "Browse"; pressed => { root.browse-merge-output(); } }
+                        }
+                    }
+
+                    Text { text: root.merge-status-text; color: #dbe6f3; font-size: 12px; font-weight: 700; }
+                    Text { text: root.merge-detail-text; color: #67809c; font-size: 10px; wrap: word-wrap; }
+                    ProgressBar { progress: root.merge-progress; }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+
+                        Rectangle {
+                            width: 160px;
+                            PrimaryButton {
+                                width: parent.width;
+                                label: root.merge-job-active ? "Processing..." : "Write Merged MIDI";
+                                enabled: root.start-enabled;
+                                pressed => { root.start-merge-job(); }
+                            }
+                        }
+
+                        MiniActionButton {
+                            label: "Cancel";
+                            enabled: root.merge-job-active;
+                            pressed => { root.cancel-merge-job(); }
+                        }
+                    }
+
+                    Rectangle { height: 4px; }
+                    FieldRow { label: "Output"; value: root.merge-result-output-text; }
+                    FieldRow { label: "Inputs"; value: root.merge-result-input-count-text; }
+                    FieldRow { label: "Tracks"; value: root.merge-result-track-count-text; }
+                    FieldRow { label: "PPQ"; value: root.merge-result-ppq-text; }
+                    FieldRow { label: "Events"; value: root.merge-result-event-count-text; }
+                }
+            }
+
+            Rectangle { height: 40px; }
+        }
+    }
+}

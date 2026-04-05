@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::audio::{AudioRenderEvent, AudioStatus};
-use crate::midi::analysis::MidiAnalysisData;
+use crate::midi::analysis::{MidiAnalysisData, MidiFileInspection};
 use crate::render::SceneLayout;
 
 use super::{
@@ -49,6 +49,9 @@ pub enum CoreEvent {
     ParsedMidiLoaded {
         parsed_midi_id: ParsedMidiId,
         path: PathBuf,
+    },
+    MidiFilesInspected {
+        inspections: Vec<MidiFileInspection>,
     },
     MidiAnalysis {
         processed_midi_id: Option<ProcessedMidiId>,

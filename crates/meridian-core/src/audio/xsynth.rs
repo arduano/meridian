@@ -18,13 +18,13 @@ pub struct XSynthPlayer {
 impl XSynthPlayer {
     pub fn new(config: &AudioConfig) -> Result<Self, MeridianError> {
         let synth = std::panic::catch_unwind(|| {
-            RealtimeSynth::open_with_default_output_and_params(
-                config.xsynth.config.clone(),
-                config.xsynth.render.audio_params,
-            )
+            RealtimeSynth::open_with_default_output(config.xsynth.config.clone())
         })
         .map_err(|_| {
             MeridianError::MidiLoad("xsynth panicked during output initialization".into())
+        })?
+        .map_err(|error| {
+            MeridianError::MidiLoad(format!("xsynth output initialization failed: {error}"))
         })?;
         let sender = synth.get_sender_ref().clone();
         let stats = synth.get_stats();

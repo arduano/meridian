@@ -9,8 +9,8 @@ use crate::{
     protocol::{
         AnalysisJobId, AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, DisplayCacheId,
         MidiAnalysisData, MidiAnalysisJobEvent, MidiAnalysisJobStatus, MidiAnalysisKind,
-        MidiProcessEvent, MidiProcessJobId, MidiProcessStatus, PROTOCOL_VERSION, ParsedMidiId,
-        VideoRenderEvent, VideoRenderStatus,
+        MidiFileInspection, MidiProcessEvent, MidiProcessJobId, MidiProcessStatus,
+        PROTOCOL_VERSION, ParsedMidiId, VideoRenderEvent, VideoRenderStatus,
     },
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
 };
@@ -90,6 +90,9 @@ pub enum ProtocolCommand {
     LoadParsedMidi {
         path: PathBuf,
     },
+    InspectMidiFiles {
+        paths: Vec<PathBuf>,
+    },
     LoadAudioMidi {
         path: PathBuf,
     },
@@ -129,6 +132,7 @@ impl From<ProtocolCommand> for CoreCommand {
     fn from(value: ProtocolCommand) -> Self {
         match value {
             ProtocolCommand::LoadParsedMidi { path } => Self::LoadParsedMidi { path },
+            ProtocolCommand::InspectMidiFiles { paths } => Self::InspectMidiFiles { paths },
             ProtocolCommand::LoadAudioMidi { path } => Self::LoadAudioMidi { path },
             ProtocolCommand::StartMidiAnalysisJob {
                 parsed_midi_id,
@@ -176,6 +180,9 @@ pub enum ProtocolEvent {
     ParsedMidiLoaded {
         parsed_midi_id: ParsedMidiId,
         path: PathBuf,
+    },
+    MidiFilesInspected {
+        inspections: Vec<MidiFileInspection>,
     },
     MidiLoaded {
         path: PathBuf,
@@ -233,6 +240,9 @@ impl TryFrom<CoreEvent> for ProtocolEvent {
                 parsed_midi_id,
                 path,
             }),
+            CoreEvent::MidiFilesInspected { inspections } => {
+                Ok(Self::MidiFilesInspected { inspections })
+            }
             CoreEvent::MidiLoaded { path, .. } => Ok(Self::MidiLoaded { path }),
             CoreEvent::MidiFilesProcessed {
                 output,
