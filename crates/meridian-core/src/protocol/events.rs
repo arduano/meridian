@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::audio::{AudioRenderEvent, AudioStatus};
-use crate::midi::analysis::{MidiAnalysisData, MidiFileInspection};
+use crate::midi::{
+    MidiBuildProgress,
+    analysis::{MidiAnalysisData, MidiFileInspection},
+};
 use crate::render::SceneLayout;
 
 use super::{
@@ -124,7 +127,7 @@ pub enum CoreEvent {
     },
     MidiLoadProgress {
         path: PathBuf,
-        progress: Option<f32>,
+        progress: MidiBuildProgress,
         status: String,
     },
     MidiLoaded {

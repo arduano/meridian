@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::error::MeridianError;
 
 use super::{
-    MIDIFileUnion,
+    MIDIFileUnion, MidiBuildProgress,
     analysis::{CachedMidiAnalysis, build_cached_midi_analysis_with_progress},
     audio_cache::InRamAudioCache,
     display_cache::DisplayMidiCache,
@@ -61,7 +61,7 @@ impl MidiCacheStack {
 
     pub fn display_cache_with_progress(
         &self,
-        progress: impl FnMut(Option<f32>),
+        progress: impl FnMut(MidiBuildProgress),
     ) -> Result<Arc<DisplayMidiCache>, MeridianError> {
         let mut display = self
             .display
@@ -129,7 +129,7 @@ impl MidiCacheStack {
 
     pub fn audio_cache_with_progress(
         &self,
-        progress: impl FnMut(Option<f32>),
+        progress: impl FnMut(MidiBuildProgress),
     ) -> Result<Arc<InRamAudioCache>, MeridianError> {
         let mut audio = self
             .audio
@@ -158,7 +158,7 @@ impl MidiCacheStack {
 
     pub fn render_caches_with_progress(
         &self,
-        progress: impl FnMut(Option<f32>),
+        progress: impl FnMut(MidiBuildProgress),
     ) -> Result<(Arc<DisplayMidiCache>, Arc<InRamAudioCache>), MeridianError> {
         let mut display = self
             .display

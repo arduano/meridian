@@ -13,7 +13,7 @@ use rustc_hash::FxHashMap;
 use crate::error::MeridianError;
 
 use super::{
-    MIDI_KEY_COUNT, TrackAndChannel,
+    MIDI_KEY_COUNT, MidiBuildProgress, TrackAndChannel,
     audio_cache::{CompressedAudio, InRamAudioCache},
     parsed::ParsedMidiFile,
     ram::{InRamMidiCache, block::InRamNoteBlock},
@@ -107,8 +107,10 @@ impl KeyBuilder {
 pub(crate) fn build_materialized_midi_with_progress(
     parsed: &ParsedMidiFile,
     options: MaterializeOptions,
-    mut progress: impl FnMut(Option<f32>),
+    mut progress: impl FnMut(MidiBuildProgress),
 ) -> Result<MaterializedMidi, MeridianError> {
+    const INDETERMINATE_PROGRESS_STRIDE: u64 = 4_096;
+
     let midi = parsed.midi();
     let ppq = midi.ppq();
     if (ppq & 0x8000) != 0 {
@@ -118,12 +120,12 @@ pub(crate) fn build_materialized_midi_with_progress(
     }
 
     let merged = pipe!(midi.iter_all_track_events_merged_batches() |> unwrap_items());
-    let total_events = parsed.cached_total_event_count();
-    let progress_stride = total_events.map(|events| (events.max(1) / 200).max(1));
 
-    let mut keys = options
-        .display
-        .then(|| (0..MIDI_KEY_COUNT).map(|_| KeyBuilder::new()).collect::<Vec<_>>());
+    let mut keys = options.display.then(|| {
+        (0..MIDI_KEY_COUNT)
+            .map(|_| KeyBuilder::new())
+            .collect::<Vec<_>>()
+    });
     let mut tempo_map = options.display.then(|| TempoMap::new(ppq));
     let mut dirty_keys = options.display.then(|| Vec::<usize>::new());
     let mut dirty_key_flags = options.display.then(|| [false; MIDI_KEY_COUNT]);
@@ -137,7 +139,11 @@ pub(crate) fn build_materialized_midi_with_progress(
     let mut micros_per_quarter = 500_000_u32;
     let mut processed_events = 0_u64;
 
-    progress(total_events.map(|_| 0.0));
+    progress(MidiBuildProgress::from_counts(
+        0,
+        0,
+        parsed.cached_total_event_count(),
+    ));
 
     type ToolkitBatch = Delta<u64, Track<EventBatch<Event>>>;
     for batch in merged {
@@ -211,11 +217,14 @@ pub(crate) fn build_materialized_midi_with_progress(
                             notes += 1;
                         }
                     }
-                    if let (Some(current_audio_data), Some(current_audio_control)) = (
-                        current_audio_data.as_mut(),
-                        current_audio_control.as_mut(),
-                    ) {
-                        push_audio_event(event.as_event(), current_audio_data, current_audio_control);
+                    if let (Some(current_audio_data), Some(current_audio_control)) =
+                        (current_audio_data.as_mut(), current_audio_control.as_mut())
+                    {
+                        push_audio_event(
+                            event.as_event(),
+                            current_audio_data,
+                            current_audio_control,
+                        );
                     }
                 }
                 Event::NoteOff(note_off) => {
@@ -226,38 +235,52 @@ pub(crate) fn build_materialized_midi_with_progress(
                             keys[key_index].end_note(track_chan, time_seconds, time_ticks);
                         }
                     }
-                    if let (Some(current_audio_data), Some(current_audio_control)) = (
-                        current_audio_data.as_mut(),
-                        current_audio_control.as_mut(),
-                    ) {
-                        push_audio_event(event.as_event(), current_audio_data, current_audio_control);
+                    if let (Some(current_audio_data), Some(current_audio_control)) =
+                        (current_audio_data.as_mut(), current_audio_control.as_mut())
+                    {
+                        push_audio_event(
+                            event.as_event(),
+                            current_audio_data,
+                            current_audio_control,
+                        );
                     }
                 }
                 _ => {
-                    if let (Some(current_audio_data), Some(current_audio_control)) = (
-                        current_audio_data.as_mut(),
-                        current_audio_control.as_mut(),
-                    ) {
-                        push_audio_event(event.as_event(), current_audio_data, current_audio_control);
+                    if let (Some(current_audio_data), Some(current_audio_control)) =
+                        (current_audio_data.as_mut(), current_audio_control.as_mut())
+                    {
+                        push_audio_event(
+                            event.as_event(),
+                            current_audio_data,
+                            current_audio_control,
+                        );
                     }
                 }
             }
         }
 
-        if let (Some(total_events), Some(progress_stride)) = (total_events, progress_stride) {
-            if processed_events == batch_event_count
-                || processed_events >= total_events
-                || processed_events % progress_stride <= batch_event_count
-            {
-                progress(Some(
-                    (processed_events as f32 / total_events as f32).clamp(0.0, 1.0),
-                ));
-            }
+        let total_events = parsed.cached_total_event_count();
+        let progress_stride = total_events
+            .map(|events| (events.max(1) / 200).max(1))
+            .unwrap_or(INDETERMINATE_PROGRESS_STRIDE);
+        let previous_events = processed_events.saturating_sub(batch_event_count);
+        let crossed_stride = processed_events / progress_stride > previous_events / progress_stride;
+        if processed_events == batch_event_count
+            || total_events.is_some_and(|total_events| processed_events >= total_events)
+            || crossed_stride
+        {
+            progress(MidiBuildProgress::from_counts(
+                processed_events,
+                notes,
+                total_events,
+            ));
         }
     }
 
     let display = if let (Some(mut keys), Some(tempo_map)) = (keys, tempo_map) {
-        if let (Some(dirty_keys), Some(dirty_key_flags)) = (dirty_keys.as_mut(), dirty_key_flags.as_mut()) {
+        if let (Some(dirty_keys), Some(dirty_key_flags)) =
+            (dirty_keys.as_mut(), dirty_key_flags.as_mut())
+        {
             for key_index in dirty_keys.drain(..) {
                 dirty_key_flags[key_index] = false;
                 keys[key_index].flush(time_seconds, time_ticks);
@@ -282,8 +305,11 @@ pub(crate) fn build_materialized_midi_with_progress(
         None
     };
 
-    let audio = if let (Some(mut audio_blocks), Some(mut current_audio_data), Some(mut current_audio_control)) =
-        (audio_blocks, current_audio_data, current_audio_control)
+    let audio = if let (
+        Some(mut audio_blocks),
+        Some(mut current_audio_data),
+        Some(mut current_audio_control),
+    ) = (audio_blocks, current_audio_data, current_audio_control)
     {
         flush_audio_block(
             &mut audio_blocks,
@@ -303,7 +329,11 @@ pub(crate) fn build_materialized_midi_with_progress(
         None
     };
 
-    progress(total_events.map(|_| 1.0));
+    progress(MidiBuildProgress::from_counts(
+        processed_events,
+        notes,
+        parsed.cached_total_event_count(),
+    ));
 
     Ok(MaterializedMidi { display, audio })
 }

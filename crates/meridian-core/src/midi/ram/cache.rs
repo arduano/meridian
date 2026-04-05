@@ -41,7 +41,7 @@ impl InRamMidiCache {
 
     pub fn from_parsed_with_progress(
         parsed: &ParsedMidiFile,
-        progress: impl FnMut(Option<f32>),
+        progress: impl FnMut(crate::midi::MidiBuildProgress),
     ) -> Result<Self, MeridianError> {
         super::parse::build_in_ram_cache_with_progress(parsed, progress)
     }

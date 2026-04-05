@@ -21,7 +21,7 @@ use slint::{ModelRc, SharedString, VecModel};
 
 use super::{
     inspector::rows_for_scene,
-    view::{App, BarValue, EventCount, MergeSourceRow},
+    view::{App, BarValue, EventCount, MergeSourceRow, MidiLoadState},
     view_model::{MergeSourceInspection, UiViewModel},
 };
 
@@ -51,6 +51,12 @@ impl Default for UiOptions {
             ),
         }
     }
+}
+
+pub(super) fn app_has_active_midi_load(app: &App) -> bool {
+    app.get_render_load_state() == MidiLoadState::Loading
+        || app.get_audio_load_state() == MidiLoadState::Loading
+        || app.get_analysis_load_state() == MidiLoadState::Loading
 }
 
 pub fn apply_events_to_app(

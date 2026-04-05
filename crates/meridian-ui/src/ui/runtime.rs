@@ -44,7 +44,7 @@ use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
 
 use super::{
     core_bridge::UiCoreBridge,
-    state::{UiOptions, apply_events_to_app, apply_merge_sources_to_app},
+    state::{UiOptions, app_has_active_midi_load, apply_events_to_app, apply_merge_sources_to_app},
     view::{App, MidiLoadState},
     view_model::{MergeSourceInspection, MergeSourceViewModel, UiViewModel},
     viewport::ViewportRenderer,
@@ -245,9 +245,7 @@ fn wire_callbacks(
 }
 
 fn app_is_loading(app: &App) -> bool {
-    app.get_render_load_state() == MidiLoadState::Loading
-        || app.get_audio_load_state() == MidiLoadState::Loading
-        || app.get_analysis_load_state() == MidiLoadState::Loading
+    app_has_active_midi_load(app)
 }
 
 fn cancel_pending_midi_loads(
@@ -5408,6 +5406,31 @@ fn update_analysis_progress(
     });
 }
 
+fn approximate_midi_load_fraction(
+    path: &Path,
+    progress: meridian_core::midi::MidiBuildProgress,
+) -> Option<f32> {
+    if let Some(fraction_complete) = progress.fraction_complete {
+        return Some(fraction_complete);
+    }
+
+    let file_bytes = fs::metadata(path).ok()?.len().max(1);
+
+    if let Some(completed_notes) = progress.completed_notes {
+        let estimated_total_notes =
+            ((file_bytes as f64 / 7.0).round() as u64).max(completed_notes.saturating_add(1));
+        return Some((completed_notes as f32 / estimated_total_notes as f32).clamp(0.0, 0.97));
+    }
+
+    if let Some(completed_events) = progress.completed_events {
+        let estimated_total_events =
+            ((file_bytes as f64 / 3.5).round() as u64).max(completed_events.saturating_add(1));
+        return Some((completed_events as f32 / estimated_total_events as f32).clamp(0.0, 0.97));
+    }
+
+    None
+}
+
 /// Install the winit window event handler for OS file drag-and-drop.
 fn install_drag_drop(app: &App) {
     let app_weak = app.as_weak();
@@ -5461,20 +5484,24 @@ fn install_core_event_listener(
                 } => {
                     let path_text: slint::SharedString = path.display().to_string().into();
                     let status_text: slint::SharedString = status.clone().into();
-                    let progress = *progress;
+                    let progress = approximate_midi_load_fraction(path, *progress);
                     let _ = app_weak.upgrade_in_event_loop(move |app| {
                         if app.get_selected_midi_name() != path_text {
                             return;
                         }
                         if app.get_render_load_state() == MidiLoadState::Loading {
                             if let Some(progress) = progress {
-                                app.set_render_loading_progress(progress);
+                                app.set_render_loading_progress(
+                                    app.get_render_loading_progress().max(progress),
+                                );
                             }
                             app.set_render_loading_status(status_text.clone());
                         }
                         if app.get_audio_load_state() == MidiLoadState::Loading {
                             if let Some(progress) = progress {
-                                app.set_audio_loading_progress(progress);
+                                app.set_audio_loading_progress(
+                                    app.get_audio_loading_progress().max(progress),
+                                );
                             }
                             app.set_audio_loading_status(status_text);
                         }

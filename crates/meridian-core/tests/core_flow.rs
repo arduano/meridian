@@ -1,6 +1,9 @@
 mod support;
 
-use std::{fs, time::Duration};
+use std::{
+    fs,
+    time::{Duration, Instant},
+};
 
 use meridian_core::{
     PROTOCOL_VERSION,
@@ -428,6 +431,35 @@ fn process_midi_files_job_reports_status_and_finishes() {
             status: MidiProcessStatus::Idle
         }]
     ));
+}
+
+#[test]
+fn midi_load_progress_reports_materialization_counts() {
+    let midi = support::write_test_midi();
+    let core = spawn_core();
+    let event_rx = core.subscribe_events();
+
+    core.request(CoreCommand::LoadDisplayMidi { path: midi.clone() })
+        .expect("load display midi");
+
+    let deadline = Instant::now() + Duration::from_secs(1);
+    while Instant::now() < deadline {
+        let Ok(event) = event_rx.recv_timeout(Duration::from_millis(50)) else {
+            continue;
+        };
+        match event {
+            CoreEvent::MidiLoadProgress { path, progress, .. } if path == midi => {
+                if progress.completed_events.is_some_and(|value| value > 0)
+                    && progress.completed_notes.is_some_and(|value| value > 0)
+                {
+                    return;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    panic!("did not observe count-bearing midi load progress");
 }
 
 #[test]
