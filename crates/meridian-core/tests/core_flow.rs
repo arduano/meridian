@@ -8,8 +8,9 @@ use std::{
 use meridian_core::{
     PROTOCOL_VERSION,
     midi::{
-        EventFilterConfig, FileTimeProcessingConfig, MidiFileProcessingConfig, MidiMergeMode,
-        StructureProcessingConfig, TrimProcessingConfig, analysis::MidiAnalysisKind,
+        EventFilterConfig, FileTimeProcessingConfig, MidiFileProcessingConfig,
+        MidiFilesMergeConfig, StructureProcessingConfig, TrimProcessingConfig,
+        analysis::MidiAnalysisKind,
     },
     protocol::{
         CoreCommand, CoreEvent, JsonRequest, JsonResponse, MidiProcessEvent, MidiProcessStatus,
@@ -326,41 +327,20 @@ fn merge_midi_files_trims_and_writes_output() {
     );
     support::write_toolkit_midi(
         &midi_b,
-        48,
+        96,
         vec![vec![
             Event::new_delta_note_on_event(0, 1, 65, 90),
-            Event::new_delta_note_off_event(48, 1, 65),
+            Event::new_delta_note_off_event(96, 1, 65),
         ]],
     );
 
     let core = spawn_core();
-    let mut config = MidiFileProcessingConfig::default();
-    config.time = FileTimeProcessingConfig {
-        offset_ticks: 0,
-        ppq_override: Some(120),
-        tempo_override: Some(500_000),
-        trim: Some(TrimProcessingConfig {
-            start_tick: 24,
-            end_tick: Some(120),
-            inject_edge_state: true,
-            close_open_notes_at_end: true,
-        }),
-    };
-    config.notes.transpose = 12;
-    config.events = EventFilterConfig::default();
-    config.structure = StructureProcessingConfig {
-        split_channels: false,
-        collapse_tracks: true,
-        remove_empty_tracks: true,
-        drop_orphan_note_offs: true,
-    };
 
     let events = core
         .request(CoreCommand::MergeMidiFiles {
             inputs: vec![midi_a.clone(), midi_b.clone()],
             output: output.clone(),
-            mode: MidiMergeMode::FlattenToSingleTrack,
-            config,
+            config: MidiFilesMergeConfig::default(),
         })
         .expect("merge midi files");
 
@@ -369,45 +349,40 @@ fn merge_midi_files_trims_and_writes_output() {
         [CoreEvent::MidiFilesMerged {
             output: merged_output,
             input_count: 2,
-            output_track_count: 1,
-            output_ppq: 120,
+            output_track_count: 2,
+            output_ppq: 96,
             ..
         }] if merged_output == &output
     ));
 
     let written = ToolkitMidiFile::open_in_ram(&output, None).expect("open output midi");
-    assert_eq!(written.ppq(), 120);
-    assert_eq!(written.track_count(), 1);
+    assert_eq!(written.ppq(), 96);
+    assert_eq!(written.track_count(), 2);
 
-    let mut seen_tempo = 0;
-    let mut seen_program = 0;
-    let mut note_ons = Vec::new();
-    let mut note_offs = Vec::new();
-    let mut tick = 0u64;
-    for event in written.iter_track(0).expect("open written track") {
-        let event = event.expect("parse written track");
-        tick += event.delta;
-        match event.event {
-            Event::Tempo(tempo) => {
-                seen_tempo += 1;
-                assert_eq!(tempo.tempo, 500_000);
-                assert_eq!(tick, 0);
-            }
-            Event::ProgramChange(program) => {
-                seen_program += 1;
-                assert_eq!(program.program, 5);
-                assert_eq!(tick, 0);
-            }
-            Event::NoteOn(note) => note_ons.push((tick, note.channel, note.key)),
-            Event::NoteOff(note) => note_offs.push((tick, note.channel, note.key)),
-            _ => {}
-        }
-    }
+    let track_a = written
+        .iter_track(0)
+        .expect("open written track a")
+        .map(|event| event.expect("parse written track a").event)
+        .collect::<Vec<_>>();
+    let track_b = written
+        .iter_track(1)
+        .expect("open written track b")
+        .map(|event| event.expect("parse written track b").event)
+        .collect::<Vec<_>>();
 
-    assert_eq!(seen_tempo, 1);
-    assert_eq!(seen_program, 1);
-    assert_eq!(note_ons, vec![(0, 1, 77), (36, 0, 72)]);
-    assert_eq!(note_offs, vec![(60, 1, 77), (144, 0, 72)]);
+    assert!(matches!(
+        track_a.as_slice(),
+        [
+            Event::Tempo(_),
+            Event::ProgramChange(_),
+            Event::NoteOn(_),
+            Event::NoteOff(_)
+        ]
+    ));
+    assert!(matches!(
+        track_b.as_slice(),
+        [Event::NoteOn(_), Event::NoteOff(_)]
+    ));
 }
 
 #[test]

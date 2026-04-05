@@ -5,7 +5,7 @@ use ts_rs::TS;
 
 use crate::{
     audio::AudioRenderEvent,
-    midi::{MidiFileProcessingConfig, MidiMergeMode},
+    midi::{MidiFileProcessingConfig, MidiFilesMergeConfig},
     protocol::{
         AnalysisJobId, AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, DisplayCacheId,
         MidiAnalysisData, MidiAnalysisJobEvent, MidiAnalysisJobStatus, MidiAnalysisKind,
@@ -116,8 +116,7 @@ pub enum ProtocolCommand {
     MergeMidiFiles {
         inputs: Vec<PathBuf>,
         output: PathBuf,
-        mode: MidiMergeMode,
-        config: MidiFileProcessingConfig,
+        config: MidiFilesMergeConfig,
     },
     CancelMidiFileProcess,
     GetMidiFileProcessStatus,
@@ -166,12 +165,10 @@ impl From<ProtocolCommand> for CoreCommand {
             ProtocolCommand::MergeMidiFiles {
                 inputs,
                 output,
-                mode,
                 config,
             } => Self::MergeMidiFiles {
                 inputs,
                 output,
-                mode,
                 config,
             },
             ProtocolCommand::CancelMidiFileProcess => Self::CancelMidiFileProcess,

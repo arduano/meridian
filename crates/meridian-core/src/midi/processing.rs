@@ -138,14 +138,6 @@ impl Default for MidiFileProcessingConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum MidiMergeMode {
-    PreserveTracks,
-    FlattenToSingleTrack,
-    MergeByTrackIndex,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
 pub struct FileTimeProcessingConfig {

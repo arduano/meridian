@@ -194,11 +194,9 @@ impl CoreState {
             CoreCommand::MergeMidiFiles {
                 inputs,
                 output,
-                mode,
                 config,
-            } => match crate::midi::file_processing::merge_midi_files_to_file(
-                &inputs, &output, mode, &config,
-            ) {
+            } => match crate::midi::file_merge::merge_midi_files_to_file(&inputs, &output, &config)
+            {
                 Ok(summary) => vec![CoreEvent::MidiFilesMerged {
                     output: summary.output,
                     input_count: summary.input_count,

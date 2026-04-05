@@ -22,9 +22,8 @@ use crate::{
 use super::{
     parsed::ParsedMidiFile,
     processing::{
-        EventFilterConfig, MidiFileProcessingConfig, MidiMergeMode, NoteProcessingConfig,
-        PitchProcessingConfig, StructureProcessingConfig, TrimProcessingConfig,
-        ZeroVelocityNoteOnMode,
+        EventFilterConfig, MidiFileProcessingConfig, NoteProcessingConfig, PitchProcessingConfig,
+        StructureProcessingConfig, TrimProcessingConfig, ZeroVelocityNoteOnMode,
     },
     tempo_map::TempoMap,
     tool_pipeline::apply_modifier_tools,
@@ -34,15 +33,6 @@ use super::{
 pub struct MidiFileProcessSummary {
     pub input: PathBuf,
     pub output: PathBuf,
-    pub output_track_count: usize,
-    pub output_ppq: u16,
-    pub total_events: usize,
-}
-
-#[derive(Debug, Clone)]
-pub struct MidiFilesMergeSummary {
-    pub output: PathBuf,
-    pub input_count: usize,
     pub output_track_count: usize,
     pub output_ppq: u16,
     pub total_events: usize,
@@ -92,70 +82,6 @@ pub fn process_midi_file_to_file(
     config: &MidiFileProcessingConfig,
 ) -> Result<MidiFileProcessSummary, MeridianError> {
     process_midi_file_to_file_inner(input, output, config, &AtomicBool::new(false))
-}
-
-pub fn merge_midi_files_to_file(
-    inputs: &[PathBuf],
-    output: &Path,
-    merge_mode: MidiMergeMode,
-    config: &MidiFileProcessingConfig,
-) -> Result<MidiFilesMergeSummary, MeridianError> {
-    if inputs.is_empty() {
-        return Err(MeridianError::InvalidMidi(
-            "midi merge input list is empty".into(),
-        ));
-    }
-
-    let mut parsed_inputs = Vec::with_capacity(inputs.len());
-    let mut output_ppq = config.time.ppq_override.unwrap_or(0);
-    for input in inputs {
-        let parsed = ParsedMidiFile::load_from_file(input.clone())?;
-        output_ppq = output_ppq.max(parsed.midi().ppq());
-        parsed_inputs.push(parsed);
-    }
-    let output_ppq = output_ppq.max(1);
-
-    let mut processed_files = Vec::with_capacity(parsed_inputs.len());
-    for parsed in &parsed_inputs {
-        let tempo_map = build_tempo_map(parsed)?;
-        processed_files.push(process_single_midi(parsed, &tempo_map, output_ppq, config)?);
-    }
-
-    let mut output_tracks = merge_processed_files(processed_files, merge_mode)?;
-    if let Some(tempo) = config.time.tempo_override {
-        inject_constant_tempo(&mut output_tracks, tempo);
-    }
-    apply_modifier_tools(&mut output_tracks, &config.tools)?;
-    if config.structure.remove_empty_tracks {
-        output_tracks.retain(|track| !track.is_empty());
-    }
-
-    let writer = MIDIWriter::new(output.to_string_lossy().as_ref(), output_ppq)
-        .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
-    let mut total_events = 0usize;
-    for track in &output_tracks {
-        let mut track_writer = writer
-            .try_open_next_track()
-            .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
-        total_events += track_writer
-            .write_events_iter(track.iter().cloned())
-            .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
-        track_writer
-            .end()
-            .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
-    }
-    let mut writer = writer;
-    writer
-        .end()
-        .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
-
-    Ok(MidiFilesMergeSummary {
-        output: output.to_path_buf(),
-        input_count: inputs.len(),
-        output_track_count: output_tracks.len(),
-        output_ppq,
-        total_events,
-    })
 }
 
 pub fn process_midi_file_job(
@@ -773,35 +699,6 @@ fn update_open_notes_from_event(
             }
         }
         _ => {}
-    }
-}
-
-fn merge_processed_files(
-    files: Vec<Vec<Vec<Delta<u64, Event>>>>,
-    mode: MidiMergeMode,
-) -> Result<Vec<Vec<Delta<u64, Event>>>, MeridianError> {
-    match mode {
-        MidiMergeMode::PreserveTracks => Ok(files.into_iter().flatten().collect()),
-        MidiMergeMode::FlattenToSingleTrack => {
-            let tracks: Vec<_> = files.into_iter().flatten().collect();
-            if tracks.is_empty() {
-                Ok(Vec::new())
-            } else {
-                Ok(vec![merge_track_group(tracks)?])
-            }
-        }
-        MidiMergeMode::MergeByTrackIndex => {
-            let mut grouped: BTreeMap<usize, Vec<Vec<Delta<u64, Event>>>> = BTreeMap::new();
-            for file in files {
-                for (index, track) in file.into_iter().enumerate() {
-                    grouped.entry(index).or_default().push(track);
-                }
-            }
-            grouped
-                .into_values()
-                .map(merge_track_group)
-                .collect::<Result<Vec<_>, _>>()
-        }
     }
 }
 
