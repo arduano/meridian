@@ -6,6 +6,7 @@ on:
       - "*"
 
 permissions:
+  actions: read
   contents: write
 
 concurrency:
@@ -138,10 +139,11 @@ jobs:
 
           deadline=$((SECONDS + 900))
           while true; do
-            mapfile -t available_artifacts < <(
+            artifact_names="$(
               gh api "repos/${REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100" \
                 --jq '.artifacts[].name'
-            )
+            )"
+            mapfile -t available_artifacts < <(printf '%s\n' "$artifact_names")
 
             missing_artifacts=()
             for artifact in "${expected_artifacts[@]}"; do
