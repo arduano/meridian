@@ -23,6 +23,7 @@ use ts_rs::TS;
 
 use crate::error::MeridianError;
 use crate::render::DisplayTimeSpace;
+pub use analysis::MidiFileInspection;
 pub use cache::MidiCacheStack;
 pub use colors::{MIDIColor, MIDIColorPair};
 pub use processed::ProcessedMidi;

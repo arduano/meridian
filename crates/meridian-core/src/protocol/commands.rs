@@ -27,6 +27,9 @@ pub enum CoreCommand {
     LoadParsedMidi {
         path: PathBuf,
     },
+    InspectMidiFiles {
+        paths: Vec<PathBuf>,
+    },
     BuildProcessedMidi {
         parsed_midi_id: ParsedMidiId,
         config: MidiProcessingConfig,

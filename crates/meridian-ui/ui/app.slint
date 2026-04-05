@@ -9,17 +9,18 @@
 //   - panels/*.slint       (PreviewWelcome, DropOverlay, VideoPanel, RenderPanel, …)
 // ═══════════════════════════════════════════════════════════
 
-import { InspectorRow, MidiLoadState, BarValue, EventCount, SliderCurve } from "structs.slint";
+import { InspectorRow, MidiLoadState, BarValue, EventCount, MergeSourceRow, SliderCurve } from "structs.slint";
 import { SectionHeader, FieldRow, OptionChip } from "primitives.slint";
 import { ProfileTab, TabGroupDivider, TransportButton, TimeScrubber } from "chrome.slint";
 import { PreviewWelcome, DropOverlay } from "panels/preview.slint";
 import { VideoPanel } from "panels/video.slint";
 import { RenderPanel } from "panels/render.slint";
 import { AudioPanel } from "panels/audio.slint";
+import { MergePanel } from "panels/merge.slint";
 import { ModifyPanel } from "panels/modify.slint";
 import { AnalysisPanel } from "panels/analysis.slint";
 
-export { InspectorRow, MidiLoadState, BarValue, EventCount, SliderCurve }
+export { InspectorRow, MidiLoadState, BarValue, EventCount, MergeSourceRow, SliderCurve }
 
 export component App inherits Window {
     icon: @image-url("../../../assets/icons/meridian.png");
@@ -73,6 +74,14 @@ export component App inherits Window {
     callback retry-load-render;                 // retry failed render load
     callback retry-load-audio;                  // retry failed audio load
     callback retry-load-analysis;               // retry failed analysis load
+    callback select-merge-files;                // open multi-file picker for merge page
+    callback clear-merge-files;                 // clear the merge queue
+    callback remove-merge-source(int);          // remove a merge source by index
+    callback move-merge-source(int, int);       // reorder merge source by delta
+    callback update-merge-control(string, string);
+    callback browse-merge-output;
+    callback start-merge-job;
+    callback cancel-merge-job;
 
 
     // ══════════════════════════════════════════
@@ -388,7 +397,32 @@ export component App inherits Window {
     in-out property <string> modify-analysis-guard-min-track-count-text: "";
     in-out property <string> modify-analysis-guard-max-track-count-text: "";
 
-    // ── Profile (0=Preview 1=Video 2=Render 3=Audio 4=Modify 5=Analysis) ──
+    in-out property <[MergeSourceRow]> merge-sources: [];
+    in-out property <string> merge-source-count-text: "0";
+    in-out property <string> merge-track-total-text: "—";
+    in-out property <string> merge-note-total-text: "—";
+    in-out property <string> merge-tempo-total-text: "—";
+    in-out property <string> merge-layout-text: "preserve_tracks";
+    in-out property <string> merge-metadata-mode-text: "tempo_signatures";
+    in-out property <string> merge-remove-empty-tracks-text: "on";
+    in-out property <string> merge-strip-duplicate-start-text: "on";
+    in-out property <string> merge-prefer-first-tempo-text: "on";
+    in-out property <string> merge-deconflict-channels-text: "off";
+    in-out property <string> merge-dedupe-meta-text: "on";
+    in-out property <string> merge-dedupe-controls-text: "off";
+    in-out property <string> merge-dedupe-notes-text: "off";
+    in-out property <string> merge-output-path-text: "";
+    in-out property <float> merge-progress: 0;
+    in-out property <bool> merge-job-active: false;
+    in-out property <string> merge-status-text: "Ready";
+    in-out property <string> merge-detail-text: "Drop MIDI files here or browse to assemble a merge.";
+    in-out property <string> merge-result-output-text: "merged-output.mid";
+    in-out property <string> merge-result-input-count-text: "—";
+    in-out property <string> merge-result-track-count-text: "—";
+    in-out property <string> merge-result-ppq-text: "—";
+    in-out property <string> merge-result-event-count-text: "—";
+
+    // ── Profile (0=Preview 1=Video 2=Render 3=Audio 4=Modify 5=Analysis 6=Merge) ──
     in-out property <int> active-profile: 0;
 
     // ── Derived layout flags ──
@@ -403,7 +437,7 @@ export component App inherits Window {
     private property <bool> full-viewport:
         root.active-profile == 0;
     private property <bool> panel-only:
-        root.active-profile == 2 || root.active-profile == 4 || root.active-profile == 5;
+        root.active-profile == 2 || root.active-profile == 4 || root.active-profile == 5 || root.active-profile == 6;
 
     // Whether the Preview page shows the welcome hero (no MIDI loaded)
     private property <MidiLoadState> preview-load-state:
@@ -581,6 +615,7 @@ export component App inherits Window {
                             ProfileTab { label: "Audio";    active: root.active-profile == 3; pressed => { root.active-profile = 3; } }
                             TabGroupDivider {}
                             ProfileTab { label: "Render";   active: root.active-profile == 2; pressed => { root.active-profile = 2; } }
+                            ProfileTab { label: "Merge";    active: root.active-profile == 6; pressed => { root.active-profile = 6; } }
                             ProfileTab { label: "Modify";   active: root.active-profile == 4; pressed => { root.active-profile = 4; } }
                             TabGroupDivider {}
                             ProfileTab { label: "Analysis"; active: root.active-profile == 5; pressed => { root.active-profile = 5; } }
@@ -1026,7 +1061,7 @@ export component App inherits Window {
 
             // ──────────────────────────────────────
             //  FULL-WIDTH: Panel-only profiles
-            //  (Render / Modify / Analysis — no viewport)
+            //  (Render / Merge / Modify / Analysis — no viewport)
             // ──────────────────────────────────────
             Rectangle {
                 visible: root.panel-only;
@@ -1101,6 +1136,45 @@ export component App inherits Window {
                     toggle-open-after-export => { root.toggle-render-open-after-export(); }
                     start-export => { root.start-export(); }
                     cancel-export => { root.cancel-export(); }
+                }
+
+                MergePanel {
+                    visible: root.active-profile == 6;
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+
+                    merge-sources: root.merge-sources;
+                    merge-source-count-text: root.merge-source-count-text;
+                    merge-track-total-text: root.merge-track-total-text;
+                    merge-note-total-text: root.merge-note-total-text;
+                    merge-tempo-total-text: root.merge-tempo-total-text;
+                    merge-layout-text: root.merge-layout-text;
+                    merge-metadata-mode-text: root.merge-metadata-mode-text;
+                    merge-remove-empty-tracks-text: root.merge-remove-empty-tracks-text;
+                    merge-strip-duplicate-start-text: root.merge-strip-duplicate-start-text;
+                    merge-prefer-first-tempo-text: root.merge-prefer-first-tempo-text;
+                    merge-deconflict-channels-text: root.merge-deconflict-channels-text;
+                    merge-dedupe-meta-text: root.merge-dedupe-meta-text;
+                    merge-dedupe-controls-text: root.merge-dedupe-controls-text;
+                    merge-dedupe-notes-text: root.merge-dedupe-notes-text;
+                    merge-output-path-text: root.merge-output-path-text;
+                    merge-progress: root.merge-progress;
+                    merge-job-active: root.merge-job-active;
+                    merge-status-text: root.merge-status-text;
+                    merge-detail-text: root.merge-detail-text;
+                    merge-result-output-text: root.merge-result-output-text;
+                    merge-result-input-count-text: root.merge-result-input-count-text;
+                    merge-result-track-count-text: root.merge-result-track-count-text;
+                    merge-result-ppq-text: root.merge-result-ppq-text;
+                    merge-result-event-count-text: root.merge-result-event-count-text;
+
+                    select-merge-files => { root.select-merge-files(); }
+                    clear-merge-files => { root.clear-merge-files(); }
+                    remove-merge-source(index) => { root.remove-merge-source(index); }
+                    move-merge-source(index, delta) => { root.move-merge-source(index, delta); }
+                    update-merge-control(key, value) => { root.update-merge-control(key, value); }
+                    browse-merge-output => { root.browse-merge-output(); }
+                    start-merge-job => { root.start-merge-job(); }
+                    cancel-merge-job => { root.cancel-merge-job(); }
                 }
 
                 ModifyPanel {

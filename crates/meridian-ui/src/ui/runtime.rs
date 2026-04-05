@@ -25,9 +25,9 @@ use meridian_core::{
         KeyMapEntry, KeyMapTool, KeyRange, MergeBalanceTool, MetaTextTool,
         MidiFileProcessingConfig, MidiFileSelection, MidiModifierTool, MidiProcessingConfig,
         NoteLengthTool, OverlapRepairTool, PitchBendTool, ProgramTool, QuantizeTool,
-        RangeSelectTool, SelectableEventKind, SysexTool, TempoMapTool, TempoPoint, TextKind,
-        TimeWarpPoint, TimeWarpTool, TrackMapEntry, TrackRouteTool, TrimProcessingConfig,
-        VelocityMapTool, VelocityPoint,
+        RangeSelectTool, SelectableEventKind, SharedMetadataTrackTool, SysexTool, TempoMapTool,
+        TempoPoint, TextKind, TimeWarpPoint, TimeWarpTool, TrackMapEntry, TrackRouteTool,
+        TrimProcessingConfig, VelocityMapTool, VelocityPoint,
     },
     protocol::{CoreEvent, ParsedMidiId, ProcessedMidiId, StateSnapshot, VideoRenderConfig},
     render::{
@@ -44,9 +44,9 @@ use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
 
 use super::{
     core_bridge::UiCoreBridge,
-    state::{UiOptions, apply_events_to_app},
+    state::{UiOptions, apply_events_to_app, apply_merge_sources_to_app},
     view::{App, MidiLoadState},
-    view_model::UiViewModel,
+    view_model::{MergeSourceInspection, MergeSourceViewModel, UiViewModel},
     viewport::ViewportRenderer,
 };
 
@@ -163,6 +163,7 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let pending_viewport_image = Rc::new(RefCell::new(None));
     let viewport_size = Rc::new(RefCell::new((1280_u32, 720_u32)));
     initialize_core(&bridge, &options, &app, &shared_state)?;
+    initialize_merge_panel(&app, &shared_state);
     initialize_modify_panel(&app, &bridge, &shared_state);
     install_core_event_listener(&app, bridge.core(), &shared_state, &export_state);
     install_midi_process_listener(&app, bridge.core(), &shared_state);
@@ -230,6 +231,7 @@ fn wire_callbacks(
     wire_video_callbacks(app, bridge, shared_state);
     wire_audio_config_callbacks(app, bridge, shared_state);
     wire_render_export_callbacks(app, bridge, shared_state, export_state);
+    wire_merge_callbacks(app, bridge, shared_state);
     wire_modify_callbacks(app, bridge, shared_state);
     wire_midi_callbacks(
         app,
@@ -1618,6 +1620,342 @@ fn wire_audio_config_callbacks(
     }
 }
 
+fn initialize_merge_panel(app: &App, shared_state: &Arc<Mutex<UiViewModel>>) {
+    apply_merge_sources_to_app(app, shared_state);
+    if app.get_merge_output_path_text().is_empty() {
+        app.set_merge_result_output_text("merged-output.mid".into());
+    }
+}
+
+fn wire_merge_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mutex<UiViewModel>>) {
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_select_merge_files(move || {
+            if app_weak.upgrade().is_none() {
+                return;
+            }
+            let app_weak = app_weak.clone();
+            let bridge = bridge.clone();
+            let shared_state = Arc::clone(&shared_state);
+            std::thread::spawn(move || {
+                let files = rfd::FileDialog::new()
+                    .add_filter("MIDI files", &["mid", "midi", "MID", "MIDI"])
+                    .add_filter("All files", &["*"])
+                    .pick_files()
+                    .unwrap_or_default();
+                if files.is_empty() {
+                    return;
+                }
+                let _ = app_weak.upgrade_in_event_loop(move |app| {
+                    append_merge_source_paths(&app, &bridge, &shared_state, files);
+                });
+            });
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let shared_state = Arc::clone(shared_state);
+        app.on_clear_merge_files(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            if app.get_merge_job_active() {
+                return;
+            }
+            {
+                let mut model = shared_state.lock().expect("ui model mutex poisoned");
+                model.merge.sources.clear();
+            }
+            app.set_merge_output_path_text("".into());
+            app.set_merge_status_text("Ready".into());
+            app.set_merge_detail_text("Drop MIDI files here or browse to assemble a merge.".into());
+            app.set_merge_result_output_text("merged-output.mid".into());
+            apply_merge_sources_to_app(&app, &shared_state);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let shared_state = Arc::clone(shared_state);
+        app.on_remove_merge_source(move |index| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            if app.get_merge_job_active() {
+                return;
+            }
+            {
+                let mut model = shared_state.lock().expect("ui model mutex poisoned");
+                let index = index.max(0) as usize;
+                if index < model.merge.sources.len() {
+                    model.merge.sources.remove(index);
+                }
+            }
+            apply_merge_sources_to_app(&app, &shared_state);
+            if app.get_merge_output_path_text().is_empty() {
+                if let Some(path) = merge_default_output_from_model(&shared_state) {
+                    app.set_merge_output_path_text(path.display().to_string().into());
+                    app.set_merge_result_output_text(file_name_or_path(&path).into());
+                }
+            }
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let shared_state = Arc::clone(shared_state);
+        app.on_move_merge_source(move |index, delta| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            if app.get_merge_job_active() {
+                return;
+            }
+            {
+                let mut model = shared_state.lock().expect("ui model mutex poisoned");
+                let index = index.max(0) as usize;
+                if index >= model.merge.sources.len() {
+                    return;
+                }
+                let target = index as isize + delta as isize;
+                if !(0..model.merge.sources.len() as isize).contains(&target) {
+                    return;
+                }
+                model.merge.sources.swap(index, target as usize);
+            }
+            apply_merge_sources_to_app(&app, &shared_state);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_update_merge_control(move |key, value| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            update_merge_control(&app, key.as_str(), value.as_str());
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let shared_state = Arc::clone(shared_state);
+        app.on_browse_merge_output(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let app_weak = app_weak.clone();
+            let suggested_output = current_merge_output_path(&app)
+                .ok()
+                .or_else(|| merge_default_output_from_model(&shared_state))
+                .unwrap_or_else(|| PathBuf::from("merged-output.mid"));
+            std::thread::spawn(move || {
+                let mut dialog = rfd::FileDialog::new().add_filter("MIDI", &["mid", "midi"]);
+                if let Some(name) = suggested_output.file_name().and_then(OsStr::to_str) {
+                    dialog = dialog.set_file_name(name);
+                }
+                let Some(path) = dialog.save_file() else {
+                    return;
+                };
+                let _ = app_weak.upgrade_in_event_loop(move |app| {
+                    let normalized = normalize_merge_output_path(&path);
+                    app.set_merge_output_path_text(normalized.display().to_string().into());
+                    app.set_merge_result_output_text(file_name_or_path(&normalized).into());
+                    app.window().request_redraw();
+                });
+            });
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_start_merge_job(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            if app.get_merge_job_active() {
+                return;
+            }
+
+            let inputs = merge_inputs_from_model(&shared_state);
+            if inputs.is_empty() {
+                set_merge_ui_failure(&app, "add at least one MIDI file");
+                app.window().request_redraw();
+                return;
+            }
+
+            let output = match current_merge_output_path(&app) {
+                Ok(path) => path,
+                Err(message) => {
+                    set_merge_ui_failure(&app, &message);
+                    app.window().request_redraw();
+                    return;
+                }
+            };
+            app.set_merge_output_path_text(output.display().to_string().into());
+
+            let config = build_merge_processing_config(&app);
+            let events = match bridge.start_process_midi_files(
+                MidiFileSelection { inputs },
+                output,
+                config,
+                &shared_state,
+            ) {
+                Ok(events) => events,
+                Err(error) => {
+                    set_merge_ui_failure(&app, &error.to_string());
+                    app.window().request_redraw();
+                    return;
+                }
+            };
+
+            if let Some(message) = events_error_message(&events) {
+                set_merge_ui_failure(&app, &message);
+            } else {
+                apply_events_to_app(&app, &shared_state, &events);
+            }
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        app.on_cancel_merge_job(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let events = match bridge.cancel_process_midi_files(&shared_state) {
+                Ok(events) => events,
+                Err(error) => {
+                    set_merge_ui_failure(&app, &error.to_string());
+                    app.window().request_redraw();
+                    return;
+                }
+            };
+            if let Some(message) = events_error_message(&events) {
+                set_merge_ui_failure(&app, &message);
+            } else {
+                apply_events_to_app(&app, &shared_state, &events);
+            }
+            app.window().request_redraw();
+        });
+    }
+}
+
+fn append_merge_source_paths(
+    app: &App,
+    bridge: &UiCoreBridge,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    paths: Vec<PathBuf>,
+) {
+    let mut pending = Vec::new();
+    {
+        let mut model = shared_state.lock().expect("ui model mutex poisoned");
+        for path in paths {
+            if model.merge.sources.iter().any(|source| source.path == path) {
+                continue;
+            }
+            model
+                .merge
+                .sources
+                .push(MergeSourceViewModel::new_loading(path.clone()));
+            pending.push(path);
+        }
+    }
+
+    if pending.is_empty() {
+        return;
+    }
+
+    if app.get_merge_output_path_text().is_empty() {
+        if let Some(path) = merge_default_output_from_model(shared_state) {
+            app.set_merge_output_path_text(path.display().to_string().into());
+            app.set_merge_result_output_text(file_name_or_path(&path).into());
+        }
+    }
+    app.set_merge_status_text("Inspecting sources".into());
+    app.set_merge_detail_text(
+        format!(
+            "Loading {} new MIDI source{}.",
+            pending.len(),
+            if pending.len() == 1 { "" } else { "s" }
+        )
+        .into(),
+    );
+    apply_merge_sources_to_app(app, shared_state);
+    app.window().request_redraw();
+
+    let app_weak = app.as_weak();
+    let bridge = bridge.clone();
+    let shared_state = Arc::clone(shared_state);
+    std::thread::spawn(move || {
+        let result = bridge.inspect_midi_files(pending.clone(), &shared_state);
+        let _ = app_weak.upgrade_in_event_loop(move |app| {
+            {
+                let mut model = shared_state.lock().expect("ui model mutex poisoned");
+                match result {
+                    Ok(inspections) => {
+                        for inspection in inspections {
+                            if let Some(source) = model
+                                .merge
+                                .sources
+                                .iter_mut()
+                                .find(|source| source.path == inspection.path)
+                            {
+                                source.inspection = if let Some(message) = inspection.error.clone()
+                                {
+                                    MergeSourceInspection::Error(message)
+                                } else {
+                                    MergeSourceInspection::Ready(inspection)
+                                };
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        for path in pending {
+                            if let Some(source) = model
+                                .merge
+                                .sources
+                                .iter_mut()
+                                .find(|source| source.path == path)
+                            {
+                                source.inspection = MergeSourceInspection::Error(error.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            apply_merge_sources_to_app(&app, &shared_state);
+            app.set_merge_status_text("Ready".into());
+            app.set_merge_detail_text(
+                "Source queue updated. Reorder files, choose a merge recipe, then write output."
+                    .into(),
+            );
+            app.window().request_redraw();
+        });
+    });
+}
+
+fn merge_inputs_from_model(shared_state: &Arc<Mutex<UiViewModel>>) -> Vec<PathBuf> {
+    shared_state
+        .lock()
+        .expect("ui model mutex poisoned")
+        .merge
+        .sources
+        .iter()
+        .map(|source| source.path.clone())
+        .collect()
+}
+
+fn merge_default_output_from_model(shared_state: &Arc<Mutex<UiViewModel>>) -> Option<PathBuf> {
+    let inputs = merge_inputs_from_model(shared_state);
+    (!inputs.is_empty()).then(|| default_merge_output_path(&inputs))
+}
+
 fn initialize_modify_panel(
     app: &App,
     bridge: &UiCoreBridge,
@@ -2527,6 +2865,7 @@ fn sync_modify_pass_controls(app: &App, config: &MidiFileProcessingConfig) {
                 toggle_text(tool.prefer_first_tempo_map).into(),
             );
         }
+        MidiModifierTool::SharedMetadataTrack(_) => {}
         MidiModifierTool::AnalysisGuard(tool) => {
             app.set_modify_analysis_guard_min_note_count_text(
                 option_text(tool.min_note_count).into(),
@@ -3201,6 +3540,7 @@ fn tool_key(tool: &MidiModifierTool) -> &'static str {
         MidiModifierTool::MetaText(_) => "meta_text",
         MidiModifierTool::Sysex(_) => "sysex",
         MidiModifierTool::MergeBalance(_) => "merge_balance",
+        MidiModifierTool::SharedMetadataTrack(_) => "shared_metadata_track",
         MidiModifierTool::AnalysisGuard(_) => "analysis_guard",
     }
 }
@@ -3260,6 +3600,13 @@ fn tool_for_pass(pass_key: &str) -> MidiModifierTool {
             deconflict_channels: true,
             strip_duplicate_start_state: true,
             prefer_first_tempo_map: true,
+        }),
+        "shared_metadata_track" => MidiModifierTool::SharedMetadataTrack(SharedMetadataTrackTool {
+            target_track_index: 0,
+            move_tempo_events: true,
+            move_time_signatures: true,
+            move_key_signatures: true,
+            move_text_events: false,
         }),
         "analysis_guard" => MidiModifierTool::AnalysisGuard(AnalysisGuardTool {
             min_note_count: Some(1),
@@ -3329,6 +3676,153 @@ fn validate_modify_config(app: &App) {
             app.set_modify_config_status_text(format!("JSON parse error: {error}").into());
         }
     }
+}
+
+fn update_merge_control(app: &App, key: &str, value: &str) {
+    match key {
+        "layout" => app.set_merge_layout_text(value.into()),
+        "metadata_mode" => app.set_merge_metadata_mode_text(value.into()),
+        "remove_empty_tracks" => app.set_merge_remove_empty_tracks_text(value.into()),
+        "strip_duplicate_start" => app.set_merge_strip_duplicate_start_text(value.into()),
+        "prefer_first_tempo" => app.set_merge_prefer_first_tempo_text(value.into()),
+        "deconflict_channels" => app.set_merge_deconflict_channels_text(value.into()),
+        "dedupe_meta" => app.set_merge_dedupe_meta_text(value.into()),
+        "dedupe_controls" => app.set_merge_dedupe_controls_text(value.into()),
+        "dedupe_notes" => app.set_merge_dedupe_notes_text(value.into()),
+        _ => {}
+    }
+}
+
+fn build_merge_processing_config(app: &App) -> MidiFileProcessingConfig {
+    let mut config = MidiFileProcessingConfig::default();
+    config.merge.mode = parse_serde_enum(app.get_merge_layout_text().as_str(), "merge layout mode")
+        .unwrap_or_default();
+    config.structure.remove_empty_tracks = parse_bool_toggle(
+        app.get_merge_remove_empty_tracks_text().as_str(),
+        "remove empty tracks toggle",
+    )
+    .unwrap_or(true);
+
+    let metadata_mode = app.get_merge_metadata_mode_text();
+    if metadata_mode.as_str() != "keep" {
+        config.tools.push(MidiModifierTool::SharedMetadataTrack(
+            SharedMetadataTrackTool {
+                target_track_index: 0,
+                move_tempo_events: true,
+                move_time_signatures: true,
+                move_key_signatures: true,
+                move_text_events: metadata_mode.as_str() == "all_text_meta",
+            },
+        ));
+    }
+
+    let merge_balance = MergeBalanceTool {
+        deconflict_channels: parse_bool_toggle(
+            app.get_merge_deconflict_channels_text().as_str(),
+            "deconflict channels toggle",
+        )
+        .unwrap_or(false),
+        strip_duplicate_start_state: parse_bool_toggle(
+            app.get_merge_strip_duplicate_start_text().as_str(),
+            "strip duplicate start toggle",
+        )
+        .unwrap_or(true),
+        prefer_first_tempo_map: parse_bool_toggle(
+            app.get_merge_prefer_first_tempo_text().as_str(),
+            "prefer first tempo toggle",
+        )
+        .unwrap_or(true),
+    };
+    if merge_balance.deconflict_channels
+        || merge_balance.strip_duplicate_start_state
+        || merge_balance.prefer_first_tempo_map
+    {
+        config
+            .tools
+            .push(MidiModifierTool::MergeBalance(merge_balance));
+    }
+
+    let dedupe_notes = parse_bool_toggle(
+        app.get_merge_dedupe_notes_text().as_str(),
+        "dedupe notes toggle",
+    )
+    .unwrap_or(false);
+    let dedupe_controls = parse_bool_toggle(
+        app.get_merge_dedupe_controls_text().as_str(),
+        "dedupe controls toggle",
+    )
+    .unwrap_or(false);
+    let dedupe_meta = parse_bool_toggle(
+        app.get_merge_dedupe_meta_text().as_str(),
+        "dedupe meta toggle",
+    )
+    .unwrap_or(true);
+    if dedupe_notes || dedupe_controls || dedupe_meta {
+        config.tools.push(MidiModifierTool::Dedupe(DedupeTool {
+            notes: dedupe_notes,
+            controls: dedupe_controls,
+            tempo: dedupe_meta,
+            meta: dedupe_meta,
+        }));
+    }
+
+    config
+}
+
+fn file_name_or_path(path: &Path) -> String {
+    path.file_name()
+        .and_then(OsStr::to_str)
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| path.display().to_string())
+}
+
+fn default_merge_output_path(inputs: &[PathBuf]) -> PathBuf {
+    let Some(first) = inputs.first() else {
+        return PathBuf::from("merged-output.mid");
+    };
+    let stem = first
+        .file_stem()
+        .and_then(OsStr::to_str)
+        .filter(|name| !name.is_empty())
+        .unwrap_or("merged-output");
+    let suffix = if inputs.len() > 1 {
+        format!("-plus-{}", inputs.len() - 1)
+    } else {
+        String::new()
+    };
+    let file_name = format!("{stem}{suffix}-merged.mid");
+    first
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(|parent| parent.join(file_name.clone()))
+        .unwrap_or_else(|| PathBuf::from(file_name))
+}
+
+fn normalize_merge_output_path(path: &Path) -> PathBuf {
+    let mut normalized = path.to_path_buf();
+    let has_midi_extension = normalized
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("mid") || ext.eq_ignore_ascii_case("midi"));
+    if !has_midi_extension {
+        normalized.set_extension("mid");
+    }
+    normalized
+}
+
+fn current_merge_output_path(app: &App) -> Result<PathBuf, String> {
+    let raw = app.get_merge_output_path_text();
+    if raw.is_empty() {
+        return Err("choose an output path".into());
+    }
+    Ok(normalize_merge_output_path(Path::new(raw.as_str())))
+}
+
+fn set_merge_ui_failure(app: &App, message: &str) {
+    app.set_merge_job_active(false);
+    app.set_merge_progress(0.0);
+    app.set_merge_status_text("Failed".into());
+    app.set_merge_detail_text(message.into());
 }
 
 fn default_modify_output_path(selected_midi_name: &str) -> PathBuf {
@@ -4195,6 +4689,15 @@ fn wire_midi_callbacks(
         let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_drop_midi_file(move |path| {
             if let Some(app) = app_weak.upgrade() {
+                if app.get_active_profile() == 6 {
+                    append_merge_source_paths(
+                        &app,
+                        &bridge,
+                        &shared_state,
+                        vec![PathBuf::from(path.as_str())],
+                    );
+                    return;
+                }
                 replace_selected_midi(
                     &app,
                     &bridge,

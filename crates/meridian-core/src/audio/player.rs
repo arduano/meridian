@@ -1,9 +1,5 @@
 use std::sync::{Arc, RwLock};
 
-use cpal::{
-    SampleRate,
-    traits::{DeviceTrait, HostTrait},
-};
 use serde::{Deserialize, Serialize};
 use xsynth_core::AudioStreamParams;
 
@@ -107,25 +103,26 @@ impl MeridianAudioPlayer {
             AudioBackend::None => Box::new(EmptyPlayer),
             AudioBackend::Xsynth => Box::new(XSynthPlayer::new(config)?),
         };
-        let output_support = match config.backend {
-            AudioBackend::None => OutputSupport::default(),
-            AudioBackend::Xsynth => default_output_support(),
-        };
         new_player.configure(config, &self.cache)?;
+        let stream_params = new_player.stream_params();
+        let (supports_44100_hz, supports_48000_hz, supports_88200_hz, supports_96000_hz) =
+            sample_rate_support(stream_params);
+        let (supports_176400_hz, supports_192000_hz, supports_mono, supports_stereo) =
+            channel_and_high_rate_support(stream_params);
         let status = AudioStatus {
             backend: config.backend,
             voice_count: new_player.voice_count(),
-            stream_params: new_player.stream_params(),
+            stream_params,
             loaded_soundfonts: config.soundfonts.iter().filter(|sf| sf.enabled).count(),
             active: !matches!(config.backend, AudioBackend::None),
-            supports_44100_hz: output_support.supports_44100_hz,
-            supports_48000_hz: output_support.supports_48000_hz,
-            supports_88200_hz: output_support.supports_88200_hz,
-            supports_96000_hz: output_support.supports_96000_hz,
-            supports_176400_hz: output_support.supports_176400_hz,
-            supports_192000_hz: output_support.supports_192000_hz,
-            supports_mono: output_support.supports_mono,
-            supports_stereo: output_support.supports_stereo,
+            supports_44100_hz,
+            supports_48000_hz,
+            supports_88200_hz,
+            supports_96000_hz,
+            supports_176400_hz,
+            supports_192000_hz,
+            supports_mono,
+            supports_stereo,
         };
         *write_lock(&self.player) = new_player;
         *write_lock(&self.status) = status;
@@ -155,53 +152,6 @@ impl MeridianAudioPlayer {
     }
 }
 
-#[derive(Default)]
-struct OutputSupport {
-    supports_44100_hz: bool,
-    supports_48000_hz: bool,
-    supports_88200_hz: bool,
-    supports_96000_hz: bool,
-    supports_176400_hz: bool,
-    supports_192000_hz: bool,
-    supports_mono: bool,
-    supports_stereo: bool,
-}
-
-fn default_output_support() -> OutputSupport {
-    let host = cpal::default_host();
-    let Some(device) = host.default_output_device() else {
-        return OutputSupport::default();
-    };
-    let Ok(configs) = device.supported_output_configs() else {
-        return OutputSupport::default();
-    };
-
-    let mut support = OutputSupport::default();
-    for config in configs {
-        let channels = config.channels();
-        if channels == 1 {
-            support.supports_mono = true;
-        }
-        if channels == 2 {
-            support.supports_stereo = true;
-        }
-
-        support.supports_44100_hz |= supports_sample_rate(&config, 44_100);
-        support.supports_48000_hz |= supports_sample_rate(&config, 48_000);
-        support.supports_88200_hz |= supports_sample_rate(&config, 88_200);
-        support.supports_96000_hz |= supports_sample_rate(&config, 96_000);
-        support.supports_176400_hz |= supports_sample_rate(&config, 176_400);
-        support.supports_192000_hz |= supports_sample_rate(&config, 192_000);
-    }
-
-    support
-}
-
-fn supports_sample_rate(config: &cpal::SupportedStreamConfigRange, sample_rate: u32) -> bool {
-    config.min_sample_rate() <= SampleRate(sample_rate)
-        && SampleRate(sample_rate) <= config.max_sample_rate()
-}
-
 fn read_lock<T>(lock: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T> {
     match lock.read() {
         Ok(guard) => guard,
@@ -214,4 +164,27 @@ fn write_lock<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
     }
+}
+
+fn sample_rate_support(stream_params: Option<AudioStreamParams>) -> (bool, bool, bool, bool) {
+    let sample_rate = stream_params.as_ref().map(|params| params.sample_rate);
+    (
+        sample_rate == Some(44_100),
+        sample_rate == Some(48_000),
+        sample_rate == Some(88_200),
+        sample_rate == Some(96_000),
+    )
+}
+
+fn channel_and_high_rate_support(
+    stream_params: Option<AudioStreamParams>,
+) -> (bool, bool, bool, bool) {
+    let sample_rate = stream_params.as_ref().map(|params| params.sample_rate);
+    let channels = stream_params.as_ref().map(|params| params.channels.count());
+    (
+        sample_rate == Some(176_400),
+        sample_rate == Some(192_000),
+        channels == Some(1),
+        channels == Some(2),
+    )
 }

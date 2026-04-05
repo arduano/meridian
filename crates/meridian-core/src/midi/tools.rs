@@ -274,6 +274,16 @@ pub struct MergeBalanceTool {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
+pub struct SharedMetadataTrackTool {
+    pub target_track_index: usize,
+    pub move_tempo_events: bool,
+    pub move_time_signatures: bool,
+    pub move_key_signatures: bool,
+    pub move_text_events: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
+#[serde(default)]
 pub struct AnalysisGuardTool {
     pub min_note_count: Option<u64>,
     pub max_note_count: Option<u64>,
@@ -302,5 +312,6 @@ pub enum MidiModifierTool {
     MetaText(MetaTextTool),
     Sysex(SysexTool),
     MergeBalance(MergeBalanceTool),
+    SharedMetadataTrack(SharedMetadataTrackTool),
     AnalysisGuard(AnalysisGuardTool),
 }

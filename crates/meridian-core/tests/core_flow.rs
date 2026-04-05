@@ -310,6 +310,46 @@ fn process_midi_files_merges_trims_and_writes_output() {
 }
 
 #[test]
+fn inspect_midi_files_reports_basic_merge_metadata() {
+    let dir = support::temp_dir("meridian-core-inspect-test");
+    let midi = dir.join("inspect.mid");
+    support::write_toolkit_midi(
+        &midi,
+        96,
+        vec![
+            vec![
+                Event::new_delta_tempo_event(0, 500_000),
+                Event::new_delta_note_on_event(24, 0, 60, 100),
+                Event::new_delta_note_off_event(48, 0, 60),
+            ],
+            vec![Event::new_delta_track_name_event(0, "Strings")],
+        ],
+    );
+
+    let core = spawn_core();
+    let events = core
+        .request(CoreCommand::InspectMidiFiles {
+            paths: vec![midi.clone()],
+        })
+        .expect("inspect midi files");
+
+    match events.as_slice() {
+        [CoreEvent::MidiFilesInspected { inspections }] => {
+            assert_eq!(inspections.len(), 1);
+            let inspection = &inspections[0];
+            assert_eq!(inspection.path, midi);
+            assert_eq!(inspection.actual_track_count, 2);
+            assert_eq!(inspection.tempo_event_count, 1);
+            assert_eq!(inspection.track_name_event_count, 1);
+            assert_eq!(inspection.total_notes, 1);
+            assert_eq!(inspection.ticks_per_quarter, Some(96));
+            assert!(inspection.error.is_none());
+        }
+        other => panic!("unexpected inspect response: {other:?}"),
+    }
+}
+
+#[test]
 fn process_midi_files_job_reports_status_and_finishes() {
     let dir = support::temp_dir("meridian-core-process-job-test");
     let midi = dir.join("input.mid");

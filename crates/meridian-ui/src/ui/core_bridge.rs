@@ -7,7 +7,7 @@ use meridian_core::{
     CoreHandle, MeridianError,
     audio::{AudioBackend, AudioConfig, AudioRenderConfig},
     display::MIN_VIEW_RANGE_SECONDS,
-    midi::{MidiFileProcessingConfig, MidiFileSelection, MidiProcessingConfig},
+    midi::{MidiFileInspection, MidiFileProcessingConfig, MidiFileSelection, MidiProcessingConfig},
     protocol::{
         CoreCommand, CoreEvent, MidiProcessStatus, ParsedMidiId, ProcessedMidiId, VideoRenderConfig,
     },
@@ -126,6 +126,21 @@ impl UiCoreBridge {
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
         self.request(CoreCommand::LoadParsedMidi { path }, model)
+    }
+
+    pub fn inspect_midi_files(
+        &self,
+        paths: Vec<PathBuf>,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<MidiFileInspection>, MeridianError> {
+        let events = self.request(CoreCommand::InspectMidiFiles { paths }, model)?;
+        events
+            .into_iter()
+            .find_map(|event| match event {
+                CoreEvent::MidiFilesInspected { inspections } => Some(inspections),
+                _ => None,
+            })
+            .ok_or_else(|| MeridianError::Protocol("missing midi inspection result".into()))
     }
 
     pub fn build_processed_midi(

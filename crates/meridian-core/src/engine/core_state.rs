@@ -168,6 +168,9 @@ impl CoreState {
                 state: self.snapshot(),
             }],
             CoreCommand::LoadParsedMidi { path } => self.load_parsed_midi_resource(path),
+            CoreCommand::InspectMidiFiles { paths } => vec![CoreEvent::MidiFilesInspected {
+                inspections: crate::midi::analysis::inspect_midi_files(&paths),
+            }],
             CoreCommand::BuildProcessedMidi {
                 parsed_midi_id,
                 config,

@@ -58,6 +58,25 @@ export struct EventCount {
 }
 
 
+// ── MergeSourceRow ─────────────────────────────────────────
+// One source card in the merge page.
+
+export struct MergeSourceRow {
+    name: string,
+    path: string,
+    status: string,
+    tracks_text: string,
+    notes_text: string,
+    tempo_text: string,
+    length_text: string,
+    bpm_text: string,
+    ppq_text: string,
+    meta_text: string,
+    is_loading: bool,
+    is_error: bool,
+}
+
+
 // ── SliderCurve ────────────────────────────────────────────
 // Determines the mapping between the 0-1 slider position and
 // the actual value range.  "linear" gives uniform resolution;
