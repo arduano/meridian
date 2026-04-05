@@ -13,34 +13,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  linux:
-    name: linux-${{ matrix.target }}
+  linux-debian-packages:
+    name: linux-debian-packages
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: tarball
-            build_script: publish/linux/archive/build.sh
-            smoke_script: publish/linux/docker/smoke-tarball.sh
-            artifact_name: release-linux-tarball
-            artifact_glob: publish/linux/artifacts/*.tar.gz
-          - target: deb
-            build_script: publish/linux/deb/build.sh
-            smoke_script: publish/linux/docker/smoke-deb.sh
-            artifact_name: release-linux-deb
-            artifact_glob: publish/linux/artifacts/*.deb
-          - target: rpm
-            build_script: publish/linux/rpm/build.sh
-            smoke_script: publish/linux/docker/smoke-rpm.sh
-            artifact_name: release-linux-rpm
-            artifact_glob: publish/linux/artifacts/**/*.rpm
-          - target: appimage
-            build_script: publish/linux/appimage/build.sh
-            smoke_script: publish/linux/docker/smoke-appimage.sh
-            artifact_name: release-linux-appimage
-            artifact_glob: publish/linux/artifacts/*.AppImage
 
     steps:
       - name: Checkout
@@ -57,39 +33,92 @@ jobs:
           path: |
             publish/linux/artifacts/.cargo-home
             publish/linux/artifacts/.rustup-home
-          key: draft-release-linux-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
+          key: draft-release-linux-debian-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
           restore-keys: |
-            draft-release-linux-${{ runner.os }}-${{ matrix.target }}-
+            draft-release-linux-debian-${{ runner.os }}-
 
-      - name: Build package
+      - name: Build tarball
         run: |
           set -euo pipefail
-          "${{ matrix.build_script }}"
+          publish/linux/archive/build.sh
 
-      - name: Smoke package in Docker
+      - name: Smoke tarball in Docker
         run: |
           set -euo pipefail
-          "${{ matrix.smoke_script }}"
+          publish/linux/docker/smoke-tarball.sh
 
-      - name: Verify package artifact exists
+      - name: Verify tarball artifact exists
         run: |
-          shopt -s nullglob globstar
-          files=( ${{ matrix.artifact_glob }} )
+          shopt -s nullglob
+          files=( publish/linux/artifacts/*.tar.gz )
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "missing package artifact for ${{ matrix.target }}: ${{ matrix.artifact_glob }}" >&2
+            echo "missing tarball artifact in publish/linux/artifacts" >&2
             exit 1
           fi
 
-      - name: Upload package artifact
+      - name: Upload tarball artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: release-linux-tarball
           if-no-files-found: error
           path: |
-            ${{ matrix.artifact_glob }}
+            publish/linux/artifacts/*.tar.gz
+
+      - name: Build deb package
+        run: |
+          set -euo pipefail
+          publish/linux/deb/build.sh
+
+      - name: Smoke deb package in Docker
+        run: |
+          set -euo pipefail
+          publish/linux/docker/smoke-deb.sh
+
+      - name: Verify deb artifact exists
+        run: |
+          shopt -s nullglob
+          files=( publish/linux/artifacts/*.deb )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "missing deb artifact in publish/linux/artifacts" >&2
+            exit 1
+          fi
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-deb
+          if-no-files-found: error
+          path: |
+            publish/linux/artifacts/*.deb
+
+      - name: Build AppImage
+        run: |
+          set -euo pipefail
+          publish/linux/appimage/build.sh
+
+      - name: Smoke AppImage in Docker
+        run: |
+          set -euo pipefail
+          publish/linux/docker/smoke-appimage.sh
+
+      - name: Verify AppImage artifact exists
+        run: |
+          shopt -s nullglob
+          files=( publish/linux/artifacts/*.AppImage )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "missing AppImage artifact in publish/linux/artifacts" >&2
+            exit 1
+          fi
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-appimage
+          if-no-files-found: error
+          path: |
+            publish/linux/artifacts/*.AppImage
 
       - name: Download built artifacts for release
-        if: matrix.target == 'tarball'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -145,7 +174,6 @@ jobs:
           gh run download "$RUN_ID" --dir release-artifacts
 
       - name: Create or update draft release
-        if: matrix.target == 'tarball'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
@@ -174,6 +202,57 @@ jobs:
               --generate-notes \
               "${prerelease_flag[@]}"
           fi
+
+  linux-rpm:
+    name: linux-rpm
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-03-29
+
+      - name: Restore publish caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            publish/linux/artifacts/.cargo-home
+            publish/linux/artifacts/.rustup-home
+          key: draft-release-linux-rpm-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
+          restore-keys: |
+            draft-release-linux-rpm-${{ runner.os }}-
+
+      - name: Build RPM package
+        run: |
+          set -euo pipefail
+          publish/linux/rpm/build.sh
+
+      - name: Smoke RPM package in Docker
+        run: |
+          set -euo pipefail
+          publish/linux/docker/smoke-rpm.sh
+
+      - name: Verify RPM artifact exists
+        run: |
+          shopt -s nullglob globstar
+          files=( publish/linux/artifacts/**/*.rpm )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "missing rpm artifact in publish/linux/artifacts" >&2
+            exit 1
+          fi
+
+      - name: Upload RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-rpm
+          if-no-files-found: error
+          path: |
+            publish/linux/artifacts/**/*.rpm
 
   windows:
     name: windows
