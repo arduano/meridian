@@ -26,6 +26,7 @@ source_tarball="$spec_root/SOURCES/${TARBALL_PREFIX}.tar.gz"
 tar -C "$tarball_root" -czf "$source_tarball" "$TARBALL_PREFIX"
 
 {
+    echo "%global debug_package %{nil}"
     echo "Name:           $PACKAGE_NAME"
     echo "Version:        $PACKAGE_VERSION"
     echo "Release:        ${RPM_RELEASE}.${PACKAGE_ITERATION}"
@@ -34,9 +35,6 @@ tar -C "$tarball_root" -czf "$source_tarball" "$TARBALL_PREFIX"
     echo "URL:            $PACKAGE_URL"
     echo "Source0:        ${TARBALL_PREFIX}.tar.gz"
     echo "BuildArch:      x86_64"
-    for dep in "${fedora_runtime_deps[@]}"; do
-        echo "Requires:       $dep"
-    done
     cat <<'EOF'
 
 %description
@@ -48,8 +46,8 @@ Meridian ships a headless CLI and a Slint-based desktop frontend.
 %build
 
 %install
-mkdir -p %{buildroot}
-cp -a * %{buildroot}/
+mkdir -p %{buildroot}/usr
+cp -a bin share %{buildroot}/usr/
 
 %files
 /usr/bin/meridian
@@ -57,15 +55,26 @@ cp -a * %{buildroot}/
 /usr/share/applications/io.github.arduano.meridian.desktop
 /usr/share/doc/meridian/README.md
 /usr/share/icons/hicolor/256x256/apps/io.github.arduano.meridian.png
-EOF
-} | sed "s/__TARBALL_PREFIX__/${TARBALL_PREFIX}/g" >"$spec_root/SPECS/$PACKAGE_NAME.spec"
 
-docker run --rm \
-    -v "$ROOT:$ROOT" \
-    -w "$ROOT" \
-    "$FEDORA_BUILD_IMAGE" \
-    bash -lc "dnf install -y rpm-build >/dev/null && rpmbuild --define '_topdir $spec_root' -bb '$spec_root/SPECS/$PACKAGE_NAME.spec'"
+%changelog
+* Sat Apr 04 2026 Meridian Maintainers - __PACKAGE_VERSION__-__RPM_RELEASE__.__PACKAGE_ITERATION__
+- Prototype package build
+EOF
+} | sed \
+    -e "s/__TARBALL_PREFIX__/${TARBALL_PREFIX}/g" \
+    -e "s/__PACKAGE_VERSION__/${PACKAGE_VERSION}/g" \
+    -e "s/__RPM_RELEASE__/${RPM_RELEASE}/g" \
+    -e "s/__PACKAGE_ITERATION__/${PACKAGE_ITERATION}/g" \
+    >"$spec_root/SPECS/$PACKAGE_NAME.spec"
+
+docker_run "$FEDORA_BUILD_IMAGE" "
+dnf install -y rpm-build >/dev/null
+rpmbuild --define '_topdir $spec_root' -bb '$spec_root/SPECS/$PACKAGE_NAME.spec'
+"
 
 artifact_path="$(find "$spec_root/RPMS" -name '*.rpm' -print -quit)"
 test -n "$artifact_path"
+final_artifact="$ARTIFACTS_DIR/$(basename "$artifact_path")"
+cp -f "$artifact_path" "$final_artifact"
+artifact_path="$final_artifact"
 printf '%s\n' "$artifact_path"

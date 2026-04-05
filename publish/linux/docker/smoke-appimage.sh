@@ -19,7 +19,7 @@ run_appimage_smoke() {
     "
 }
 
-run_appimage_smoke debian:12-slim "apt-get update && apt-get install -y ${debian_runtime_deps[*]} libfuse2"
+run_appimage_smoke debian:12-slim "apt-get update && apt-get install -y ${debian_smoke_runtime_deps[*]} libfuse2"
 run_appimage_smoke ubuntu:24.04 "apt-get update && apt-get install -y ${ubuntu_runtime_deps[*]} libfuse2"
 run_appimage_smoke fedora:41 "dnf install -y ${fedora_runtime_deps[*]} fuse-libs"
 run_appimage_smoke opensuse/tumbleweed "zypper --non-interactive refresh && zypper --non-interactive install ${opensuse_runtime_deps[*]} fuse"
