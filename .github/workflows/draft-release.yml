@@ -1,0 +1,279 @@
+name: Draft Release
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: draft-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: linux-${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: tarball
+            build_script: publish/linux/archive/build.sh
+            smoke_script: publish/linux/docker/smoke-tarball.sh
+            artifact_name: release-linux-tarball
+            artifact_glob: publish/linux/artifacts/*.tar.gz
+          - target: deb
+            build_script: publish/linux/deb/build.sh
+            smoke_script: publish/linux/docker/smoke-deb.sh
+            artifact_name: release-linux-deb
+            artifact_glob: publish/linux/artifacts/*.deb
+          - target: rpm
+            build_script: publish/linux/rpm/build.sh
+            smoke_script: publish/linux/docker/smoke-rpm.sh
+            artifact_name: release-linux-rpm
+            artifact_glob: publish/linux/artifacts/**/*.rpm
+          - target: appimage
+            build_script: publish/linux/appimage/build.sh
+            smoke_script: publish/linux/docker/smoke-appimage.sh
+            artifact_name: release-linux-appimage
+            artifact_glob: publish/linux/artifacts/*.AppImage
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-03-29
+
+      - name: Restore publish caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            publish/linux/artifacts/.cargo-home
+            publish/linux/artifacts/.rustup-home
+          key: draft-release-linux-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
+          restore-keys: |
+            draft-release-linux-${{ runner.os }}-${{ matrix.target }}-
+
+      - name: Build package
+        run: |
+          set -euo pipefail
+          "${{ matrix.build_script }}"
+
+      - name: Smoke package in Docker
+        run: |
+          set -euo pipefail
+          "${{ matrix.smoke_script }}"
+
+      - name: Verify package artifact exists
+        run: |
+          shopt -s nullglob globstar
+          files=( ${{ matrix.artifact_glob }} )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "missing package artifact for ${{ matrix.target }}: ${{ matrix.artifact_glob }}" >&2
+            exit 1
+          fi
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          if-no-files-found: error
+          path: |
+            ${{ matrix.artifact_glob }}
+
+  windows:
+    name: windows
+    runs-on: windows-2022
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-03-29
+
+      - name: Cache cargo state
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\.cargo\bin
+            ~\.cargo\registry\cache
+            ~\.cargo\registry\index
+            ~\.cargo\registry\src
+            ~\.cargo\git\db
+            target
+          key: draft-release-windows-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
+          restore-keys: |
+            draft-release-windows-${{ runner.os }}-
+
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis -y --no-progress
+
+      - name: Build CLI
+        shell: pwsh
+        run: cargo build --release -p meridian-cli
+
+      - name: Build UI
+        shell: pwsh
+        run: cargo build --release -p meridian-ui
+
+      - name: Build portable zip
+        shell: pwsh
+        run: .\publish\windows\ci\build-portable.ps1
+
+      - name: Smoke staged CLI
+        shell: pwsh
+        run: .\publish\windows\ci\smoke-cli.ps1
+
+      - name: Smoke staged UI
+        shell: pwsh
+        run: .\publish\windows\ci\smoke-ui.ps1
+
+      - name: Build NSIS installer
+        shell: pwsh
+        run: .\publish\windows\ci\build-installer.ps1
+
+      - name: Smoke installed binaries
+        shell: pwsh
+        run: .\publish\windows\ci\smoke-installer.ps1
+
+      - name: Verify artifacts exist
+        shell: pwsh
+        run: |
+          $artifacts = Get-ChildItem -Path publish\windows\artifacts\dist\*.zip, publish\windows\artifacts\dist\*.exe -File
+          if ($artifacts.Count -eq 0) {
+            throw "Missing Windows artifacts in publish\\windows\\artifacts\\dist"
+          }
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          if-no-files-found: error
+          path: |
+            publish/windows/artifacts/dist/*.zip
+            publish/windows/artifacts/dist/*.exe
+
+  macos:
+    name: ${{ matrix.artifact_name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            artifact_name: release-macos-x86_64
+          - runner: macos-14
+            artifact_name: release-macos-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-03-29
+
+      - name: Cache cargo state
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/registry/src
+            ~/.cargo/git/db
+            target
+          key: draft-release-macos-${{ matrix.runner }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
+          restore-keys: |
+            draft-release-macos-${{ matrix.runner }}-
+
+      - name: Build CLI
+        run: cargo build --release -p meridian-cli
+
+      - name: Build UI
+        run: cargo build --release -p meridian-ui
+
+      - name: Build portable zip
+        run: bash publish/macos/ci/build-portable.sh
+
+      - name: Smoke CLI
+        run: bash publish/macos/ci/smoke-cli.sh
+
+      - name: Smoke UI
+        run: bash publish/macos/ci/smoke-ui.sh
+
+      - name: Verify zip artifact exists
+        run: |
+          shopt -s nullglob
+          files=( publish/macos/artifacts/dist/*.zip )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "missing macOS artifact in publish/macos/artifacts/dist" >&2
+            exit 1
+          fi
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          if-no-files-found: error
+          path: |
+            publish/macos/artifacts/dist/*.zip
+
+  draft-release:
+    name: draft-release
+    runs-on: ubuntu-latest
+    needs:
+      - linux
+      - windows
+      - macos
+    timeout-minutes: 30
+
+    steps:
+      - name: Download built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t assets < <(find release-artifacts -type f | sort)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No release assets were downloaded" >&2
+            exit 1
+          fi
+
+          prerelease_flag=()
+          if [[ "$TAG_NAME" == *-* ]]; then
+            prerelease_flag+=(--prerelease)
+          fi
+
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release edit "$TAG_NAME" --draft --title "$TAG_NAME"
+            gh release upload "$TAG_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$TAG_NAME" "${assets[@]}" \
+              --draft \
+              --verify-tag \
+              --title "$TAG_NAME" \
+              --generate-notes \
+              "${prerelease_flag[@]}"
+          fi
