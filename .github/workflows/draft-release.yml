@@ -61,6 +61,7 @@ jobs:
         with:
           name: release-linux-tarball
           if-no-files-found: error
+          retention-days: 7
           path: |
             publish/linux/artifacts/*.tar.gz
 
@@ -88,6 +89,7 @@ jobs:
         with:
           name: release-linux-deb
           if-no-files-found: error
+          retention-days: 7
           path: |
             publish/linux/artifacts/*.deb
 
@@ -115,6 +117,7 @@ jobs:
         with:
           name: release-linux-appimage
           if-no-files-found: error
+          retention-days: 7
           path: |
             publish/linux/artifacts/*.AppImage
 
@@ -166,6 +169,7 @@ jobs:
         with:
           name: release-linux-rpm
           if-no-files-found: error
+          retention-days: 7
           path: |
             publish/linux/artifacts/**/*.rpm
 
@@ -242,6 +246,7 @@ jobs:
         with:
           name: release-windows
           if-no-files-found: error
+          retention-days: 7
           path: |
             publish/windows/artifacts/dist/*.zip
             publish/windows/artifacts/dist/*.exe
@@ -311,6 +316,7 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           if-no-files-found: error
+          retention-days: 7
           path: |
             publish/macos/artifacts/dist/*.zip
 

@@ -85,6 +85,7 @@ jobs:
         with:
           name: windows-prototype
           if-no-files-found: ignore
+          retention-days: 5
           path: |
             meridian/publish/windows/artifacts/dist/*.zip
             meridian/publish/windows/artifacts/dist/*.exe

@@ -81,5 +81,6 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           if-no-files-found: ignore
+          retention-days: 5
           path: |
             publish/macos/artifacts/dist/*.zip

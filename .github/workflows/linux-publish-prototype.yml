@@ -67,6 +67,7 @@ jobs:
         with:
           name: linux-tarball
           if-no-files-found: error
+          retention-days: 5
           path: |
             publish/linux/artifacts/*.tar.gz
 
@@ -76,6 +77,7 @@ jobs:
         with:
           name: linux-tarball-logs
           if-no-files-found: error
+          retention-days: 5
           path: |
             publish/linux/artifacts/logs/tarball-build.log
             publish/linux/artifacts/logs/tarball-smoke.log
@@ -105,6 +107,7 @@ jobs:
         with:
           name: linux-deb
           if-no-files-found: error
+          retention-days: 5
           path: |
             publish/linux/artifacts/*.deb
 
@@ -114,6 +117,7 @@ jobs:
         with:
           name: linux-deb-logs
           if-no-files-found: error
+          retention-days: 5
           path: |
             publish/linux/artifacts/logs/deb-build.log
             publish/linux/artifacts/logs/deb-smoke.log
@@ -143,6 +147,7 @@ jobs:
         with:
           name: linux-appimage
           if-no-files-found: error
+          retention-days: 5
           path: |
             publish/linux/artifacts/*.AppImage
 
@@ -152,6 +157,7 @@ jobs:
         with:
           name: linux-appimage-logs
           if-no-files-found: error
+          retention-days: 5
           path: |
             publish/linux/artifacts/logs/appimage-build.log
             publish/linux/artifacts/logs/appimage-smoke.log
@@ -209,6 +215,7 @@ jobs:
         with:
           name: linux-rpm
           if-no-files-found: error
+          retention-days: 5
           path: |
             publish/linux/artifacts/**/*.rpm
 
@@ -218,6 +225,7 @@ jobs:
         with:
           name: linux-rpm-logs
           if-no-files-found: error
+          retention-days: 5
           path: |
             publish/linux/artifacts/logs/rpm-build.log
             publish/linux/artifacts/logs/rpm-smoke.log
