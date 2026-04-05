@@ -6,8 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     audio::{AudioConfig, AudioRenderConfig},
     midi::{
-        MidiFileProcessingConfig, MidiFileSelection, MidiProcessingConfig,
-        analysis::MidiAnalysisKind,
+        MidiFileProcessingConfig, MidiMergeMode, MidiProcessingConfig, analysis::MidiAnalysisKind,
     },
     render::{DisplayTimeSpace, SceneConfig},
 };
@@ -34,18 +33,24 @@ pub enum CoreCommand {
         parsed_midi_id: ParsedMidiId,
         config: MidiProcessingConfig,
     },
-    ProcessMidiFiles {
-        selection: MidiFileSelection,
+    ProcessMidiFile {
+        input: PathBuf,
         output: PathBuf,
         config: MidiFileProcessingConfig,
     },
-    StartProcessMidiFiles {
-        selection: MidiFileSelection,
+    MergeMidiFiles {
+        inputs: Vec<PathBuf>,
+        output: PathBuf,
+        mode: MidiMergeMode,
+        config: MidiFileProcessingConfig,
+    },
+    StartProcessMidiFile {
+        input: PathBuf,
         output: PathBuf,
         config: MidiFileProcessingConfig,
     },
-    CancelProcessMidiFiles,
-    GetProcessMidiStatus,
+    CancelMidiFileProcess,
+    GetMidiFileProcessStatus,
     AnalyzeActiveMidi {
         bucket_count: Option<usize>,
     },

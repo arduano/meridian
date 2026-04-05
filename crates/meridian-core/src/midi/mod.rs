@@ -28,9 +28,9 @@ pub use cache::MidiCacheStack;
 pub use colors::{MIDIColor, MIDIColorPair};
 pub use processed::ProcessedMidi;
 pub use processing::{
-    EventFilterConfig, FileTimeProcessingConfig, MergeProcessingConfig, MidiFileProcessingConfig,
-    MidiFileSelection, MidiMergeMode, MidiProcessingConfig, PitchProcessingConfig,
-    StructureProcessingConfig, TrimProcessingConfig, ZeroVelocityNoteOnMode,
+    EventFilterConfig, FileTimeProcessingConfig, MidiFileProcessingConfig, MidiMergeMode,
+    MidiProcessingConfig, PitchProcessingConfig, StructureProcessingConfig, TrimProcessingConfig,
+    ZeroVelocityNoteOnMode,
 };
 pub use tools::*;
 

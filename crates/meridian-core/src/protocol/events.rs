@@ -75,7 +75,14 @@ pub enum CoreEvent {
         total_audio_events: usize,
         track_count: usize,
     },
-    MidiFilesProcessed {
+    MidiFileProcessed {
+        input: PathBuf,
+        output: PathBuf,
+        output_track_count: usize,
+        output_ppq: u16,
+        total_events: usize,
+    },
+    MidiFilesMerged {
         output: PathBuf,
         input_count: usize,
         output_track_count: usize,

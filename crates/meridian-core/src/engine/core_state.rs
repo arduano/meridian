@@ -175,14 +175,31 @@ impl CoreState {
                 parsed_midi_id,
                 config,
             } => self.build_processed_midi_resource(parsed_midi_id, config),
-            CoreCommand::ProcessMidiFiles {
-                selection,
+            CoreCommand::ProcessMidiFile {
+                input,
                 output,
                 config,
-            } => match crate::midi::file_processing::process_midi_files_to_file(
-                &selection, &output, &config,
+            } => match crate::midi::file_processing::process_midi_file_to_file(
+                &input, &output, &config,
             ) {
-                Ok(summary) => vec![CoreEvent::MidiFilesProcessed {
+                Ok(summary) => vec![CoreEvent::MidiFileProcessed {
+                    input: summary.input,
+                    output: summary.output,
+                    output_track_count: summary.output_track_count,
+                    output_ppq: summary.output_ppq,
+                    total_events: summary.total_events,
+                }],
+                Err(error) => vec![error_event(super::error_code(&error), error.to_string())],
+            },
+            CoreCommand::MergeMidiFiles {
+                inputs,
+                output,
+                mode,
+                config,
+            } => match crate::midi::file_processing::merge_midi_files_to_file(
+                &inputs, &output, mode, &config,
+            ) {
+                Ok(summary) => vec![CoreEvent::MidiFilesMerged {
                     output: summary.output,
                     input_count: summary.input_count,
                     output_track_count: summary.output_track_count,
@@ -191,13 +208,13 @@ impl CoreState {
                 }],
                 Err(error) => vec![error_event(super::error_code(&error), error.to_string())],
             },
-            CoreCommand::StartProcessMidiFiles {
-                selection,
+            CoreCommand::StartProcessMidiFile {
+                input,
                 output,
                 config,
-            } => self.start_process_midi_files(selection, output, config),
-            CoreCommand::CancelProcessMidiFiles => self.cancel_process_midi_files(),
-            CoreCommand::GetProcessMidiStatus => vec![CoreEvent::MidiProcessStatus {
+            } => self.start_process_midi_file(input, output, config),
+            CoreCommand::CancelMidiFileProcess => self.cancel_midi_file_process(),
+            CoreCommand::GetMidiFileProcessStatus => vec![CoreEvent::MidiProcessStatus {
                 status: self.midi_process_status(),
             }],
             CoreCommand::AnalyzeActiveMidi { bucket_count } => {

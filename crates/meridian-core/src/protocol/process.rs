@@ -10,31 +10,25 @@ use super::ids::MidiProcessJobId;
 pub enum MidiProcessEvent {
     ProcessStarted {
         job_id: MidiProcessJobId,
+        input: PathBuf,
         output: PathBuf,
-        total_inputs: usize,
-    },
-    InputProgress {
-        job_id: MidiProcessJobId,
-        processed_inputs: usize,
-        total_inputs: usize,
-        current_input: Option<PathBuf>,
     },
     ProcessFinished {
         job_id: MidiProcessJobId,
+        input: PathBuf,
         output: PathBuf,
-        input_count: usize,
         output_track_count: usize,
         output_ppq: u16,
         total_events: usize,
     },
     ProcessCancelled {
         job_id: MidiProcessJobId,
+        input: PathBuf,
         output: PathBuf,
-        processed_inputs: usize,
-        total_inputs: usize,
     },
     ProcessFailed {
         job_id: MidiProcessJobId,
+        input: PathBuf,
         output: PathBuf,
         message: String,
     },
@@ -46,16 +40,12 @@ pub enum MidiProcessStatus {
     Idle,
     Running {
         job_id: MidiProcessJobId,
+        input: PathBuf,
         output: PathBuf,
-        processed_inputs: usize,
-        total_inputs: usize,
-        current_input: Option<PathBuf>,
     },
     Cancelling {
         job_id: MidiProcessJobId,
+        input: PathBuf,
         output: PathBuf,
-        processed_inputs: usize,
-        total_inputs: usize,
-        current_input: Option<PathBuf>,
     },
 }

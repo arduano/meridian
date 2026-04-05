@@ -8,9 +8,8 @@ use std::{
 use meridian_core::{
     PROTOCOL_VERSION,
     midi::{
-        EventFilterConfig, FileTimeProcessingConfig, MergeProcessingConfig,
-        MidiFileProcessingConfig, MidiFileSelection, MidiMergeMode, StructureProcessingConfig,
-        TrimProcessingConfig, analysis::MidiAnalysisKind,
+        EventFilterConfig, FileTimeProcessingConfig, MidiFileProcessingConfig, MidiMergeMode,
+        StructureProcessingConfig, TrimProcessingConfig, analysis::MidiAnalysisKind,
     },
     protocol::{
         CoreCommand, CoreEvent, JsonRequest, JsonResponse, MidiProcessEvent, MidiProcessStatus,
@@ -18,7 +17,11 @@ use meridian_core::{
     render::{DisplayTimeSpace, SceneLayout},
     spawn_core,
 };
-use midi_toolkit::{events::Event, io::MIDIFile as ToolkitMidiFile};
+use midi_toolkit::{
+    events::{Event, TextEvent, TextEventKind},
+    io::MIDIFile as ToolkitMidiFile,
+    sequence::event::Delta,
+};
 
 #[test]
 fn stateful_core_projects_a_frame() {
@@ -207,11 +210,109 @@ fn midi_analysis_job_runs_without_building_display_cache() {
 }
 
 #[test]
-fn process_midi_files_merges_trims_and_writes_output() {
+fn process_midi_file_trims_and_writes_output() {
     let dir = support::temp_dir("meridian-core-process-test");
+    let midi = dir.join("input.mid");
+    let output = dir.join("out.mid");
+
+    support::write_toolkit_midi(
+        &midi,
+        96,
+        vec![
+            vec![
+                Event::new_delta_program_change_event(0, 0, 5),
+                Event::new_delta_note_on_event(48, 0, 60, 100),
+                Event::new_delta_note_off_event(48, 0, 60),
+            ],
+            vec![
+                Event::new_delta_note_on_event(0, 1, 65, 90),
+                Event::new_delta_note_off_event(72, 1, 65),
+            ],
+        ],
+    );
+
+    let core = spawn_core();
+    let mut config = MidiFileProcessingConfig::default();
+    config.time = FileTimeProcessingConfig {
+        offset_ticks: 0,
+        ppq_override: Some(120),
+        tempo_override: Some(500_000),
+        trim: Some(TrimProcessingConfig {
+            start_tick: 24,
+            end_tick: Some(120),
+            inject_edge_state: true,
+            close_open_notes_at_end: true,
+        }),
+    };
+    config.notes.transpose = 12;
+    config.events = EventFilterConfig::default();
+    config.structure = StructureProcessingConfig {
+        split_channels: false,
+        collapse_tracks: true,
+        remove_empty_tracks: true,
+        drop_orphan_note_offs: true,
+    };
+
+    let events = core
+        .request(CoreCommand::ProcessMidiFile {
+            input: midi.clone(),
+            output: output.clone(),
+            config,
+        })
+        .expect("process midi file");
+
+    assert!(matches!(
+        events.as_slice(),
+        [CoreEvent::MidiFileProcessed {
+            input: processed_input,
+            output: processed_output,
+            output_track_count: 1,
+            output_ppq: 120,
+            ..
+        }] if processed_input == &midi && processed_output == &output
+    ));
+
+    let written = ToolkitMidiFile::open_in_ram(&output, None).expect("open output midi");
+    assert_eq!(written.ppq(), 120);
+    assert_eq!(written.track_count(), 1);
+
+    let mut seen_tempo = 0;
+    let mut seen_program = 0;
+    let mut note_ons = Vec::new();
+    let mut note_offs = Vec::new();
+    let mut tick = 0u64;
+    for event in written.iter_track(0).expect("open written track") {
+        let event = event.expect("parse written track");
+        tick += event.delta;
+        match event.event {
+            Event::Tempo(tempo) => {
+                seen_tempo += 1;
+                assert_eq!(tempo.tempo, 500_000);
+                assert_eq!(tick, 0);
+            }
+            Event::ProgramChange(program) => {
+                seen_program += 1;
+                assert_eq!(program.program, 5);
+                assert_eq!(tick, 0);
+            }
+            Event::NoteOn(note) => note_ons.push((tick, note.channel, note.key)),
+            Event::NoteOff(note) => note_offs.push((tick, note.channel, note.key)),
+            _ => {}
+        }
+    }
+
+    assert_eq!(seen_tempo, 1);
+    assert_eq!(seen_program, 1);
+    assert_eq!(note_ons, vec![(0, 1, 77), (30, 0, 72)]);
+    assert_eq!(note_offs, vec![(60, 1, 77), (90, 0, 72)]);
+}
+
+#[test]
+fn merge_midi_files_trims_and_writes_output() {
+    let dir = support::temp_dir("meridian-core-merge-test");
     let midi_a = dir.join("a.mid");
     let midi_b = dir.join("b.mid");
-    let output = dir.join("out.mid");
+    let output = dir.join("merged.mid");
 
     support::write_toolkit_midi(
         &midi_a,
@@ -253,28 +354,25 @@ fn process_midi_files_merges_trims_and_writes_output() {
         remove_empty_tracks: true,
         drop_orphan_note_offs: true,
     };
-    config.merge = MergeProcessingConfig {
-        mode: MidiMergeMode::FlattenToSingleTrack,
-    };
 
     let events = core
-        .request(CoreCommand::ProcessMidiFiles {
-            selection: MidiFileSelection {
-                inputs: vec![midi_a.clone(), midi_b.clone()],
-            },
+        .request(CoreCommand::MergeMidiFiles {
+            inputs: vec![midi_a.clone(), midi_b.clone()],
             output: output.clone(),
+            mode: MidiMergeMode::FlattenToSingleTrack,
             config,
         })
-        .expect("process midi files");
+        .expect("merge midi files");
 
     assert!(matches!(
         events.as_slice(),
-        [CoreEvent::MidiFilesProcessed {
-            output: processed_output,
+        [CoreEvent::MidiFilesMerged {
+            output: merged_output,
+            input_count: 2,
             output_track_count: 1,
             output_ppq: 120,
             ..
-        }] if processed_output == &output
+        }] if merged_output == &output
     ));
 
     let written = ToolkitMidiFile::open_in_ram(&output, None).expect("open output midi");
@@ -325,7 +423,13 @@ fn inspect_midi_files_reports_basic_merge_metadata() {
                 Event::new_delta_note_on_event(24, 0, 60, 100),
                 Event::new_delta_note_off_event(48, 0, 60),
             ],
-            vec![Event::new_delta_track_name_event(0, "Strings")],
+            vec![Delta::new(
+                0,
+                Event::Text(Box::new(TextEvent {
+                    kind: TextEventKind::TrackName,
+                    bytes: b"Strings".to_vec(),
+                })),
+            )],
         ],
     );
 
@@ -353,7 +457,7 @@ fn inspect_midi_files_reports_basic_merge_metadata() {
 }
 
 #[test]
-fn process_midi_files_job_reports_status_and_finishes() {
+fn process_midi_file_job_reports_status_and_finishes() {
     let dir = support::temp_dir("meridian-core-process-job-test");
     let midi = dir.join("input.mid");
     let output = dir.join("job_out.mid");
@@ -370,10 +474,8 @@ fn process_midi_files_job_reports_status_and_finishes() {
     let core = spawn_core();
     let event_rx = core.subscribe_events();
     let events = core
-        .request(CoreCommand::StartProcessMidiFiles {
-            selection: MidiFileSelection {
-                inputs: vec![midi.clone(), midi],
-            },
+        .request(CoreCommand::StartProcessMidiFile {
+            input: midi.clone(),
             output: output.clone(),
             config: MidiFileProcessingConfig::default(),
         })
@@ -383,13 +485,14 @@ fn process_midi_files_job_reports_status_and_finishes() {
         events.as_slice(),
         [CoreEvent::MidiProcessStatus {
             status: MidiProcessStatus::Running {
-                total_inputs: 2,
+                input: running_input,
+                output: running_output,
                 ..
             }
-        }]
+        }] if running_input == &midi && running_output == &output
     ));
 
-    let mut saw_progress = false;
+    let mut saw_started = false;
     let mut saw_finished = false;
     for _ in 0..10 {
         let event = event_rx
@@ -397,18 +500,22 @@ fn process_midi_files_job_reports_status_and_finishes() {
             .expect("receive job event");
         match event {
             CoreEvent::MidiProcess { event } => match event {
-                MidiProcessEvent::InputProgress {
-                    processed_inputs, ..
-                } => {
-                    saw_progress |= processed_inputs > 0;
-                }
-                MidiProcessEvent::ProcessFinished {
-                    output: finished_output,
-                    input_count,
+                MidiProcessEvent::ProcessStarted {
+                    input: started_input,
+                    output: started_output,
                     ..
                 } => {
+                    assert_eq!(started_input, midi);
+                    assert_eq!(started_output, output);
+                    saw_started = true;
+                }
+                MidiProcessEvent::ProcessFinished {
+                    input: finished_input,
+                    output: finished_output,
+                    ..
+                } => {
+                    assert_eq!(finished_input, midi);
                     assert_eq!(finished_output, output);
-                    assert_eq!(input_count, 2);
                     saw_finished = true;
                     break;
                 }
@@ -418,12 +525,12 @@ fn process_midi_files_job_reports_status_and_finishes() {
         }
     }
 
-    assert!(saw_progress);
+    assert!(saw_started);
     assert!(saw_finished);
     assert!(output.exists());
 
     let status = core
-        .request(CoreCommand::GetProcessMidiStatus)
+        .request(CoreCommand::GetMidiFileProcessStatus)
         .expect("get midi process status");
     assert!(matches!(
         status.as_slice(),

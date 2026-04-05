@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -114,25 +112,12 @@ pub enum ZeroVelocityNoteOnMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(default)]
-pub struct MidiFileSelection {
-    pub inputs: Vec<PathBuf>,
-}
-
-impl Default for MidiFileSelection {
-    fn default() -> Self {
-        Self { inputs: Vec::new() }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-#[serde(default)]
 pub struct MidiFileProcessingConfig {
     pub time: FileTimeProcessingConfig,
     pub notes: NoteProcessingConfig,
     pub pitch: PitchProcessingConfig,
     pub events: EventFilterConfig,
     pub structure: StructureProcessingConfig,
-    pub merge: MergeProcessingConfig,
     pub tools: Vec<MidiModifierTool>,
     pub piano_only: bool,
     pub zero_velocity_note_on: ZeroVelocityNoteOnMode,
@@ -146,12 +131,19 @@ impl Default for MidiFileProcessingConfig {
             pitch: PitchProcessingConfig::default(),
             events: EventFilterConfig::default(),
             structure: StructureProcessingConfig::default(),
-            merge: MergeProcessingConfig::default(),
             tools: Vec::new(),
             piano_only: false,
             zero_velocity_note_on: ZeroVelocityNoteOnMode::NoteOff,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum MidiMergeMode {
+    PreserveTracks,
+    FlattenToSingleTrack,
+    MergeByTrackIndex,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
@@ -231,33 +223,5 @@ impl Default for StructureProcessingConfig {
             remove_empty_tracks: true,
             drop_orphan_note_offs: true,
         }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-#[serde(default)]
-pub struct MergeProcessingConfig {
-    pub mode: MidiMergeMode,
-}
-
-impl Default for MergeProcessingConfig {
-    fn default() -> Self {
-        Self {
-            mode: MidiMergeMode::PreserveTracks,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum MidiMergeMode {
-    PreserveTracks,
-    FlattenToSingleTrack,
-    MergeByTrackIndex,
-}
-
-impl Default for MidiMergeMode {
-    fn default() -> Self {
-        Self::PreserveTracks
     }
 }

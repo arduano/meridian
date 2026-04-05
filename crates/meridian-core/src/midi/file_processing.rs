@@ -22,9 +22,9 @@ use crate::{
 use super::{
     parsed::ParsedMidiFile,
     processing::{
-        EventFilterConfig, MidiFileProcessingConfig, MidiFileSelection, MidiMergeMode,
-        NoteProcessingConfig, PitchProcessingConfig, StructureProcessingConfig,
-        TrimProcessingConfig, ZeroVelocityNoteOnMode,
+        EventFilterConfig, MidiFileProcessingConfig, MidiMergeMode, NoteProcessingConfig,
+        PitchProcessingConfig, StructureProcessingConfig, TrimProcessingConfig,
+        ZeroVelocityNoteOnMode,
     },
     tempo_map::TempoMap,
     tool_pipeline::apply_modifier_tools,
@@ -32,6 +32,15 @@ use super::{
 
 #[derive(Debug, Clone)]
 pub struct MidiFileProcessSummary {
+    pub input: PathBuf,
+    pub output: PathBuf,
+    pub output_track_count: usize,
+    pub output_ppq: u16,
+    pub total_events: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct MidiFilesMergeSummary {
     pub output: PathBuf,
     pub input_count: usize,
     pub output_track_count: usize,
@@ -77,23 +86,80 @@ enum MappedEvent {
     Drop,
 }
 
-pub fn process_midi_files_to_file(
-    selection: &MidiFileSelection,
+pub fn process_midi_file_to_file(
+    input: &Path,
     output: &Path,
     config: &MidiFileProcessingConfig,
 ) -> Result<MidiFileProcessSummary, MeridianError> {
-    process_midi_files_to_file_inner(
-        selection,
-        output,
-        config,
-        None,
-        &AtomicBool::new(false),
-        |_| {},
-    )
+    process_midi_file_to_file_inner(input, output, config, &AtomicBool::new(false))
 }
 
-pub fn process_midi_files_job(
-    selection: &MidiFileSelection,
+pub fn merge_midi_files_to_file(
+    inputs: &[PathBuf],
+    output: &Path,
+    merge_mode: MidiMergeMode,
+    config: &MidiFileProcessingConfig,
+) -> Result<MidiFilesMergeSummary, MeridianError> {
+    if inputs.is_empty() {
+        return Err(MeridianError::InvalidMidi(
+            "midi merge input list is empty".into(),
+        ));
+    }
+
+    let mut parsed_inputs = Vec::with_capacity(inputs.len());
+    let mut output_ppq = config.time.ppq_override.unwrap_or(0);
+    for input in inputs {
+        let parsed = ParsedMidiFile::load_from_file(input.clone())?;
+        output_ppq = output_ppq.max(parsed.midi().ppq());
+        parsed_inputs.push(parsed);
+    }
+    let output_ppq = output_ppq.max(1);
+
+    let mut processed_files = Vec::with_capacity(parsed_inputs.len());
+    for parsed in &parsed_inputs {
+        let tempo_map = build_tempo_map(parsed)?;
+        processed_files.push(process_single_midi(parsed, &tempo_map, output_ppq, config)?);
+    }
+
+    let mut output_tracks = merge_processed_files(processed_files, merge_mode)?;
+    if let Some(tempo) = config.time.tempo_override {
+        inject_constant_tempo(&mut output_tracks, tempo);
+    }
+    apply_modifier_tools(&mut output_tracks, &config.tools)?;
+    if config.structure.remove_empty_tracks {
+        output_tracks.retain(|track| !track.is_empty());
+    }
+
+    let writer = MIDIWriter::new(output.to_string_lossy().as_ref(), output_ppq)
+        .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
+    let mut total_events = 0usize;
+    for track in &output_tracks {
+        let mut track_writer = writer
+            .try_open_next_track()
+            .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
+        total_events += track_writer
+            .write_events_iter(track.iter().cloned())
+            .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
+        track_writer
+            .end()
+            .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
+    }
+    let mut writer = writer;
+    writer
+        .end()
+        .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
+
+    Ok(MidiFilesMergeSummary {
+        output: output.to_path_buf(),
+        input_count: inputs.len(),
+        output_track_count: output_tracks.len(),
+        output_ppq,
+        total_events,
+    })
+}
+
+pub fn process_midi_file_job(
+    input: &Path,
     output: &Path,
     config: &MidiFileProcessingConfig,
     job_id: MidiProcessJobId,
@@ -102,30 +168,22 @@ pub fn process_midi_files_job(
 ) -> Result<(), MeridianError> {
     on_event(MidiProcessEvent::ProcessStarted {
         job_id,
+        input: input.to_path_buf(),
         output: output.to_path_buf(),
-        total_inputs: selection.inputs.len(),
     });
-    match process_midi_files_to_file_inner(
-        selection,
-        output,
-        config,
-        Some(job_id),
-        cancel,
-        &mut on_event,
-    ) {
+    match process_midi_file_to_file_inner(input, output, config, cancel) {
         Ok(summary) => {
             if cancel.load(Ordering::SeqCst) {
                 on_event(MidiProcessEvent::ProcessCancelled {
                     job_id,
+                    input: summary.input,
                     output: output.to_path_buf(),
-                    processed_inputs: summary.input_count,
-                    total_inputs: selection.inputs.len(),
                 });
             } else {
                 on_event(MidiProcessEvent::ProcessFinished {
                     job_id,
+                    input: summary.input,
                     output: summary.output,
-                    input_count: summary.input_count,
                     output_track_count: summary.output_track_count,
                     output_ppq: summary.output_ppq,
                     total_events: summary.total_events,
@@ -137,14 +195,14 @@ pub fn process_midi_files_job(
             if cancel.load(Ordering::SeqCst) {
                 on_event(MidiProcessEvent::ProcessCancelled {
                     job_id,
+                    input: input.to_path_buf(),
                     output: output.to_path_buf(),
-                    processed_inputs: 0,
-                    total_inputs: selection.inputs.len(),
                 });
                 Ok(())
             } else {
                 on_event(MidiProcessEvent::ProcessFailed {
                     job_id,
+                    input: input.to_path_buf(),
                     output: output.to_path_buf(),
                     message: error.to_string(),
                 });
@@ -154,65 +212,30 @@ pub fn process_midi_files_job(
     }
 }
 
-fn process_midi_files_to_file_inner(
-    selection: &MidiFileSelection,
+fn process_midi_file_to_file_inner(
+    input: &Path,
     output: &Path,
     config: &MidiFileProcessingConfig,
-    job_id: Option<MidiProcessJobId>,
     cancel: &AtomicBool,
-    mut on_event: impl FnMut(MidiProcessEvent),
 ) -> Result<MidiFileProcessSummary, MeridianError> {
-    if selection.inputs.is_empty() {
-        return Err(MeridianError::InvalidMidi(
-            "midi file selection is empty".into(),
-        ));
+    if cancel.load(Ordering::SeqCst) {
+        return Ok(MidiFileProcessSummary {
+            input: input.to_path_buf(),
+            output: output.to_path_buf(),
+            output_track_count: 0,
+            output_ppq: config.time.ppq_override.unwrap_or(1).max(1),
+            total_events: 0,
+        });
     }
 
-    let mut parsed_inputs = Vec::with_capacity(selection.inputs.len());
-    let mut output_ppq = config.time.ppq_override.unwrap_or(0);
-    for path in &selection.inputs {
-        if cancel.load(Ordering::SeqCst) {
-            return Ok(MidiFileProcessSummary {
-                output: output.to_path_buf(),
-                input_count: 0,
-                output_track_count: 0,
-                output_ppq: output_ppq.max(1),
-                total_events: 0,
-            });
-        }
-        let parsed = ParsedMidiFile::load_from_file(path.clone())?;
-        output_ppq = output_ppq.max(parsed.midi().ppq());
-        parsed_inputs.push(parsed);
-    }
-    let output_ppq = output_ppq.max(1);
-
-    let mut processed_files = Vec::new();
-    let mut processed_input_count = 0usize;
-    for (index, parsed) in parsed_inputs.iter().enumerate() {
-        if cancel.load(Ordering::SeqCst) {
-            return Ok(MidiFileProcessSummary {
-                output: output.to_path_buf(),
-                input_count: processed_input_count,
-                output_track_count: 0,
-                output_ppq,
-                total_events: 0,
-            });
-        }
-        let tempo_map = build_tempo_map(parsed)?;
-        let file_tracks = process_single_midi(parsed, &tempo_map, output_ppq, config)?;
-        processed_files.push(file_tracks);
-        processed_input_count = index + 1;
-        if let Some(job_id) = job_id {
-            on_event(MidiProcessEvent::InputProgress {
-                job_id,
-                processed_inputs: processed_input_count,
-                total_inputs: selection.inputs.len(),
-                current_input: Some(selection.inputs[index].clone()),
-            });
-        }
-    }
-
-    let mut output_tracks = merge_processed_files(processed_files, config.merge.mode)?;
+    let parsed = ParsedMidiFile::load_from_file(input.to_path_buf())?;
+    let output_ppq = config
+        .time
+        .ppq_override
+        .unwrap_or(parsed.midi().ppq())
+        .max(1);
+    let tempo_map = build_tempo_map(&parsed)?;
+    let mut output_tracks = process_single_midi(&parsed, &tempo_map, output_ppq, config)?;
     if let Some(tempo) = config.time.tempo_override {
         inject_constant_tempo(&mut output_tracks, tempo);
     }
@@ -227,8 +250,8 @@ fn process_midi_files_to_file_inner(
     for track in &output_tracks {
         if cancel.load(Ordering::SeqCst) {
             return Ok(MidiFileProcessSummary {
+                input: input.to_path_buf(),
                 output: output.to_path_buf(),
-                input_count: processed_input_count,
                 output_track_count: output_tracks.len(),
                 output_ppq,
                 total_events,
@@ -250,8 +273,8 @@ fn process_midi_files_to_file_inner(
         .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
 
     Ok(MidiFileProcessSummary {
+        input: input.to_path_buf(),
         output: output.to_path_buf(),
-        input_count: processed_input_count,
         output_track_count: output_tracks.len(),
         output_ppq,
         total_events,
@@ -726,6 +749,33 @@ fn push_bucket_event(
     buckets.entry(bucket).or_default().push(event);
 }
 
+fn update_open_notes_from_event(
+    open_notes: &mut HashMap<(u8, u8), VecDeque<NoteOnEvent>>,
+    event: &Event,
+    drop_orphan_note_offs: bool,
+) {
+    match event {
+        Event::NoteOn(note_on) => {
+            open_notes
+                .entry((note_on.channel, note_on.key))
+                .or_default()
+                .push_back(note_on.clone());
+        }
+        Event::NoteOff(note_off) => {
+            let key = (note_off.channel, note_off.key);
+            if let Some(queue) = open_notes.get_mut(&key) {
+                queue.pop_front();
+                if queue.is_empty() {
+                    open_notes.remove(&key);
+                }
+            } else if !drop_orphan_note_offs {
+                open_notes.entry(key).or_default();
+            }
+        }
+        _ => {}
+    }
+}
+
 fn merge_processed_files(
     files: Vec<Vec<Vec<Delta<u64, Event>>>>,
     mode: MidiMergeMode,
@@ -752,33 +802,6 @@ fn merge_processed_files(
                 .map(merge_track_group)
                 .collect::<Result<Vec<_>, _>>()
         }
-    }
-}
-
-fn update_open_notes_from_event(
-    open_notes: &mut HashMap<(u8, u8), VecDeque<NoteOnEvent>>,
-    event: &Event,
-    drop_orphan_note_offs: bool,
-) {
-    match event {
-        Event::NoteOn(note_on) => {
-            open_notes
-                .entry((note_on.channel, note_on.key))
-                .or_default()
-                .push_back(note_on.clone());
-        }
-        Event::NoteOff(note_off) => {
-            let key = (note_off.channel, note_off.key);
-            if let Some(queue) = open_notes.get_mut(&key) {
-                queue.pop_front();
-                if queue.is_empty() {
-                    open_notes.remove(&key);
-                }
-            } else if !drop_orphan_note_offs {
-                open_notes.entry(key).or_default();
-            }
-        }
-        _ => {}
     }
 }
 

@@ -5,7 +5,7 @@ use ts_rs::TS;
 
 use crate::{
     audio::AudioRenderEvent,
-    midi::{MidiFileProcessingConfig, MidiFileSelection},
+    midi::{MidiFileProcessingConfig, MidiMergeMode},
     protocol::{
         AnalysisJobId, AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, DisplayCacheId,
         MidiAnalysisData, MidiAnalysisJobEvent, MidiAnalysisJobStatus, MidiAnalysisKind,
@@ -108,13 +108,19 @@ pub enum ProtocolCommand {
     GetMidiAnalysisJobStatus {
         job_id: AnalysisJobId,
     },
-    StartProcessMidiFiles {
-        selection: MidiFileSelection,
+    StartProcessMidiFile {
+        input: PathBuf,
         output: PathBuf,
         config: MidiFileProcessingConfig,
     },
-    CancelProcessMidiFiles,
-    GetProcessMidiStatus,
+    MergeMidiFiles {
+        inputs: Vec<PathBuf>,
+        output: PathBuf,
+        mode: MidiMergeMode,
+        config: MidiFileProcessingConfig,
+    },
+    CancelMidiFileProcess,
+    GetMidiFileProcessStatus,
     StartRenderAudio {
         config: ProtocolAudioRenderConfig,
     },
@@ -148,17 +154,28 @@ impl From<ProtocolCommand> for CoreCommand {
             ProtocolCommand::GetMidiAnalysisJobStatus { job_id } => {
                 Self::GetMidiAnalysisJobStatus { job_id }
             }
-            ProtocolCommand::StartProcessMidiFiles {
-                selection,
+            ProtocolCommand::StartProcessMidiFile {
+                input,
                 output,
                 config,
-            } => Self::StartProcessMidiFiles {
-                selection,
+            } => Self::StartProcessMidiFile {
+                input,
                 output,
                 config,
             },
-            ProtocolCommand::CancelProcessMidiFiles => Self::CancelProcessMidiFiles,
-            ProtocolCommand::GetProcessMidiStatus => Self::GetProcessMidiStatus,
+            ProtocolCommand::MergeMidiFiles {
+                inputs,
+                output,
+                mode,
+                config,
+            } => Self::MergeMidiFiles {
+                inputs,
+                output,
+                mode,
+                config,
+            },
+            ProtocolCommand::CancelMidiFileProcess => Self::CancelMidiFileProcess,
+            ProtocolCommand::GetMidiFileProcessStatus => Self::GetMidiFileProcessStatus,
             ProtocolCommand::StartRenderAudio { config } => Self::StartRenderAudio {
                 config: config.into(),
             },
@@ -187,7 +204,14 @@ pub enum ProtocolEvent {
     MidiLoaded {
         path: PathBuf,
     },
-    MidiFilesProcessed {
+    MidiFileProcessed {
+        input: PathBuf,
+        output: PathBuf,
+        output_track_count: usize,
+        output_ppq: u16,
+        total_events: usize,
+    },
+    MidiFilesMerged {
         output: PathBuf,
         input_count: usize,
         output_track_count: usize,
@@ -244,13 +268,26 @@ impl TryFrom<CoreEvent> for ProtocolEvent {
                 Ok(Self::MidiFilesInspected { inspections })
             }
             CoreEvent::MidiLoaded { path, .. } => Ok(Self::MidiLoaded { path }),
-            CoreEvent::MidiFilesProcessed {
+            CoreEvent::MidiFileProcessed {
+                input,
+                output,
+                output_track_count,
+                output_ppq,
+                total_events,
+            } => Ok(Self::MidiFileProcessed {
+                input,
+                output,
+                output_track_count,
+                output_ppq,
+                total_events,
+            }),
+            CoreEvent::MidiFilesMerged {
                 output,
                 input_count,
                 output_track_count,
                 output_ppq,
                 total_events,
-            } => Ok(Self::MidiFilesProcessed {
+            } => Ok(Self::MidiFilesMerged {
                 output,
                 input_count,
                 output_track_count,
@@ -286,7 +323,7 @@ impl Default for ProtocolRequest {
         Self {
             protocol_version: PROTOCOL_VERSION,
             id: None,
-            command: ProtocolCommand::GetProcessMidiStatus,
+            command: ProtocolCommand::GetMidiFileProcessStatus,
         }
     }
 }
