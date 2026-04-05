@@ -1,9 +1,5 @@
 [workspace]
-members = [
-    "crates/meridian-core",
-    "crates/meridian-cli",
-    "crates/meridian-ui",
-]
+members = ["crates/meridian-core", "crates/meridian-cli", "crates/meridian-ui"]
 default-members = ["crates/meridian-cli", "crates/meridian-ui"]
 resolver = "3"
 
@@ -47,7 +43,15 @@ xsynth-core = { version = "0.4.0", features = ["serde"] }
 xsynth-realtime = { version = "0.4.0", features = ["serde"] }
 
 [profile.dev]
+opt-level = 1
+
+[profile.dev.package."meridian-core"]
 opt-level = 2
+codegen-units = 16
+
+[profile.dev.package."meridian-cli"]
+opt-level = 2
+codegen-units = 16
 
 [profile.release]
 opt-level = 1
@@ -59,5 +63,17 @@ opt-level = 3
 codegen-units = 16
 
 [profile.release.package."meridian-cli"]
+opt-level = 3
+codegen-units = 16
+
+[profile.release.package."xsynth-core"]
+opt-level = 3
+codegen-units = 16
+
+[profile.release.package."xsynth-realtime"]
+opt-level = 3
+codegen-units = 16
+
+[profile.release.package."midi-toolkit-rs"]
 opt-level = 3
 codegen-units = 16
