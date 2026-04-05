@@ -144,9 +144,6 @@ impl InRamNoteViewData {
             }
             crate::render::DisplayTimeSpace::Tick => {
                 let start_tick = tempo_map.tick_at_seconds(current_time);
-                // Keep the tick-space window width stable across tempo changes so
-                // faster tempos move the playhead through the scene instead of
-                // rescaling all note geometry each frame.
                 let base_ticks_per_second = tempo_map.ticks_per_second_at_tick(0);
                 let tick_range = range * base_ticks_per_second;
                 MIDIViewRange::new(
@@ -189,8 +186,6 @@ impl InRamNoteViewData {
                     data.notes_to_render_end -= block.notes.len() as u64;
                     new_block_end -= 1;
                 }
-            } else {
-                // No change in view end.
             }
 
             if new_view_range.start > old_view_range.start {
@@ -212,7 +207,6 @@ impl InRamNoteViewData {
                     data.blocks_to_keyboard += 1;
                 }
             } else if new_view_range.start < old_view_range.start {
-                // Rebuild the start-side counters when seeking backward.
                 data.notes_to_render_start = 0;
                 new_block_start = 0;
                 data.notes_to_keyboard = 0;
@@ -237,8 +231,6 @@ impl InRamNoteViewData {
                     data.notes_to_keyboard += block.notes.len() as u64;
                     data.blocks_to_keyboard += 1;
                 }
-            } else {
-                // No change in view start.
             }
 
             data.block_range = new_block_start..new_block_end;

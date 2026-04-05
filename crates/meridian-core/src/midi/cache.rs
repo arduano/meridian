@@ -7,6 +7,7 @@ use super::{
     analysis::{CachedMidiAnalysis, build_cached_midi_analysis_with_progress},
     audio_cache::InRamAudioCache,
     display_cache::DisplayMidiCache,
+    materialized::{MaterializeOptions, build_materialized_midi_with_progress},
     parsed::ParsedMidiFile,
 };
 
@@ -60,7 +61,7 @@ impl MidiCacheStack {
 
     pub fn display_cache_with_progress(
         &self,
-        progress: impl FnMut(f32),
+        progress: impl FnMut(Option<f32>),
     ) -> Result<Arc<DisplayMidiCache>, MeridianError> {
         let mut display = self
             .display
@@ -70,8 +71,17 @@ impl MidiCacheStack {
             return Ok(Arc::clone(cache));
         }
 
-        let (built_display, _) =
-            super::ram::parse::build_in_ram_cache_with_progress(self.parsed(), progress)?;
+        let materialized = build_materialized_midi_with_progress(
+            self.parsed(),
+            MaterializeOptions {
+                display: true,
+                audio: false,
+            },
+            progress,
+        )?;
+        let built_display = materialized
+            .display
+            .expect("display cache must exist when display materialization is requested");
         let display_arc = Arc::new(built_display);
         *display = Some(Arc::clone(&display_arc));
         Ok(display_arc)
@@ -119,7 +129,7 @@ impl MidiCacheStack {
 
     pub fn audio_cache_with_progress(
         &self,
-        progress: impl FnMut(f32),
+        progress: impl FnMut(Option<f32>),
     ) -> Result<Arc<InRamAudioCache>, MeridianError> {
         let mut audio = self
             .audio
@@ -129,11 +139,66 @@ impl MidiCacheStack {
             return Ok(Arc::clone(cache));
         }
 
-        let cache = Arc::new(InRamAudioCache::from_parsed_with_progress(
+        let materialized = build_materialized_midi_with_progress(
             self.parsed(),
+            MaterializeOptions {
+                display: false,
+                audio: true,
+            },
             progress,
-        )?);
+        )?;
+        let cache = Arc::new(
+            materialized
+                .audio
+                .expect("audio cache must exist when audio materialization is requested"),
+        );
         *audio = Some(Arc::clone(&cache));
         Ok(cache)
+    }
+
+    pub fn render_caches_with_progress(
+        &self,
+        progress: impl FnMut(Option<f32>),
+    ) -> Result<(Arc<DisplayMidiCache>, Arc<InRamAudioCache>), MeridianError> {
+        let mut display = self
+            .display
+            .lock()
+            .map_err(|_| MeridianError::InvalidMidi("display cache lock poisoned".into()))?;
+        let mut audio = self
+            .audio
+            .lock()
+            .map_err(|_| MeridianError::InvalidMidi("audio cache lock poisoned".into()))?;
+
+        if let (Some(display_cache), Some(audio_cache)) = (&*display, &*audio) {
+            return Ok((Arc::clone(display_cache), Arc::clone(audio_cache)));
+        }
+
+        let materialized = build_materialized_midi_with_progress(
+            self.parsed(),
+            MaterializeOptions {
+                display: display.is_none(),
+                audio: audio.is_none(),
+            },
+            progress,
+        )?;
+
+        if display.is_none() {
+            *display = Some(Arc::new(
+                materialized
+                    .display
+                    .expect("display cache must exist when requested"),
+            ));
+        }
+        if audio.is_none() {
+            *audio = Some(Arc::new(
+                materialized
+                    .audio
+                    .expect("audio cache must exist when requested"),
+            ));
+        }
+        Ok((
+            Arc::clone(display.as_ref().expect("display cache must be initialized")),
+            Arc::clone(audio.as_ref().expect("audio cache must be initialized")),
+        ))
     }
 }
