@@ -18,5 +18,5 @@ run_deb_smoke() {
     "
 }
 
-run_deb_smoke debian:12-slim "${debian_runtime_deps[*]}"
+run_deb_smoke debian:12-slim "${debian_smoke_runtime_deps[*]}"
 run_deb_smoke ubuntu:24.04 "${ubuntu_runtime_deps[*]}"

@@ -17,7 +17,7 @@ run_debian() {
         tar -C /tmp/meridian-extract -xzf '$artifact_path' &&
         publish/linux/docker/smoke-common.sh &&
         source publish/linux/docker/smoke-common.sh &&
-        run_smoke /tmp/meridian-extract/$TARBALL_PREFIX/usr/bin
+        run_smoke /tmp/meridian-extract/$TARBALL_PREFIX/bin
     "
 }
 
@@ -28,7 +28,7 @@ run_fedora() {
         mkdir -p /tmp/meridian-extract &&
         tar -C /tmp/meridian-extract -xzf '$artifact_path' &&
         source publish/linux/docker/smoke-common.sh &&
-        run_smoke /tmp/meridian-extract/$TARBALL_PREFIX/usr/bin
+        run_smoke /tmp/meridian-extract/$TARBALL_PREFIX/bin
     "
 }
 
@@ -40,7 +40,7 @@ run_opensuse() {
         mkdir -p /tmp/meridian-extract &&
         tar -C /tmp/meridian-extract -xzf '$artifact_path' &&
         source publish/linux/docker/smoke-common.sh &&
-        run_smoke /tmp/meridian-extract/$TARBALL_PREFIX/usr/bin
+        run_smoke /tmp/meridian-extract/$TARBALL_PREFIX/bin
     "
 }
 
@@ -51,11 +51,11 @@ run_arch() {
         mkdir -p /tmp/meridian-extract &&
         tar -C /tmp/meridian-extract -xzf '$artifact_path' &&
         source publish/linux/docker/smoke-common.sh &&
-        run_smoke /tmp/meridian-extract/$TARBALL_PREFIX/usr/bin
+        run_smoke /tmp/meridian-extract/$TARBALL_PREFIX/bin
     "
 }
 
-run_debian debian:12-slim "${debian_runtime_deps[*]}"
+run_debian debian:12-slim "${debian_smoke_runtime_deps[*]}"
 run_debian ubuntu:24.04 "${ubuntu_runtime_deps[*]}"
 run_fedora
 run_opensuse

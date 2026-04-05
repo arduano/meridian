@@ -50,6 +50,11 @@ debian_runtime_deps=(
     libxrender1
 )
 
+debian_smoke_runtime_deps=(
+    libasound2
+    "${debian_runtime_deps[@]:1}"
+)
+
 ubuntu_runtime_deps=(
     libasound2t64
     libdbus-1-3
@@ -85,7 +90,7 @@ fedora_runtime_deps=(
     libXrender
     libxcb
     mesa-libGL
-    wayland
+    libwayland-client
 )
 
 arch_runtime_deps=(
@@ -170,9 +175,13 @@ cargo_profile_args() {
 docker_run() {
     local image="$1"
     local script="$2"
+    local host_uid
+    local host_gid
 
     require_cmd docker
     ensure_artifacts_dir
+    host_uid="$(id -u)"
+    host_gid="$(id -g)"
 
     docker run --rm \
         -v "$ROOT:$ROOT" \
@@ -180,7 +189,14 @@ docker_run() {
         -v "$RUSTUP_HOME_DIR:/root/.rustup" \
         -w "$ROOT" \
         "$image" \
-        bash -lc "$script"
+        bash -lc "
+set -euo pipefail
+cleanup() {
+    chown -R $host_uid:$host_gid '$ARTIFACTS_DIR' || true
+}
+trap cleanup EXIT
+$script
+"
 }
 
 bootstrap_rustup_script() {
