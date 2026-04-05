@@ -83,12 +83,9 @@ function Initialize-StageDir {
     $knownIssues = @(
         "Current Windows prototype notes:",
         "- meridian.exe was built natively on a GitHub Actions Windows runner.",
-        "- meridian-ui.exe is included only if the native Windows build succeeded."
+        "- meridian-ui.exe was built natively on a GitHub Actions Windows runner.",
+        "- The smoke tests verify CLI help, geometry generation, UI help, and a short UI launch."
     )
-
-    if (-not $uiBuilt) {
-        $knownIssues += "- meridian-ui.exe was not produced by this workflow run."
-    }
 
     Set-Content -Path (Join-Path $paths.StageDir "KNOWN_ISSUES.txt") -Value $knownIssues
 

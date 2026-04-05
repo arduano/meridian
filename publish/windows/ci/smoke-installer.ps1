@@ -24,3 +24,10 @@ if (-not (Test-Path $installedCli)) {
 }
 
 & $installedCli --help | Out-Host
+
+$installedUi = Join-Path $installDir "meridian-ui.exe"
+if (-not (Test-Path $installedUi)) {
+    throw "Installer did not produce $installedUi"
+}
+
+& $installedUi --help | Out-Host
