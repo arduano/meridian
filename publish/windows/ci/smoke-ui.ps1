@@ -8,9 +8,10 @@ $paths = Get-PublishPaths -RepoRoot $repoRoot
 $uiPath = Join-Path $paths.StageDir "meridian-ui.exe"
 
 if (-not (Test-Path $uiPath)) {
-    Write-Host "Skipping UI smoke test because meridian-ui.exe was not built."
-    exit 0
+    throw "Missing staged UI binary: $uiPath"
 }
+
+& $uiPath --help | Out-Host
 
 $process = Start-Process -FilePath $uiPath -PassThru
 Start-Sleep -Seconds 5

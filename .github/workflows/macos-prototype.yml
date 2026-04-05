@@ -1,0 +1,85 @@
+name: macOS Prototype
+
+on:
+  push:
+    branches:
+      - "codex/macos-gha-*"
+      - "codex/win-mac-gha-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-prototype-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-package:
+    name: ${{ matrix.artifact_name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            artifact_name: macos-prototype-x86_64
+          - runner: macos-14
+            artifact_name: macos-prototype-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-03-29
+
+      - name: Cache cargo state
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/registry/src
+            ~/.cargo/git/db
+            target
+          key: macos-prototype-${{ matrix.runner }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
+          restore-keys: |
+            macos-prototype-${{ matrix.runner }}-
+
+      - name: Build CLI
+        run: cargo build --release -p meridian-cli
+
+      - name: Build UI
+        run: cargo build --release -p meridian-ui
+
+      - name: Build portable zip
+        run: bash publish/macos/ci/build-portable.sh
+
+      - name: Smoke CLI
+        run: bash publish/macos/ci/smoke-cli.sh
+
+      - name: Smoke UI
+        run: bash publish/macos/ci/smoke-ui.sh
+
+      - name: Verify zip artifact exists
+        run: |
+          shopt -s nullglob
+          files=( publish/macos/artifacts/dist/*.zip )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "missing macOS artifact in publish/macos/artifacts/dist" >&2
+            exit 1
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          if-no-files-found: ignore
+          path: |
+            publish/macos/artifacts/dist/*.zip

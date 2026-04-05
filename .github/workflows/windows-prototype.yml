@@ -3,12 +3,21 @@ name: Windows Prototype
 on:
   push:
     branches:
+      - "codex/win-mac-gha-*"
       - "codex/windows-gha-prototype-*"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-prototype-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows-package:
-    runs-on: windows-latest
+    runs-on: windows-2022
+    timeout-minutes: 90
     defaults:
       run:
         shell: pwsh
@@ -19,18 +28,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: meridian
-
-      - name: Checkout midi-toolkit-rs
-        uses: actions/checkout@v4
-        with:
-          repository: arduano/midi-toolkit-rs
-          path: midi-toolkit-rs
-
-      - name: Checkout xsynth
-        uses: actions/checkout@v4
-        with:
-          repository: arduano/xsynth
-          path: xsynth
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -55,10 +52,9 @@ jobs:
         run: choco install nsis -y --no-progress
 
       - name: Build CLI
-        run: cargo build --release -p meridian-stdio
+        run: cargo build --release -p meridian-cli
 
       - name: Build UI
-        continue-on-error: true
         run: cargo build --release -p meridian-ui
 
       - name: Build portable zip
@@ -76,10 +72,19 @@ jobs:
       - name: Smoke installed CLI
         run: .\publish\windows\ci\smoke-installer.ps1
 
+      - name: Verify artifacts exist
+        run: |
+          $artifacts = Get-ChildItem -Path publish\windows\artifacts\dist\*.zip, publish\windows\artifacts\dist\*.exe -File
+          if ($artifacts.Count -eq 0) {
+            throw "Missing Windows artifacts in publish\\windows\\artifacts\\dist"
+          }
+
       - name: Upload artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: windows-prototype
+          if-no-files-found: ignore
           path: |
             meridian/publish/windows/artifacts/dist/*.zip
             meridian/publish/windows/artifacts/dist/*.exe
