@@ -88,6 +88,93 @@ jobs:
           path: |
             ${{ matrix.artifact_glob }}
 
+      - name: Download built artifacts for release
+        if: matrix.target == 'tarball'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          expected_artifacts=(
+            release-linux-tarball
+            release-linux-deb
+            release-linux-rpm
+            release-linux-appimage
+            release-windows
+            release-macos-x86_64
+            release-macos-arm64
+          )
+
+          deadline=$((SECONDS + 900))
+          while true; do
+            mapfile -t available_artifacts < <(
+              gh api "repos/${REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100" \
+                --jq '.artifacts[].name'
+            )
+
+            missing_artifacts=()
+            for artifact in "${expected_artifacts[@]}"; do
+              found=0
+              for available in "${available_artifacts[@]}"; do
+                if [[ "$available" == "$artifact" ]]; then
+                  found=1
+                  break
+                fi
+              done
+              if [ "$found" -eq 0 ]; then
+                missing_artifacts+=("$artifact")
+              fi
+            done
+
+            if [ "${#missing_artifacts[@]}" -eq 0 ]; then
+              break
+            fi
+
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              printf 'Timed out waiting for release artifacts: %s\n' "${missing_artifacts[*]}" >&2
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          rm -rf release-artifacts
+          mkdir -p release-artifacts
+          gh run download "$RUN_ID" --dir release-artifacts
+
+      - name: Create or update draft release
+        if: matrix.target == 'tarball'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t assets < <(find release-artifacts -type f | sort)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No release assets were downloaded" >&2
+            exit 1
+          fi
+
+          prerelease_flag=()
+          if [[ "$TAG_NAME" == *-* ]]; then
+            prerelease_flag+=(--prerelease)
+          fi
+
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release edit "$TAG_NAME" --draft --title "$TAG_NAME"
+            gh release upload "$TAG_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$TAG_NAME" "${assets[@]}" \
+              --draft \
+              --verify-tag \
+              --title "$TAG_NAME" \
+              --generate-notes \
+              "${prerelease_flag[@]}"
+          fi
+
   windows:
     name: windows
     runs-on: windows-2022
@@ -232,51 +319,3 @@ jobs:
           if-no-files-found: error
           path: |
             publish/macos/artifacts/dist/*.zip
-
-  draft-release:
-    name: draft-release
-    runs-on: ubuntu-latest
-    needs:
-      - linux
-      - windows
-      - macos
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download built artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-artifacts
-
-      - name: Create or update draft release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG_NAME: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-
-          mapfile -t assets < <(find release-artifacts -type f | sort)
-          if [ "${#assets[@]}" -eq 0 ]; then
-            echo "No release assets were downloaded" >&2
-            exit 1
-          fi
-
-          prerelease_flag=()
-          if [[ "$TAG_NAME" == *-* ]]; then
-            prerelease_flag+=(--prerelease)
-          fi
-
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release edit "$TAG_NAME" --draft --title "$TAG_NAME"
-            gh release upload "$TAG_NAME" "${assets[@]}" --clobber
-          else
-            gh release create "$TAG_NAME" "${assets[@]}" \
-              --draft \
-              --verify-tag \
-              --title "$TAG_NAME" \
-              --generate-notes \
-              "${prerelease_flag[@]}"
-          fi
