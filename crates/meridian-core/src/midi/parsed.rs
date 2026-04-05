@@ -27,7 +27,7 @@ pub struct ParsedMidiFile {
     midi: ToolkitMidiFile,
     signature: MIDIFileUniqueSignature,
     header: ParsedMidiHeader,
-    total_event_count: u64,
+    total_event_count: OnceLock<u64>,
     gzip_size: OnceLock<u64>,
 }
 
@@ -51,15 +51,11 @@ impl ParsedMidiFile {
             .map_err(|e| MeridianError::MidiLoad(format!("{e:?}")))?;
         progress(1.0);
 
-        let stats = get_channels_array_statistics(midi.iter_all_tracks().collect())
-            .map_err(|e| MeridianError::MidiLoad(format!("{e:?}")))?;
-        let total_event_count = stats.total_event_count();
-
         Ok(Self {
             midi,
             signature,
             header,
-            total_event_count,
+            total_event_count: OnceLock::new(),
             gzip_size: OnceLock::new(),
         })
     }
@@ -76,8 +72,20 @@ impl ParsedMidiFile {
         self.header
     }
 
-    pub fn total_event_count(&self) -> u64 {
-        self.total_event_count
+    pub fn cached_total_event_count(&self) -> Option<u64> {
+        self.total_event_count.get().copied()
+    }
+
+    pub fn total_event_count(&self) -> Result<u64, MeridianError> {
+        if let Some(total) = self.total_event_count.get() {
+            return Ok(*total);
+        }
+
+        let stats = get_channels_array_statistics(self.midi.iter_all_tracks().collect())
+            .map_err(|e| MeridianError::MidiLoad(format!("{e:?}")))?;
+        let total = stats.total_event_count();
+        let _ = self.total_event_count.set(total);
+        Ok(total)
     }
 
     pub fn cached_gzip_size(&self) -> std::io::Result<u64> {

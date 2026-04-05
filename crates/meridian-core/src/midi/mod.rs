@@ -5,6 +5,7 @@ pub mod cache;
 pub mod colors;
 pub mod display_cache;
 pub mod file_processing;
+mod materialized;
 pub mod parsed;
 pub mod processed;
 pub mod processing;

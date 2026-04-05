@@ -528,7 +528,7 @@ pub fn build_cached_midi_analysis_with_progress(
     let mut micros_per_quarter = 500_000_u32;
     let mut total_notes = 0_u64;
     let mut analysis = MidiAnalysisAccumulator::new(track_count);
-    let total_events = parsed.total_event_count().max(1);
+    let total_events = parsed.total_event_count()?.max(1);
     let progress_stride = (total_events / 200).max(1);
     let mut processed_events = 0_u64;
     progress(0.0);
@@ -637,7 +637,7 @@ pub fn build_buckets_from_parsed_with_progress(
     }
 
     let merged = pipe!(midi.iter_all_track_events_merged() |> unwrap_items());
-    let total_events = parsed.total_event_count().max(1);
+    let total_events = parsed.total_event_count()?.max(1);
     let progress_stride = (total_events / 200).max(1);
     let bucket_width = midi_length / bucket_count as f64;
     let mut note_starts = vec![0_u64; bucket_count];
@@ -875,7 +875,7 @@ pub fn analyze_file_metrics(
         declared_track_count: header.declared_track_count,
         actual_track_count,
         ticks_per_quarter: ((header.time_division & 0x8000) == 0).then_some(header.time_division),
-        total_event_count: parsed.total_event_count(),
+        total_event_count: parsed.total_event_count().unwrap_or(0),
     }
 }
 

@@ -4964,11 +4964,15 @@ fn install_core_event_listener(
                             return;
                         }
                         if app.get_render_load_state() == MidiLoadState::Loading {
-                            app.set_render_loading_progress(progress);
+                            if let Some(progress) = progress {
+                                app.set_render_loading_progress(progress);
+                            }
                             app.set_render_loading_status(status_text.clone());
                         }
                         if app.get_audio_load_state() == MidiLoadState::Loading {
-                            app.set_audio_loading_progress(progress);
+                            if let Some(progress) = progress {
+                                app.set_audio_loading_progress(progress);
+                            }
                             app.set_audio_loading_status(status_text);
                         }
                         app.window().request_redraw();

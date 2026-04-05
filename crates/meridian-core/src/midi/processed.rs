@@ -14,7 +14,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     error::MeridianError,
     midi::{
-        MIDIColor, MIDIColorPair, MIDIFileUniqueSignature, TrackAndChannel,
+        MIDIFileUniqueSignature, TrackAndChannel,
         analysis::{CachedMidiAnalysis, MidiAnalysisAccumulator},
         audio_cache::{CompressedAudio, InRamAudioCache},
         display_cache::DisplayMidiCache,

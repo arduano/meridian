@@ -121,7 +121,7 @@ pub enum CoreEvent {
     },
     MidiLoadProgress {
         path: PathBuf,
-        progress: f32,
+        progress: Option<f32>,
         status: String,
     },
     MidiLoaded {

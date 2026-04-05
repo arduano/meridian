@@ -1,14 +1,10 @@
-use midi_toolkit::{
-    events::{Event, MIDIEventEnum},
-    pipe,
-    sequence::{
-        TimeCaster,
-        event::{Delta, EventBatch, Track, cancel_tempo_events, scale_event_time},
-        unwrap_items,
+use crate::{
+    error::MeridianError,
+    midi::{
+        materialized::{MaterializeOptions, build_materialized_midi_with_progress},
+        parsed::ParsedMidiFile,
     },
 };
-
-use crate::{error::MeridianError, midi::parsed::ParsedMidiFile};
 
 #[derive(Clone, Debug)]
 pub struct CompressedAudio {
@@ -40,93 +36,19 @@ impl InRamAudioCache {
 
     pub fn from_parsed_with_progress(
         parsed: &ParsedMidiFile,
-        mut progress: impl FnMut(f32),
+        progress: impl FnMut(Option<f32>),
     ) -> Result<Self, MeridianError> {
-        let midi = parsed.midi();
-        let ppq = midi.ppq();
-        if (ppq & 0x8000) != 0 {
-            return Err(MeridianError::InvalidMidi(
-                "timecode MIDI files are not supported yet".into(),
-            ));
-        }
-
-        let merged = pipe!(
-            midi.iter_all_track_events_merged_batches()
-            |>TimeCaster::<f64>::cast_event_delta()
-            |>cancel_tempo_events(250000)
-            |>scale_event_time(1.0 / ppq as f64)
-            |>unwrap_items()
-        );
-
-        type Ev = Delta<f64, Track<EventBatch<Event>>>;
-        let mut time = 0.0;
-        let mut out = Vec::new();
-        let total_events = parsed.total_event_count().max(1);
-        let mut processed_events = 0_u64;
-        let progress_stride = (total_events / 200).max(1);
-        progress(0.0);
-
-        for block in merged {
-            let block: Ev = block;
-            time += block.delta;
-            let mut data = Vec::with_capacity(block.count() * 3);
-            let mut control = Vec::new();
-            let block_event_count = block.count() as u64;
-            processed_events += block.count() as u64;
-
-            for event in block.iter_events() {
-                match event.as_event() {
-                    Event::NoteOn(e) => {
-                        data.extend_from_slice(&[EV_ON | e.channel, e.key, e.velocity])
-                    }
-                    Event::NoteOff(e) => data.extend_from_slice(&[EV_OFF | e.channel, e.key]),
-                    Event::PolyphonicKeyPressure(e) => {
-                        data.extend_from_slice(&[EV_POLYPHONIC | e.channel, e.key, e.velocity])
-                    }
-                    Event::ControlChange(e) => {
-                        let bytes = [EV_CONTROL | e.channel, e.controller, e.value];
-                        data.extend_from_slice(&bytes);
-                        control.extend_from_slice(&bytes);
-                    }
-                    Event::ProgramChange(e) => {
-                        let bytes = [EV_PROGRAM | e.channel, e.program];
-                        data.extend_from_slice(&bytes);
-                        control.extend_from_slice(&bytes);
-                    }
-                    Event::ChannelPressure(e) => {
-                        let bytes = [EV_CHAN_PRESSURE | e.channel, e.pressure];
-                        data.extend_from_slice(&bytes);
-                        control.extend_from_slice(&bytes);
-                    }
-                    Event::PitchWheelChange(e) => {
-                        let value = e.pitch + 8192;
-                        let bytes = [
-                            EV_PITCH_BEND | e.channel,
-                            (value & 0x7F) as u8,
-                            ((value >> 7) & 0x7F) as u8,
-                        ];
-                        data.extend_from_slice(&bytes);
-                        control.extend_from_slice(&bytes);
-                    }
-                    _ => {}
-                }
-            }
-
-            out.push(CompressedAudio {
-                time,
-                data,
-                control_only_data: (!control.is_empty()).then_some(control),
-            });
-
-            if processed_events == block_event_count
-                || processed_events >= total_events
-                || processed_events % progress_stride <= block_event_count
-            {
-                progress((processed_events as f32 / total_events as f32).clamp(0.0, 1.0));
-            }
-        }
-        progress(1.0);
-        Ok(Self::new(out))
+        let materialized = build_materialized_midi_with_progress(
+            parsed,
+            MaterializeOptions {
+                display: false,
+                audio: true,
+            },
+            progress,
+        )?;
+        Ok(materialized
+            .audio
+            .expect("audio cache must exist when audio materialization is requested"))
     }
 
     pub fn events(&self) -> &[CompressedAudio] {
