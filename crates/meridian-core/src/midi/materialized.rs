@@ -2,11 +2,8 @@ use std::{collections::VecDeque, sync::Arc};
 
 use midi_toolkit::{
     events::{Event, MIDIEventEnum},
-    pipe,
-    sequence::{
-        event::{Delta, EventBatch, Track},
-        unwrap_items,
-    },
+    prelude::*,
+    sequence::event::{Delta, EventBatch, Track},
 };
 use rustc_hash::FxHashMap;
 
@@ -119,7 +116,7 @@ pub(crate) fn build_materialized_midi_with_progress(
         ));
     }
 
-    let merged = pipe!(midi.iter_all_track_events_merged_batches() |> unwrap_items());
+    let merged = midi.iter_all_track_events_merged_batches().unwrap_items();
 
     let mut keys = options.display.then(|| {
         (0..MIDI_KEY_COUNT)
