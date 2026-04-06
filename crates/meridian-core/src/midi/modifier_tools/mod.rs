@@ -12,12 +12,15 @@ pub mod extract_track;
 pub mod humanize;
 pub mod key_map;
 pub mod meta_text;
+pub mod note_length;
 pub mod pitch_bend;
 pub mod program;
 pub mod quantize;
+pub mod shared_metadata_track;
 pub mod sysex;
 pub mod tempo_map;
 pub mod time_warp;
+pub mod track_route;
 pub mod velocity_map;
 
 pub use change_ppq::ChangePpqTool;
@@ -29,12 +32,15 @@ pub use extract_track::ExtractTrackTool;
 pub use humanize::{HumanizeCollisionMode, HumanizeTool};
 pub use key_map::{KeyMapEntry, KeyMapTool, KeyRange};
 pub use meta_text::{MetaTextTool, TextKind};
+pub use note_length::NoteLengthTool;
 pub use pitch_bend::PitchBendTool;
 pub use program::{ChannelProgram, ProgramTool};
 pub use quantize::{QuantizeMode, QuantizeTool};
+pub use shared_metadata_track::SharedMetadataTrackTool;
 pub use sysex::SysexTool;
 pub use tempo_map::{TempoMapTool, TempoPoint};
 pub use time_warp::{TimeWarpPoint, TimeWarpTool};
+pub use track_route::{TrackMapEntry, TrackRouteTool};
 pub use velocity_map::{VelocityMapTool, VelocityPoint};
 
 pub fn apply_modifier_tool_to_file(
@@ -62,6 +68,9 @@ pub fn apply_modifier_tool_to_file(
         MidiModifierTool::MetaText(tool) => {
             meta_text::apply_meta_text_tool_to_file(input, output, tool)
         }
+        MidiModifierTool::NoteLength(tool) => {
+            note_length::apply_note_length_tool_to_file(input, output, tool)
+        }
         MidiModifierTool::PitchBend(tool) => {
             pitch_bend::apply_pitch_bend_tool_to_file(input, output, tool)
         }
@@ -69,12 +78,18 @@ pub fn apply_modifier_tool_to_file(
         MidiModifierTool::Quantize(tool) => {
             quantize::apply_quantize_tool_to_file(input, output, tool)
         }
+        MidiModifierTool::SharedMetadataTrack(tool) => {
+            shared_metadata_track::apply_shared_metadata_track_tool_to_file(input, output, tool)
+        }
         MidiModifierTool::Sysex(tool) => sysex::apply_sysex_tool_to_file(input, output, tool),
         MidiModifierTool::TempoMap(tool) => {
             tempo_map::apply_tempo_map_tool_to_file(input, output, tool)
         }
         MidiModifierTool::TimeWarp(tool) => {
             time_warp::apply_time_warp_tool_to_file(input, output, tool)
+        }
+        MidiModifierTool::TrackRoute(tool) => {
+            track_route::apply_track_route_tool_to_file(input, output, tool)
         }
         MidiModifierTool::VelocityMap(tool) => {
             velocity_map::apply_velocity_map_tool_to_file(input, output, tool)

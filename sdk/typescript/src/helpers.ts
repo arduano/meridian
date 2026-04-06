@@ -21,6 +21,7 @@ import type {
   ProgramTool,
   QuantizeTool,
   RangeSelectTool,
+  SharedMetadataTrackTool,
   StructureProcessingConfig,
   SysexTool,
   TempoMapDestination,
@@ -188,9 +189,6 @@ export const midiTools = {
     return withDefaults({ tool: "channel_remap", mappings: [], ...config });
   },
   trackRoute: {
-    preserve(): TrackRouteTool {
-      return { tool: "track_route", mode: "preserve" };
-    },
     collapseAll(): TrackRouteTool {
       return { tool: "track_route", mode: "collapse_all" };
     },
@@ -328,6 +326,24 @@ export const midiTools = {
       tool: "sysex",
       strip_all: false,
       prepend: [],
+      ...config,
+    });
+  },
+  sharedMetadataTrack(
+    config: Partial<SharedMetadataTrackTool> = {},
+  ): SharedMetadataTrackTool {
+    return withDefaults({
+      tool: "shared_metadata_track",
+      destination: { mode: "create_new" },
+      move_tempo_events: true,
+      move_time_signatures: true,
+      move_key_signatures: true,
+      move_text_events: true,
+      move_unknown_meta_events: false,
+      move_channel_prefix_events: false,
+      move_midi_port_events: false,
+      move_control_change_events: false,
+      move_program_change_events: false,
       ...config,
     });
   },

@@ -9,12 +9,15 @@ pub use super::modifier_tools::{
     humanize::{HumanizeCollisionMode, HumanizeTool},
     key_map::{KeyMapEntry, KeyMapTool, KeyRange},
     meta_text::{MetaTextTool, TextKind},
+    note_length::NoteLengthTool,
     pitch_bend::PitchBendTool,
     program::{ChannelProgram, ProgramTool},
     quantize::{QuantizeMode, QuantizeTool},
+    shared_metadata_track::SharedMetadataTrackTool,
     sysex::SysexTool,
     tempo_map::{TempoMapTool, TempoPoint},
     time_warp::{TimeWarpPoint, TimeWarpTool},
+    track_route::{TrackMapEntry, TrackRouteTool},
     velocity_map::{VelocityMapTool, VelocityPoint},
 };
 
@@ -48,30 +51,6 @@ pub enum SelectableEventKind {
     Text,
     Sysex,
     MetaOther,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-#[serde(tag = "mode", rename_all = "snake_case")]
-pub enum TrackRouteTool {
-    Preserve,
-    CollapseAll,
-    SplitByChannel,
-    Map { mappings: Vec<TrackMapEntry> },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-pub struct TrackMapEntry {
-    pub from: usize,
-    pub to: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
-pub struct NoteLengthTool {
-    pub min_ticks: Option<u64>,
-    pub max_ticks: Option<u64>,
-    pub scale: Option<f32>,
-    pub fixed_ticks: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
@@ -112,16 +91,6 @@ pub struct MergeBalanceTool {
     pub deconflict_channels: bool,
     pub strip_duplicate_start_state: bool,
     pub prefer_first_tempo_map: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
-pub struct SharedMetadataTrackTool {
-    pub target_track_index: usize,
-    pub move_tempo_events: bool,
-    pub move_time_signatures: bool,
-    pub move_key_signatures: bool,
-    pub move_text_events: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]

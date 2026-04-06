@@ -1157,8 +1157,6 @@ export class MeridianClient {
     ): MidiProcessTask =>
       this.#withTool(options, (tool) => midiTools.channelRemap(tool)),
     trackRoute: {
-      preserve: (options: MidiModificationOptions): MidiProcessTask =>
-        this.midi({ ...options, tool: midiTools.trackRoute.preserve() }),
       collapseAll: (options: MidiModificationOptions): MidiProcessTask =>
         this.midi({ ...options, tool: midiTools.trackRoute.collapseAll() }),
       splitByChannel: (options: MidiModificationOptions): MidiProcessTask =>

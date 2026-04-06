@@ -59,6 +59,7 @@ export type { ProtocolResponse as JsonResponse } from "../generated/ProtocolResp
 export type { RendererKind } from "../generated/RendererKind.ts";
 export type { SceneConfig } from "../generated/SceneConfig.ts";
 export type { SelectableEventKind } from "../generated/SelectableEventKind.ts";
+export type { SharedMetadataTrackDestination } from "../generated/SharedMetadataTrackDestination.ts";
 export type { SharedMetadataTrackTool } from "../generated/SharedMetadataTrackTool.ts";
 export type { StructureProcessingConfig } from "../generated/StructureProcessingConfig.ts";
 export type { TempoMapDestination } from "../generated/TempoMapDestination.ts";
