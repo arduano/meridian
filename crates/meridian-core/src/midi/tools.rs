@@ -236,9 +236,7 @@ pub struct DedupeTool {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct MetaTextTool {
-    pub strip_all_text: bool,
     pub keep_kinds: Vec<TextKind>,
-    pub prefix_track_names: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]

@@ -4,8 +4,10 @@ use crate::error::MeridianError;
 
 use super::tools::MidiModifierTool;
 
+mod channel_remap;
 mod common;
 mod key_map;
+mod meta_text;
 
 pub fn apply_modifier_tool_to_file(
     input: &Path,
@@ -13,7 +15,13 @@ pub fn apply_modifier_tool_to_file(
     tool: &MidiModifierTool,
 ) -> Result<(), MeridianError> {
     match tool {
+        MidiModifierTool::ChannelRemap(tool) => {
+            channel_remap::apply_channel_remap_tool_to_file(input, output, tool)
+        }
         MidiModifierTool::KeyMap(tool) => key_map::apply_key_map_tool_to_file(input, output, tool),
+        MidiModifierTool::MetaText(tool) => {
+            meta_text::apply_meta_text_tool_to_file(input, output, tool)
+        }
         other => Err(MeridianError::Unsupported(format!(
             "modifier tool not implemented in new modifier pipeline: {}",
             tool_name(other)
@@ -49,12 +57,15 @@ fn tool_name(tool: &MidiModifierTool) -> &'static str {
 #[cfg(test)]
 mod tests {
     use midi_toolkit::events::MIDIEvent;
+    use midi_toolkit::events::{Event, TextEvent, TextEventKind};
+    use midi_toolkit::sequence::event::Delta;
 
     use super::apply_modifier_tool_to_file;
     use crate::{
         error::MeridianError,
         midi::{
-            KeyMapEntry, KeyMapTool, KeyRange, MidiModifierTool, RangeSelectTool,
+            ChannelMapEntry, ChannelRemapTool, KeyMapEntry, KeyMapTool, KeyRange, MetaTextTool,
+            MidiModifierTool, RangeSelectTool, TextKind,
             parsed::ParsedMidiFile,
             test_support::{TestDir, note_off, note_on, read_track_events, write_toolkit_midi},
         },
@@ -118,5 +129,124 @@ mod tests {
 
         assert!(matches!(error, MeridianError::Unsupported(_)));
         assert!(!output.exists());
+    }
+
+    #[test]
+    fn channel_remap_pass_updates_channel_events() {
+        let dir = TestDir::new("modifier-channel-remap");
+        let input = dir.path("input.mid");
+        let output = dir.path("output.mid");
+
+        write_toolkit_midi(
+            &input,
+            96,
+            &[vec![
+                Event::new_delta_note_on_event(0, 1, 60, 100),
+                Event::new_delta_control_change_event(0, 1, 64, 127),
+                Event::new_delta_program_change_event(0, 1, 10),
+                note_off(24, 1, 60),
+            ]],
+        );
+
+        apply_modifier_tool_to_file(
+            &input,
+            &output,
+            &MidiModifierTool::ChannelRemap(ChannelRemapTool {
+                mappings: vec![ChannelMapEntry { from: 1, to: 9 }],
+            }),
+        )
+        .expect("channel remap should succeed");
+
+        let parsed = ParsedMidiFile::load_from_file(output).expect("parse output midi");
+        let channels = read_track_events(&parsed, 0)
+            .into_iter()
+            .filter_map(|event| event.event.channel())
+            .collect::<Vec<_>>();
+
+        assert_eq!(channels, vec![9, 9, 9, 9]);
+    }
+
+    #[test]
+    fn channel_remap_rejects_invalid_channel_maps() {
+        let dir = TestDir::new("modifier-channel-remap-invalid");
+        let input = dir.path("input.mid");
+        let output = dir.path("output.mid");
+
+        write_toolkit_midi(&input, 96, &[vec![note_on(0, 0, 60, 100)]]);
+
+        let error = apply_modifier_tool_to_file(
+            &input,
+            &output,
+            &MidiModifierTool::ChannelRemap(ChannelRemapTool {
+                mappings: vec![
+                    ChannelMapEntry { from: 2, to: 9 },
+                    ChannelMapEntry { from: 2, to: 10 },
+                ],
+            }),
+        )
+        .expect_err("duplicate channel mappings should fail");
+
+        assert!(matches!(error, MeridianError::Validation(_)));
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn meta_text_pass_filters_track_text_events() {
+        let dir = TestDir::new("modifier-meta-text");
+        let input = dir.path("input.mid");
+        let output = dir.path("output.mid");
+
+        write_toolkit_midi(
+            &input,
+            96,
+            &[vec![
+                Delta::new(
+                    0,
+                    Event::Text(Box::new(TextEvent {
+                        kind: TextEventKind::TrackName,
+                        bytes: b"Piano".to_vec(),
+                    })),
+                ),
+                Delta::new(
+                    12,
+                    Event::Text(Box::new(TextEvent {
+                        kind: TextEventKind::Marker,
+                        bytes: b"Verse".to_vec(),
+                    })),
+                ),
+                note_on(24, 0, 60, 100),
+                note_off(24, 0, 60),
+            ]],
+        );
+
+        apply_modifier_tool_to_file(
+            &input,
+            &output,
+            &MidiModifierTool::MetaText(MetaTextTool {
+                keep_kinds: vec![TextKind::TrackName],
+            }),
+        )
+        .expect("meta text should succeed");
+
+        let parsed = ParsedMidiFile::load_from_file(output).expect("parse output midi");
+        let events = read_track_events(&parsed, 0);
+
+        assert!(matches!(
+            events.as_slice(),
+            [
+                Delta {
+                    delta: 0,
+                    event: Event::Text(text),
+                },
+                Delta {
+                    delta: 36,
+                    event: Event::NoteOn(_),
+                },
+                Delta {
+                    delta: 24,
+                    event: Event::NoteOff(_),
+                }
+            ] if text.kind == TextEventKind::TrackName && text.bytes == b"Piano"
+        ));
     }
 }
