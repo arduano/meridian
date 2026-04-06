@@ -6,6 +6,8 @@ use midi_toolkit::{
     prelude::EventSequenceExt,
     sequence::event::Delta,
 };
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::{
     error::MeridianError,
@@ -14,9 +16,20 @@ use crate::{
             map_toolkit_event_result, midi_write_error, write_try_track_events,
         },
         parsed::ParsedMidiFile,
-        tools::ChannelRemapTool,
     },
 };
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
+#[serde(default)]
+pub struct ChannelRemapTool {
+    pub mappings: Vec<ChannelMapEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+pub struct ChannelMapEntry {
+    pub from: u8,
+    pub to: u8,
+}
 
 pub(super) fn apply_channel_remap_tool_to_file(
     input: &Path,
@@ -91,4 +104,78 @@ fn build_channel_lookup(tool: &ChannelRemapTool) -> Result<[u8; 16], MeridianErr
     }
 
     Ok(lookup)
+}
+
+#[cfg(test)]
+mod tests {
+    use midi_toolkit::events::{Event, MIDIEvent};
+
+    use super::{ChannelMapEntry, ChannelRemapTool};
+    use crate::{
+        error::MeridianError,
+        midi::{
+            MidiModifierTool,
+            parsed::ParsedMidiFile,
+            test_support::{TestDir, note_off, note_on, read_track_events, write_toolkit_midi},
+        },
+    };
+
+    #[test]
+    fn channel_remap_pass_updates_channel_events() {
+        let dir = TestDir::new("modifier-channel-remap");
+        let input = dir.path("input.mid");
+        let output = dir.path("output.mid");
+
+        write_toolkit_midi(
+            &input,
+            96,
+            &[vec![
+                Event::new_delta_note_on_event(0, 1, 60, 100),
+                Event::new_delta_control_change_event(0, 1, 64, 127),
+                Event::new_delta_program_change_event(0, 1, 10),
+                note_off(24, 1, 60),
+            ]],
+        );
+
+        super::super::apply_modifier_tool_to_file(
+            &input,
+            &output,
+            &MidiModifierTool::ChannelRemap(ChannelRemapTool {
+                mappings: vec![ChannelMapEntry { from: 1, to: 9 }],
+            }),
+        )
+        .expect("channel remap should succeed");
+
+        let parsed = ParsedMidiFile::load_from_file(output).expect("parse output midi");
+        let channels = read_track_events(&parsed, 0)
+            .into_iter()
+            .filter_map(|event| event.event.channel())
+            .collect::<Vec<_>>();
+
+        assert_eq!(channels, vec![9, 9, 9, 9]);
+    }
+
+    #[test]
+    fn channel_remap_rejects_invalid_channel_maps() {
+        let dir = TestDir::new("modifier-channel-remap-invalid");
+        let input = dir.path("input.mid");
+        let output = dir.path("output.mid");
+
+        write_toolkit_midi(&input, 96, &[vec![note_on(0, 0, 60, 100)]]);
+
+        let error = super::super::apply_modifier_tool_to_file(
+            &input,
+            &output,
+            &MidiModifierTool::ChannelRemap(ChannelRemapTool {
+                mappings: vec![
+                    ChannelMapEntry { from: 2, to: 9 },
+                    ChannelMapEntry { from: 2, to: 10 },
+                ],
+            }),
+        )
+        .expect_err("duplicate channel mappings should fail");
+
+        assert!(matches!(error, MeridianError::Validation(_)));
+        assert!(!output.exists());
+    }
 }

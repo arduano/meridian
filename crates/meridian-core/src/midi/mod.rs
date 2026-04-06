@@ -30,6 +30,9 @@ pub use analysis::MidiFileInspection;
 pub use cache::MidiCacheStack;
 pub use colors::{MIDIColor, MIDIColorPair};
 pub use file_merge::{MidiFilesMergeConfig, MidiFilesMergeMode};
+pub use modifier_tools::{
+    ChannelMapEntry, ChannelRemapTool, KeyMapEntry, KeyMapTool, KeyRange, MetaTextTool, TextKind,
+};
 pub use processed::ProcessedMidi;
 pub use processing::{
     EventFilterConfig, FileTimeProcessingConfig, MidiFileProcessingConfig, MidiProcessingConfig,

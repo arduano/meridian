@@ -6,6 +6,8 @@ use midi_toolkit::{
     prelude::EventSequenceExt,
     sequence::event::Delta,
 };
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::{
     error::MeridianError,
@@ -14,9 +16,30 @@ use crate::{
             map_toolkit_event_result, midi_write_error, write_try_track_events,
         },
         parsed::ParsedMidiFile,
-        tools::{MetaTextTool, TextKind},
     },
 };
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
+#[serde(default)]
+pub struct MetaTextTool {
+    pub keep_kinds: Vec<TextKind>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TextKind {
+    Text,
+    Copyright,
+    TrackName,
+    InstrumentName,
+    Lyric,
+    Marker,
+    CuePoint,
+    ProgramName,
+    DeviceName,
+    Undefined,
+    MetaEvent,
+}
 
 pub(super) fn apply_meta_text_tool_to_file(
     input: &Path,
@@ -85,4 +108,79 @@ fn text_kind_matches(kind: TextEventKind, expected: TextKind) -> bool {
             | (TextEventKind::Undefined, TextKind::Undefined)
             | (TextEventKind::MetaEvent, TextKind::MetaEvent)
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use midi_toolkit::{
+        events::{Event, TextEvent, TextEventKind},
+        sequence::event::Delta,
+    };
+
+    use super::{MetaTextTool, TextKind};
+    use crate::midi::{
+        MidiModifierTool,
+        parsed::ParsedMidiFile,
+        test_support::{TestDir, note_off, note_on, read_track_events, write_toolkit_midi},
+    };
+
+    #[test]
+    fn meta_text_pass_filters_track_text_events() {
+        let dir = TestDir::new("modifier-meta-text");
+        let input = dir.path("input.mid");
+        let output = dir.path("output.mid");
+
+        write_toolkit_midi(
+            &input,
+            96,
+            &[vec![
+                Delta::new(
+                    0,
+                    Event::Text(Box::new(TextEvent {
+                        kind: TextEventKind::TrackName,
+                        bytes: b"Piano".to_vec(),
+                    })),
+                ),
+                Delta::new(
+                    12,
+                    Event::Text(Box::new(TextEvent {
+                        kind: TextEventKind::Marker,
+                        bytes: b"Verse".to_vec(),
+                    })),
+                ),
+                note_on(24, 0, 60, 100),
+                note_off(24, 0, 60),
+            ]],
+        );
+
+        super::super::apply_modifier_tool_to_file(
+            &input,
+            &output,
+            &MidiModifierTool::MetaText(MetaTextTool {
+                keep_kinds: vec![TextKind::TrackName],
+            }),
+        )
+        .expect("meta text should succeed");
+
+        let parsed = ParsedMidiFile::load_from_file(output).expect("parse output midi");
+        let events = read_track_events(&parsed, 0);
+
+        assert!(matches!(
+            events.as_slice(),
+            [
+                Delta {
+                    delta: 0,
+                    event: Event::Text(text),
+                },
+                Delta {
+                    delta: 36,
+                    event: Event::NoteOn(_),
+                },
+                Delta {
+                    delta: 24,
+                    event: Event::NoteOff(_),
+                }
+            ] if text.kind == TextEventKind::TrackName && text.bytes == b"Piano"
+        ));
+    }
 }

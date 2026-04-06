@@ -1,6 +1,12 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub use super::modifier_tools::{
+    channel_remap::{ChannelMapEntry, ChannelRemapTool},
+    key_map::{KeyMapEntry, KeyMapTool, KeyRange},
+    meta_text::{MetaTextTool, TextKind},
+};
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
 pub struct RangeSelectTool {
@@ -57,18 +63,6 @@ pub struct TimeWarpTool {
 pub struct TimeWarpPoint {
     pub source_tick: u64,
     pub dest_tick: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
-pub struct ChannelRemapTool {
-    pub mappings: Vec<ChannelMapEntry>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-pub struct ChannelMapEntry {
-    pub from: u8,
-    pub to: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
@@ -206,53 +200,11 @@ pub struct HumanizeTool {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
-pub struct KeyMapTool {
-    pub mappings: Vec<KeyMapEntry>,
-    pub fold_to_range: Option<KeyRange>,
-    pub drop_unmapped: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-pub struct KeyMapEntry {
-    pub from: u8,
-    pub to: u8,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-pub struct KeyRange {
-    pub min: u8,
-    pub max: u8,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
 pub struct DedupeTool {
     pub notes: bool,
     pub controls: bool,
     pub tempo: bool,
     pub meta: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
-pub struct MetaTextTool {
-    pub keep_kinds: Vec<TextKind>,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum TextKind {
-    Text,
-    Copyright,
-    TrackName,
-    InstrumentName,
-    Lyric,
-    Marker,
-    CuePoint,
-    ProgramName,
-    DeviceName,
-    Undefined,
-    MetaEvent,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
