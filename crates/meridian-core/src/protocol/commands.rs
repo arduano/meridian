@@ -106,6 +106,7 @@ pub enum CoreCommand {
     UnloadDisplayContext,
     UnloadAudioContext,
     UnloadRenderContext,
+    DropInactiveMidiResources,
     LoadMidi {
         path: PathBuf,
     },

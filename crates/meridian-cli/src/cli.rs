@@ -254,36 +254,12 @@ pub struct DebugPianoTrailClassicGeometryArgs {
 
 #[derive(Debug, Clone, Args)]
 pub struct ProcessCommonArgs {
-    #[arg(value_name = "INPUT", num_args = 1..)]
-    inputs: Vec<PathBuf>,
+    #[arg(value_name = "INPUT")]
+    input: PathBuf,
     #[arg(long)]
     output: PathBuf,
     #[arg(long)]
     pretty: bool,
-    #[arg(long)]
-    piano_only: bool,
-    #[arg(long)]
-    min_key: Option<u8>,
-    #[arg(long)]
-    max_key: Option<u8>,
-    #[arg(long)]
-    transpose: Option<i16>,
-    #[arg(long)]
-    velocity_scale: Option<f32>,
-    #[arg(long)]
-    split_channels: bool,
-    #[arg(long)]
-    collapse_tracks: bool,
-    #[arg(long, value_enum)]
-    merge_mode: Option<MergeModeArg>,
-    #[arg(long)]
-    ppq_override: Option<u16>,
-    #[arg(long)]
-    tempo_override: Option<u32>,
-    #[arg(long)]
-    trim_start: Option<u64>,
-    #[arg(long)]
-    trim_end: Option<u64>,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -351,13 +327,6 @@ pub enum QuantizeModeArg {
     NoteStartOnly,
     NoteStartAndEnd,
     AllEvents,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum MergeModeArg {
-    PreserveTracks,
-    FlattenToSingleTrack,
-    MergeByTrackIndex,
 }
 
 enum ProcessTool {
@@ -449,19 +418,9 @@ fn run_analyze(args: AnalyzeArgs) -> Result<(), MeridianError> {
 
 fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), MeridianError> {
     let config = build_process_config(&common, tool);
-    let input = common
-        .inputs
-        .first()
-        .cloned()
-        .ok_or_else(|| MeridianError::Protocol("missing midi input".into()))?;
-    if common.inputs.len() != 1 {
-        return Err(MeridianError::Unsupported(
-            "CLI process commands currently support exactly one input MIDI".into(),
-        ));
-    }
     let client = ProtocolClient::spawn();
     let status_events = client.request(ProtocolCommand::StartProcessMidiFile {
-        input,
+        input: common.input.clone(),
         output: common.output.clone(),
         config,
     })?;
@@ -559,44 +518,14 @@ fn analysis_kinds(args: &AnalyzeArgs) -> Vec<MidiAnalysisKind> {
 }
 
 fn build_process_config(common: &ProcessCommonArgs, tool: ProcessTool) -> MidiFileProcessingConfig {
-    let mut config = MidiFileProcessingConfig::default();
-    config.piano_only = common.piano_only;
-    if let Some(min_key) = common.min_key {
-        config.notes.min_key = min_key;
+    let _ = common;
+    MidiFileProcessingConfig {
+        tool: match tool {
+            ProcessTool::Select(tool) => meridian_core::midi::MidiModifierTool::RangeSelect(tool),
+            ProcessTool::Tempo(tool) => meridian_core::midi::MidiModifierTool::TempoMap(tool),
+            ProcessTool::Quantize(tool) => meridian_core::midi::MidiModifierTool::Quantize(tool),
+        },
     }
-    if let Some(max_key) = common.max_key {
-        config.notes.max_key = max_key;
-    }
-    if let Some(transpose) = common.transpose {
-        config.notes.transpose = transpose;
-    }
-    if let Some(velocity_scale) = common.velocity_scale {
-        config.notes.velocity_scale = velocity_scale;
-    }
-    config.structure.split_channels = common.split_channels;
-    config.structure.collapse_tracks = common.collapse_tracks;
-    if common.ppq_override.is_some()
-        || common.tempo_override.is_some()
-        || common.trim_start.is_some()
-        || common.trim_end.is_some()
-    {
-        config.time.ppq_override = common.ppq_override;
-        config.time.tempo_override = common.tempo_override;
-        if common.trim_start.is_some() || common.trim_end.is_some() {
-            let mut trim = meridian_core::midi::TrimProcessingConfig::default();
-            if let Some(start) = common.trim_start {
-                trim.start_tick = start;
-            }
-            trim.end_tick = common.trim_end;
-            config.time.trim = Some(trim);
-        }
-    }
-    config.tools = vec![match tool {
-        ProcessTool::Select(tool) => meridian_core::midi::MidiModifierTool::RangeSelect(tool),
-        ProcessTool::Tempo(tool) => meridian_core::midi::MidiModifierTool::TempoMap(tool),
-        ProcessTool::Quantize(tool) => meridian_core::midi::MidiModifierTool::Quantize(tool),
-    }];
-    config
 }
 
 fn process_range_select_tool(args: &ProcessSelectArgs) -> RangeSelectTool {

@@ -1,7 +1,6 @@
 import type { DeepPartial } from "../helpers.ts";
-import { createMidiFileProcessingConfig, midiTools } from "../helpers.ts";
+import { midiTools } from "../helpers.ts";
 import {
-  type AnalysisGuardTool,
   type AnalysisJobId,
   type AudioRenderEvent,
   type AudioRenderEventWrapper,
@@ -12,13 +11,11 @@ import {
   type ChannelRemapTool,
   type ControlChangeTool,
   type CoreEvent,
-  type DedupeTool,
   type ErrorEvent,
   type ExtractTrackTool,
   type HumanizeTool,
   type JsonResponse,
   type KeyMapTool,
-  type MergeBalanceTool,
   type MeridianProtocolCommand,
   type MetaTextTool,
   type MidiAnalysisData,
@@ -26,7 +23,6 @@ import {
   type MidiAnalysisJobStatus,
   type MidiAnalysisJobStatusEventWrapper,
   type MidiAnalysisKind,
-  type MidiFileProcessingConfig,
   type MidiFilesMergeConfig,
   type MidiFilesMergedEvent,
   type MidiLoadedEvent,
@@ -37,7 +33,6 @@ import {
   type MidiProcessStatus,
   type MidiProcessStatusEventWrapper,
   type NoteLengthTool,
-  type OverlapRepairTool,
   type ParsedMidiId,
   type PitchBendTool,
   type ProgramTool,
@@ -641,14 +636,12 @@ export interface MidiToolTaskOptions {
   input: string;
   output: string;
   tool: MidiModifierTool;
-  config?: DeepPartial<Omit<MidiFileProcessingConfig, "tools">>;
   onEvent?: (event: MidiProcessEvent) => void;
 }
 
 export interface MidiModificationOptions {
   input: string;
   output: string;
-  config?: DeepPartial<Omit<MidiFileProcessingConfig, "tools">>;
   onEvent?: (event: MidiProcessEvent) => void;
 }
 
@@ -778,7 +771,6 @@ export class MidiProcessTask
       input: options.input,
       output: options.output,
       tool: structuredClone(options.tool),
-      ...(options.config ? { config: structuredClone(options.config) } : {}),
       ...(options.onEvent ? { onEvent: options.onEvent } : {}),
     };
   }
@@ -830,9 +822,6 @@ export class MidiProcessTask
       input: this.#options.input,
       output: this.#options.output,
       tool: structuredClone(this.#options.tool),
-      ...(this.#options.config
-        ? { config: structuredClone(this.#options.config) }
-        : {}),
       ...(this.#options.onEvent ? { onEvent: this.#options.onEvent } : {}),
     };
   }
@@ -1213,10 +1202,6 @@ export class MeridianClient {
       options: MidiModificationOptions & Partial<ToolConfig<NoteLengthTool>>,
     ): MidiProcessTask =>
       this.#withTool(options, (tool) => midiTools.noteLength(tool)),
-    overlapRepair: (
-      options: MidiModificationOptions & Partial<ToolConfig<OverlapRepairTool>>,
-    ): MidiProcessTask =>
-      this.#withTool(options, (tool) => midiTools.overlapRepair(tool)),
     quantize: (
       options: MidiModificationOptions & Partial<ToolConfig<QuantizeTool>>,
     ): MidiProcessTask =>
@@ -1229,10 +1214,6 @@ export class MeridianClient {
       options: MidiModificationOptions & Partial<ToolConfig<KeyMapTool>>,
     ): MidiProcessTask =>
       this.#withTool(options, (tool) => midiTools.keyMap(tool)),
-    dedupe: (
-      options: MidiModificationOptions & Partial<ToolConfig<DedupeTool>>,
-    ): MidiProcessTask =>
-      this.#withTool(options, (tool) => midiTools.dedupe(tool)),
     metaText: (
       options: MidiModificationOptions & Partial<ToolConfig<MetaTextTool>>,
     ): MidiProcessTask =>
@@ -1241,14 +1222,6 @@ export class MeridianClient {
       options: MidiModificationOptions & Partial<ToolConfig<SysexTool>>,
     ): MidiProcessTask =>
       this.#withTool(options, (tool) => midiTools.sysex(tool)),
-    mergeBalance: (
-      options: MidiModificationOptions & Partial<ToolConfig<MergeBalanceTool>>,
-    ): MidiProcessTask =>
-      this.#withTool(options, (tool) => midiTools.mergeBalance(tool)),
-    analysisGuard: (
-      options: MidiModificationOptions & Partial<ToolConfig<AnalysisGuardTool>>,
-    ): MidiProcessTask =>
-      this.#withTool(options, (tool) => midiTools.analysisGuard(tool)),
   };
   readonly merge = {
     midiFiles: (options: MidiMergeOptions): Promise<MidiFilesMergedEvent> =>
@@ -1278,11 +1251,10 @@ export class MeridianClient {
     options: MidiModificationOptions & Partial<ToolConfig<T>>,
     build: (config: Partial<ToolConfig<T>>) => T,
   ): MidiProcessTask {
-    const { input, output, config, onEvent, ...toolConfig } = options;
+    const { input, output, onEvent, ...toolConfig } = options;
     return this.midi({
       input,
       output,
-      ...(config ? { config } : {}),
       ...(onEvent ? { onEvent } : {}),
       tool: build(toolConfig as unknown as Partial<ToolConfig<T>>),
     });
@@ -1310,17 +1282,11 @@ export class MeridianClient {
   async startMidiProcess(
     options: MidiToolTaskOptions,
   ): Promise<MidiProcessJobHandle> {
-    const config = createMidiFileProcessingConfig(
-      options.config as
-        | DeepPartial<MidiFileProcessingConfig>
-        | undefined,
-    );
-    config.tools = [structuredClone(options.tool)];
     const events = await this.protocol.request({
       type: "start_process_midi_file",
       input: options.input,
       output: options.output,
-      config,
+      config: { tool: structuredClone(options.tool) },
     });
     const wrapper = requireEvent(events, "midi_process_status");
     if (wrapper.status.state === "idle") {

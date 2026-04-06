@@ -106,6 +106,22 @@ pub(crate) fn build_materialized_midi_with_progress(
     options: MaterializeOptions,
     mut progress: impl FnMut(MidiBuildProgress),
 ) -> Result<MaterializedMidi, MeridianError> {
+    build_materialized_midi_with_progress_cancelable(
+        parsed,
+        options,
+        move |value| {
+            progress(value);
+        },
+        || false,
+    )
+}
+
+pub(crate) fn build_materialized_midi_with_progress_cancelable(
+    parsed: &ParsedMidiFile,
+    options: MaterializeOptions,
+    mut progress: impl FnMut(MidiBuildProgress),
+    should_cancel: impl Fn() -> bool,
+) -> Result<MaterializedMidi, MeridianError> {
     const INDETERMINATE_PROGRESS_STRIDE: u64 = 4_096;
 
     let midi = parsed.midi();
@@ -144,6 +160,9 @@ pub(crate) fn build_materialized_midi_with_progress(
 
     type ToolkitBatch = Delta<u64, Track<EventBatch<Event>>>;
     for batch in merged {
+        if should_cancel() {
+            return Err(MeridianError::Cancelled("midi load cancelled".into()));
+        }
         let batch: ToolkitBatch = batch;
         let batch_event_count = batch.count() as u64;
         processed_events += batch_event_count;
@@ -274,6 +293,10 @@ pub(crate) fn build_materialized_midi_with_progress(
         }
     }
 
+    if should_cancel() {
+        return Err(MeridianError::Cancelled("midi load cancelled".into()));
+    }
+
     let display = if let (Some(mut keys), Some(tempo_map)) = (keys, tempo_map) {
         if let (Some(dirty_keys), Some(dirty_key_flags)) =
             (dirty_keys.as_mut(), dirty_key_flags.as_mut())
@@ -331,6 +354,10 @@ pub(crate) fn build_materialized_midi_with_progress(
         notes,
         parsed.cached_total_event_count(),
     ));
+
+    if should_cancel() {
+        return Err(MeridianError::Cancelled("midi load cancelled".into()));
+    }
 
     Ok(MaterializedMidi { display, audio })
 }

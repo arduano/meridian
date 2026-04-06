@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc, time::Instant};
+use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Instant};
 
 use crate::{
     midi::{
@@ -7,7 +7,7 @@ use crate::{
     },
     protocol::{
         AudioCacheId, AudioSessionId, CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId,
-        ParsedMidiId, ProcessedMidiId,
+        MidiAnalysisJobStatus, ParsedMidiId, ProcessedMidiId,
     },
 };
 
@@ -21,6 +21,22 @@ use super::{
 };
 
 impl CoreState {
+    fn midi_load_cancelled_events() -> Vec<CoreEvent> {
+        vec![error_event(CoreErrorCode::Cancelled, "midi load cancelled")]
+    }
+
+    fn midi_load_was_cancelled(&self, load_generation: u64) -> bool {
+        self.core_handle.current_midi_load_generation() != load_generation
+    }
+
+    fn ensure_midi_load_not_cancelled(&self, load_generation: u64) -> Result<(), Vec<CoreEvent>> {
+        if self.midi_load_was_cancelled(load_generation) {
+            Err(Self::midi_load_cancelled_events())
+        } else {
+            Ok(())
+        }
+    }
+
     fn broadcast_midi_load_progress(
         &self,
         path: &std::path::Path,
@@ -75,8 +91,15 @@ impl CoreState {
         path: PathBuf,
         progress: impl FnMut(f32),
     ) -> Vec<CoreEvent> {
-        match MidiCacheStack::load_with_progress(&path, progress) {
+        let load_generation = self.core_handle.current_midi_load_generation();
+        let core_handle = self.core_handle.clone();
+        match MidiCacheStack::load_with_progress_cancelable(&path, progress, move || {
+            core_handle.current_midi_load_generation() != load_generation
+        }) {
             Ok(cache_stack) => {
+                if self.midi_load_was_cancelled(load_generation) {
+                    return Self::midi_load_cancelled_events();
+                }
                 let parsed_midi_id = self.next_parsed_midi_id();
                 self.parsed_midis.insert(
                     parsed_midi_id,
@@ -90,7 +113,7 @@ impl CoreState {
                     path,
                 }]
             }
-            Err(error) => vec![error_event(CoreErrorCode::Internal, error.to_string())],
+            Err(error) => vec![error_event(super::error_code(&error), error.to_string())],
         }
     }
 
@@ -99,14 +122,23 @@ impl CoreState {
         parsed_midi_id: ParsedMidiId,
         progress: impl FnMut(MidiBuildProgress),
     ) -> Vec<CoreEvent> {
+        let load_generation = self.core_handle.current_midi_load_generation();
         let Some(parsed) = self.parsed_midis.get(&parsed_midi_id) else {
             return vec![error_event(
                 CoreErrorCode::InvalidCommand,
                 format!("unknown parsed_midi_id {}", parsed_midi_id.0),
             )];
         };
-        match parsed.cache_stack.display_cache_with_progress(progress) {
+        let core_handle = self.core_handle.clone();
+        match parsed
+            .cache_stack
+            .display_cache_with_progress_cancelable(progress, move || {
+                core_handle.current_midi_load_generation() != load_generation
+            }) {
             Ok(cache_stack) => {
+                if self.midi_load_was_cancelled(load_generation) {
+                    return Self::midi_load_cancelled_events();
+                }
                 let display_cache_id = self.next_display_cache_id();
                 let event = CoreEvent::DisplayCacheBuilt {
                     parsed_midi_id,
@@ -124,7 +156,7 @@ impl CoreState {
                 );
                 vec![event]
             }
-            Err(error) => vec![error_event(CoreErrorCode::Internal, error.to_string())],
+            Err(error) => vec![error_event(super::error_code(&error), error.to_string())],
         }
     }
 
@@ -157,7 +189,7 @@ impl CoreState {
                 );
                 vec![event]
             }
-            Err(error) => vec![error_event(CoreErrorCode::Internal, error.to_string())],
+            Err(error) => vec![error_event(super::error_code(&error), error.to_string())],
         }
     }
 
@@ -173,14 +205,23 @@ impl CoreState {
         parsed_midi_id: ParsedMidiId,
         progress: impl FnMut(MidiBuildProgress),
     ) -> Vec<CoreEvent> {
+        let load_generation = self.core_handle.current_midi_load_generation();
         let Some(parsed) = self.parsed_midis.get(&parsed_midi_id) else {
             return vec![error_event(
                 CoreErrorCode::InvalidCommand,
                 format!("unknown parsed_midi_id {}", parsed_midi_id.0),
             )];
         };
-        match parsed.cache_stack.audio_cache_with_progress(progress) {
+        let core_handle = self.core_handle.clone();
+        match parsed
+            .cache_stack
+            .audio_cache_with_progress_cancelable(progress, move || {
+                core_handle.current_midi_load_generation() != load_generation
+            }) {
             Ok(cache) => {
+                if self.midi_load_was_cancelled(load_generation) {
+                    return Self::midi_load_cancelled_events();
+                }
                 let audio_cache_id = self.next_audio_cache_id();
                 let total_events = cache.events().len();
                 self.audio_caches.insert(
@@ -344,23 +385,107 @@ impl CoreState {
         }]
     }
 
+    pub(super) fn drop_inactive_midi_resources(&mut self) -> Vec<CoreEvent> {
+        let mut keep_parsed = HashSet::new();
+        let mut keep_processed = HashSet::new();
+        let mut keep_display = HashSet::new();
+        let mut keep_audio = HashSet::new();
+
+        if let Some(parsed_midi_id) = self.active_parsed_midi_id {
+            keep_parsed.insert(parsed_midi_id);
+        }
+        if let Some(processed_midi_id) = self.active_processed_midi_id {
+            keep_processed.insert(processed_midi_id);
+        }
+        if let Some(display_cache_id) = self.active_display_cache_id {
+            keep_display.insert(display_cache_id);
+        }
+        if let Some(audio_cache_id) = self.active_audio_cache_id {
+            keep_audio.insert(audio_cache_id);
+        }
+
+        for session in self.display_sessions.values() {
+            keep_display.insert(session.display_cache_id);
+        }
+        for session in self.audio_sessions.values() {
+            keep_audio.insert(session.audio_cache_id);
+        }
+
+        for status in self.analysis_jobs.values() {
+            if let MidiAnalysisJobStatus::Running {
+                parsed_midi_id,
+                display_cache_id,
+                ..
+            } = status
+            {
+                keep_parsed.insert(*parsed_midi_id);
+                if let Some(display_cache_id) = display_cache_id {
+                    keep_display.insert(*display_cache_id);
+                }
+            }
+        }
+
+        for processed_midi_id in keep_processed.iter().copied().collect::<Vec<_>>() {
+            if let Some(resource) = self.processed_midis.get(&processed_midi_id) {
+                keep_parsed.insert(resource.parsed_midi_id);
+            }
+        }
+        for display_cache_id in keep_display.iter().copied().collect::<Vec<_>>() {
+            if let Some(resource) = self.display_caches.get(&display_cache_id) {
+                keep_parsed.insert(resource.parsed_midi_id);
+            }
+        }
+        for audio_cache_id in keep_audio.iter().copied().collect::<Vec<_>>() {
+            if let Some(resource) = self.audio_caches.get(&audio_cache_id) {
+                keep_parsed.insert(resource.parsed_midi_id);
+            }
+        }
+
+        self.processed_midis
+            .retain(|processed_midi_id, _| keep_processed.contains(processed_midi_id));
+        self.display_caches
+            .retain(|display_cache_id, _| keep_display.contains(display_cache_id));
+        self.audio_caches
+            .retain(|audio_cache_id, _| keep_audio.contains(audio_cache_id));
+        self.display_sessions
+            .retain(|_, session| keep_display.contains(&session.display_cache_id));
+        self.audio_sessions
+            .retain(|_, session| keep_audio.contains(&session.audio_cache_id));
+        self.parsed_midis
+            .retain(|parsed_midi_id, _| keep_parsed.contains(parsed_midi_id));
+
+        vec![CoreEvent::StateSnapshot {
+            state: self.snapshot(),
+        }]
+    }
+
     pub(super) fn load_display_midi(&mut self, path: PathBuf) -> Vec<CoreEvent> {
+        let load_generation = self.core_handle.current_midi_load_generation();
         self.broadcast_midi_load_progress(
             &path,
             MidiBuildProgress::from_fraction(0.0),
             "Opening MIDI file for display…",
         );
+        if let Err(events) = self.ensure_midi_load_not_cancelled(load_generation) {
+            return events;
+        }
         let parsed_midi_id =
             match self.ensure_parsed_midi_for_path(&path, 0.12, "Reading MIDI file…") {
                 Ok(parsed_midi_id) => parsed_midi_id,
                 Err(events) => return events,
             };
+        if let Err(events) = self.ensure_midi_load_not_cancelled(load_generation) {
+            return events;
+        }
 
         let display_cache_id =
             match self.ensure_display_cache_for_path(parsed_midi_id, &path, 0.12, 0.94) {
                 Ok(display_cache_id) => display_cache_id,
                 Err(events) => return events,
             };
+        if let Err(events) = self.ensure_midi_load_not_cancelled(load_generation) {
+            return events;
+        }
 
         self.broadcast_midi_load_progress(
             &path,
@@ -387,22 +512,32 @@ impl CoreState {
     }
 
     pub(super) fn load_audio_midi(&mut self, path: PathBuf) -> Vec<CoreEvent> {
+        let load_generation = self.core_handle.current_midi_load_generation();
         self.broadcast_midi_load_progress(
             &path,
             MidiBuildProgress::from_fraction(0.0),
             "Opening MIDI file for audio…",
         );
+        if let Err(events) = self.ensure_midi_load_not_cancelled(load_generation) {
+            return events;
+        }
         let parsed_midi_id =
             match self.ensure_parsed_midi_for_path(&path, 0.12, "Reading MIDI file…") {
                 Ok(parsed_midi_id) => parsed_midi_id,
                 Err(events) => return events,
             };
+        if let Err(events) = self.ensure_midi_load_not_cancelled(load_generation) {
+            return events;
+        }
 
         let audio_cache_id =
             match self.ensure_audio_cache_for_path(parsed_midi_id, &path, 0.12, 0.94) {
                 Ok(audio_cache_id) => audio_cache_id,
                 Err(events) => return events,
             };
+        if let Err(events) = self.ensure_midi_load_not_cancelled(load_generation) {
+            return events;
+        }
 
         self.broadcast_midi_load_progress(
             &path,
@@ -429,11 +564,15 @@ impl CoreState {
     }
 
     pub(super) fn load_midi_legacy(&mut self, path: PathBuf) -> Vec<CoreEvent> {
+        let load_generation = self.core_handle.current_midi_load_generation();
         self.broadcast_midi_load_progress(
             &path,
             MidiBuildProgress::from_fraction(0.0),
             "Opening MIDI file…",
         );
+        if let Err(events) = self.ensure_midi_load_not_cancelled(load_generation) {
+            return events;
+        }
         let subscribers = Arc::clone(&self.subscribers);
         let parsed_progress_path = path.clone();
         let parsed_events =
@@ -457,12 +596,18 @@ impl CoreState {
             }
             _ => return parsed_events,
         };
+        if let Err(events) = self.ensure_midi_load_not_cancelled(load_generation) {
+            return events;
+        }
 
         let (display_cache_id, audio_cache_id) =
             match self.ensure_render_caches_for_path(parsed_midi_id, &path, 0.1, 0.94) {
                 Ok(ids) => ids,
                 Err(events) => return events,
             };
+        if let Err(events) = self.ensure_midi_load_not_cancelled(load_generation) {
+            return events;
+        }
 
         let display_attach_events = self.attach_display_cache_resource(display_cache_id);
         if !matches!(
@@ -593,14 +738,23 @@ impl CoreState {
         parsed_midi_id: ParsedMidiId,
         config: MidiProcessingConfig,
     ) -> Vec<CoreEvent> {
+        let load_generation = self.core_handle.current_midi_load_generation();
         let Some(parsed) = self.parsed_midis.get(&parsed_midi_id) else {
             return vec![error_event(
                 CoreErrorCode::InvalidCommand,
                 format!("unknown parsed_midi_id {}", parsed_midi_id.0),
             )];
         };
-        match ProcessedMidi::from_parsed(parsed.cache_stack.parsed(), &config) {
+        let core_handle = self.core_handle.clone();
+        match ProcessedMidi::from_parsed_cancelable(
+            parsed.cache_stack.parsed(),
+            &config,
+            move || core_handle.current_midi_load_generation() != load_generation,
+        ) {
             Ok(midi) => {
+                if self.midi_load_was_cancelled(load_generation) {
+                    return Self::midi_load_cancelled_events();
+                }
                 let processed_midi_id = self.next_processed_midi_id();
                 let midi_length = midi.midi_length();
                 let total_notes = midi.total_notes();
@@ -622,7 +776,7 @@ impl CoreState {
                     track_count,
                 }]
             }
-            Err(error) => vec![error_event(CoreErrorCode::Internal, error.to_string())],
+            Err(error) => vec![error_event(super::error_code(&error), error.to_string())],
         }
     }
 
@@ -996,26 +1150,32 @@ impl CoreState {
 
         let subscribers = Arc::clone(&self.subscribers);
         let progress_path = path.to_path_buf();
-        let cache_result = parsed
-            .cache_stack
-            .render_caches_with_progress(move |phase| {
+        let load_generation = self.core_handle.current_midi_load_generation();
+        let core_handle = self.core_handle.clone();
+        let cache_result = parsed.cache_stack.render_caches_with_progress_cancelable(
+            move |phase| {
                 broadcast_progress_to_subscribers(
                     &subscribers,
                     &progress_path,
                     scale_midi_build_progress(phase, progress_start, progress_end),
                     "Building display and audio caches…",
                 );
-            });
+            },
+            move || core_handle.current_midi_load_generation() != load_generation,
+        );
 
         let (display_cache, audio_cache) = match cache_result {
             Ok(caches) => caches,
             Err(error) => {
                 return Err(vec![error_event(
-                    CoreErrorCode::Internal,
+                    super::error_code(&error),
                     error.to_string(),
                 )]);
             }
         };
+        if self.midi_load_was_cancelled(load_generation) {
+            return Err(Self::midi_load_cancelled_events());
+        }
 
         let display_cache_id = if let Some(display_cache_id) = existing_display {
             display_cache_id
@@ -1089,5 +1249,115 @@ fn scale_midi_build_progress(
     MidiBuildProgress {
         fraction_complete,
         ..progress
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        path::PathBuf,
+        sync::{Arc, Mutex},
+    };
+
+    use flume::unbounded;
+
+    use crate::audio::{AudioBackend, AudioConfig};
+
+    use super::*;
+    use crate::engine::core_state::CoreState;
+
+    fn midi_fixture(relative_path: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/midis")
+            .join(relative_path)
+    }
+
+    fn test_state() -> CoreState {
+        let (sender, _receiver) = unbounded();
+        let subscribers = Arc::new(Mutex::new(Vec::new()));
+        let mut state = CoreState::new(
+            sender,
+            subscribers,
+            Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        );
+        state.audio_config = AudioConfig {
+            backend: AudioBackend::None,
+            ..AudioConfig::default()
+        };
+        state
+            .audio_player
+            .switch(&state.audio_config)
+            .expect("switch test audio backend");
+        state
+    }
+
+    #[test]
+    fn drop_inactive_midi_resources_reclaims_unloaded_preview_caches() {
+        let mut state = test_state();
+
+        let events =
+            state.load_midi_legacy(midi_fixture("piano/burgmuller-op100-no13-consolation.mid"));
+        assert!(matches!(events.as_slice(), [CoreEvent::MidiLoaded { .. }]));
+        assert_eq!(state.parsed_midis.len(), 1);
+        assert_eq!(state.display_caches.len(), 1);
+        assert_eq!(state.audio_caches.len(), 1);
+
+        state.unload_render_context();
+        state.drop_inactive_midi_resources();
+
+        assert!(state.parsed_midis.is_empty());
+        assert!(state.processed_midis.is_empty());
+        assert!(state.display_caches.is_empty());
+        assert!(state.audio_caches.is_empty());
+        assert!(state.display_sessions.is_empty());
+        assert!(state.audio_sessions.is_empty());
+    }
+
+    #[test]
+    fn drop_inactive_midi_resources_preserves_session_owned_caches() {
+        let mut state = test_state();
+
+        let events = state.load_display_midi(midi_fixture("smoke-two-notes.mid"));
+        assert!(matches!(events.as_slice(), [CoreEvent::MidiLoaded { .. }]));
+        let display_cache_id = state
+            .active_display_cache_id
+            .expect("display cache should be active");
+
+        let session_events = state.create_display_session_resource(display_cache_id);
+        assert!(matches!(
+            session_events.as_slice(),
+            [CoreEvent::DisplaySessionCreated { .. }]
+        ));
+
+        state.unload_display_context();
+        state.drop_inactive_midi_resources();
+
+        assert_eq!(state.parsed_midis.len(), 1);
+        assert_eq!(state.display_caches.len(), 1);
+        assert_eq!(state.display_sessions.len(), 1);
+    }
+
+    #[test]
+    fn drop_inactive_midi_resources_reclaims_orphaned_analysis_artifacts() {
+        let mut state = test_state();
+
+        let parsed_events = state.load_parsed_midi_resource(midi_fixture("smoke-two-notes.mid"));
+        let parsed_midi_id = match parsed_events.as_slice() {
+            [CoreEvent::ParsedMidiLoaded { parsed_midi_id, .. }] => *parsed_midi_id,
+            other => panic!("unexpected parsed midi events: {other:?}"),
+        };
+        let processed_events =
+            state.build_processed_midi_resource(parsed_midi_id, MidiProcessingConfig::default());
+        assert!(matches!(
+            processed_events.as_slice(),
+            [CoreEvent::ProcessedMidiBuilt { .. }]
+        ));
+        assert_eq!(state.parsed_midis.len(), 1);
+        assert_eq!(state.processed_midis.len(), 1);
+
+        state.drop_inactive_midi_resources();
+
+        assert!(state.parsed_midis.is_empty());
+        assert!(state.processed_midis.is_empty());
     }
 }

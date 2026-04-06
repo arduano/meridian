@@ -154,6 +154,16 @@ fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: &StateSnaps
         CoreEvent::FrameSaved { output, .. } => {
             app.set_status_text(format!("Saved frame to {}", output.display()).into());
         }
+        CoreEvent::MidiFileProcessed { output, .. } => {
+            app.set_modify_status_text("Finished".into());
+            app.set_modify_detail_text(format!("Wrote {}", output.display()).into());
+            app.set_modify_result_output_text(file_name_or_full(output).into());
+        }
+        CoreEvent::MidiFilesMerged { output, .. } => {
+            app.set_merge_status_text("Finished".into());
+            app.set_merge_detail_text(format!("Wrote {}", output.display()).into());
+            app.set_merge_result_output_text(file_name_or_full(output).into());
+        }
         CoreEvent::VideoRender { .. }
         | CoreEvent::VideoRenderStatus { .. }
         | CoreEvent::AudioRender { .. }
@@ -168,7 +178,6 @@ fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: &StateSnaps
         | CoreEvent::AudioSessionCreated { .. }
         | CoreEvent::MidiAnalysisJob { .. }
         | CoreEvent::MidiAnalysisJobStatus { .. }
-        | CoreEvent::MidiFilesProcessed { .. }
         | CoreEvent::MidiProcess { .. }
         | CoreEvent::MidiProcessStatus { .. } => {}
         CoreEvent::DisplaySessionAttached { .. } | CoreEvent::AudioSessionAttached { .. } => {
@@ -866,46 +875,16 @@ fn apply_modify_process_to_app(
     app.set_modify_result_event_count_text("—".into());
 
     match status {
-        MidiProcessStatus::Running {
-            output,
-            processed_inputs,
-            total_inputs,
-            current_input,
-            ..
-        } => {
-            let progress = if *total_inputs == 0 {
-                0.0
-            } else {
-                *processed_inputs as f32 / *total_inputs as f32
-            };
-            app.set_modify_progress(progress);
+        MidiProcessStatus::Running { output, .. } => {
+            app.set_modify_progress(0.0);
             app.set_modify_status_text("Processing MIDI".into());
-            let detail = current_input
-                .as_ref()
-                .map(|path| format!("Working on {}", file_name_or_full(path)))
-                .unwrap_or_else(|| format!("Writing {}", output.display()));
-            app.set_modify_detail_text(detail.into());
+            app.set_modify_detail_text(format!("Writing {}", output.display()).into());
             app.set_modify_result_output_text(file_name_or_full(output).into());
         }
-        MidiProcessStatus::Cancelling {
-            output,
-            processed_inputs,
-            total_inputs,
-            current_input,
-            ..
-        } => {
-            let progress = if *total_inputs == 0 {
-                0.0
-            } else {
-                *processed_inputs as f32 / *total_inputs as f32
-            };
-            app.set_modify_progress(progress);
+        MidiProcessStatus::Cancelling { output, .. } => {
+            app.set_modify_progress(0.0);
             app.set_modify_status_text("Cancelling".into());
-            let detail = current_input
-                .as_ref()
-                .map(|path| format!("Stopping after {}", file_name_or_full(path)))
-                .unwrap_or_else(|| format!("Stopping {}", output.display()));
-            app.set_modify_detail_text(detail.into());
+            app.set_modify_detail_text(format!("Stopping {}", output.display()).into());
             app.set_modify_result_output_text(file_name_or_full(output).into());
         }
         MidiProcessStatus::Idle => {
@@ -913,7 +892,6 @@ fn apply_modify_process_to_app(
             match latest_event {
                 Some(MidiProcessEvent::ProcessFinished {
                     output,
-                    input_count,
                     output_track_count,
                     output_ppq,
                     total_events,
@@ -922,9 +900,7 @@ fn apply_modify_process_to_app(
                     app.set_modify_status_text("Finished".into());
                     app.set_modify_detail_text(format!("Wrote {}", output.display()).into());
                     app.set_modify_result_output_text(file_name_or_full(output).into());
-                    app.set_modify_result_input_count_text(
-                        format_number(*input_count as u64).into(),
-                    );
+                    app.set_modify_result_input_count_text("1".into());
                     app.set_modify_result_track_count_text(
                         format_number(*output_track_count as u64).into(),
                     );
@@ -940,58 +916,17 @@ fn apply_modify_process_to_app(
                     app.set_modify_detail_text(message.clone().into());
                     app.set_modify_result_output_text(file_name_or_full(output).into());
                 }
-                Some(MidiProcessEvent::ProcessCancelled {
-                    output,
-                    processed_inputs,
-                    total_inputs,
-                    ..
-                }) => {
+                Some(MidiProcessEvent::ProcessCancelled { output, .. }) => {
                     app.set_modify_status_text("Cancelled".into());
-                    app.set_modify_detail_text(
-                        format!(
-                            "Stopped after {} of {} input{}",
-                            processed_inputs,
-                            total_inputs,
-                            if *total_inputs == 1 { "" } else { "s" }
-                        )
-                        .into(),
-                    );
-                    app.set_modify_result_output_text(file_name_or_full(output).into());
-                    app.set_modify_result_input_count_text(
-                        format_number(*processed_inputs as u64).into(),
-                    );
-                }
-                Some(MidiProcessEvent::ProcessStarted {
-                    output,
-                    total_inputs,
-                    ..
-                }) => {
-                    app.set_modify_status_text("Ready".into());
-                    app.set_modify_detail_text(
-                        format!(
-                            "Configured for {} input{} -> {}",
-                            total_inputs,
-                            if *total_inputs == 1 { "" } else { "s" },
-                            output.display()
-                        )
-                        .into(),
-                    );
+                    app.set_modify_detail_text("Processing stopped".into());
                     app.set_modify_result_output_text(file_name_or_full(output).into());
                 }
-                Some(MidiProcessEvent::InputProgress {
-                    current_input,
-                    processed_inputs,
-                    total_inputs,
-                    ..
-                }) => {
+                Some(MidiProcessEvent::ProcessStarted { output, .. }) => {
                     app.set_modify_status_text("Ready".into());
-                    let detail = current_input
-                        .as_ref()
-                        .map(|path| format!("Last input: {}", file_name_or_full(path)))
-                        .unwrap_or_else(|| {
-                            format!("Last run processed {processed_inputs} of {total_inputs}")
-                        });
-                    app.set_modify_detail_text(detail.into());
+                    app.set_modify_detail_text(
+                        format!("Configured to write {}", output.display()).into(),
+                    );
+                    app.set_modify_result_output_text(file_name_or_full(output).into());
                 }
                 None => {
                     app.set_modify_status_text("Ready".into());
@@ -1020,50 +955,16 @@ fn apply_merge_process_to_app(
     app.set_merge_result_event_count_text("—".into());
 
     match status {
-        MidiProcessStatus::Running {
-            output,
-            processed_inputs,
-            total_inputs,
-            current_input,
-            ..
-        } => {
-            let progress = if *total_inputs == 0 {
-                0.0
-            } else {
-                *processed_inputs as f32 / *total_inputs as f32
-            };
-            app.set_merge_progress(progress);
-            app.set_merge_status_text("Merging MIDI".into());
-            app.set_merge_detail_text(
-                current_input
-                    .as_ref()
-                    .map(|path| format!("Inspecting and transforming {}", file_name_or_full(path)))
-                    .unwrap_or_else(|| format!("Writing {}", output.display()))
-                    .into(),
-            );
+        MidiProcessStatus::Running { output, .. } => {
+            app.set_merge_progress(0.0);
+            app.set_merge_status_text("Processing MIDI".into());
+            app.set_merge_detail_text(format!("Writing {}", output.display()).into());
             app.set_merge_result_output_text(file_name_or_full(output).into());
         }
-        MidiProcessStatus::Cancelling {
-            output,
-            processed_inputs,
-            total_inputs,
-            current_input,
-            ..
-        } => {
-            let progress = if *total_inputs == 0 {
-                0.0
-            } else {
-                *processed_inputs as f32 / *total_inputs as f32
-            };
-            app.set_merge_progress(progress);
+        MidiProcessStatus::Cancelling { output, .. } => {
+            app.set_merge_progress(0.0);
             app.set_merge_status_text("Cancelling".into());
-            app.set_merge_detail_text(
-                current_input
-                    .as_ref()
-                    .map(|path| format!("Stopping after {}", file_name_or_full(path)))
-                    .unwrap_or_else(|| format!("Stopping {}", output.display()))
-                    .into(),
-            );
+            app.set_merge_detail_text(format!("Stopping {}", output.display()).into());
             app.set_merge_result_output_text(file_name_or_full(output).into());
         }
         MidiProcessStatus::Idle => {
@@ -1071,7 +972,6 @@ fn apply_merge_process_to_app(
             match latest_event {
                 Some(MidiProcessEvent::ProcessFinished {
                     output,
-                    input_count,
                     output_track_count,
                     output_ppq,
                     total_events,
@@ -1080,9 +980,7 @@ fn apply_merge_process_to_app(
                     app.set_merge_status_text("Finished".into());
                     app.set_merge_detail_text(format!("Wrote {}", output.display()).into());
                     app.set_merge_result_output_text(file_name_or_full(output).into());
-                    app.set_merge_result_input_count_text(
-                        format_number(*input_count as u64).into(),
-                    );
+                    app.set_merge_result_input_count_text("1".into());
                     app.set_merge_result_track_count_text(
                         format_number(*output_track_count as u64).into(),
                     );
@@ -1098,60 +996,17 @@ fn apply_merge_process_to_app(
                     app.set_merge_detail_text(message.clone().into());
                     app.set_merge_result_output_text(file_name_or_full(output).into());
                 }
-                Some(MidiProcessEvent::ProcessCancelled {
-                    output,
-                    processed_inputs,
-                    total_inputs,
-                    ..
-                }) => {
+                Some(MidiProcessEvent::ProcessCancelled { output, .. }) => {
                     app.set_merge_status_text("Cancelled".into());
-                    app.set_merge_detail_text(
-                        format!(
-                            "Stopped after {} of {} input{}",
-                            processed_inputs,
-                            total_inputs,
-                            if *total_inputs == 1 { "" } else { "s" }
-                        )
-                        .into(),
-                    );
-                    app.set_merge_result_output_text(file_name_or_full(output).into());
-                    app.set_merge_result_input_count_text(
-                        format_number(*processed_inputs as u64).into(),
-                    );
-                }
-                Some(MidiProcessEvent::ProcessStarted {
-                    output,
-                    total_inputs,
-                    ..
-                }) => {
-                    app.set_merge_status_text("Ready".into());
-                    app.set_merge_detail_text(
-                        format!(
-                            "Configured for {} input{} -> {}",
-                            total_inputs,
-                            if *total_inputs == 1 { "" } else { "s" },
-                            output.display()
-                        )
-                        .into(),
-                    );
+                    app.set_merge_detail_text("Processing stopped".into());
                     app.set_merge_result_output_text(file_name_or_full(output).into());
                 }
-                Some(MidiProcessEvent::InputProgress {
-                    current_input,
-                    processed_inputs,
-                    total_inputs,
-                    ..
-                }) => {
+                Some(MidiProcessEvent::ProcessStarted { output, .. }) => {
                     app.set_merge_status_text("Ready".into());
                     app.set_merge_detail_text(
-                        current_input
-                            .as_ref()
-                            .map(|path| format!("Last input: {}", file_name_or_full(path)))
-                            .unwrap_or_else(|| {
-                                format!("Last run processed {processed_inputs} of {total_inputs}")
-                            })
-                            .into(),
+                        format!("Configured to write {}", output.display()).into(),
                     );
+                    app.set_merge_result_output_text(file_name_or_full(output).into());
                 }
                 None => {
                     app.set_merge_status_text("Ready".into());

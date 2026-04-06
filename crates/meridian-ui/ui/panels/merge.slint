@@ -54,32 +54,88 @@ component MergeMetricCell inherits Rectangle {
     }
 }
 
-component MergeToggleRow inherits Rectangle {
+component MergeTextRow inherits Rectangle {
     in property <string> label;
-    in property <string> hint;
-    in property <string> value: "off";
-    callback changed(string);
+    in property <string> value;
+    in property <string> hint: "";
+    callback submitted(string);
 
-    height: 42px;
+    private property <string> draft: root.value;
 
-    HorizontalLayout {
-        spacing: 8px;
+    changed value => {
+        root.draft = root.value;
+    }
 
-        VerticalLayout {
-            spacing: 1px;
-            alignment: center;
-            horizontal-stretch: 1;
+    height: root.hint != "" ? 56px : 36px;
+    background: transparent;
 
-            Text { text: root.label; color: #b0c0d4; font-size: 11px; font-weight: 600; }
-            Text { text: root.hint; color: #556b86; font-size: 9px; wrap: word-wrap; }
-        }
+    VerticalLayout {
+        spacing: 3px;
+        alignment: start;
 
         HorizontalLayout {
-            spacing: 4px;
-            alignment: center;
+            spacing: 8px;
+            height: 30px;
 
-            OptionChip { label: "Off"; active: root.value == "off"; pressed => { root.changed("off"); } }
-            OptionChip { label: "On"; active: root.value == "on"; pressed => { root.changed("on"); } }
+            Text {
+                text: root.label;
+                color: #7d8fa8;
+                font-size: 11px;
+                vertical-alignment: center;
+                min-width: 100px;
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+                height: 28px;
+                border-radius: 6px;
+                background: #0a1018;
+                border-width: 1px;
+                border-color: editor.has-focus ? #2563eb : #1a2740;
+
+                editor := TextInput {
+                    text: root.draft;
+                    color: #b0c0d4;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                    font-family: "monospace";
+                    x: 8px;
+                    width: parent.width - 16px;
+                    height: parent.height;
+                    edited => { root.draft = self.text; }
+                    accepted => { root.submitted(root.draft); }
+                }
+            }
+
+            Rectangle {
+                width: 44px;
+                height: 28px;
+                border-radius: 6px;
+                background: apply-area.has-hover ? #0f1724 : #09101a;
+                border-width: 1px;
+                border-color: #1a2740;
+
+                Text {
+                    text: "Apply";
+                    color: #8aa0bb;
+                    font-size: 10px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                apply-area := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.submitted(root.draft); }
+                }
+            }
+        }
+
+        if root.hint != "" : Text {
+            text: root.hint;
+            color: #556b86;
+            font-size: 9px;
+            wrap: word-wrap;
         }
     }
 }
@@ -171,15 +227,9 @@ export component MergePanel inherits Rectangle {
     in property <string> merge-track-total-text: "—";
     in property <string> merge-note-total-text: "—";
     in property <string> merge-tempo-total-text: "—";
-    in property <string> merge-layout-text: "preserve_tracks";
-    in property <string> merge-metadata-mode-text: "tempo_signatures";
-    in property <string> merge-remove-empty-tracks-text: "on";
-    in property <string> merge-strip-duplicate-start-text: "on";
-    in property <string> merge-prefer-first-tempo-text: "on";
-    in property <string> merge-deconflict-channels-text: "off";
-    in property <string> merge-dedupe-meta-text: "on";
-    in property <string> merge-dedupe-controls-text: "off";
-    in property <string> merge-dedupe-notes-text: "off";
+    in property <string> merge-layout-text: "append_tracks";
+    in property <string> merge-metadata-mode-text: "keep";
+    in property <string> merge-ppq-override-text: "";
     in property <string> merge-output-path-text: "";
     in property <float> merge-progress: 0;
     in property <bool> merge-job-active: false;
@@ -361,13 +411,12 @@ export component MergePanel inherits Rectangle {
                         spacing: 10px;
 
                         Text { text: "TRACK LAYOUT"; color: #d5deea; font-size: 12px; font-weight: 700; }
-                        Text { text: "Choose whether files stack whole tracks, collapse to one track, or merge matching track indexes together."; color: #5f7490; font-size: 10px; wrap: word-wrap; }
+                        Text { text: "Choose whether files append their tracks in order or merge matching track indexes together."; color: #5f7490; font-size: 10px; wrap: word-wrap; }
 
                         HorizontalLayout {
                             spacing: 6px;
-                            OptionChip { label: "Stack"; active: root.merge-layout-text == "preserve_tracks"; pressed => { root.update-merge-control("layout", "preserve_tracks"); } }
-                            OptionChip { label: "By Index"; active: root.merge-layout-text == "merge_by_track_index"; pressed => { root.update-merge-control("layout", "merge_by_track_index"); } }
-                            OptionChip { label: "Flatten"; active: root.merge-layout-text == "flatten_to_single_track"; pressed => { root.update-merge-control("layout", "flatten_to_single_track"); } }
+                            OptionChip { label: "Append"; active: root.merge-layout-text == "append_tracks"; pressed => { root.update-merge-control("layout", "append_tracks"); } }
+                            OptionChip { label: "By Index"; active: root.merge-layout-text == "merge_tracks"; pressed => { root.update-merge-control("layout", "merge_tracks"); } }
                         }
                     }
                 }
@@ -383,14 +432,13 @@ export component MergePanel inherits Rectangle {
                         padding: 16px;
                         spacing: 10px;
 
-                        Text { text: "METADATA LANE"; color: #d5deea; font-size: 12px; font-weight: 700; }
-                        Text { text: "Keep conductor data where it lives, or pull shared tempo/signature/text events into track 1 for a cleaner merged file."; color: #5f7490; font-size: 10px; wrap: word-wrap; }
+                        Text { text: "METADATA TRACK"; color: #d5deea; font-size: 12px; font-weight: 700; }
+                        Text { text: "Either keep metadata in place, or normalize shared metadata into a dedicated first track."; color: #5f7490; font-size: 10px; wrap: word-wrap; }
 
                         HorizontalLayout {
                             spacing: 6px;
                             OptionChip { label: "Keep"; active: root.merge-metadata-mode-text == "keep"; pressed => { root.update-merge-control("metadata_mode", "keep"); } }
-                            OptionChip { label: "Tempo+Sig"; active: root.merge-metadata-mode-text == "tempo_signatures"; pressed => { root.update-merge-control("metadata_mode", "tempo_signatures"); } }
-                            OptionChip { label: "All Text"; active: root.merge-metadata-mode-text == "all_text_meta"; pressed => { root.update-merge-control("metadata_mode", "all_text_meta"); } }
+                            OptionChip { label: "Normalize"; active: root.merge-metadata-mode-text == "normalize"; pressed => { root.update-merge-control("metadata_mode", "normalize"); } }
                         }
                     }
                 }
@@ -408,50 +456,9 @@ export component MergePanel inherits Rectangle {
                     padding: 16px;
                     spacing: 10px;
 
-                    Text { text: "CLEANUP + COLLISION HANDLING"; color: #d5deea; font-size: 12px; font-weight: 700; }
-
-                    MergeToggleRow {
-                        label: "Strip empty tracks";
-                        hint: "Drop blank outputs after merging and metadata moves.";
-                        value: root.merge-remove-empty-tracks-text;
-                        changed(value) => { root.update-merge-control("remove_empty_tracks", value); }
-                    }
-                    MergeToggleRow {
-                        label: "Strip duplicate start state";
-                        hint: "Remove duplicate startup tempo, controller, and meta events at tick 0.";
-                        value: root.merge-strip-duplicate-start-text;
-                        changed(value) => { root.update-merge-control("strip_duplicate_start", value); }
-                    }
-                    MergeToggleRow {
-                        label: "Prefer first tempo map";
-                        hint: "Drop later tempo maps when the first file should be authoritative.";
-                        value: root.merge-prefer-first-tempo-text;
-                        changed(value) => { root.update-merge-control("prefer_first_tempo", value); }
-                    }
-                    MergeToggleRow {
-                        label: "Deconflict channels";
-                        hint: "Rewrite tracks onto distinct channels when stacked files collide.";
-                        value: root.merge-deconflict-channels-text;
-                        changed(value) => { root.update-merge-control("deconflict_channels", value); }
-                    }
-                    MergeToggleRow {
-                        label: "Deduplicate metadata";
-                        hint: "Collapse duplicate text, signature, and tempo events after the merge.";
-                        value: root.merge-dedupe-meta-text;
-                        changed(value) => { root.update-merge-control("dedupe_meta", value); }
-                    }
-                    MergeToggleRow {
-                        label: "Deduplicate controllers";
-                        hint: "Remove duplicate controller/program state if source tracks repeat setup messages.";
-                        value: root.merge-dedupe-controls-text;
-                        changed(value) => { root.update-merge-control("dedupe_controls", value); }
-                    }
-                    MergeToggleRow {
-                        label: "Deduplicate notes";
-                        hint: "Useful when sources overlap or were exported with repeated note blocks.";
-                        value: root.merge-dedupe-notes-text;
-                        changed(value) => { root.update-merge-control("dedupe_notes", value); }
-                    }
+                    Text { text: "TIMING"; color: #d5deea; font-size: 12px; font-weight: 700; }
+                    Text { text: "Leave blank to keep the source PPQ when they already match, or set an override to scale everything into a new PPQ."; color: #5f7490; font-size: 10px; wrap: word-wrap; }
+                    MergeTextRow { label: "PPQ override"; value: root.merge-ppq-override-text; hint: "Blank keeps source PPQ."; submitted(text) => { root.update-merge-control("ppq_override", text); } }
                 }
             }
 

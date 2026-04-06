@@ -1,7 +1,10 @@
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex, atomic::AtomicBool},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64},
+    },
     time::Instant,
 };
 
@@ -84,11 +87,13 @@ impl CoreState {
     pub(super) fn new(
         sender: Sender<RequestMessage>,
         subscribers: Arc<Mutex<Vec<Sender<CoreEvent>>>>,
+        midi_load_generation: Arc<AtomicU64>,
     ) -> Self {
         Self {
             core_handle: CoreHandle {
                 sender,
                 subscribers: Arc::clone(&subscribers),
+                midi_load_generation,
             },
             subscribers,
             midi_cache: None,
@@ -265,6 +270,7 @@ impl CoreState {
             CoreCommand::UnloadDisplayContext => self.unload_display_context(),
             CoreCommand::UnloadAudioContext => self.unload_audio_context(),
             CoreCommand::UnloadRenderContext => self.unload_render_context(),
+            CoreCommand::DropInactiveMidiResources => self.drop_inactive_midi_resources(),
             CoreCommand::LoadMidi { path } => self.load_midi_legacy(path),
             CoreCommand::SetAudioConfig { config } => {
                 self.audio_config = config;

@@ -268,44 +268,13 @@ export component ModifyPanel inherits Rectangle {
     in property <string> modify-result-ppq-text: "—";
     in property <string> modify-result-event-count-text: "—";
 
-    // ── Common: merge & time ──
-    in property <string> modify-time-offset-ticks-text: "0";
-    in property <string> modify-time-ppq-override-text: "";
-    in property <string> modify-time-tempo-override-text: "";
-    in property <string> modify-merge-mode-text: "preserve_tracks";
-
-    // ── Common: trim ──
-    in property <string> modify-trim-start-tick-text: "";
-    in property <string> modify-trim-end-tick-text: "";
-    in property <string> modify-trim-inject-edge-text: "on";
-    in property <string> modify-trim-close-open-text: "on";
-
-    // ── Common: note filter ──
-    in property <string> modify-min-key-text: "0";
-    in property <string> modify-max-key-text: "127";
-    in property <string> modify-transpose-text: "0";
-    in property <string> modify-note-velocity-scale-text: "1.0";
-    in property <string> modify-piano-only-text: "off";
-    in property <string> modify-zero-velocity-mode-text: "note_off";
-
-    // ── Common: structure ──
-    in property <string> modify-split-channels-text: "off";
-    in property <string> modify-collapse-tracks-text: "off";
-    in property <string> modify-remove-empty-tracks-text: "on";
-    in property <string> modify-drop-orphan-note-offs-text: "on";
-
     // ── Pass: range select ──
-    in property <string> modify-range-track-min-text: "";
-    in property <string> modify-range-track-max-text: "";
-    in property <string> modify-range-channel-min-text: "";
-    in property <string> modify-range-channel-max-text: "";
-    in property <string> modify-range-key-min-text: "";
-    in property <string> modify-range-key-max-text: "";
-    in property <string> modify-range-velocity-min-text: "";
-    in property <string> modify-range-velocity-max-text: "";
-    in property <string> modify-range-tick-start-text: "";
-    in property <string> modify-range-tick-end-text: "";
-    in property <string> modify-range-event-kinds-text: "";
+    in property <string> modify-range-track-select-text: "";
+    in property <string> modify-range-start-ticks-text: "";
+    in property <string> modify-range-end-ticks-text: "";
+    in property <string> modify-range-offset-ticks-text: "";
+    in property <string> modify-range-preserve-system-text: "off";
+    in property <string> modify-range-edge-behavior-text: "trim";
 
     // ── Pass: tempo ──
     in property <string> modify-tempo-mode-text: "scale_bpm";
@@ -318,14 +287,13 @@ export component ModifyPanel inherits Rectangle {
     in property <string> modify-channel-remap-mappings-text: "";
 
     // ── Pass: track route ──
-    in property <string> modify-track-route-mode-text: "preserve";
+    in property <string> modify-track-route-mode-text: "collapse_all";
     in property <string> modify-track-route-mappings-text: "";
 
     // ── Pass: program ──
     in property <string> modify-program-force-program-text: "";
     in property <string> modify-program-strip-changes-text: "off";
     in property <string> modify-program-startup-programs-text: "";
-    in property <string> modify-program-keep-only-startup-text: "off";
 
     // ── Pass: control change ──
     in property <string> modify-control-strip-controllers-text: "";
@@ -339,7 +307,6 @@ export component ModifyPanel inherits Rectangle {
     in property <string> modify-pitch-offset-text: "0";
     in property <string> modify-pitch-min-bend-text: "-8192";
     in property <string> modify-pitch-max-bend-text: "8191";
-    in property <string> modify-pitch-reset-at-start-text: "off";
 
     // ── Pass: velocity map ──
     in property <string> modify-velocity-mode-text: "scale";
@@ -353,52 +320,28 @@ export component ModifyPanel inherits Rectangle {
     in property <string> modify-note-length-scale-text: "1.0";
     in property <string> modify-note-length-fixed-ticks-text: "";
 
-    // ── Pass: overlap repair ──
-    in property <string> modify-overlap-repeated-policy-text: "close_previous";
-    in property <string> modify-overlap-orphan-policy-text: "drop";
-
     // ── Pass: quantize ──
     in property <string> modify-quantize-grid-ticks-text: "120";
-    in property <string> modify-quantize-strength-text: "1.0";
-    in property <string> modify-quantize-note-ends-text: "off";
-    in property <string> modify-quantize-swing-text: "0.0";
+    in property <string> modify-quantize-mode-text: "note_start_only";
 
     // ── Pass: humanize ──
     in property <string> modify-humanize-start-jitter-text: "8";
     in property <string> modify-humanize-length-jitter-text: "6";
     in property <string> modify-humanize-velocity-jitter-text: "5";
     in property <string> modify-humanize-seed-text: "1";
+    in property <string> modify-humanize-collision-mode-text: "stable";
 
     // ── Pass: key map ──
     in property <string> modify-key-map-mappings-text: "";
     in property <string> modify-key-map-fold-range-text: "";
     in property <string> modify-key-map-drop-unmapped-text: "off";
 
-    // ── Pass: dedupe ──
-    in property <string> modify-dedupe-notes-text: "on";
-    in property <string> modify-dedupe-controls-text: "off";
-    in property <string> modify-dedupe-tempo-text: "off";
-    in property <string> modify-dedupe-meta-text: "off";
-
     // ── Pass: meta text ──
-    in property <string> modify-meta-strip-all-text: "off";
     in property <string> modify-meta-keep-kinds-text: "";
-    in property <string> modify-meta-prefix-track-names-text: "";
 
     // ── Pass: sysex ──
     in property <string> modify-sysex-strip-all-text: "off";
     in property <string> modify-sysex-prepend-text: "";
-
-    // ── Pass: merge balance ──
-    in property <string> modify-merge-balance-deconflict-text: "on";
-    in property <string> modify-merge-balance-strip-duplicate-text: "on";
-    in property <string> modify-merge-balance-prefer-first-text: "on";
-
-    // ── Pass: analysis guard ──
-    in property <string> modify-analysis-guard-min-note-count-text: "1";
-    in property <string> modify-analysis-guard-max-note-count-text: "";
-    in property <string> modify-analysis-guard-min-track-count-text: "";
-    in property <string> modify-analysis-guard-max-track-count-text: "";
 
     // ── Reference analytics (cheap subset) ──
     in property <string> analysis-note-count-text: "—";
@@ -432,12 +375,6 @@ export component ModifyPanel inherits Rectangle {
         root.has-midi && root.has-output && root.modify-config-valid && !root.modify-job-active;
     private property <bool> is-custom: root.modify-pass-key-text == "custom";
     private property <bool> advanced-open: false;
-
-    // Accordion states (all collapsed by default)
-    private property <bool> section-merge-time-open: false;
-    private property <bool> section-trim-open: false;
-    private property <bool> section-note-filter-open: false;
-    private property <bool> section-structure-open: false;
 
     clip: true;
 
@@ -534,7 +471,7 @@ export component ModifyPanel inherits Rectangle {
                 Text { text: "SELECTION + TIMING"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; }
                 HorizontalLayout {
                     spacing: 6px;
-                    ModifyPassButton { title: "Range Select"; subtitle: "Scope tools to tracks, keys, ticks, or event kinds."; active: root.modify-pass-key-text == "range_select"; pressed => { root.select-pass("range_select"); } }
+                    ModifyPassButton { title: "Range Select"; subtitle: "Extract a tick range, optionally offsetting it."; active: root.modify-pass-key-text == "range_select"; pressed => { root.select-pass("range_select"); } }
                     ModifyPassButton { title: "Tempo Map"; subtitle: "Flatten, scale, or replace tempo events."; active: root.modify-pass-key-text == "tempo_map"; pressed => { root.select-pass("tempo_map"); } }
                     ModifyPassButton { title: "Time Warp"; subtitle: "Remap ticks through source/dest points."; active: root.modify-pass-key-text == "time_warp"; pressed => { root.select-pass("time_warp"); } }
                 }
@@ -555,7 +492,7 @@ export component ModifyPanel inherits Rectangle {
                 HorizontalLayout {
                     spacing: 6px;
                     ModifyPassButton { title: "Channel Remap"; subtitle: "Map source channels onto new destinations."; active: root.modify-pass-key-text == "channel_remap"; pressed => { root.select-pass("channel_remap"); } }
-                    ModifyPassButton { title: "Track Route"; subtitle: "Preserve, collapse, split, or map tracks."; active: root.modify-pass-key-text == "track_route"; pressed => { root.select-pass("track_route"); } }
+                    ModifyPassButton { title: "Track Route"; subtitle: "Collapse, split, or map tracks."; active: root.modify-pass-key-text == "track_route"; pressed => { root.select-pass("track_route"); } }
                     ModifyPassButton { title: "Key Map"; subtitle: "Remap pitches, fold range, or drop unmapped."; active: root.modify-pass-key-text == "key_map"; pressed => { root.select-pass("key_map"); } }
                 }
                 HorizontalLayout {
@@ -575,14 +512,14 @@ export component ModifyPanel inherits Rectangle {
                 HorizontalLayout {
                     spacing: 6px;
                     ModifyPassButton { title: "Control Change"; subtitle: "Strip, remap, scale, or inject CC."; active: root.modify-pass-key-text == "control_change"; pressed => { root.select-pass("control_change"); } }
-                    ModifyPassButton { title: "Overlap Repair"; subtitle: "Fix repeated note-ons and orphan offs."; active: root.modify-pass-key-text == "overlap_repair"; pressed => { root.select-pass("overlap_repair"); } }
-                    ModifyPassButton { title: "Dedupe"; subtitle: "Remove duplicate note/tempo/CC events."; active: root.modify-pass-key-text == "dedupe"; pressed => { root.select-pass("dedupe"); } }
+                    ModifyPassButton { title: "Meta Text"; subtitle: "Keep only the text event kinds you want."; active: root.modify-pass-key-text == "meta_text"; pressed => { root.select-pass("meta_text"); } }
+                    PassButtonPlaceholder { }
                 }
                 HorizontalLayout {
                     spacing: 6px;
-                    ModifyPassButton { title: "Meta Text"; subtitle: "Strip text events or rewrite prefixes."; active: root.modify-pass-key-text == "meta_text"; pressed => { root.select-pass("meta_text"); } }
                     ModifyPassButton { title: "Sysex"; subtitle: "Strip SysEx or prepend device messages."; active: root.modify-pass-key-text == "sysex"; pressed => { root.select-pass("sysex"); } }
-                    ModifyPassButton { title: "Analysis Guard"; subtitle: "Fail fast if thresholds are broken."; active: root.modify-pass-key-text == "analysis_guard"; pressed => { root.select-pass("analysis_guard"); } }
+                    PassButtonPlaceholder { }
+                    PassButtonPlaceholder { }
                 }
             }
 
@@ -594,7 +531,7 @@ export component ModifyPanel inherits Rectangle {
                 Text { text: "MERGE + EXPORT"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; }
                 HorizontalLayout {
                     spacing: 6px;
-                    ModifyPassButton { title: "Merge Balance"; subtitle: "Deconflict merged inputs and state."; active: root.modify-pass-key-text == "merge_balance"; pressed => { root.select-pass("merge_balance"); } }
+                    PassButtonPlaceholder { }
                     PassButtonPlaceholder { }
                     PassButtonPlaceholder { }
                 }
@@ -645,17 +582,21 @@ export component ModifyPanel inherits Rectangle {
                 if root.modify-pass-key-text == "range_select" : VerticalLayout {
                     spacing: 8px;
                     alignment: start;
-                    ModifyTextRow { label: "Track min"; value: root.modify-range-track-min-text; hint: "Optional lower track index bound."; submitted(text) => { root.update-control("range.track_min", text); } }
-                    ModifyTextRow { label: "Track max"; value: root.modify-range-track-max-text; submitted(text) => { root.update-control("range.track_max", text); } }
-                    ModifyTextRow { label: "Channel min"; value: root.modify-range-channel-min-text; submitted(text) => { root.update-control("range.channel_min", text); } }
-                    ModifyTextRow { label: "Channel max"; value: root.modify-range-channel-max-text; submitted(text) => { root.update-control("range.channel_max", text); } }
-                    ModifyTextRow { label: "Key min"; value: root.modify-range-key-min-text; submitted(text) => { root.update-control("range.key_min", text); } }
-                    ModifyTextRow { label: "Key max"; value: root.modify-range-key-max-text; submitted(text) => { root.update-control("range.key_max", text); } }
-                    ModifyTextRow { label: "Vel min"; value: root.modify-range-velocity-min-text; submitted(text) => { root.update-control("range.velocity_min", text); } }
-                    ModifyTextRow { label: "Vel max"; value: root.modify-range-velocity-max-text; submitted(text) => { root.update-control("range.velocity_max", text); } }
-                    ModifyTextRow { label: "Tick start"; value: root.modify-range-tick-start-text; submitted(text) => { root.update-control("range.tick_start", text); } }
-                    ModifyTextRow { label: "Tick end"; value: root.modify-range-tick-end-text; submitted(text) => { root.update-control("range.tick_end", text); } }
-                    ModifyTextRow { label: "Event kinds"; value: root.modify-range-event-kinds-text; hint: "Comma-separated: note, tempo, text, ..."; submitted(text) => { root.update-control("range.event_kinds", text); } }
+                    ModifyTextRow { label: "Track"; value: root.modify-range-track-select-text; hint: "Blank = all tracks."; submitted(text) => { root.update-control("range.track_select", text); } }
+                    ModifyTextRow { label: "Start tick"; value: root.modify-range-start-ticks-text; submitted(text) => { root.update-control("range.start_ticks", text); } }
+                    ModifyTextRow { label: "End tick"; value: root.modify-range-end-ticks-text; submitted(text) => { root.update-control("range.end_ticks", text); } }
+                    ModifyTextRow { label: "Offset tick"; value: root.modify-range-offset-ticks-text; hint: "Blank keeps original timing."; submitted(text) => { root.update-control("range.offset_ticks", text); } }
+                    InlineOptionRow {
+                        label: "Preserve system";
+                        OptionChip { label: "Off"; active: root.modify-range-preserve-system-text == "off"; pressed => { root.update-control("range.preserve_system_events", "off"); } }
+                        OptionChip { label: "On"; active: root.modify-range-preserve-system-text == "on"; pressed => { root.update-control("range.preserve_system_events", "on"); } }
+                    }
+                    InlineOptionRow {
+                        label: "Edge behavior";
+                        OptionChip { label: "Keep"; active: root.modify-range-edge-behavior-text == "keep"; pressed => { root.update-control("range.edge_behavior", "keep"); } }
+                        OptionChip { label: "Skip"; active: root.modify-range-edge-behavior-text == "skip"; pressed => { root.update-control("range.edge_behavior", "skip"); } }
+                        OptionChip { label: "Trim"; active: root.modify-range-edge-behavior-text == "trim"; pressed => { root.update-control("range.edge_behavior", "trim"); } }
+                    }
                 }
 
                 // ── tempo_map ──
@@ -693,7 +634,6 @@ export component ModifyPanel inherits Rectangle {
                     alignment: start;
                     InlineOptionRow {
                         label: "Mode";
-                        OptionChip { label: "Preserve"; active: root.modify-track-route-mode-text == "preserve"; pressed => { root.update-control("track_route.mode", "preserve"); } }
                         OptionChip { label: "Collapse"; active: root.modify-track-route-mode-text == "collapse_all"; pressed => { root.update-control("track_route.mode", "collapse_all"); } }
                         OptionChip { label: "Split"; active: root.modify-track-route-mode-text == "split_by_channel"; pressed => { root.update-control("track_route.mode", "split_by_channel"); } }
                         OptionChip { label: "Map"; active: root.modify-track-route-mode-text == "map"; pressed => { root.update-control("track_route.mode", "map"); } }
@@ -711,11 +651,6 @@ export component ModifyPanel inherits Rectangle {
                         label: "Strip changes";
                         OptionChip { label: "Off"; active: root.modify-program-strip-changes-text == "off"; pressed => { root.update-control("program.strip_program_changes", "off"); } }
                         OptionChip { label: "On"; active: root.modify-program-strip-changes-text == "on"; pressed => { root.update-control("program.strip_program_changes", "on"); } }
-                    }
-                    InlineOptionRow {
-                        label: "Keep startup";
-                        OptionChip { label: "Off"; active: root.modify-program-keep-only-startup-text == "off"; pressed => { root.update-control("program.keep_only_startup", "off"); } }
-                        OptionChip { label: "On"; active: root.modify-program-keep-only-startup-text == "on"; pressed => { root.update-control("program.keep_only_startup", "on"); } }
                     }
                 }
 
@@ -737,11 +672,6 @@ export component ModifyPanel inherits Rectangle {
                         label: "Strip bends";
                         OptionChip { label: "Off"; active: root.modify-pitch-strip-text == "off"; pressed => { root.update-control("pitch_bend.strip", "off"); } }
                         OptionChip { label: "On"; active: root.modify-pitch-strip-text == "on"; pressed => { root.update-control("pitch_bend.strip", "on"); } }
-                    }
-                    InlineOptionRow {
-                        label: "Reset start";
-                        OptionChip { label: "Off"; active: root.modify-pitch-reset-at-start-text == "off"; pressed => { root.update-control("pitch_bend.reset_at_start", "off"); } }
-                        OptionChip { label: "On"; active: root.modify-pitch-reset-at-start-text == "on"; pressed => { root.update-control("pitch_bend.reset_at_start", "on"); } }
                     }
                     ModifyTextRow { label: "Scale"; value: root.modify-pitch-scale-text; submitted(text) => { root.update-control("pitch_bend.scale", text); } }
                     ModifyTextRow { label: "Offset"; value: root.modify-pitch-offset-text; submitted(text) => { root.update-control("pitch_bend.offset", text); } }
@@ -774,33 +704,16 @@ export component ModifyPanel inherits Rectangle {
                     ModifyTextRow { label: "Fixed ticks"; value: root.modify-note-length-fixed-ticks-text; hint: "Set all notes to this length."; submitted(text) => { root.update-control("note_length.fixed_ticks", text); } }
                 }
 
-                // ── overlap_repair ──
-                if root.modify-pass-key-text == "overlap_repair" : VerticalLayout {
-                    spacing: 8px;
-                    alignment: start;
-                    InlineOptionRow {
-                        label: "Repeat note";
-                        OptionChip { label: "Close"; active: root.modify-overlap-repeated-policy-text == "close_previous"; pressed => { root.update-control("overlap.repeated_note_on", "close_previous"); } }
-                        OptionChip { label: "Keep"; active: root.modify-overlap-repeated-policy-text == "keep"; pressed => { root.update-control("overlap.repeated_note_on", "keep"); } }
-                    }
-                    InlineOptionRow {
-                        label: "Orphan offs";
-                        OptionChip { label: "Drop"; active: root.modify-overlap-orphan-policy-text == "drop"; pressed => { root.update-control("overlap.orphan_note_offs", "drop"); } }
-                        OptionChip { label: "Keep"; active: root.modify-overlap-orphan-policy-text == "keep"; pressed => { root.update-control("overlap.orphan_note_offs", "keep"); } }
-                    }
-                }
-
                 // ── quantize ──
                 if root.modify-pass-key-text == "quantize" : VerticalLayout {
                     spacing: 8px;
                     alignment: start;
                     ModifyTextRow { label: "Grid ticks"; value: root.modify-quantize-grid-ticks-text; hint: "Quantization grid in ticks."; submitted(text) => { root.update-control("quantize.grid_ticks", text); } }
-                    ModifyTextRow { label: "Strength"; value: root.modify-quantize-strength-text; hint: "0.0 to 1.0"; submitted(text) => { root.update-control("quantize.strength", text); } }
-                    ModifyTextRow { label: "Swing"; value: root.modify-quantize-swing-text; hint: "0.0 = straight"; submitted(text) => { root.update-control("quantize.swing", text); } }
                     InlineOptionRow {
-                        label: "Note ends";
-                        OptionChip { label: "Off"; active: root.modify-quantize-note-ends-text == "off"; pressed => { root.update-control("quantize.note_ends", "off"); } }
-                        OptionChip { label: "On"; active: root.modify-quantize-note-ends-text == "on"; pressed => { root.update-control("quantize.note_ends", "on"); } }
+                        label: "Mode";
+                        OptionChip { label: "Starts"; active: root.modify-quantize-mode-text == "note_start_only"; pressed => { root.update-control("quantize.mode", "note_start_only"); } }
+                        OptionChip { label: "Start+End"; active: root.modify-quantize-mode-text == "note_start_and_end"; pressed => { root.update-control("quantize.mode", "note_start_and_end"); } }
+                        OptionChip { label: "All Events"; active: root.modify-quantize-mode-text == "all_events"; pressed => { root.update-control("quantize.mode", "all_events"); } }
                     }
                 }
 
@@ -812,6 +725,12 @@ export component ModifyPanel inherits Rectangle {
                     ModifyTextRow { label: "Length jitter"; value: root.modify-humanize-length-jitter-text; submitted(text) => { root.update-control("humanize.length_jitter", text); } }
                     ModifyTextRow { label: "Vel jitter"; value: root.modify-humanize-velocity-jitter-text; submitted(text) => { root.update-control("humanize.velocity_jitter", text); } }
                     ModifyTextRow { label: "Seed"; value: root.modify-humanize-seed-text; submitted(text) => { root.update-control("humanize.seed", text); } }
+                    InlineOptionRow {
+                        label: "Collision mode";
+                        OptionChip { label: "Stable"; active: root.modify-humanize-collision-mode-text == "stable"; pressed => { root.update-control("humanize.collision_mode", "stable"); } }
+                        OptionChip { label: "By Track"; active: root.modify-humanize-collision-mode-text == "distinguish_by_track"; pressed => { root.update-control("humanize.collision_mode", "distinguish_by_track"); } }
+                        OptionChip { label: "By Note"; active: root.modify-humanize-collision-mode-text == "distinguish_by_note"; pressed => { root.update-control("humanize.collision_mode", "distinguish_by_note"); } }
+                    }
                 }
 
                 // ── key_map ──
@@ -827,27 +746,11 @@ export component ModifyPanel inherits Rectangle {
                     }
                 }
 
-                // ── dedupe ──
-                if root.modify-pass-key-text == "dedupe" : VerticalLayout {
-                    spacing: 8px;
-                    alignment: start;
-                    InlineOptionRow { label: "Notes";    OptionChip { label: "On"; active: root.modify-dedupe-notes-text == "on"; pressed => { root.update-control("dedupe.notes", "on"); } } OptionChip { label: "Off"; active: root.modify-dedupe-notes-text == "off"; pressed => { root.update-control("dedupe.notes", "off"); } } }
-                    InlineOptionRow { label: "Controls"; OptionChip { label: "On"; active: root.modify-dedupe-controls-text == "on"; pressed => { root.update-control("dedupe.controls", "on"); } } OptionChip { label: "Off"; active: root.modify-dedupe-controls-text == "off"; pressed => { root.update-control("dedupe.controls", "off"); } } }
-                    InlineOptionRow { label: "Tempo";    OptionChip { label: "On"; active: root.modify-dedupe-tempo-text == "on"; pressed => { root.update-control("dedupe.tempo", "on"); } } OptionChip { label: "Off"; active: root.modify-dedupe-tempo-text == "off"; pressed => { root.update-control("dedupe.tempo", "off"); } } }
-                    InlineOptionRow { label: "Meta";     OptionChip { label: "On"; active: root.modify-dedupe-meta-text == "on"; pressed => { root.update-control("dedupe.meta", "on"); } } OptionChip { label: "Off"; active: root.modify-dedupe-meta-text == "off"; pressed => { root.update-control("dedupe.meta", "off"); } } }
-                }
-
                 // ── meta_text ──
                 if root.modify-pass-key-text == "meta_text" : VerticalLayout {
                     spacing: 8px;
                     alignment: start;
-                    InlineOptionRow {
-                        label: "Strip all";
-                        OptionChip { label: "Off"; active: root.modify-meta-strip-all-text == "off"; pressed => { root.update-control("meta.strip_all", "off"); } }
-                        OptionChip { label: "On"; active: root.modify-meta-strip-all-text == "on"; pressed => { root.update-control("meta.strip_all", "on"); } }
-                    }
                     ModifyTextRow { label: "Keep kinds"; value: root.modify-meta-keep-kinds-text; hint: "track_name, marker, lyric, ..."; submitted(text) => { root.update-control("meta.keep_kinds", text); } }
-                    ModifyTextRow { label: "Track prefix"; value: root.modify-meta-prefix-track-names-text; hint: "Prefix for track-name events."; submitted(text) => { root.update-control("meta.prefix_track_names", text); } }
                 }
 
                 // ── sysex ──
@@ -862,154 +765,6 @@ export component ModifyPanel inherits Rectangle {
                     ModifyTextRow { label: "Prepend"; value: root.modify-sysex-prepend-text; hint: "Pipe-separated messages, space-separated bytes."; submitted(text) => { root.update-control("sysex.prepend", text); } }
                 }
 
-                // ── merge_balance ──
-                if root.modify-pass-key-text == "merge_balance" : VerticalLayout {
-                    spacing: 8px;
-                    alignment: start;
-                    InlineOptionRow { label: "Deconflict";   OptionChip { label: "On"; active: root.modify-merge-balance-deconflict-text == "on"; pressed => { root.update-control("merge_balance.deconflict_channels", "on"); } } OptionChip { label: "Off"; active: root.modify-merge-balance-deconflict-text == "off"; pressed => { root.update-control("merge_balance.deconflict_channels", "off"); } } }
-                    InlineOptionRow { label: "Strip dupes";  OptionChip { label: "On"; active: root.modify-merge-balance-strip-duplicate-text == "on"; pressed => { root.update-control("merge_balance.strip_duplicate_start_state", "on"); } } OptionChip { label: "Off"; active: root.modify-merge-balance-strip-duplicate-text == "off"; pressed => { root.update-control("merge_balance.strip_duplicate_start_state", "off"); } } }
-                    InlineOptionRow { label: "Prefer tempo"; OptionChip { label: "On"; active: root.modify-merge-balance-prefer-first-text == "on"; pressed => { root.update-control("merge_balance.prefer_first_tempo_map", "on"); } } OptionChip { label: "Off"; active: root.modify-merge-balance-prefer-first-text == "off"; pressed => { root.update-control("merge_balance.prefer_first_tempo_map", "off"); } } }
-                }
-
-                // ── analysis_guard ──
-                if root.modify-pass-key-text == "analysis_guard" : VerticalLayout {
-                    spacing: 8px;
-                    alignment: start;
-                    ModifyTextRow { label: "Min notes"; value: root.modify-analysis-guard-min-note-count-text; submitted(text) => { root.update-control("analysis_guard.min_note_count", text); } }
-                    ModifyTextRow { label: "Max notes"; value: root.modify-analysis-guard-max-note-count-text; submitted(text) => { root.update-control("analysis_guard.max_note_count", text); } }
-                    ModifyTextRow { label: "Min tracks"; value: root.modify-analysis-guard-min-track-count-text; submitted(text) => { root.update-control("analysis_guard.min_track_count", text); } }
-                    ModifyTextRow { label: "Max tracks"; value: root.modify-analysis-guard-max-track-count-text; submitted(text) => { root.update-control("analysis_guard.max_track_count", text); } }
-                }
-            }
-
-            Rectangle { height: 16px; }
-            Separator { }
-            Rectangle { height: 16px; }
-
-            // ══════════════════════════════════════
-            //  4 · PREPROCESSING (accordion)
-            // ══════════════════════════════════════
-
-            SectionHeader { title: "PREPROCESSING"; }
-            Rectangle { height: 2px; }
-            Text {
-                text: "Global settings applied before the selected pass. Defaults are pre-filled — expand only what you need.";
-                color: #3d5068;
-                font-size: 10px;
-                wrap: word-wrap;
-            }
-            Rectangle { height: 8px; }
-
-            ModifyCard {
-
-                // ── Merge & Time ──
-                AccordionHeader {
-                    title: "MERGE & TIME";
-                    expanded: root.section-merge-time-open;
-                    summary: root.modify-merge-mode-text == "preserve_tracks" ? "preserve" : root.modify-merge-mode-text == "flatten_to_single_track" ? "flatten" : "index";
-                    toggle => { root.section-merge-time-open = !root.section-merge-time-open; }
-                }
-                if root.section-merge-time-open : VerticalLayout {
-                    spacing: 6px;
-                    alignment: start;
-                    InlineOptionRow {
-                        label: "Merge";
-                        OptionChip { label: "Preserve"; active: root.modify-merge-mode-text == "preserve_tracks"; pressed => { root.update-control("merge.mode", "preserve_tracks"); } }
-                        OptionChip { label: "Flatten"; active: root.modify-merge-mode-text == "flatten_to_single_track"; pressed => { root.update-control("merge.mode", "flatten_to_single_track"); } }
-                        OptionChip { label: "Index"; active: root.modify-merge-mode-text == "merge_by_track_index"; pressed => { root.update-control("merge.mode", "merge_by_track_index"); } }
-                    }
-                    ModifyTextRow { label: "Offset ticks"; value: root.modify-time-offset-ticks-text; hint: "Signed tick offset before merge."; submitted(text) => { root.update-control("time.offset_ticks", text); } }
-                    ModifyTextRow { label: "PPQ override"; value: root.modify-time-ppq-override-text; hint: "Blank = keep source PPQ."; submitted(text) => { root.update-control("time.ppq_override", text); } }
-                    ModifyTextRow { label: "Tempo override"; value: root.modify-time-tempo-override-text; hint: "us/qn. Blank = keep tempo map."; submitted(text) => { root.update-control("time.tempo_override", text); } }
-                }
-
-                Separator { }
-
-                // ── Trim ──
-                AccordionHeader {
-                    title: "TRIM";
-                    expanded: root.section-trim-open;
-                    summary: root.modify-trim-start-tick-text == "" && root.modify-trim-end-tick-text == "" ? "off" : "active";
-                    toggle => { root.section-trim-open = !root.section-trim-open; }
-                }
-                if root.section-trim-open : VerticalLayout {
-                    spacing: 6px;
-                    alignment: start;
-                    ModifyTextRow { label: "Start tick"; value: root.modify-trim-start-tick-text; hint: "Blank = no trim."; submitted(text) => { root.update-control("time.trim.start_tick", text); } }
-                    ModifyTextRow { label: "End tick"; value: root.modify-trim-end-tick-text; submitted(text) => { root.update-control("time.trim.end_tick", text); } }
-                    InlineOptionRow {
-                        label: "Edge state";
-                        OptionChip { label: "Inject"; active: root.modify-trim-inject-edge-text == "on"; pressed => { root.update-control("time.trim.inject_edge_state", "on"); } }
-                        OptionChip { label: "Skip"; active: root.modify-trim-inject-edge-text == "off"; pressed => { root.update-control("time.trim.inject_edge_state", "off"); } }
-                    }
-                    InlineOptionRow {
-                        label: "Close notes";
-                        OptionChip { label: "Yes"; active: root.modify-trim-close-open-text == "on"; pressed => { root.update-control("time.trim.close_open_notes_at_end", "on"); } }
-                        OptionChip { label: "No"; active: root.modify-trim-close-open-text == "off"; pressed => { root.update-control("time.trim.close_open_notes_at_end", "off"); } }
-                    }
-                }
-
-                Separator { }
-
-                // ── Note Filter ──
-                AccordionHeader {
-                    title: "NOTE FILTER";
-                    expanded: root.section-note-filter-open;
-                    summary: root.modify-piano-only-text == "on" ? "piano only" : "all notes";
-                    toggle => { root.section-note-filter-open = !root.section-note-filter-open; }
-                }
-                if root.section-note-filter-open : VerticalLayout {
-                    spacing: 6px;
-                    alignment: start;
-                    InlineOptionRow {
-                        label: "Piano only";
-                        OptionChip { label: "Off"; active: root.modify-piano-only-text == "off"; pressed => { root.update-control("piano_only", "off"); } }
-                        OptionChip { label: "On"; active: root.modify-piano-only-text == "on"; pressed => { root.update-control("piano_only", "on"); } }
-                    }
-                    InlineOptionRow {
-                        label: "Zero vel";
-                        OptionChip { label: "NoteOff"; active: root.modify-zero-velocity-mode-text == "note_off"; pressed => { root.update-control("zero_velocity_note_on", "note_off"); } }
-                        OptionChip { label: "Keep"; active: root.modify-zero-velocity-mode-text == "keep_as_note_on"; pressed => { root.update-control("zero_velocity_note_on", "keep_as_note_on"); } }
-                    }
-                    ModifyTextRow { label: "Min key"; value: root.modify-min-key-text; hint: "0-127"; submitted(text) => { root.update-control("notes.min_key", text); } }
-                    ModifyTextRow { label: "Max key"; value: root.modify-max-key-text; hint: "0-127"; submitted(text) => { root.update-control("notes.max_key", text); } }
-                    ModifyTextRow { label: "Transpose"; value: root.modify-transpose-text; hint: "Signed semitones."; submitted(text) => { root.update-control("notes.transpose", text); } }
-                    ModifyTextRow { label: "Velocity scale"; value: root.modify-note-velocity-scale-text; submitted(text) => { root.update-control("notes.velocity_scale", text); } }
-                }
-
-                Separator { }
-
-                // ── Structure ──
-                AccordionHeader {
-                    title: "STRUCTURE";
-                    expanded: root.section-structure-open;
-                    summary: "defaults";
-                    toggle => { root.section-structure-open = !root.section-structure-open; }
-                }
-                if root.section-structure-open : VerticalLayout {
-                    spacing: 6px;
-                    alignment: start;
-                    InlineOptionRow {
-                        label: "Split chans";
-                        OptionChip { label: "Off"; active: root.modify-split-channels-text == "off"; pressed => { root.update-control("structure.split_channels", "off"); } }
-                        OptionChip { label: "On"; active: root.modify-split-channels-text == "on"; pressed => { root.update-control("structure.split_channels", "on"); } }
-                    }
-                    InlineOptionRow {
-                        label: "Collapse";
-                        OptionChip { label: "Off"; active: root.modify-collapse-tracks-text == "off"; pressed => { root.update-control("structure.collapse_tracks", "off"); } }
-                        OptionChip { label: "On"; active: root.modify-collapse-tracks-text == "on"; pressed => { root.update-control("structure.collapse_tracks", "on"); } }
-                    }
-                    InlineOptionRow {
-                        label: "Remove empty";
-                        OptionChip { label: "On"; active: root.modify-remove-empty-tracks-text == "on"; pressed => { root.update-control("structure.remove_empty_tracks", "on"); } }
-                        OptionChip { label: "Off"; active: root.modify-remove-empty-tracks-text == "off"; pressed => { root.update-control("structure.remove_empty_tracks", "off"); } }
-                    }
-                    InlineOptionRow {
-                        label: "Drop orphan";
-                        OptionChip { label: "On"; active: root.modify-drop-orphan-note-offs-text == "on"; pressed => { root.update-control("structure.drop_orphan_note_offs", "on"); } }
-                        OptionChip { label: "Off"; active: root.modify-drop-orphan-note-offs-text == "off"; pressed => { root.update-control("structure.drop_orphan_note_offs", "off"); } }
-                    }
-                }
             }
 
             Rectangle { height: 16px; }

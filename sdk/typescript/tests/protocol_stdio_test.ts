@@ -87,49 +87,12 @@ Deno.test("stdio protocol processes a midi file with the singular process comman
       input: midiPath,
       output,
       config: {
-        time: {
-          offset_ticks: 0,
-          ppq_override: null,
-          tempo_override: null,
-          trim: null,
-        },
-        notes: {
-          min_key: 0,
-          max_key: 127,
-          transpose: 0,
-          velocity_scale: 1,
-        },
-        pitch: {
-          bend_scale: 1,
-          bend_offset: 0,
-          min_bend: -8192,
-          max_bend: 8191,
-        },
-        events: {
-          notes: true,
-          tempo: true,
-          pitch_bend: true,
-          channel_controls: true,
-          program_changes: true,
-          channel_pressure: true,
-          polyphonic_pressure: true,
-          sysex: true,
-          meta_other: true,
-        },
-        structure: {
-          split_channels: false,
-          collapse_tracks: false,
-          remove_empty_tracks: true,
-          drop_orphan_note_offs: true,
-        },
-        tools: [{
+        tool: {
           tool: "key_map",
           mappings: [{ from: 60, to: 65 }],
           fold_to_range: null,
           drop_unmapped: false,
-        }],
-        piano_only: false,
-        zero_velocity_note_on: "note_off",
+        },
       },
     });
     const status = events[0];

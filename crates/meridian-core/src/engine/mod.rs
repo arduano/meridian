@@ -9,7 +9,10 @@ mod support;
 mod video_render_job;
 
 use std::{
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     thread,
 };
 
@@ -57,17 +60,20 @@ pub type CoreResponse = Vec<CoreEvent>;
 pub struct CoreHandle {
     sender: Sender<RequestMessage>,
     subscribers: Arc<Mutex<Vec<Sender<CoreEvent>>>>,
+    midi_load_generation: Arc<AtomicU64>,
 }
 
 pub fn spawn_core() -> CoreHandle {
     let (sender, receiver) = flume::unbounded();
     let subscribers = Arc::new(Mutex::new(Vec::new()));
+    let midi_load_generation = Arc::new(AtomicU64::new(0));
     let core_handle = CoreHandle {
         sender: sender.clone(),
         subscribers: Arc::clone(&subscribers),
+        midi_load_generation: Arc::clone(&midi_load_generation),
     };
     thread::spawn(move || {
-        let mut core = core_state::CoreState::new(sender, subscribers);
+        let mut core = core_state::CoreState::new(sender, subscribers, midi_load_generation);
         core.run(receiver);
     });
     core_handle
@@ -113,6 +119,14 @@ impl CoreHandle {
         receiver
     }
 
+    pub fn cancel_midi_loads(&self) {
+        self.midi_load_generation.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub(crate) fn current_midi_load_generation(&self) -> u64 {
+        self.midi_load_generation.load(Ordering::SeqCst)
+    }
+
     pub(crate) fn publish_video_event(&self, event: VideoRenderEvent) -> Result<(), MeridianError> {
         self.sender
             .send(RequestMessage::VideoRenderUpdate { event })
@@ -146,11 +160,12 @@ impl CoreHandle {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{path::PathBuf, thread};
 
     use crate::{
         audio::{AudioBackend, AudioConfig},
-        protocol::{CoreCommand, CoreEvent, StateSnapshot},
+        midi::test_support::{note_off, note_on, write_toolkit_midi},
+        protocol::{CoreCommand, CoreErrorCode, CoreEvent, StateSnapshot},
     };
 
     use super::{CoreHandle, spawn_core};
@@ -187,6 +202,25 @@ mod tests {
     fn shutdown(core: &CoreHandle) {
         core.request(CoreCommand::Shutdown)
             .expect("shutdown core after test");
+    }
+
+    fn large_test_midi() -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "meridian-cancel-load-{}-{}.mid",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after unix epoch")
+                .as_nanos()
+        ));
+        let mut track = Vec::with_capacity(80_000);
+        for index in 0..40_000_u64 {
+            let key = 21 + (index % 60) as u8;
+            track.push(note_on(1, 0, key, 100));
+            track.push(note_off(1, 0, key));
+        }
+        write_toolkit_midi(&path, 480, &[track]);
+        path
     }
 
     #[test]
@@ -265,6 +299,48 @@ mod tests {
         assert!(replaced_state.active_display_cache_id.is_some());
         assert!(replaced_state.midi_loaded);
 
+        shutdown(&core);
+    }
+
+    #[test]
+    fn cancelling_a_midi_load_aborts_the_core_request() {
+        let core = test_core();
+        let receiver = core.subscribe_events();
+        let midi = large_test_midi();
+        let request_core = core.clone();
+        let midi_for_thread = midi.clone();
+        let load_thread = thread::spawn(move || {
+            request_core
+                .request(CoreCommand::LoadMidi {
+                    path: midi_for_thread,
+                })
+                .expect("load midi request should return a response")
+        });
+
+        loop {
+            let event = receiver.recv().expect("midi load progress event");
+            if matches!(event, CoreEvent::MidiLoadProgress { .. }) {
+                core.cancel_midi_loads();
+                break;
+            }
+        }
+
+        let response = load_thread.join().expect("load thread should join");
+        assert!(matches!(
+            response.as_slice(),
+            [CoreEvent::Error {
+                code: CoreErrorCode::Cancelled,
+                ..
+            }]
+        ));
+
+        let state = snapshot(&core);
+        assert!(state.active_parsed_midi_id.is_none());
+        assert!(state.active_display_cache_id.is_none());
+        assert!(state.active_audio_cache_id.is_none());
+        assert_eq!(state.midi_path, None);
+
+        let _ = std::fs::remove_file(midi);
         shutdown(&core);
     }
 }

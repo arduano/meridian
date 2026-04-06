@@ -182,7 +182,8 @@ impl UiViewModel {
             | CoreEvent::AudioSessionCreated { .. }
             | CoreEvent::MidiAnalysisJob { .. }
             | CoreEvent::MidiAnalysisJobStatus { .. }
-            | CoreEvent::MidiFilesProcessed { .. }
+            | CoreEvent::MidiFileProcessed { .. }
+            | CoreEvent::MidiFilesMerged { .. }
             | CoreEvent::Error { .. }
             | CoreEvent::ShutdownComplete => {}
         }

@@ -1,37 +1,25 @@
 import type {
-  AnalysisGuardTool,
   ChangePpqTool,
   ChannelRemapTool,
   ControlChangeTool,
-  DedupeTool,
-  EventFilterConfig,
   ExtractTrackTool,
-  FileTimeProcessingConfig,
   HumanizeTool,
   KeyMapTool,
-  MergeBalanceTool,
   MetaTextTool,
-  MidiFileProcessingConfig,
   MidiModifierTool,
   NoteLengthTool,
-  NoteProcessingConfig,
-  OverlapRepairTool,
   PitchBendTool,
-  PitchProcessingConfig,
   ProgramTool,
   QuantizeTool,
   RangeSelectTool,
   SharedMetadataTrackTool,
-  StructureProcessingConfig,
   SysexTool,
   TempoMapDestination,
   TempoMapTool,
   TempoPoint,
   TimeWarpTool,
   TrackRouteTool,
-  TrimProcessingConfig,
   VelocityMapTool,
-  ZeroVelocityNoteOnMode,
 } from "./protocol.ts";
 
 export type DeepPartial<T> = T extends (infer U)[] ? U[]
@@ -65,84 +53,6 @@ export function deepMerge<T>(base: T, override: DeepPartial<T> | undefined): T {
     output[key] = deepMerge(baseValue, overrideValue as never);
   }
   return output as T;
-}
-
-export function defaultEventFilterConfig(): EventFilterConfig {
-  return {
-    notes: true,
-    tempo: true,
-    pitch_bend: true,
-    channel_controls: true,
-    program_changes: true,
-    channel_pressure: true,
-    polyphonic_pressure: true,
-    sysex: true,
-    meta_other: true,
-  };
-}
-
-export function defaultNoteProcessingConfig(): NoteProcessingConfig {
-  return {
-    min_key: 0,
-    max_key: 127,
-    transpose: 0,
-    velocity_scale: 1,
-  };
-}
-
-export function defaultTrimProcessingConfig(): TrimProcessingConfig {
-  return {
-    start_tick: 0,
-    end_tick: null,
-    inject_edge_state: true,
-    close_open_notes_at_end: true,
-  };
-}
-
-export function defaultFileTimeProcessingConfig(): FileTimeProcessingConfig {
-  return {
-    offset_ticks: 0,
-    ppq_override: null,
-    tempo_override: null,
-    trim: null,
-  };
-}
-
-export function defaultPitchProcessingConfig(): PitchProcessingConfig {
-  return {
-    bend_scale: 1,
-    bend_offset: 0,
-    min_bend: -8192,
-    max_bend: 8191,
-  };
-}
-
-export function defaultStructureProcessingConfig(): StructureProcessingConfig {
-  return {
-    split_channels: false,
-    collapse_tracks: false,
-    remove_empty_tracks: true,
-    drop_orphan_note_offs: true,
-  };
-}
-
-export function defaultMidiFileProcessingConfig(): MidiFileProcessingConfig {
-  return {
-    time: defaultFileTimeProcessingConfig(),
-    notes: defaultNoteProcessingConfig(),
-    pitch: defaultPitchProcessingConfig(),
-    events: defaultEventFilterConfig(),
-    structure: defaultStructureProcessingConfig(),
-    tools: [],
-    piano_only: false,
-    zero_velocity_note_on: "note_off",
-  };
-}
-
-export function createMidiFileProcessingConfig(
-  override?: DeepPartial<MidiFileProcessingConfig>,
-): MidiFileProcessingConfig {
-  return deepMerge(defaultMidiFileProcessingConfig(), override);
 }
 
 function withDefaults<T extends MidiModifierTool>(value: T): T {
@@ -262,14 +172,6 @@ export const midiTools = {
       ...config,
     });
   },
-  overlapRepair(config: Partial<OverlapRepairTool> = {}): OverlapRepairTool {
-    return withDefaults({
-      tool: "overlap_repair",
-      repeated_note_on: "close_previous",
-      orphan_note_offs: "drop",
-      ...config,
-    });
-  },
   quantize(config: Partial<QuantizeTool> = {}): QuantizeTool {
     return withDefaults({
       tool: "quantize",
@@ -295,16 +197,6 @@ export const midiTools = {
       mappings: [],
       fold_to_range: null,
       drop_unmapped: false,
-      ...config,
-    });
-  },
-  dedupe(config: Partial<DedupeTool> = {}): DedupeTool {
-    return withDefaults({
-      tool: "dedupe",
-      notes: false,
-      controls: false,
-      tempo: false,
-      meta: false,
       ...config,
     });
   },
@@ -344,29 +236,4 @@ export const midiTools = {
       ...config,
     });
   },
-  mergeBalance(config: Partial<MergeBalanceTool> = {}): MergeBalanceTool {
-    return withDefaults({
-      tool: "merge_balance",
-      deconflict_channels: false,
-      strip_duplicate_start_state: false,
-      prefer_first_tempo_map: false,
-      ...config,
-    });
-  },
-  analysisGuard(config: Partial<AnalysisGuardTool> = {}): AnalysisGuardTool {
-    return withDefaults({
-      tool: "analysis_guard",
-      min_note_count: null,
-      max_note_count: null,
-      min_track_count: null,
-      max_track_count: null,
-      ...config,
-    });
-  },
 };
-
-export function normalizeZeroVelocityNoteOnMode(
-  mode?: ZeroVelocityNoteOnMode,
-): ZeroVelocityNoteOnMode {
-  return mode ?? "note_off";
-}

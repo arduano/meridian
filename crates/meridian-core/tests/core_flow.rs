@@ -8,9 +8,8 @@ use std::{
 use meridian_core::{
     PROTOCOL_VERSION,
     midi::{
-        EventFilterConfig, FileTimeProcessingConfig, KeyMapEntry, KeyMapTool,
-        MidiFileProcessingConfig, MidiFilesMergeConfig, MidiModifierTool,
-        StructureProcessingConfig, TrimProcessingConfig, analysis::MidiAnalysisKind,
+        KeyMapEntry, KeyMapTool, MidiFileProcessingConfig, MidiFilesMergeConfig, MidiModifierTool,
+        RangeEdgeBehavior, RangeSelectTool, analysis::MidiAnalysisKind,
     },
     protocol::{
         CoreCommand, CoreEvent, JsonRequest, JsonResponse, MidiProcessEvent, MidiProcessStatus,
@@ -211,7 +210,7 @@ fn midi_analysis_job_runs_without_building_display_cache() {
 }
 
 #[test]
-fn process_midi_file_trims_and_writes_output() {
+fn process_midi_file_applies_range_select_tool() {
     let dir = support::temp_dir("meridian-core-process-test");
     let midi = dir.join("input.mid");
     let output = dir.join("out.mid");
@@ -233,25 +232,15 @@ fn process_midi_file_trims_and_writes_output() {
     );
 
     let core = spawn_core();
-    let mut config = MidiFileProcessingConfig::default();
-    config.time = FileTimeProcessingConfig {
-        offset_ticks: 0,
-        ppq_override: Some(120),
-        tempo_override: Some(500_000),
-        trim: Some(TrimProcessingConfig {
-            start_tick: 24,
-            end_tick: Some(120),
-            inject_edge_state: true,
-            close_open_notes_at_end: true,
+    let config = MidiFileProcessingConfig {
+        tool: MidiModifierTool::RangeSelect(RangeSelectTool {
+            start_ticks: 24,
+            end_ticks: 120,
+            offset_ticks: Some(0),
+            track_select: None,
+            preserve_system_events: false,
+            edge_behavior: RangeEdgeBehavior::Trim,
         }),
-    };
-    config.notes.transpose = 12;
-    config.events = EventFilterConfig::default();
-    config.structure = StructureProcessingConfig {
-        split_channels: false,
-        collapse_tracks: true,
-        remove_empty_tracks: true,
-        drop_orphan_note_offs: true,
     };
 
     let events = core
@@ -267,45 +256,38 @@ fn process_midi_file_trims_and_writes_output() {
         [CoreEvent::MidiFileProcessed {
             input: processed_input,
             output: processed_output,
-            output_track_count: 1,
-            output_ppq: 120,
+            output_track_count: 2,
+            output_ppq: 96,
             ..
         }] if processed_input == &midi && processed_output == &output
     ));
 
     let written = ToolkitMidiFile::open_in_ram(&output, None).expect("open output midi");
-    assert_eq!(written.ppq(), 120);
-    assert_eq!(written.track_count(), 1);
+    assert_eq!(written.ppq(), 96);
+    assert_eq!(written.track_count(), 2);
 
-    let mut seen_tempo = 0;
-    let mut seen_program = 0;
-    let mut note_ons = Vec::new();
-    let mut note_offs = Vec::new();
+    let mut track0_events = Vec::new();
     let mut tick = 0u64;
-    for event in written.iter_track(0).expect("open written track") {
-        let event = event.expect("parse written track");
+    for event in written.iter_track(0).expect("open written track 0") {
+        let event = event.expect("parse written track 0");
         tick += event.delta;
-        match event.event {
-            Event::Tempo(tempo) => {
-                seen_tempo += 1;
-                assert_eq!(tempo.tempo, 500_000);
-                assert_eq!(tick, 0);
-            }
-            Event::ProgramChange(program) => {
-                seen_program += 1;
-                assert_eq!(program.program, 5);
-                assert_eq!(tick, 0);
-            }
-            Event::NoteOn(note) => note_ons.push((tick, note.channel, note.key)),
-            Event::NoteOff(note) => note_offs.push((tick, note.channel, note.key)),
-            _ => {}
+        if let Some(key) = event.event.key() {
+            track0_events.push((tick, key));
         }
     }
 
-    assert_eq!(seen_tempo, 1);
-    assert_eq!(seen_program, 1);
-    assert_eq!(note_ons, vec![(0, 1, 77), (30, 0, 72)]);
-    assert_eq!(note_offs, vec![(60, 1, 77), (90, 0, 72)]);
+    let mut track1_events = Vec::new();
+    tick = 0;
+    for event in written.iter_track(1).expect("open written track 1") {
+        let event = event.expect("parse written track 1");
+        tick += event.delta;
+        if let Some(key) = event.event.key() {
+            track1_events.push((tick, key));
+        }
+    }
+
+    assert_eq!(track0_events, vec![(24, 60), (72, 60)]);
+    assert_eq!(track1_events, vec![(0, 65), (48, 65)]);
 }
 
 #[test]
@@ -326,12 +308,13 @@ fn process_midi_file_applies_key_map_tool() {
     );
 
     let core = spawn_core();
-    let mut config = MidiFileProcessingConfig::default();
-    config.tools = vec![MidiModifierTool::KeyMap(KeyMapTool {
-        mappings: vec![KeyMapEntry { from: 60, to: 72 }],
-        fold_to_range: None,
-        drop_unmapped: true,
-    })];
+    let config = MidiFileProcessingConfig {
+        tool: MidiModifierTool::KeyMap(KeyMapTool {
+            mappings: vec![KeyMapEntry { from: 60, to: 72 }],
+            fold_to_range: None,
+            drop_unmapped: true,
+        }),
+    };
 
     let events = core
         .request(CoreCommand::ProcessMidiFile {
@@ -503,7 +486,9 @@ fn process_midi_file_job_reports_status_and_finishes() {
         .request(CoreCommand::StartProcessMidiFile {
             input: midi.clone(),
             output: output.clone(),
-            config: MidiFileProcessingConfig::default(),
+            config: MidiFileProcessingConfig {
+                tool: MidiModifierTool::KeyMap(KeyMapTool::default()),
+            },
         })
         .expect("start midi process job");
 

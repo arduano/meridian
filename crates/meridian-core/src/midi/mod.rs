@@ -35,8 +35,7 @@ pub use modifier_tools::{
 };
 pub use processed::ProcessedMidi;
 pub use processing::{
-    EventFilterConfig, FileTimeProcessingConfig, MidiFileProcessingConfig, MidiProcessingConfig,
-    PitchProcessingConfig, StructureProcessingConfig, TrimProcessingConfig, ZeroVelocityNoteOnMode,
+    EventFilterConfig, MidiFileProcessingConfig, MidiProcessingConfig, ZeroVelocityNoteOnMode,
 };
 pub use tools::*;
 

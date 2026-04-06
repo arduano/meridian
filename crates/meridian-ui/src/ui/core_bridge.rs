@@ -7,7 +7,9 @@ use meridian_core::{
     CoreHandle, MeridianError,
     audio::{AudioBackend, AudioConfig, AudioRenderConfig},
     display::MIN_VIEW_RANGE_SECONDS,
-    midi::{MidiFileInspection, MidiFileProcessingConfig, MidiFileSelection, MidiProcessingConfig},
+    midi::{
+        MidiFileInspection, MidiFileProcessingConfig, MidiFilesMergeConfig, MidiProcessingConfig,
+    },
     protocol::{
         CoreCommand, CoreEvent, MidiProcessStatus, ParsedMidiId, ProcessedMidiId, VideoRenderConfig,
     },
@@ -28,6 +30,10 @@ impl UiCoreBridge {
 
     pub fn core(&self) -> &CoreHandle {
         &self.core
+    }
+
+    pub fn cancel_midi_loads(&self) {
+        self.core.cancel_midi_loads();
     }
 
     pub fn initialize(
@@ -120,6 +126,13 @@ impl UiCoreBridge {
         self.request(CoreCommand::UnloadRenderContext, model)
     }
 
+    pub fn drop_inactive_midi_resources(
+        &self,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(CoreCommand::DropInactiveMidiResources, model)
+    }
+
     pub fn load_parsed_midi(
         &self,
         path: PathBuf,
@@ -173,16 +186,16 @@ impl UiCoreBridge {
         )
     }
 
-    pub fn start_process_midi_files(
+    pub fn start_process_midi_file(
         &self,
-        selection: MidiFileSelection,
+        input: PathBuf,
         output: PathBuf,
         config: MidiFileProcessingConfig,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
         self.request(
-            CoreCommand::StartProcessMidiFiles {
-                selection,
+            CoreCommand::StartProcessMidiFile {
+                input,
                 output,
                 config,
             },
@@ -190,18 +203,35 @@ impl UiCoreBridge {
         )
     }
 
-    pub fn cancel_process_midi_files(
+    pub fn merge_midi_files(
+        &self,
+        inputs: Vec<PathBuf>,
+        output: PathBuf,
+        config: MidiFilesMergeConfig,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(
+            CoreCommand::MergeMidiFiles {
+                inputs,
+                output,
+                config,
+            },
+            model,
+        )
+    }
+
+    pub fn cancel_midi_file_process(
         &self,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
-        self.request(CoreCommand::CancelProcessMidiFiles, model)
+        self.request(CoreCommand::CancelMidiFileProcess, model)
     }
 
-    pub fn get_process_midi_status(
+    pub fn get_midi_file_process_status(
         &self,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<MidiProcessStatus, MeridianError> {
-        let events = self.request(CoreCommand::GetProcessMidiStatus, model)?;
+        let events = self.request(CoreCommand::GetMidiFileProcessStatus, model)?;
         events
             .into_iter()
             .find_map(|event| match event {

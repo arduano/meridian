@@ -39,7 +39,15 @@ impl ProcessedMidi {
         parsed: &ParsedMidiFile,
         config: &MidiProcessingConfig,
     ) -> Result<Self, MeridianError> {
-        build_processed_midi(parsed, config)
+        Self::from_parsed_cancelable(parsed, config, || false)
+    }
+
+    pub fn from_parsed_cancelable(
+        parsed: &ParsedMidiFile,
+        config: &MidiProcessingConfig,
+        should_cancel: impl Fn() -> bool,
+    ) -> Result<Self, MeridianError> {
+        build_processed_midi_cancelable(parsed, config, should_cancel)
     }
 
     pub fn display_cache(&self) -> Arc<DisplayMidiCache> {
@@ -92,9 +100,10 @@ struct FinishedNote {
     track_chan: TrackAndChannel,
 }
 
-fn build_processed_midi(
+fn build_processed_midi_cancelable(
     parsed: &ParsedMidiFile,
     config: &MidiProcessingConfig,
+    should_cancel: impl Fn() -> bool,
 ) -> Result<ProcessedMidi, MeridianError> {
     let midi = parsed.midi();
     let ppq = midi.ppq();
@@ -124,6 +133,9 @@ fn build_processed_midi(
 
     type ToolkitEvent = Delta<f64, Track<Event>>;
     for event in merged {
+        if should_cancel() {
+            return Err(MeridianError::Cancelled("midi load cancelled".into()));
+        }
         let event: ToolkitEvent = event;
         time += event.delta;
         let output_time = (time + config.time.offset_seconds).max(0.0);
@@ -249,6 +261,10 @@ fn build_processed_midi(
         }
     }
 
+    if should_cancel() {
+        return Err(MeridianError::Cancelled("midi load cancelled".into()));
+    }
+
     for ((key, _track_chan), queue) in &mut open_notes {
         while let Some(note) = queue.pop_front() {
             analysis.observe_note_release();
@@ -292,6 +308,10 @@ fn build_processed_midi(
     ));
     let total_audio_events = audio_blocks.len();
     let audio = Arc::new(InRamAudioCache::new(audio_blocks));
+
+    if should_cancel() {
+        return Err(MeridianError::Cancelled("midi load cancelled".into()));
+    }
 
     Ok(ProcessedMidi {
         display,

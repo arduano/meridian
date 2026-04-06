@@ -7,7 +7,7 @@ use super::{
     analysis::{CachedMidiAnalysis, build_cached_midi_analysis_with_progress},
     audio_cache::InRamAudioCache,
     display_cache::DisplayMidiCache,
-    materialized::{MaterializeOptions, build_materialized_midi_with_progress},
+    materialized::{MaterializeOptions, build_materialized_midi_with_progress_cancelable},
     parsed::ParsedMidiFile,
 };
 
@@ -41,9 +41,19 @@ impl MidiCacheStack {
         path: impl Into<std::path::PathBuf>,
         progress: impl FnMut(f32),
     ) -> Result<Self, MeridianError> {
+        Self::load_with_progress_cancelable(path, progress, || false)
+    }
+
+    pub fn load_with_progress_cancelable(
+        path: impl Into<std::path::PathBuf>,
+        progress: impl FnMut(f32),
+        should_cancel: impl Fn() -> bool,
+    ) -> Result<Self, MeridianError> {
         Ok(Self {
-            parsed: Arc::new(ParsedMidiFile::load_from_file_with_progress(
-                path, progress,
+            parsed: Arc::new(ParsedMidiFile::load_from_file_with_progress_cancelable(
+                path,
+                progress,
+                should_cancel,
             )?),
             display: Mutex::new(None),
             analysis: Mutex::new(None),
@@ -63,6 +73,14 @@ impl MidiCacheStack {
         &self,
         progress: impl FnMut(MidiBuildProgress),
     ) -> Result<Arc<DisplayMidiCache>, MeridianError> {
+        self.display_cache_with_progress_cancelable(progress, || false)
+    }
+
+    pub fn display_cache_with_progress_cancelable(
+        &self,
+        progress: impl FnMut(MidiBuildProgress),
+        should_cancel: impl Fn() -> bool,
+    ) -> Result<Arc<DisplayMidiCache>, MeridianError> {
         let mut display = self
             .display
             .lock()
@@ -71,13 +89,14 @@ impl MidiCacheStack {
             return Ok(Arc::clone(cache));
         }
 
-        let materialized = build_materialized_midi_with_progress(
+        let materialized = build_materialized_midi_with_progress_cancelable(
             self.parsed(),
             MaterializeOptions {
                 display: true,
                 audio: false,
             },
             progress,
+            should_cancel,
         )?;
         let built_display = materialized
             .display
@@ -131,6 +150,14 @@ impl MidiCacheStack {
         &self,
         progress: impl FnMut(MidiBuildProgress),
     ) -> Result<Arc<InRamAudioCache>, MeridianError> {
+        self.audio_cache_with_progress_cancelable(progress, || false)
+    }
+
+    pub fn audio_cache_with_progress_cancelable(
+        &self,
+        progress: impl FnMut(MidiBuildProgress),
+        should_cancel: impl Fn() -> bool,
+    ) -> Result<Arc<InRamAudioCache>, MeridianError> {
         let mut audio = self
             .audio
             .lock()
@@ -139,13 +166,14 @@ impl MidiCacheStack {
             return Ok(Arc::clone(cache));
         }
 
-        let materialized = build_materialized_midi_with_progress(
+        let materialized = build_materialized_midi_with_progress_cancelable(
             self.parsed(),
             MaterializeOptions {
                 display: false,
                 audio: true,
             },
             progress,
+            should_cancel,
         )?;
         let cache = Arc::new(
             materialized
@@ -160,6 +188,14 @@ impl MidiCacheStack {
         &self,
         progress: impl FnMut(MidiBuildProgress),
     ) -> Result<(Arc<DisplayMidiCache>, Arc<InRamAudioCache>), MeridianError> {
+        self.render_caches_with_progress_cancelable(progress, || false)
+    }
+
+    pub fn render_caches_with_progress_cancelable(
+        &self,
+        progress: impl FnMut(MidiBuildProgress),
+        should_cancel: impl Fn() -> bool,
+    ) -> Result<(Arc<DisplayMidiCache>, Arc<InRamAudioCache>), MeridianError> {
         let mut display = self
             .display
             .lock()
@@ -173,13 +209,14 @@ impl MidiCacheStack {
             return Ok((Arc::clone(display_cache), Arc::clone(audio_cache)));
         }
 
-        let materialized = build_materialized_midi_with_progress(
+        let materialized = build_materialized_midi_with_progress_cancelable(
             self.parsed(),
             MaterializeOptions {
                 display: display.is_none(),
                 audio: audio.is_none(),
             },
             progress,
+            should_cancel,
         )?;
 
         if display.is_none() {

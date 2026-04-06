@@ -1,6 +1,8 @@
 use std::{
+    any::Any,
     fs::File,
     io::{Read, Seek, SeekFrom},
+    panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     path::PathBuf,
     sync::OnceLock,
 };
@@ -40,15 +42,38 @@ impl ParsedMidiFile {
         path: impl Into<PathBuf>,
         mut progress: impl FnMut(f32),
     ) -> Result<Self, MeridianError> {
+        Self::load_from_file_with_progress_cancelable(
+            path,
+            move |value| {
+                progress(value);
+            },
+            || false,
+        )
+    }
+
+    pub fn load_from_file_with_progress_cancelable(
+        path: impl Into<PathBuf>,
+        mut progress: impl FnMut(f32),
+        should_cancel: impl Fn() -> bool,
+    ) -> Result<Self, MeridianError> {
         let (mut file, signature) = open_file_and_signature(path)?;
         let header = read_header(&mut file)?;
         let declared_track_count = header.declared_track_count.max(1);
         file.seek(SeekFrom::Start(0))?;
         let mut read_progress = |tracks_done: u32| {
+            if should_cancel() {
+                panic_midi_load_cancelled();
+            }
             progress((tracks_done as f32 / declared_track_count as f32).clamp(0.0, 1.0));
         };
-        let midi = ToolkitMidiFile::open_from_stream(file, Some(&mut read_progress))
-            .map_err(|e| MeridianError::MidiLoad(format!("{e:?}")))?;
+        let midi = catch_unwind(AssertUnwindSafe(|| {
+            ToolkitMidiFile::open_from_stream(file, Some(&mut read_progress))
+        }))
+        .map_err(map_midi_load_panic)?
+        .map_err(|e| MeridianError::MidiLoad(format!("{e:?}")))?;
+        if should_cancel() {
+            return Err(MeridianError::Cancelled("midi load cancelled".into()));
+        }
         progress(1.0);
 
         Ok(Self {
@@ -96,6 +121,21 @@ impl ParsedMidiFile {
         let size = gzip_size_for_path(&self.signature.filepath)?;
         let _ = self.gzip_size.set(size);
         Ok(*self.gzip_size.get().unwrap_or(&size))
+    }
+}
+
+#[derive(Debug)]
+struct MidiLoadCancelled;
+
+fn panic_midi_load_cancelled() -> ! {
+    std::panic::panic_any(MidiLoadCancelled);
+}
+
+fn map_midi_load_panic(payload: Box<dyn Any + Send>) -> MeridianError {
+    if payload.is::<MidiLoadCancelled>() {
+        MeridianError::Cancelled("midi load cancelled".into())
+    } else {
+        resume_unwind(payload);
     }
 }
 
