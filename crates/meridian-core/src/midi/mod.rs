@@ -7,6 +7,7 @@ pub mod display_cache;
 pub mod file_merge;
 pub mod file_processing;
 mod materialized;
+pub mod modifier_tools;
 pub mod parsed;
 pub mod processed;
 pub mod processing;
@@ -14,7 +15,6 @@ pub mod ram;
 pub mod tempo_map;
 #[cfg(test)]
 pub(crate) mod test_support;
-pub mod tool_pipeline;
 pub mod tools;
 pub mod views;
 

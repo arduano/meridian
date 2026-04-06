@@ -8,7 +8,6 @@ import type {
   HumanizeTool,
   KeyMapTool,
   MergeBalanceTool,
-  MergeProcessingConfig,
   MetaTextTool,
   MidiFileProcessingConfig,
   MidiModifierTool,
@@ -123,12 +122,6 @@ export function defaultStructureProcessingConfig(): StructureProcessingConfig {
   };
 }
 
-export function defaultMergeProcessingConfig(): MergeProcessingConfig {
-  return {
-    mode: "preserve_tracks",
-  };
-}
-
 export function defaultMidiFileProcessingConfig(): MidiFileProcessingConfig {
   return {
     time: defaultFileTimeProcessingConfig(),
@@ -136,7 +129,6 @@ export function defaultMidiFileProcessingConfig(): MidiFileProcessingConfig {
     pitch: defaultPitchProcessingConfig(),
     events: defaultEventFilterConfig(),
     structure: defaultStructureProcessingConfig(),
-    merge: defaultMergeProcessingConfig(),
     tools: [],
     piano_only: false,
     zero_velocity_note_on: "note_off",

@@ -79,26 +79,20 @@ Deno.test("midi processing job runs through the SDK", async () => {
   await ensureExecutable(executablePath);
 
   const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-process-" });
-  const midiA = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
-  const midiB = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
   const output = `${tempDir}/out.mid`;
 
   const client = await createDenoMeridianClient(executablePath);
   try {
     const events: string[] = [];
-    const result = await client.modification.rangeSelect({
-      inputs: [midiA, midiB],
+    const result = await client.modification.keyMap({
+      input: midiPath,
       output,
-      event_kinds: ["note"],
-      config: {
-        notes: {
-          velocity_scale: 0.75,
-        },
-      },
+      mappings: [{ from: 60, to: 64 }],
       onEvent: (event) => events.push(event.type),
     });
-    if (result.input_count !== 2) {
-      throw new Error(`Expected 2 inputs, got ${result.input_count}`);
+    if (result.input !== midiPath) {
+      throw new Error(`Expected input ${midiPath}, got ${result.input}`);
     }
     if (result.output_track_count < 1) {
       throw new Error(
@@ -121,21 +115,54 @@ Deno.test("midi processing start returns a live job handle", async () => {
   await ensureExecutable(executablePath);
 
   const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-process-handle-" });
-  const midiA = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
-  const midiB = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
   const output = `${tempDir}/out.mid`;
 
   const client = await createDenoMeridianClient(executablePath);
   try {
-    const task = client.modification.velocityMap.scale(0.5, {
-      inputs: [midiA, midiB],
+    const task = client.modification.keyMap({
+      input: midiPath,
       output,
+      mappings: [{ from: 60, to: 67 }],
     });
     const handle = await task.start();
     const result = await handle.wait();
 
+    if (result.input !== midiPath) {
+      throw new Error(`Expected input ${midiPath}, got ${result.input}`);
+    }
+    await Deno.stat(output);
+  } finally {
+    await client.close();
+  }
+});
+
+Deno.test("midi merge runs through the SDK", async () => {
+  const executablePath = defaultExecutablePath();
+  await ensureExecutable(executablePath);
+
+  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-merge-" });
+  const midiA = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiB = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const output = `${tempDir}/merged.mid`;
+
+  const client = await createDenoMeridianClient(executablePath);
+  try {
+    const result = await client.merge.midiFiles({
+      inputs: [midiA, midiB],
+      output,
+      config: {
+        mode: "append_tracks",
+      },
+    });
+
     if (result.input_count !== 2) {
       throw new Error(`Expected 2 inputs, got ${result.input_count}`);
+    }
+    if (result.output_track_count < 2) {
+      throw new Error(
+        `Expected at least 2 output tracks, got ${result.output_track_count}`,
+      );
     }
     await Deno.stat(output);
   } finally {

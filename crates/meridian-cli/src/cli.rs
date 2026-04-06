@@ -8,8 +8,8 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use meridian_core::{
     MeridianError,
     midi::{
-        MidiFileProcessingConfig, MidiFileSelection, MidiMergeMode, QuantizeTool, RangeSelectTool,
-        SelectableEventKind, TempoMapTool, analysis::MidiAnalysisKind,
+        MidiFileProcessingConfig, QuantizeTool, RangeSelectTool, SelectableEventKind, TempoMapTool,
+        analysis::MidiAnalysisKind,
     },
     protocol::{
         MidiAnalysisJobStatus, MidiProcessEvent, MidiProcessStatus, ProtocolClient,
@@ -465,11 +465,19 @@ fn run_analyze(args: AnalyzeArgs) -> Result<(), MeridianError> {
 
 fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), MeridianError> {
     let config = build_process_config(&common, tool);
+    let input = common
+        .inputs
+        .first()
+        .cloned()
+        .ok_or_else(|| MeridianError::Protocol("missing midi input".into()))?;
+    if common.inputs.len() != 1 {
+        return Err(MeridianError::Unsupported(
+            "CLI process commands currently support exactly one input MIDI".into(),
+        ));
+    }
     let client = ProtocolClient::spawn();
-    let status_events = client.request(ProtocolCommand::StartProcessMidiFiles {
-        selection: MidiFileSelection {
-            inputs: common.inputs.clone(),
-        },
+    let status_events = client.request(ProtocolCommand::StartProcessMidiFile {
+        input,
         output: common.output.clone(),
         config,
     })?;
@@ -477,15 +485,10 @@ fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), Merid
     let job_id = match status_events.events.as_slice() {
         [
             ProtocolEvent::MidiProcessStatus {
-                status:
-                    MidiProcessStatus::Running {
-                        job_id,
-                        total_inputs,
-                        ..
-                    },
+                status: MidiProcessStatus::Running { job_id, .. },
             },
         ] => {
-            eprintln!("process: started job {job_id:?} with {total_inputs} input(s)");
+            eprintln!("process: started job {job_id:?}");
             *job_id
         }
         [
@@ -510,18 +513,13 @@ fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), Merid
             .map_err(|_| MeridianError::Platform("timed out waiting for midi processing".into()))?;
         match event {
             ProtocolEvent::MidiProcess { event } => match event {
-                MidiProcessEvent::InputProgress {
+                MidiProcessEvent::ProcessStarted {
                     job_id: event_job_id,
-                    processed_inputs,
-                    total_inputs,
-                    current_input,
-                } if event_job_id == job_id => match current_input {
-                    Some(path) => eprintln!(
-                        "process: {processed_inputs}/{total_inputs} {}",
-                        path.display()
-                    ),
-                    None => eprintln!("process: {processed_inputs}/{total_inputs}"),
-                },
+                    input,
+                    ..
+                } if event_job_id == job_id => {
+                    eprintln!("process: {}", input.display());
+                }
                 MidiProcessEvent::ProcessFinished {
                     job_id: event_job_id,
                     ..
@@ -593,13 +591,6 @@ fn build_process_config(common: &ProcessCommonArgs, tool: ProcessTool) -> MidiFi
     }
     config.structure.split_channels = common.split_channels;
     config.structure.collapse_tracks = common.collapse_tracks;
-    if let Some(mode) = common.merge_mode {
-        config.merge.mode = match mode {
-            MergeModeArg::PreserveTracks => MidiMergeMode::PreserveTracks,
-            MergeModeArg::FlattenToSingleTrack => MidiMergeMode::FlattenToSingleTrack,
-            MergeModeArg::MergeByTrackIndex => MidiMergeMode::MergeByTrackIndex,
-        };
-    }
     if common.ppq_override.is_some()
         || common.tempo_override.is_some()
         || common.trim_start.is_some()

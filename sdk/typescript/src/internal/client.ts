@@ -26,6 +26,8 @@ import {
   type MidiAnalysisKind,
   type MidiFileProcessingConfig,
   type MidiLoadedEvent,
+  type MidiFilesMergeConfig,
+  type MidiFilesMergedEvent,
   type MidiModifierTool,
   type MidiProcessEvent,
   type MidiProcessEventWrapper,
@@ -127,10 +129,13 @@ export class MeridianProtocolClient {
   readonly executablePath: string;
   readonly runtimeName: string;
 
+  static readonly RECENT_EVENT_LIMIT = 256;
+
   #process: MeridianSubprocess;
   #nextId = 1;
   #pending = new Map<number, PendingRequest>();
   #listeners = new Set<MeridianEventListener>();
+  #recentEvents: CoreEvent[] = [];
   #closed = false;
 
   private constructor(
@@ -210,6 +215,10 @@ export class MeridianProtocolClient {
     };
   }
 
+  recentEvents(): readonly CoreEvent[] {
+    return this.#recentEvents;
+  }
+
   async close(): Promise<void> {
     if (this.#closed) {
       return;
@@ -239,6 +248,12 @@ export class MeridianProtocolClient {
 
     if (response.id === null) {
       for (const event of response.events) {
+        this.#recentEvents.push(event);
+        if (
+          this.#recentEvents.length > MeridianProtocolClient.RECENT_EVENT_LIMIT
+        ) {
+          this.#recentEvents.shift();
+        }
         for (const listener of this.#listeners) {
           listener(event);
         }
@@ -366,6 +381,8 @@ export class MidiProcessJobHandle {
   #protocol: MeridianProtocolClient;
   #unsubscribe: (() => void) | null = null;
   #eventListeners = new Set<(event: MidiProcessEvent) => void>();
+  #eventHistory: MidiProcessEvent[] = [];
+  #settled = false;
   #done: Promise<Extract<MidiProcessEvent, { type: "process_finished" }>>;
   #resolve!: (
     value: Extract<MidiProcessEvent, { type: "process_finished" }>,
@@ -390,10 +407,19 @@ export class MidiProcessJobHandle {
       this.#reject = reject;
     });
     this.#unsubscribe = protocol.onEvent((event) => this.#handleEvent(event));
+    for (const event of protocol.recentEvents()) {
+      this.#handleEvent(event);
+      if (this.#settled) {
+        break;
+      }
+    }
   }
 
   onEvent(listener: (event: MidiProcessEvent) => void): () => void {
     this.#eventListeners.add(listener);
+    for (const event of this.#eventHistory) {
+      listener(event);
+    }
     return () => {
       this.#eventListeners.delete(listener);
     };
@@ -401,7 +427,7 @@ export class MidiProcessJobHandle {
 
   async refreshStatus(): Promise<MidiProcessStatus> {
     const events = await this.#protocol.request({
-      type: "get_process_midi_status",
+      type: "get_midi_file_process_status",
     });
     const wrapper = requireEvent(events, "midi_process_status");
     this.#status = wrapper.status;
@@ -410,7 +436,7 @@ export class MidiProcessJobHandle {
 
   async cancel(): Promise<MidiProcessStatus> {
     const events = await this.#protocol.request({
-      type: "cancel_process_midi_files",
+      type: "cancel_midi_file_process",
     });
     const wrapper = requireEvent(events, "midi_process_status");
     this.#status = wrapper.status;
@@ -422,6 +448,9 @@ export class MidiProcessJobHandle {
   }
 
   #handleEvent(event: CoreEvent): void {
+    if (this.#settled) {
+      return;
+    }
     if (event.type === "midi_process_status") {
       this.#status = (event as MidiProcessStatusEventWrapper).status;
       return;
@@ -433,16 +462,19 @@ export class MidiProcessJobHandle {
     if (wrapped.event.job_id !== this.jobId) {
       return;
     }
+    this.#eventHistory.push(wrapped.event);
     for (const listener of this.#eventListeners) {
       listener(wrapped.event);
     }
     switch (wrapped.event.type) {
       case "process_finished":
+        this.#settled = true;
         this.#unsubscribe?.();
         this.#unsubscribe = null;
         this.#resolve(wrapped.event);
         break;
       case "process_cancelled":
+        this.#settled = true;
         this.#unsubscribe?.();
         this.#unsubscribe = null;
         this.#reject(
@@ -450,6 +482,7 @@ export class MidiProcessJobHandle {
         );
         break;
       case "process_failed":
+        this.#settled = true;
         this.#unsubscribe?.();
         this.#unsubscribe = null;
         this.#reject(new MeridianSubprocessError(wrapped.event.message));
@@ -603,7 +636,7 @@ export interface VideoRenderOptions {
 }
 
 export interface MidiToolTaskOptions {
-  inputs: string[];
+  input: string;
   output: string;
   tool: MidiModifierTool;
   config?: DeepPartial<Omit<MidiFileProcessingConfig, "tools">>;
@@ -611,10 +644,16 @@ export interface MidiToolTaskOptions {
 }
 
 export interface MidiModificationOptions {
-  inputs: string[];
+  input: string;
   output: string;
   config?: DeepPartial<Omit<MidiFileProcessingConfig, "tools">>;
   onEvent?: (event: MidiProcessEvent) => void;
+}
+
+export interface MidiMergeOptions {
+  inputs: string[];
+  output: string;
+  config?: DeepPartial<MidiFilesMergeConfig>;
 }
 
 type ToolConfig<T extends MidiModifierTool> = Omit<T, "tool">;
@@ -734,7 +773,7 @@ export class MidiProcessTask
   constructor(client: MeridianClient, options: MidiToolTaskOptions) {
     this.#client = client;
     this.#options = {
-      inputs: [...options.inputs],
+      input: options.input,
       output: options.output,
       tool: structuredClone(options.tool),
       ...(options.config ? { config: structuredClone(options.config) } : {}),
@@ -786,7 +825,7 @@ export class MidiProcessTask
 
   #snapshot(): MidiToolTaskOptions {
     return {
-      inputs: [...this.#options.inputs],
+      input: this.#options.input,
       output: this.#options.output,
       tool: structuredClone(this.#options.tool),
       ...(this.#options.config
@@ -1194,6 +1233,10 @@ export class MeridianClient {
     ): MidiProcessTask =>
       this.#withTool(options, (tool) => midiTools.analysisGuard(tool)),
   };
+  readonly merge = {
+    midiFiles: (options: MidiMergeOptions): Promise<MidiFilesMergedEvent> =>
+      this.mergeMidiFiles(options),
+  };
 
   constructor(protocol: MeridianProtocolClient) {
     this.protocol = protocol;
@@ -1218,9 +1261,9 @@ export class MeridianClient {
     options: MidiModificationOptions & Partial<ToolConfig<T>>,
     build: (config: Partial<ToolConfig<T>>) => T,
   ): MidiProcessTask {
-    const { inputs, output, config, onEvent, ...toolConfig } = options;
+    const { input, output, config, onEvent, ...toolConfig } = options;
     return this.midi({
-      inputs,
+      input,
       output,
       ...(config ? { config } : {}),
       ...(onEvent ? { onEvent } : {}),
@@ -1257,8 +1300,8 @@ export class MeridianClient {
     );
     config.tools = [structuredClone(options.tool)];
     const events = await this.protocol.request({
-      type: "start_process_midi_files",
-      selection: { inputs: options.inputs },
+      type: "start_process_midi_file",
+      input: options.input,
       output: options.output,
       config,
     });
@@ -1273,6 +1316,24 @@ export class MeridianClient {
       handle.onEvent(options.onEvent);
     }
     return handle;
+  }
+
+  async mergeMidiFiles(
+    options: MidiMergeOptions,
+  ): Promise<MidiFilesMergedEvent> {
+    const config: MidiFilesMergeConfig = {
+      mode: options.config?.mode ?? "append_tracks",
+      normalize_metadata_track: options.config?.normalize_metadata_track ??
+        false,
+      ppq_override: options.config?.ppq_override ?? null,
+    };
+    const events = await this.protocol.request({
+      type: "merge_midi_files",
+      inputs: [...options.inputs],
+      output: options.output,
+      config,
+    });
+    return requireEvent(events, "midi_files_merged");
   }
 
   async startAudioRender(

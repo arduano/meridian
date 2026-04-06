@@ -68,6 +68,136 @@ Deno.test("stdio protocol round-trips raw load and shutdown commands", async () 
   }
 });
 
+Deno.test("stdio protocol processes a midi file with the singular process command", async () => {
+  const executablePath = defaultExecutablePath();
+  await ensureExecutable(executablePath);
+  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const tempDir = await Deno.makeTempDir({ prefix: "meridian-stdio-process-" });
+  const output = `${tempDir}/processed.mid`;
+
+  const client = await createDenoProtocolClient(executablePath);
+  try {
+    const finishedPromise = waitForEvent(
+      client,
+      "midi_process",
+      (event) => event.event.type === "process_finished",
+    );
+    const events = await client.request({
+      type: "start_process_midi_file",
+      input: midiPath,
+      output,
+      config: {
+        time: {
+          offset_ticks: 0,
+          ppq_override: null,
+          tempo_override: null,
+          trim: null,
+        },
+        notes: {
+          min_key: 0,
+          max_key: 127,
+          transpose: 0,
+          velocity_scale: 1,
+        },
+        pitch: {
+          bend_scale: 1,
+          bend_offset: 0,
+          min_bend: -8192,
+          max_bend: 8191,
+        },
+        events: {
+          notes: true,
+          tempo: true,
+          pitch_bend: true,
+          channel_controls: true,
+          program_changes: true,
+          channel_pressure: true,
+          polyphonic_pressure: true,
+          sysex: true,
+          meta_other: true,
+        },
+        structure: {
+          split_channels: false,
+          collapse_tracks: false,
+          remove_empty_tracks: true,
+          drop_orphan_note_offs: true,
+        },
+        tools: [{
+          tool: "key_map",
+          mappings: [{ from: 60, to: 65 }],
+          fold_to_range: null,
+          drop_unmapped: false,
+        }],
+        piano_only: false,
+        zero_velocity_note_on: "note_off",
+      },
+    });
+    const status = events[0];
+    if (
+      events.length !== 1 ||
+      !status ||
+      status.type !== "midi_process_status" ||
+      status.status.state !== "running"
+    ) {
+      throw new Error(
+        `Unexpected midi process start response: ${JSON.stringify(events)}`,
+      );
+    }
+
+    const finished = await finishedPromise;
+    if (finished.event.type !== "process_finished") {
+      throw new Error(
+        `Unexpected midi process event: ${JSON.stringify(finished)}`,
+      );
+    }
+    if (finished.event.output !== output) {
+      throw new Error(
+        `Expected process output ${output}, got ${finished.event.output}`,
+      );
+    }
+    await Deno.stat(output);
+  } finally {
+    await client.close();
+  }
+});
+
+Deno.test("stdio protocol merges midi files", async () => {
+  const executablePath = defaultExecutablePath();
+  await ensureExecutable(executablePath);
+  const midiA = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiB = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const tempDir = await Deno.makeTempDir({ prefix: "meridian-stdio-merge-" });
+  const output = `${tempDir}/merged.mid`;
+
+  const client = await createDenoProtocolClient(executablePath);
+  try {
+    const events = await client.request({
+      type: "merge_midi_files",
+      inputs: [midiA, midiB],
+      output,
+      config: {
+        mode: "append_tracks",
+        normalize_metadata_track: false,
+        ppq_override: null,
+      },
+    });
+    const merged = events[0];
+    if (
+      events.length !== 1 ||
+      !merged ||
+      merged.type !== "midi_files_merged"
+    ) {
+      throw new Error(`Unexpected merge response: ${JSON.stringify(events)}`);
+    }
+    if (merged.input_count !== 2) {
+      throw new Error(`Expected input_count=2, got ${merged.input_count}`);
+    }
+    await Deno.stat(output);
+  } finally {
+    await client.close();
+  }
+});
+
 Deno.test("stdio protocol smoke tests video render", async () => {
   if (!(await hasCommand("ffmpeg"))) {
     console.warn("skipping video stdio smoke because ffmpeg is unavailable");

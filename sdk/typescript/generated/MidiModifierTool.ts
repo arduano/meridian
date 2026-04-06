@@ -13,10 +13,11 @@ import type { PitchBendTool } from "./PitchBendTool.ts";
 import type { ProgramTool } from "./ProgramTool.ts";
 import type { QuantizeTool } from "./QuantizeTool.ts";
 import type { RangeSelectTool } from "./RangeSelectTool.ts";
+import type { SharedMetadataTrackTool } from "./SharedMetadataTrackTool.ts";
 import type { SysexTool } from "./SysexTool.ts";
 import type { TempoMapTool } from "./TempoMapTool.ts";
 import type { TimeWarpTool } from "./TimeWarpTool.ts";
 import type { TrackRouteTool } from "./TrackRouteTool.ts";
 import type { VelocityMapTool } from "./VelocityMapTool.ts";
 
-export type MidiModifierTool = { "tool": "range_select" } & RangeSelectTool | { "tool": "tempo_map" } & TempoMapTool | { "tool": "time_warp" } & TimeWarpTool | { "tool": "channel_remap" } & ChannelRemapTool | { "tool": "track_route" } & TrackRouteTool | { "tool": "program" } & ProgramTool | { "tool": "control_change" } & ControlChangeTool | { "tool": "pitch_bend" } & PitchBendTool | { "tool": "velocity_map" } & VelocityMapTool | { "tool": "note_length" } & NoteLengthTool | { "tool": "overlap_repair" } & OverlapRepairTool | { "tool": "quantize" } & QuantizeTool | { "tool": "humanize" } & HumanizeTool | { "tool": "key_map" } & KeyMapTool | { "tool": "dedupe" } & DedupeTool | { "tool": "meta_text" } & MetaTextTool | { "tool": "sysex" } & SysexTool | { "tool": "merge_balance" } & MergeBalanceTool | { "tool": "analysis_guard" } & AnalysisGuardTool;
+export type MidiModifierTool = { "tool": "range_select" } & RangeSelectTool | { "tool": "tempo_map" } & TempoMapTool | { "tool": "time_warp" } & TimeWarpTool | { "tool": "channel_remap" } & ChannelRemapTool | { "tool": "track_route" } & TrackRouteTool | { "tool": "program" } & ProgramTool | { "tool": "control_change" } & ControlChangeTool | { "tool": "pitch_bend" } & PitchBendTool | { "tool": "velocity_map" } & VelocityMapTool | { "tool": "note_length" } & NoteLengthTool | { "tool": "overlap_repair" } & OverlapRepairTool | { "tool": "quantize" } & QuantizeTool | { "tool": "humanize" } & HumanizeTool | { "tool": "key_map" } & KeyMapTool | { "tool": "dedupe" } & DedupeTool | { "tool": "meta_text" } & MetaTextTool | { "tool": "sysex" } & SysexTool | { "tool": "merge_balance" } & MergeBalanceTool | { "tool": "shared_metadata_track" } & SharedMetadataTrackTool | { "tool": "analysis_guard" } & AnalysisGuardTool;

@@ -6,19 +6,15 @@ const midiPath = await resolveMidiFixture();
 const output = `${dir}/processed.mid`;
 
 try {
-  const result = await client.modification.rangeSelect({
-    inputs: [midiPath],
+  const result = await client.modification.keyMap({
+    input: midiPath,
     output,
-    event_kinds: ["note"],
-    config: {
-      notes: {
-        velocity_scale: 0.75,
-      },
-    },
+    mappings: [{ from: 60, to: 62 }],
+    drop_unmapped: false,
   });
   console.log(JSON.stringify(
     {
-      inputCount: result.input_count,
+      input: result.input,
       outputTrackCount: result.output_track_count,
       output,
     },

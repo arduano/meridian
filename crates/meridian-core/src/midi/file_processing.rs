@@ -1,8 +1,10 @@
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     convert::Infallible,
+    fs,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use midi_toolkit::{
@@ -20,13 +22,13 @@ use crate::{
 };
 
 use super::{
+    modifier_tools::apply_modifier_tool_to_file,
     parsed::ParsedMidiFile,
     processing::{
         EventFilterConfig, MidiFileProcessingConfig, NoteProcessingConfig, PitchProcessingConfig,
         StructureProcessingConfig, TrimProcessingConfig, ZeroVelocityNoteOnMode,
     },
     tempo_map::TempoMap,
-    tool_pipeline::apply_modifier_tools,
 };
 
 #[derive(Debug, Clone)]
@@ -165,24 +167,72 @@ fn process_midi_file_to_file_inner(
     if let Some(tempo) = config.time.tempo_override {
         inject_constant_tempo(&mut output_tracks, tempo);
     }
-    apply_modifier_tools(&mut output_tracks, &config.tools)?;
     if config.structure.remove_empty_tracks {
         output_tracks.retain(|track| !track.is_empty());
     }
 
+    if config.tools.is_empty() {
+        let total_events = write_tracks_to_file(output, output_ppq, &output_tracks, cancel)?;
+
+        return Ok(MidiFileProcessSummary {
+            input: input.to_path_buf(),
+            output: output.to_path_buf(),
+            output_track_count: output_tracks.len(),
+            output_ppq,
+            total_events,
+        });
+    }
+
+    {
+        let mut cleanup_paths = Vec::new();
+        let mut current_input = modifier_intermediate_path(output, 0);
+        cleanup_paths.push(current_input.clone());
+        write_tracks_to_file(&current_input, output_ppq, &output_tracks, cancel)?;
+
+        for (index, tool) in config.tools.iter().enumerate() {
+            let is_last = index + 1 == config.tools.len();
+            let current_output = if is_last {
+                output.to_path_buf()
+            } else {
+                let path = modifier_intermediate_path(output, index + 1);
+                cleanup_paths.push(path.clone());
+                path
+            };
+
+            apply_modifier_tool_to_file(&current_input, &current_output, tool)?;
+            current_input = current_output;
+        }
+
+        for path in cleanup_paths {
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    let written = ParsedMidiFile::load_from_file(output.to_path_buf())?;
+    Ok(MidiFileProcessSummary {
+        input: input.to_path_buf(),
+        output: output.to_path_buf(),
+        output_track_count: written.midi().track_count(),
+        output_ppq: written.midi().ppq(),
+        total_events: written.total_event_count()? as usize,
+    })
+}
+
+fn write_tracks_to_file(
+    output: &Path,
+    output_ppq: u16,
+    output_tracks: &[Vec<Delta<u64, Event>>],
+    cancel: &AtomicBool,
+) -> Result<usize, MeridianError> {
     let writer = MIDIWriter::new(output.to_string_lossy().as_ref(), output_ppq)
         .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
     let mut total_events = 0usize;
-    for track in &output_tracks {
+
+    for track in output_tracks {
         if cancel.load(Ordering::SeqCst) {
-            return Ok(MidiFileProcessSummary {
-                input: input.to_path_buf(),
-                output: output.to_path_buf(),
-                output_track_count: output_tracks.len(),
-                output_ppq,
-                total_events,
-            });
+            return Ok(total_events);
         }
+
         let mut track_writer = writer
             .try_open_next_track()
             .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
@@ -193,18 +243,28 @@ fn process_midi_file_to_file_inner(
             .end()
             .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
     }
+
     let mut writer = writer;
     writer
         .end()
         .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
 
-    Ok(MidiFileProcessSummary {
-        input: input.to_path_buf(),
-        output: output.to_path_buf(),
-        output_track_count: output_tracks.len(),
-        output_ppq,
-        total_events,
-    })
+    Ok(total_events)
+}
+
+fn modifier_intermediate_path(output: &Path, pass_index: usize) -> PathBuf {
+    let stem = output
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("modifier-intermediate");
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "meridian-{stem}-modifier-pass-{pass_index}-{}-{timestamp}.mid",
+        std::process::id(),
+    ))
 }
 
 fn build_tempo_map(parsed: &ParsedMidiFile) -> Result<TempoMap, MeridianError> {

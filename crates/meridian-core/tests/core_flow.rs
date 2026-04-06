@@ -8,9 +8,9 @@ use std::{
 use meridian_core::{
     PROTOCOL_VERSION,
     midi::{
-        EventFilterConfig, FileTimeProcessingConfig, MidiFileProcessingConfig,
-        MidiFilesMergeConfig, StructureProcessingConfig, TrimProcessingConfig,
-        analysis::MidiAnalysisKind,
+        EventFilterConfig, FileTimeProcessingConfig, KeyMapEntry, KeyMapTool,
+        MidiFileProcessingConfig, MidiFilesMergeConfig, MidiModifierTool,
+        StructureProcessingConfig, TrimProcessingConfig, analysis::MidiAnalysisKind,
     },
     protocol::{
         CoreCommand, CoreEvent, JsonRequest, JsonResponse, MidiProcessEvent, MidiProcessStatus,
@@ -19,7 +19,7 @@ use meridian_core::{
     spawn_core,
 };
 use midi_toolkit::{
-    events::{Event, TextEvent, TextEventKind},
+    events::{Event, MIDIEvent, TextEvent, TextEventKind},
     io::MIDIFile as ToolkitMidiFile,
     sequence::event::Delta,
 };
@@ -306,6 +306,57 @@ fn process_midi_file_trims_and_writes_output() {
     assert_eq!(seen_program, 1);
     assert_eq!(note_ons, vec![(0, 1, 77), (30, 0, 72)]);
     assert_eq!(note_offs, vec![(60, 1, 77), (90, 0, 72)]);
+}
+
+#[test]
+fn process_midi_file_applies_key_map_tool() {
+    let dir = support::temp_dir("meridian-core-process-key-map-test");
+    let midi = dir.join("input.mid");
+    let output = dir.join("out.mid");
+
+    support::write_toolkit_midi(
+        &midi,
+        96,
+        vec![vec![
+            Event::new_delta_note_on_event(0, 0, 60, 100),
+            Event::new_delta_note_off_event(48, 0, 60),
+            Event::new_delta_note_on_event(0, 0, 61, 100),
+            Event::new_delta_note_off_event(48, 0, 61),
+        ]],
+    );
+
+    let core = spawn_core();
+    let mut config = MidiFileProcessingConfig::default();
+    config.tools = vec![MidiModifierTool::KeyMap(KeyMapTool {
+        mappings: vec![KeyMapEntry { from: 60, to: 72 }],
+        fold_to_range: None,
+        drop_unmapped: true,
+    })];
+
+    let events = core
+        .request(CoreCommand::ProcessMidiFile {
+            input: midi.clone(),
+            output: output.clone(),
+            config,
+        })
+        .expect("process midi file");
+
+    assert!(matches!(
+        events.as_slice(),
+        [CoreEvent::MidiFileProcessed {
+            output_track_count: 1,
+            ..
+        }]
+    ));
+
+    let written = ToolkitMidiFile::open_in_ram(&output, None).expect("open output midi");
+    let keys = written
+        .iter_track(0)
+        .expect("open output track")
+        .filter_map(|event| event.expect("parse output event").event.key())
+        .collect::<Vec<_>>();
+
+    assert_eq!(keys, vec![72, 72]);
 }
 
 #[test]

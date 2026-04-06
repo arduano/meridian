@@ -21,7 +21,6 @@ export type { KeyRange } from "../generated/KeyRange.ts";
 export type { KeyboardHeightSpec } from "../generated/KeyboardHeightSpec.ts";
 export type { KeyboardProjectorConfig } from "../generated/KeyboardProjectorConfig.ts";
 export type { MIDIAnalysisSummary as MidiAnalysisSummary } from "../generated/MIDIAnalysisSummary.ts";
-export type { MergeProcessingConfig } from "../generated/MergeProcessingConfig.ts";
 export type { MidiAnalysisBucket } from "../generated/MidiAnalysisBucket.ts";
 export type { MidiAnalysisData } from "../generated/MidiAnalysisData.ts";
 export type { MidiAnalysisEventMetrics } from "../generated/MidiAnalysisEventMetrics.ts";
@@ -31,9 +30,10 @@ export type { MidiAnalysisJobStatus } from "../generated/MidiAnalysisJobStatus.t
 export type { MidiAnalysisKind } from "../generated/MidiAnalysisKind.ts";
 export type { MidiAnalysisNoteMetrics } from "../generated/MidiAnalysisNoteMetrics.ts";
 export type { MidiAnalysisTempoMetrics } from "../generated/MidiAnalysisTempoMetrics.ts";
+export type { MidiFileInspection } from "../generated/MidiFileInspection.ts";
 export type { MidiFileProcessingConfig } from "../generated/MidiFileProcessingConfig.ts";
-export type { MidiFileSelection } from "../generated/MidiFileSelection.ts";
-export type { MidiMergeMode } from "../generated/MidiMergeMode.ts";
+export type { MidiFilesMergeConfig } from "../generated/MidiFilesMergeConfig.ts";
+export type { MidiFilesMergeMode } from "../generated/MidiFilesMergeMode.ts";
 export type { MidiModifierTool } from "../generated/MidiModifierTool.ts";
 export type { MidiProcessEvent } from "../generated/MidiProcessEvent.ts";
 export type { MidiProcessJobId } from "../generated/MidiProcessJobId.ts";
@@ -58,6 +58,7 @@ export type { ProtocolResponse as JsonResponse } from "../generated/ProtocolResp
 export type { RendererKind } from "../generated/RendererKind.ts";
 export type { SceneConfig } from "../generated/SceneConfig.ts";
 export type { SelectableEventKind } from "../generated/SelectableEventKind.ts";
+export type { SharedMetadataTrackTool } from "../generated/SharedMetadataTrackTool.ts";
 export type { StructureProcessingConfig } from "../generated/StructureProcessingConfig.ts";
 export type { TempoPoint } from "../generated/TempoPoint.ts";
 export type { TextKind } from "../generated/TextKind.ts";
@@ -134,10 +135,18 @@ export type ParsedMidiLoadedEvent = Extract<
   ProtocolEvent,
   { type: "parsed_midi_loaded" }
 >;
-export type MidiLoadedEvent = Extract<ProtocolEvent, { type: "midi_loaded" }>;
-export type MidiFilesProcessedEvent = Extract<
+export type MidiFilesInspectedEvent = Extract<
   ProtocolEvent,
-  { type: "midi_files_processed" }
+  { type: "midi_files_inspected" }
+>;
+export type MidiLoadedEvent = Extract<ProtocolEvent, { type: "midi_loaded" }>;
+export type MidiFileProcessedEvent = Extract<
+  ProtocolEvent,
+  { type: "midi_file_processed" }
+>;
+export type MidiFilesMergedEvent = Extract<
+  ProtocolEvent,
+  { type: "midi_files_merged" }
 >;
 export type MidiAnalysisJobEventWrapper = Extract<
   ProtocolEvent,
@@ -178,16 +187,20 @@ export type ShutdownCompleteEvent = Extract<
 
 export type ResponseFor<C extends ProtocolCommand> = C extends
   { type: "load_parsed_midi" } ? [ParsedMidiLoadedEvent] | [ErrorEvent]
+  : C extends { type: "inspect_midi_files" }
+    ? [MidiFilesInspectedEvent] | [ErrorEvent]
   : C extends { type: "load_audio_midi" } ? [MidiLoadedEvent] | [ErrorEvent]
   : C extends { type: "start_midi_analysis_job" }
     ? [MidiAnalysisJobStatusEventWrapper] | [ErrorEvent]
   : C extends { type: "get_midi_analysis_job_status" }
     ? [MidiAnalysisJobStatusEventWrapper] | [ErrorEvent]
-  : C extends { type: "start_process_midi_files" }
+  : C extends { type: "start_process_midi_file" }
     ? [MidiProcessStatusEventWrapper] | [ErrorEvent]
-  : C extends { type: "cancel_process_midi_files" }
+  : C extends { type: "merge_midi_files" }
+    ? [MidiFilesMergedEvent] | [ErrorEvent]
+  : C extends { type: "cancel_midi_file_process" }
     ? [MidiProcessStatusEventWrapper] | [ErrorEvent]
-  : C extends { type: "get_process_midi_status" }
+  : C extends { type: "get_midi_file_process_status" }
     ? [MidiProcessStatusEventWrapper] | [ErrorEvent]
   : C extends { type: "start_render_audio" }
     ? [AudioRenderStatusEventWrapper] | [ErrorEvent]

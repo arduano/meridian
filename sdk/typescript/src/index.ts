@@ -10,6 +10,7 @@ export {
   MeridianSubprocessError,
   MidiAnalysisJobHandle,
   type MidiAnalysisOptions,
+  type MidiMergeOptions,
   MidiAnalysisTask,
   type MidiModificationOptions,
   MidiProcessJobHandle,
