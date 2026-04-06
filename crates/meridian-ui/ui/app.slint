@@ -115,7 +115,7 @@ export component App inherits Window {
     in-out property <string> video-top-bar-color-text: "#950A06";
     in-out property <string> video-palette-source-text: "default_track_colors";
     in-out property <string> video-palette-kind-text: "random";
-    in-out property <string> video-palette-randomize-text: "on";
+    in-out property <string> video-palette-randomize-text: "off";
     in-out property <string> video-palette-path-text: "(palette png)";
     in-out property <string> video-ptc-same-width-text: "on";
     in-out property <string> video-ptc-fov-text: "60.0";
@@ -138,7 +138,7 @@ export component App inherits Window {
     in-out property <string> video-ptc-aura-enabled-text: "on";
     in-out property <string> video-ptc-aura-strength-text: "2.0";
     in-out property <string> video-ptc-notes-change-size-text: "off";
-    in-out property <string> video-ptc-notes-change-tint-text: "on";
+    in-out property <string> video-ptc-notes-change-tint-text: "off";
     in-out property <string> video-ptc-use-vel-text: "off";
     in-out property <string> video-ptc-aura-image-source-text: "builtin";
     in-out property <string> video-ptc-aura-image-name-text: "ring";
@@ -253,9 +253,9 @@ export component App inherits Window {
     in-out property <string> audio-interpolation-text: "nearest";
     in-out property <string> audio-voice-count-text: "—";
     in-out property <string> audio-layer-limit-text: "4 max";
-    in-out property <string> audio-limiter-text: "Off";
-    in-out property <string> audio-threading-text: "none";
-    in-out property <string> audio-ignore-range-text: "off";
+    in-out property <string> audio-limiter-text: "on";
+    in-out property <string> audio-threading-text: "auto";
+    in-out property <string> audio-ignore-range-text: "8";
     in-out property <string> audio-attack-curve-text: "exponential";
     in-out property <string> audio-decay-curve-text: "linear";
     in-out property <string> audio-release-curve-text: "linear";
@@ -284,7 +284,7 @@ export component App inherits Window {
     in-out property <string> render-video-preset-text: "medium";
     in-out property <string> render-video-pix-fmt-text: "yuv420p";
     in-out property <string> render-audio-bitrate-text: "192k";
-    in-out property <bool> render-use-limiter: false;
+    in-out property <bool> render-use-limiter: true;
     in-out property <bool> render-open-after-export: false;
     in-out property <float> render-export-progress: 0;
     in-out property <string> render-export-status: "Ready";

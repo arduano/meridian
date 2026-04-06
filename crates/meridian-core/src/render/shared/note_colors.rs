@@ -22,7 +22,7 @@ pub enum NotePaletteConfig {
     DefaultTrackColors,
     ZenithPalette {
         palette: ZenithPaletteSpec,
-        #[serde(default = "default_true")]
+        #[serde(default = "default_false")]
         randomize: bool,
     },
 }
@@ -208,6 +208,6 @@ fn hsv_to_color(h: f32, s: f32, v: f32) -> MIDIColor {
     MIDIColor::new((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8)
 }
 
-const fn default_true() -> bool {
-    true
+const fn default_false() -> bool {
+    false
 }

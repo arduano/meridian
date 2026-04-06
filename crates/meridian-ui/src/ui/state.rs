@@ -440,7 +440,7 @@ fn apply_ptc_defaults_to_app(app: &App) {
     app.set_video_ptc_aura_strength_text("2.0".into());
     app.set_video_ptc_aura_strength_float(2.0);
     app.set_video_ptc_notes_change_size_text("off".into());
-    app.set_video_ptc_notes_change_tint_text("on".into());
+    app.set_video_ptc_notes_change_tint_text("off".into());
     app.set_video_ptc_use_vel_text("off".into());
     app.set_video_ptc_aura_image_source_text("builtin".into());
     app.set_video_ptc_aura_image_name_text("ring".into());
@@ -563,10 +563,7 @@ fn apply_audio_to_app(app: &App, state: &StateSnapshot, audio_render_status: &Au
         .first()
         .map(|soundfont| curve_name(soundfont.options.vol_envelope_options.release_curve))
         .unwrap_or("linear");
-    let ignore_range_text = match *state.audio.xsynth.config.ignore_range.end() {
-        0 => "off".to_string(),
-        end => end.to_string(),
-    };
+    let ignore_range_text = keep_velocity_text(&state.audio.xsynth.config.ignore_range);
 
     app.set_audio_backend_text(match state.audio.backend {
         AudioBackend::None => "none".into(),
@@ -650,6 +647,13 @@ fn thread_count_name(threading: ThreadCount) -> &'static str {
         ThreadCount::Auto => "auto",
         ThreadCount::Manual(4) => "4",
         ThreadCount::Manual(_) => "manual",
+    }
+}
+
+fn keep_velocity_text(ignore_range: &std::ops::RangeInclusive<u8>) -> String {
+    match *ignore_range.end() {
+        0 => "off".to_string(),
+        end => end.saturating_add(1).min(127).to_string(),
     }
 }
 

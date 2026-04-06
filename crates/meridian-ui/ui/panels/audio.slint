@@ -53,9 +53,9 @@ export component AudioPanel inherits Rectangle {
     in property <string> audio-interpolation-text: "nearest";
     in property <string> audio-voice-count-text: "—";
     in property <string> audio-layer-limit-text: "4 max";
-    in property <string> audio-limiter-text: "Off";
-    in property <string> audio-threading-text: "none";
-    in property <string> audio-ignore-range-text: "off";
+    in property <string> audio-limiter-text: "on";
+    in property <string> audio-threading-text: "auto";
+    in property <string> audio-ignore-range-text: "8";
     in property <string> audio-attack-curve-text: "exponential";
     in property <string> audio-decay-curve-text: "linear";
     in property <string> audio-release-curve-text: "linear";
@@ -430,26 +430,26 @@ export component AudioPanel inherits Rectangle {
 
             // Velocity Gate (with custom input)
             InlineCustomRow {
-                label: "Velocity Gate";
+                label: "Keep Velocity";
                 value: root.audio-ignore-range-text;
                 is-preset: root.vel-is-preset;
-                custom-display: "< " + root.audio-ignore-range-text;
+                custom-display: root.audio-ignore-range-text == "off" ? "All" : root.audio-ignore-range-text + "+";
                 custom-submitted(val) => {
                     root.select-ignore-range(val);
                 }
 
                 OptionChip {
-                    label: "Off";
+                    label: "All";
                     active: root.audio-ignore-range-text == "off";
                     pressed => { root.select-ignore-range("off"); }
                 }
                 OptionChip {
-                    label: "< 8";
+                    label: "8+";
                     active: root.audio-ignore-range-text == "8";
                     pressed => { root.select-ignore-range("8"); }
                 }
                 OptionChip {
-                    label: "< 16";
+                    label: "16+";
                     active: root.audio-ignore-range-text == "16";
                     pressed => { root.select-ignore-range("16"); }
                 }

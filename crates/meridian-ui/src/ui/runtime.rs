@@ -970,7 +970,7 @@ fn wire_video_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mut
                         *palette = if value.as_str() == "zenith_palette" {
                             NotePaletteConfig::ZenithPalette {
                                 palette: ZenithPaletteSpec::Random,
-                                randomize: true,
+                                randomize: false,
                             }
                         } else {
                             NotePaletteConfig::DefaultTrackColors
@@ -1549,12 +1549,9 @@ fn wire_audio_config_callbacks(
         app.on_select_audio_ignore_range(move |limit| {
             if let Some(app) = app_weak.upgrade() {
                 update_audio_config(&app, &bridge, &shared_state, move |config| {
-                    config.xsynth.config.ignore_range = match limit.as_str() {
-                        "8" => 1..=8,
-                        "16" => 1..=16,
-                        "24" => 1..=24,
-                        _ => 0..=0,
-                    };
+                    if let Some(ignore_range) = ignore_range_from_keep_velocity(limit.as_str()) {
+                        config.xsynth.config.ignore_range = ignore_range;
+                    }
                 });
             }
         });
@@ -3920,6 +3917,20 @@ fn envelope_curve_from_label(label: &str) -> EnvelopeCurveType {
 
 fn bool_from_label(label: &str) -> bool {
     matches!(label, "on" | "yes" | "true" | "1")
+}
+
+fn ignore_range_from_keep_velocity(label: &str) -> Option<std::ops::RangeInclusive<u8>> {
+    let trimmed = label.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
+        return Some(0..=0);
+    }
+
+    let keep_from = trimmed.parse::<u8>().ok()?.clamp(1, 127);
+    if keep_from <= 1 {
+        Some(0..=0)
+    } else {
+        Some(1..=keep_from - 1)
+    }
 }
 
 fn normalize_top_bar_color(value: &str) -> Option<String> {

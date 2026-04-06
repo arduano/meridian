@@ -79,7 +79,11 @@ pub struct XSynthRenderSettings {
 impl Default for XSynthSettings {
     fn default() -> Self {
         Self {
-            config: Default::default(),
+            config: XSynthRealtimeConfig {
+                multithreading: ThreadCount::Auto,
+                ignore_range: 1..=7,
+                ..Default::default()
+            },
             limit_layers: true,
             layers: 4,
             render: Default::default(),
@@ -95,7 +99,7 @@ impl Default for XSynthRenderSettings {
                 channel: ThreadCount::Auto,
                 key: ThreadCount::Auto,
             },
-            use_limiter: false,
+            use_limiter: true,
         }
     }
 }

@@ -483,7 +483,7 @@ const fn default_piano_trail_classic_aura_enabled() -> bool {
 }
 
 const fn default_piano_trail_classic_notes_change_tint() -> bool {
-    true
+    false
 }
 
 fn default_piano_trail_classic_aura_image() -> ProjectorImageConfig {
