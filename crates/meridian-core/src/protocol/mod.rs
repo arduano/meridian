@@ -21,7 +21,8 @@ pub use ids::{
 pub use json::{JsonRequest, JsonResponse};
 pub use process::{MidiProcessEvent, MidiProcessStatus};
 pub use render::{
-    AudioRenderStatus, FrameStats, RenderedFrame, VideoRenderConfig, VideoRenderEvent,
+    AudioRenderStatus, FrameColorMode, FrameStats, ImageExportArtifacts, ImageExportConfig,
+    RenderedFrame, VideoExportArtifacts, VideoExportConfig, VideoRenderConfig, VideoRenderEvent,
     VideoRenderStatus,
 };
 pub use server::{run_one_protocol_json, serve_protocol_json};

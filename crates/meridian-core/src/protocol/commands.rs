@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::{
     audio::{AudioConfig, AudioRenderConfig},
@@ -158,6 +159,8 @@ pub enum CoreCommand {
         format: Option<ImageOutputFormat>,
         viewport_width: Option<u32>,
         viewport_height: Option<u32>,
+        #[serde(default)]
+        export: super::render::ImageExportConfig,
     },
     StartRenderVideo {
         config: VideoRenderConfig,
@@ -167,7 +170,7 @@ pub enum CoreCommand {
     Shutdown,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum ImageOutputFormat {
     Ppm,

@@ -9,7 +9,10 @@ use std::{
 
 use meridian_core::{
     MeridianError,
-    protocol::{ProtocolClient, ProtocolCommand, ProtocolEvent, ProtocolVideoRenderConfig},
+    protocol::{
+        FrameColorMode, ProtocolClient, ProtocolCommand, ProtocolEvent, ProtocolVideoRenderConfig,
+        VideoExportConfig,
+    },
     render::{DisplayTimeSpace, RendererKind},
 };
 
@@ -24,6 +27,8 @@ pub fn run(
     first_key: u8,
     last_key: u8,
     renderer: RendererKind,
+    rgb_mode: FrameColorMode,
+    export_alpha_mask: bool,
     ffmpeg_flags: Option<&str>,
 ) -> Result<(), MeridianError> {
     let cancel = Arc::new(AtomicBool::new(false));
@@ -53,6 +58,10 @@ pub fn run(
             first_key: Some(first_key),
             last_key: Some(last_key),
             ffmpeg_args: parse_ffmpeg_args(ffmpeg_flags)?,
+            export: VideoExportConfig {
+                color_mode: rgb_mode,
+                export_alpha_mask,
+            },
         },
     })?;
     write_events(&mut stdout, &start_response.events)?;

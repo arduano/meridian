@@ -192,6 +192,10 @@ Deno.test("stdio protocol smoke tests video render", async () => {
         time_space: null,
         first_key: null,
         last_key: null,
+        export: {
+          color_mode: "premultiplied",
+          export_alpha_mask: false,
+        },
         ffmpeg_args: ["-y"],
       },
     });
@@ -256,6 +260,9 @@ Deno.test("stdio protocol accepts explicit scene config for video render", async
         scene: {
           scene_type: "three_d",
           projector: "piano_trail_classic",
+          background: {
+            source: "none",
+          },
           same_width_notes: true,
           fov: Math.PI / 3,
           view_height: 0.55,
@@ -291,6 +298,10 @@ Deno.test("stdio protocol accepts explicit scene config for video render", async
         time_space: null,
         first_key: null,
         last_key: null,
+        export: {
+          color_mode: "premultiplied",
+          export_alpha_mask: false,
+        },
         ffmpeg_args: ["-y"],
       },
     });

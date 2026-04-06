@@ -3,7 +3,7 @@ use std::{path::PathBuf, time::Instant};
 use crate::{
     error::MeridianError,
     midi::{MIDIFileBase, MIDIFileUnion},
-    protocol::{CoreErrorCode, CoreEvent, FrameStats, ImageOutputFormat},
+    protocol::{CoreErrorCode, CoreEvent, FrameStats, ImageExportConfig, ImageOutputFormat},
     render::{
         ProjectedScene, SceneConfig, SceneLayout, ScenePhysicsState, headless::save_scene_headless,
         project_scene, tick_scene_physics,
@@ -214,15 +214,17 @@ impl LiveDisplaySession {
         frame: DisplayFrame,
         output: PathBuf,
         format: ImageOutputFormat,
+        export: ImageExportConfig,
         state: crate::protocol::StateSnapshot,
     ) -> Result<CoreEvent, MeridianError> {
-        let bytes_written = save_scene_headless(
+        let (bytes_written, exports) = save_scene_headless(
             frame.layout.viewport_width,
             frame.layout.viewport_height,
             &frame.layout,
             &frame.scene,
             format,
             &output,
+            &export,
         )?;
         Ok(CoreEvent::FrameSaved {
             output,
@@ -230,6 +232,7 @@ impl LiveDisplaySession {
             state,
             stats: frame.stats,
             bytes_written,
+            exports,
         })
     }
 

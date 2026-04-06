@@ -1,3 +1,4 @@
+pub mod export;
 pub mod flat;
 pub mod headless;
 pub mod pfa;
@@ -8,9 +9,10 @@ pub use shared::{
     DisplayTimeSpace, FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardHeightSpec,
     KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig, PFA_BLUE_TOP_BAR_COLOR,
     PFA_GREEN_TOP_BAR_COLOR, PFA_RED_TOP_BAR_COLOR, PfaKeyboardProjectorConfig,
-    PfaNoteProjectorConfig, PianoTrailClassicSceneConfig, ProjectedScene, ProjectorImageConfig,
-    RendererKind, SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState, SceneQuad,
-    ThreeDSceneConfig, TwoDSceneConfig, ZenithPaletteSpec, tick_scene_physics,
+    PfaNoteProjectorConfig, PianoTrailClassicSceneConfig, ProjectedScene,
+    ProjectorBackgroundConfig, ProjectorBackgroundScalingMode, ProjectorImageConfig, RendererKind,
+    SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState, SceneQuad, ThreeDSceneConfig,
+    TwoDSceneConfig, ZenithPaletteSpec, tick_scene_physics,
 };
 
 use crate::midi::{backend::MIDIFileUnion, views::MIDIFileViewsUnion};

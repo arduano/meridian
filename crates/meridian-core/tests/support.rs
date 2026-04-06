@@ -2,7 +2,9 @@
 
 use std::{
     fs,
+    io::BufReader,
     path::{Path, PathBuf},
+    process::{Command, Stdio},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -170,11 +172,63 @@ pub fn write_toolkit_midi(path: &Path, ppq: u16, tracks: Vec<Vec<Delta<u64, Even
 }
 
 pub fn ffmpeg_available() -> bool {
-    std::process::Command::new("ffmpeg")
+    Command::new("ffmpeg")
         .arg("-version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .map(|status| status.success())
         .unwrap_or(false)
+}
+
+pub fn decode_png_rgba(path: &Path) -> (u32, u32, Vec<u8>) {
+    let file = fs::File::open(path).expect("open png");
+    let decoder = png::Decoder::new(BufReader::new(file));
+    let mut reader = decoder.read_info().expect("read png info");
+    let size = reader
+        .output_buffer_size()
+        .expect("png output buffer size should be known");
+    let mut bytes = vec![0; size];
+    let info = reader.next_frame(&mut bytes).expect("read png frame");
+    let rgba = match info.color_type {
+        png::ColorType::Rgba => bytes[..info.buffer_size()].to_vec(),
+        png::ColorType::Rgb => {
+            let mut rgba = Vec::with_capacity(info.buffer_size() / 3 * 4);
+            for pixel in bytes[..info.buffer_size()].chunks_exact(3) {
+                rgba.extend_from_slice(&[pixel[0], pixel[1], pixel[2], 255]);
+            }
+            rgba
+        }
+        other => panic!("unsupported png color type {other:?}"),
+    };
+    (info.width, info.height, rgba)
+}
+
+pub fn decode_first_video_frame_gray(path: &Path, width: u32, height: u32) -> Vec<u8> {
+    let output = Command::new("ffmpeg")
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            path.to_string_lossy().as_ref(),
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "gray",
+            "pipe:1",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .expect("decode first video frame");
+    assert!(
+        output.status.success(),
+        "ffmpeg decode failed for {}",
+        path.display()
+    );
+    assert_eq!(output.stdout.len(), (width * height) as usize);
+    output.stdout
 }

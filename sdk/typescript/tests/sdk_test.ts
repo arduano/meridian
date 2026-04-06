@@ -279,6 +279,9 @@ Deno.test("video render accepts full scene config through the SDK API", async ()
   const scene: SceneConfig = {
     scene_type: "three_d",
     projector: "piano_trail_classic",
+    background: {
+      source: "none",
+    },
     same_width_notes: true,
     fov: Math.PI / 3,
     view_height: 0.55,

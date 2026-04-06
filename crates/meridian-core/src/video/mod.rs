@@ -2,18 +2,26 @@ mod ffmpeg;
 
 use std::{
     io::Write,
+    path::PathBuf,
+    process::{Child, ChildStdin},
     sync::atomic::{AtomicBool, Ordering},
     time::Instant,
 };
 
 use crate::{
     CoreHandle, MeridianError,
-    protocol::{CoreCommand, CoreEvent, VideoRenderConfig, VideoRenderEvent, VideoRenderJobId},
-    render::headless::HeadlessRenderSession,
+    protocol::{
+        CoreCommand, CoreEvent, VideoExportArtifacts, VideoRenderConfig, VideoRenderEvent,
+        VideoRenderJobId,
+    },
+    render::{
+        export::ExportFrame,
+        headless::{HeadlessClearMode, HeadlessRenderSession},
+    },
     spawn_core,
 };
 
-pub use ffmpeg::spawn_ffmpeg;
+pub use ffmpeg::{spawn_ffmpeg_gray, spawn_ffmpeg_rgba};
 
 impl VideoRenderConfig {
     pub fn validate(&self) -> Result<(), MeridianError> {
@@ -138,34 +146,64 @@ fn render_video_with_core(
     let frame0 = core.render_frame(Some(config.width), Some(config.height))?;
     let duration_seconds = frame0.state.midi_length.max(0.0);
     let total_frames = (duration_seconds * config.fps).ceil().max(1.0) as u64;
-    let (mut ffmpeg_child, mut ffmpeg_stdin, ffmpeg_command) = spawn_ffmpeg(
+    let (mut ffmpeg_child, mut ffmpeg_stdin, ffmpeg_command) = spawn_ffmpeg_rgba(
         &config.output,
         config.fps,
         config.width,
         config.height,
         &config.ffmpeg_args,
     )?;
-    let mut session = HeadlessRenderSession::new(&frame0.layout, config.width, config.height)?;
+    let alpha_output = config
+        .export
+        .export_alpha_mask
+        .then(|| crate::render::export::sidecar_path(&config.output, "alpha"));
+    let (mut alpha_ffmpeg, alpha_ffmpeg_command) =
+        match spawn_alpha_ffmpeg(alpha_output.clone(), config) {
+            Ok(value) => value,
+            Err(error) => {
+                drop(ffmpeg_stdin);
+                let _ = ffmpeg_child.kill();
+                let _ = ffmpeg_child.wait();
+                return Err(error);
+            }
+        };
+    let mut session = HeadlessRenderSession::new_with_clear_mode(
+        &frame0.layout,
+        config.width,
+        config.height,
+        HeadlessClearMode::Transparent,
+    )?;
 
     on_event(VideoRenderEvent::RenderStarted {
         job_id,
         midi: config.midi_path.clone(),
         output: config.output.clone(),
+        exports: VideoExportArtifacts {
+            alpha_mask: alpha_output.clone(),
+        },
         fps: config.fps,
         width: config.width,
         height: config.height,
         total_frames,
         duration_seconds,
         ffmpeg_command,
+        alpha_ffmpeg_command,
     });
 
     let start = Instant::now();
     core.request(CoreCommand::ResetProjectorPhysics)?;
+    let mut color_frame = Vec::new();
+    let mut alpha_frame = Vec::new();
     for frame_index in 0..total_frames {
         if cancel.load(Ordering::SeqCst) {
             drop(ffmpeg_stdin);
             let _ = ffmpeg_child.kill();
             let _ = ffmpeg_child.wait();
+            if let Some(encoder) = alpha_ffmpeg.as_mut() {
+                drop(encoder.stdin.take());
+                let _ = encoder.child.kill();
+                let _ = encoder.child.wait();
+            }
             on_event(VideoRenderEvent::RenderCancelled {
                 job_id,
                 frame_index,
@@ -183,7 +221,15 @@ fn render_video_with_core(
         let frame = core.render_frame(Some(config.width), Some(config.height))?;
         session.render(&frame.layout, &frame.scene);
         let rgba = session.readback_rgba()?;
-        ffmpeg_stdin.write_all(&rgba)?;
+        let export_frame = ExportFrame::new(config.width, config.height, rgba);
+        export_frame.fill_color_rgba(config.export.color_mode, &mut color_frame);
+        ffmpeg_stdin.write_all(&color_frame)?;
+        if let Some(encoder) = alpha_ffmpeg.as_mut() {
+            export_frame.fill_alpha_luma(&mut alpha_frame);
+            if let Some(stdin) = encoder.stdin.as_mut() {
+                stdin.write_all(&alpha_frame)?;
+            }
+        }
 
         let elapsed_seconds = start.elapsed().as_secs_f64();
         let average_fps = if elapsed_seconds > 0.0 {
@@ -202,12 +248,16 @@ fn render_video_with_core(
     }
 
     drop(ffmpeg_stdin);
+    if let Some(encoder) = alpha_ffmpeg.as_mut() {
+        let _ = encoder.stdin.take();
+    }
     let status = ffmpeg_child.wait()?;
     if !status.success() {
         return Err(MeridianError::Platform(format!(
             "ffmpeg exited with status {status}"
         )));
     }
+    wait_for_alpha_ffmpeg(alpha_ffmpeg)?;
 
     let elapsed_seconds = start.elapsed().as_secs_f64();
     let average_fps = if elapsed_seconds > 0.0 {
@@ -221,7 +271,52 @@ fn render_video_with_core(
         elapsed_seconds,
         average_fps,
         output: config.output.clone(),
+        exports: VideoExportArtifacts {
+            alpha_mask: alpha_output,
+        },
     });
+    Ok(())
+}
+
+struct AlphaFfmpeg {
+    child: Child,
+    stdin: Option<ChildStdin>,
+}
+
+fn spawn_alpha_ffmpeg(
+    alpha_output: Option<PathBuf>,
+    config: &VideoRenderConfig,
+) -> Result<(Option<AlphaFfmpeg>, Option<Vec<String>>), MeridianError> {
+    let Some(alpha_output) = alpha_output else {
+        return Ok((None, None));
+    };
+
+    let (child, stdin, command) = spawn_ffmpeg_gray(
+        &alpha_output,
+        config.fps,
+        config.width,
+        config.height,
+        &config.ffmpeg_args,
+    )?;
+    Ok((
+        Some(AlphaFfmpeg {
+            child,
+            stdin: Some(stdin),
+        }),
+        Some(command),
+    ))
+}
+
+fn wait_for_alpha_ffmpeg(alpha_ffmpeg: Option<AlphaFfmpeg>) -> Result<(), MeridianError> {
+    let Some(mut alpha_ffmpeg) = alpha_ffmpeg else {
+        return Ok(());
+    };
+    let status = alpha_ffmpeg.child.wait()?;
+    if !status.success() {
+        return Err(MeridianError::Platform(format!(
+            "alpha ffmpeg exited with status {status}"
+        )));
+    }
     Ok(())
 }
 

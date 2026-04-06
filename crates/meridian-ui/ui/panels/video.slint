@@ -53,6 +53,9 @@ export component VideoPanel inherits Rectangle {
     in property <string> video-palette-kind-text;
     in property <string> video-palette-randomize-text;
     in property <string> video-palette-path-text;
+    in property <string> video-background-source-text;
+    in property <string> video-background-scale-text;
+    in property <string> video-background-path-text;
     in property <string> video-ptc-same-width-text;
     in property <string> video-ptc-fov-text;
     in property <string> video-ptc-view-height-text;
@@ -110,6 +113,7 @@ export component VideoPanel inherits Rectangle {
     private property <bool> uses-2d-layout: !root.is-3d;
     private property <bool> uses-zenith-palette: root.video-palette-source-text == "zenith_palette";
     private property <bool> uses-palette-png: root.video-palette-kind-text == "png_file";
+    private property <bool> uses-background-png: root.video-background-source-text == "png_file";
     private property <bool> uses-aura-png: root.video-ptc-aura-image-source-text == "png_file";
 
     // Whether there's a right column at all
@@ -276,6 +280,36 @@ export component VideoPanel inherits Rectangle {
                         file-label: "16px/32px wide opaque RGB palette png";
                         browse => { root.browse-asset("palette_png"); }
                         reset => { root.reset-asset("palette_png"); }
+                    }
+
+                    Rectangle { height: 12px; }
+                    Separator { }
+                    Rectangle { height: 12px; }
+
+                    SectionHeader { title: "BACKGROUND"; }
+                    Rectangle { height: 6px; }
+
+                    InlineOptionRow {
+                        label: "Source";
+                        OptionChip { label: "None"; active: root.video-background-source-text == "none"; pressed => { root.update-control("background_source", "none"); } }
+                        OptionChip { label: "PNG"; active: root.video-background-source-text == "png_file"; pressed => { root.update-control("background_source", "png_file"); } }
+                    }
+
+                    if root.uses-background-png : Rectangle { height: 4px; }
+
+                    if root.uses-background-png : InlineOptionRow {
+                        label: "Scale";
+                        OptionChip { label: "Stretch"; active: root.video-background-scale-text == "stretch"; pressed => { root.update-control("background_scaling", "stretch"); } }
+                        OptionChip { label: "Cover"; active: root.video-background-scale-text == "cover"; pressed => { root.update-control("background_scaling", "cover"); } }
+                    }
+
+                    if root.uses-background-png : Rectangle { height: 6px; }
+
+                    if root.uses-background-png : FilePicker {
+                        file-name: root.video-background-path-text;
+                        file-label: "Background PNG";
+                        browse => { root.browse-asset("background_png"); }
+                        reset => { root.reset-asset("background_png"); }
                     }
 
                     Rectangle { height: 12px; }

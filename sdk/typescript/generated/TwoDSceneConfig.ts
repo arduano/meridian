@@ -2,5 +2,6 @@
 import type { KeyboardHeightSpec } from "./KeyboardHeightSpec.ts";
 import type { KeyboardProjectorConfig } from "./KeyboardProjectorConfig.ts";
 import type { NoteProjectorConfig } from "./NoteProjectorConfig.ts";
+import type { ProjectorBackgroundConfig } from "./ProjectorBackgroundConfig.ts";
 
-export type TwoDSceneConfig = { keyboard_height: KeyboardHeightSpec, notes: NoteProjectorConfig, keyboard: KeyboardProjectorConfig, };
+export type TwoDSceneConfig = { background: ProjectorBackgroundConfig, keyboard_height: KeyboardHeightSpec, notes: NoteProjectorConfig, keyboard: KeyboardProjectorConfig, };

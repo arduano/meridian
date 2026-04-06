@@ -12,9 +12,14 @@ use meridian_core::{
         RangeEdgeBehavior, RangeSelectTool, analysis::MidiAnalysisKind,
     },
     protocol::{
-        CoreCommand, CoreEvent, JsonRequest, JsonResponse, MidiProcessEvent, MidiProcessStatus,
+        CoreCommand, CoreEvent, FrameColorMode, ImageExportConfig, JsonRequest, JsonResponse,
+        MidiProcessEvent, MidiProcessStatus,
     },
-    render::{DisplayTimeSpace, SceneLayout},
+    render::{
+        DisplayTimeSpace, FlatKeyboardProjectorConfig, FlatNoteProjectorConfig,
+        KeyboardProjectorConfig, NoteProjectorConfig, PianoTrailClassicSceneConfig, SceneConfig,
+        SceneLayout, ThreeDSceneConfig, TwoDSceneConfig,
+    },
     spawn_core,
 };
 use midi_toolkit::{
@@ -73,6 +78,7 @@ fn save_frame_supports_png_and_rgba() {
             format: None,
             viewport_width: Some(320),
             viewport_height: Some(180),
+            export: Default::default(),
         })
         .expect("save png");
     let rgba_events = core
@@ -81,6 +87,7 @@ fn save_frame_supports_png_and_rgba() {
             format: None,
             viewport_width: Some(320),
             viewport_height: Some(180),
+            export: Default::default(),
         })
         .expect("save rgba");
 
@@ -97,6 +104,115 @@ fn save_frame_supports_png_and_rgba() {
     ));
     assert_eq!(&png_bytes[..8], b"\x89PNG\r\n\x1a\n");
     assert_eq!(rgba_bytes.len(), 320 * 180 * 4);
+}
+
+#[test]
+fn save_frame_exports_alpha_sidecars_for_all_projectors() {
+    let midi = support::write_test_midi();
+    let out_dir = support::temp_dir("meridian-core-alpha-export");
+    let core = spawn_core();
+
+    core.request(CoreCommand::LoadMidi { path: midi })
+        .expect("load midi");
+    core.request(CoreCommand::SetTime { time: 0.25 })
+        .expect("set time");
+    core.request(CoreCommand::SetViewport {
+        width: 320,
+        height: 180,
+    })
+    .expect("set viewport");
+
+    let scenes = [
+        (
+            "flat-flat",
+            SceneConfig::TwoD(TwoDSceneConfig {
+                notes: NoteProjectorConfig::Flat(FlatNoteProjectorConfig::default()),
+                keyboard: KeyboardProjectorConfig::Flat(FlatKeyboardProjectorConfig),
+                ..Default::default()
+            }),
+        ),
+        (
+            "flat-pfa",
+            SceneConfig::TwoD(TwoDSceneConfig {
+                notes: NoteProjectorConfig::Flat(FlatNoteProjectorConfig::default()),
+                keyboard: KeyboardProjectorConfig::Pfa(Default::default()),
+                ..Default::default()
+            }),
+        ),
+        (
+            "pfa-flat",
+            SceneConfig::TwoD(TwoDSceneConfig {
+                notes: NoteProjectorConfig::Pfa(Default::default()),
+                keyboard: KeyboardProjectorConfig::Flat(FlatKeyboardProjectorConfig),
+                ..Default::default()
+            }),
+        ),
+        ("pfa-pfa", SceneConfig::TwoD(TwoDSceneConfig::default())),
+        (
+            "piano-trail-classic",
+            SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(
+                PianoTrailClassicSceneConfig::default(),
+            )),
+        ),
+    ];
+
+    let mut saw_distinct_color_modes = false;
+    for (name, scene) in scenes {
+        core.request(CoreCommand::SetSceneConfig { scene })
+            .expect("set scene");
+
+        let output = out_dir.join(format!("{name}.png"));
+        let events = core
+            .request(CoreCommand::SaveFrame {
+                output: output.clone(),
+                format: None,
+                viewport_width: Some(320),
+                viewport_height: Some(180),
+                export: ImageExportConfig {
+                    color_mode: FrameColorMode::Premultiplied,
+                    export_premultiplied_rgb: true,
+                    export_straight_rgb: true,
+                    export_alpha_mask: true,
+                },
+            })
+            .expect("save frame with alpha sidecars");
+
+        let exports = match events.as_slice() {
+            [CoreEvent::FrameSaved { exports, .. }] => exports.clone(),
+            other => panic!("unexpected save_frame response for {name}: {other:?}"),
+        };
+
+        let premultiplied_path = exports
+            .premultiplied_rgb
+            .expect("premultiplied sidecar path");
+        let straight_path = exports.straight_rgb.expect("straight sidecar path");
+        let alpha_path = exports.alpha_mask.expect("alpha sidecar path");
+
+        for path in [&output, &premultiplied_path, &straight_path, &alpha_path] {
+            assert!(path.exists(), "expected {} to exist", path.display());
+        }
+
+        let (_, _, premultiplied_rgba) = support::decode_png_rgba(&premultiplied_path);
+        let (_, _, straight_rgba) = support::decode_png_rgba(&straight_path);
+        let (_, _, alpha_rgba) = support::decode_png_rgba(&alpha_path);
+
+        assert!(alpha_rgba.chunks_exact(4).any(|pixel| pixel[0] == 0));
+        assert!(alpha_rgba.chunks_exact(4).any(|pixel| pixel[0] > 0));
+        assert!(
+            alpha_rgba
+                .chunks_exact(4)
+                .all(|pixel| { pixel[0] == pixel[1] && pixel[1] == pixel[2] && pixel[3] == 255 })
+        );
+
+        if premultiplied_rgba != straight_rgba {
+            saw_distinct_color_modes = true;
+        }
+    }
+
+    assert!(
+        saw_distinct_color_modes,
+        "expected at least one projector export to differ between premultiplied and straight rgb"
+    );
 }
 
 #[test]
@@ -697,6 +813,7 @@ fn video_render_smokes_when_ffmpeg_is_available() {
                 first_key: None,
                 last_key: None,
                 ffmpeg_args: vec!["-y".to_string()],
+                export: Default::default(),
             },
         })
         .expect("start video render");

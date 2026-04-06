@@ -11,6 +11,7 @@ use meridian_core::{
         MidiFileProcessingConfig, QuantizeMode, QuantizeTool, RangeEdgeBehavior, RangeSelectTool,
         TempoMapTool, analysis::MidiAnalysisKind,
     },
+    protocol::FrameColorMode,
     protocol::{
         MidiAnalysisJobStatus, MidiProcessEvent, MidiProcessStatus, ProtocolClient,
         ProtocolCommand, ProtocolEvent,
@@ -218,6 +219,10 @@ pub struct RenderVideoArgs {
     last_key: u8,
     #[arg(long, value_enum, default_value_t = RendererKind::Pfa)]
     renderer: RendererKind,
+    #[arg(long, value_enum, default_value_t = FrameColorMode::Premultiplied)]
+    rgb_mode: FrameColorMode,
+    #[arg(long)]
+    export_alpha_mask: bool,
     #[arg(long, allow_hyphen_values = true)]
     ffmpeg_flags: Option<String>,
 }
@@ -621,6 +626,8 @@ fn run_render_video(args: RenderVideoArgs) -> Result<(), MeridianError> {
         args.first_key,
         args.last_key,
         args.renderer,
+        args.rgb_mode,
+        args.export_alpha_mask,
         args.ffmpeg_flags.as_deref(),
     )
 }

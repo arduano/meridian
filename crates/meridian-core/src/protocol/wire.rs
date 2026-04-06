@@ -8,9 +8,10 @@ use crate::{
     midi::{MidiFileProcessingConfig, MidiFilesMergeConfig},
     protocol::{
         AnalysisJobId, AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, DisplayCacheId,
-        MidiAnalysisData, MidiAnalysisJobEvent, MidiAnalysisJobStatus, MidiAnalysisKind,
-        MidiFileInspection, MidiProcessEvent, MidiProcessJobId, MidiProcessStatus,
-        PROTOCOL_VERSION, ParsedMidiId, VideoRenderEvent, VideoRenderStatus,
+        ImageExportConfig, MidiAnalysisData, MidiAnalysisJobEvent, MidiAnalysisJobStatus,
+        MidiAnalysisKind, MidiFileInspection, MidiProcessEvent, MidiProcessJobId,
+        MidiProcessStatus, PROTOCOL_VERSION, ParsedMidiId, VideoExportConfig, VideoRenderEvent,
+        VideoRenderStatus,
     },
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
 };
@@ -23,6 +24,20 @@ pub struct ProtocolAudioRenderConfig {
     pub channels: Option<u16>,
     pub use_limiter: Option<bool>,
     pub soundfonts: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ProtocolStateSnapshot {
+    pub midi_path: Option<PathBuf>,
+    pub current_time: f64,
+    pub playing: bool,
+    pub scene: SceneConfig,
+    pub view_range: f64,
+    pub time_space: DisplayTimeSpace,
+    pub first_key: u8,
+    pub last_key: u8,
+    pub viewport_width: u32,
+    pub viewport_height: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -43,6 +58,8 @@ pub struct ProtocolVideoRenderConfig {
     pub last_key: Option<u8>,
     #[serde(default)]
     pub ffmpeg_args: Vec<String>,
+    #[serde(default)]
+    pub export: VideoExportConfig,
 }
 
 impl From<ProtocolAudioRenderConfig> for crate::audio::AudioRenderConfig {
@@ -80,6 +97,24 @@ impl From<ProtocolVideoRenderConfig> for crate::protocol::VideoRenderConfig {
             first_key: value.first_key,
             last_key: value.last_key,
             ffmpeg_args: value.ffmpeg_args,
+            export: value.export,
+        }
+    }
+}
+
+impl From<crate::protocol::StateSnapshot> for ProtocolStateSnapshot {
+    fn from(value: crate::protocol::StateSnapshot) -> Self {
+        Self {
+            midi_path: value.midi_path,
+            current_time: value.current_time,
+            playing: value.playing,
+            scene: value.scene,
+            view_range: value.view_range,
+            time_space: value.time_space,
+            first_key: value.first_key,
+            last_key: value.last_key,
+            viewport_width: value.viewport_width,
+            viewport_height: value.viewport_height,
         }
     }
 }
@@ -92,6 +127,9 @@ pub enum ProtocolCommand {
     },
     InspectMidiFiles {
         paths: Vec<PathBuf>,
+    },
+    LoadMidi {
+        path: PathBuf,
     },
     LoadAudioMidi {
         path: PathBuf,
@@ -125,6 +163,47 @@ pub enum ProtocolCommand {
     },
     CancelRenderAudio,
     GetRenderAudioStatus,
+    SetTime {
+        time: f64,
+    },
+    TickProjectorPhysics {
+        delta_seconds: f64,
+    },
+    ResetProjectorPhysics,
+    StepTime {
+        delta: f64,
+    },
+    SetPlaying {
+        playing: bool,
+    },
+    TogglePlaying,
+    SetSceneConfig {
+        scene: SceneConfig,
+    },
+    SetViewRange {
+        seconds: f64,
+        #[serde(default)]
+        time_space: Option<DisplayTimeSpace>,
+    },
+    SetKeyRange {
+        first_key: u8,
+        last_key: u8,
+    },
+    SetViewport {
+        width: u32,
+        height: u32,
+    },
+    SaveFrame {
+        output: PathBuf,
+        #[serde(default)]
+        format: Option<crate::protocol::ImageOutputFormat>,
+        #[serde(default)]
+        viewport_width: Option<u32>,
+        #[serde(default)]
+        viewport_height: Option<u32>,
+        #[serde(default)]
+        export: ImageExportConfig,
+    },
     StartRenderVideo {
         config: ProtocolVideoRenderConfig,
     },
@@ -138,6 +217,7 @@ impl From<ProtocolCommand> for CoreCommand {
         match value {
             ProtocolCommand::LoadParsedMidi { path } => Self::LoadParsedMidi { path },
             ProtocolCommand::InspectMidiFiles { paths } => Self::InspectMidiFiles { paths },
+            ProtocolCommand::LoadMidi { path } => Self::LoadMidi { path },
             ProtocolCommand::LoadAudioMidi { path } => Self::LoadAudioMidi { path },
             ProtocolCommand::StartMidiAnalysisJob {
                 parsed_midi_id,
@@ -178,6 +258,43 @@ impl From<ProtocolCommand> for CoreCommand {
             },
             ProtocolCommand::CancelRenderAudio => Self::CancelRenderAudio,
             ProtocolCommand::GetRenderAudioStatus => Self::GetRenderAudioStatus,
+            ProtocolCommand::SetTime { time } => Self::SetTime { time },
+            ProtocolCommand::TickProjectorPhysics { delta_seconds } => {
+                Self::TickProjectorPhysics { delta_seconds }
+            }
+            ProtocolCommand::ResetProjectorPhysics => Self::ResetProjectorPhysics,
+            ProtocolCommand::StepTime { delta } => Self::StepTime { delta },
+            ProtocolCommand::SetPlaying { playing } => Self::SetPlaying { playing },
+            ProtocolCommand::TogglePlaying => Self::TogglePlaying,
+            ProtocolCommand::SetSceneConfig { scene } => Self::SetSceneConfig { scene },
+            ProtocolCommand::SetViewRange {
+                seconds,
+                time_space,
+            } => Self::SetViewRange {
+                seconds,
+                time_space,
+            },
+            ProtocolCommand::SetKeyRange {
+                first_key,
+                last_key,
+            } => Self::SetKeyRange {
+                first_key,
+                last_key,
+            },
+            ProtocolCommand::SetViewport { width, height } => Self::SetViewport { width, height },
+            ProtocolCommand::SaveFrame {
+                output,
+                format,
+                viewport_width,
+                viewport_height,
+                export,
+            } => Self::SaveFrame {
+                output,
+                format,
+                viewport_width,
+                viewport_height,
+                export,
+            },
             ProtocolCommand::StartRenderVideo { config } => Self::StartRenderVideo {
                 config: config.into(),
             },
@@ -197,6 +314,9 @@ pub enum ProtocolEvent {
     },
     MidiFilesInspected {
         inspections: Vec<MidiFileInspection>,
+    },
+    StateSnapshot {
+        state: ProtocolStateSnapshot,
     },
     MidiLoaded {
         path: PathBuf,
@@ -233,6 +353,13 @@ pub enum ProtocolEvent {
     AudioRenderStatus {
         status: AudioRenderStatus,
     },
+    FrameSaved {
+        output: PathBuf,
+        format: crate::protocol::ImageOutputFormat,
+        stats: crate::protocol::FrameStats,
+        bytes_written: u64,
+        exports: crate::protocol::ImageExportArtifacts,
+    },
     VideoRender {
         event: VideoRenderEvent,
     },
@@ -264,6 +391,9 @@ impl TryFrom<CoreEvent> for ProtocolEvent {
             CoreEvent::MidiFilesInspected { inspections } => {
                 Ok(Self::MidiFilesInspected { inspections })
             }
+            CoreEvent::StateSnapshot { state } => Ok(Self::StateSnapshot {
+                state: state.into(),
+            }),
             CoreEvent::MidiLoaded { path, .. } => Ok(Self::MidiLoaded { path }),
             CoreEvent::MidiFileProcessed {
                 input,
@@ -299,6 +429,20 @@ impl TryFrom<CoreEvent> for ProtocolEvent {
             CoreEvent::MidiProcessStatus { status } => Ok(Self::MidiProcessStatus { status }),
             CoreEvent::AudioRender { event } => Ok(Self::AudioRender { event }),
             CoreEvent::AudioRenderStatus { status } => Ok(Self::AudioRenderStatus { status }),
+            CoreEvent::FrameSaved {
+                output,
+                format,
+                stats,
+                bytes_written,
+                exports,
+                ..
+            } => Ok(Self::FrameSaved {
+                output,
+                format,
+                stats,
+                bytes_written,
+                exports,
+            }),
             CoreEvent::VideoRender { event } => Ok(Self::VideoRender { event }),
             CoreEvent::VideoRenderStatus { status } => Ok(Self::VideoRenderStatus { status }),
             CoreEvent::Error { code, message } => Ok(Self::Error { code, message }),

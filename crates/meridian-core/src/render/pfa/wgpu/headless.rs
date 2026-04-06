@@ -4,7 +4,11 @@ use png::{BitDepth, ColorType, Encoder};
 use pollster::block_on;
 use wgpu::Extent3d;
 
-use crate::{error::MeridianError, protocol::ImageOutputFormat, render::shared::ProjectedScene};
+use crate::{
+    error::MeridianError,
+    protocol::ImageOutputFormat,
+    render::{SceneLayout, headless::HeadlessClearMode, shared::ProjectedScene},
+};
 
 use super::{VIEWPORT_FORMAT, renderer::PrimitiveSceneRenderer};
 
@@ -19,6 +23,14 @@ pub struct HeadlessRenderSession {
 
 impl HeadlessRenderSession {
     pub fn new(width: u32, height: u32) -> Result<Self, MeridianError> {
+        Self::new_with_clear_mode(width, height, HeadlessClearMode::OpaquePreview)
+    }
+
+    pub fn new_with_clear_mode(
+        width: u32,
+        height: u32,
+        clear_mode: HeadlessClearMode,
+    ) -> Result<Self, MeridianError> {
         let instance = wgpu::Instance::default();
         let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
             .map_err(|e| MeridianError::Wgpu(format!("request_adapter failed: {e}")))?;
@@ -35,7 +47,23 @@ impl HeadlessRenderSession {
 
         Ok(Self {
             texture: create_headless_target(&device, width, height)?,
-            renderer: PrimitiveSceneRenderer::new(&device),
+            renderer: PrimitiveSceneRenderer::new_with_clear_color(
+                &device,
+                match clear_mode {
+                    HeadlessClearMode::OpaquePreview => wgpu::Color {
+                        r: 0.02,
+                        g: 0.05,
+                        b: 0.08,
+                        a: 1.0,
+                    },
+                    HeadlessClearMode::Transparent => wgpu::Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.0,
+                    },
+                },
+            ),
             device,
             queue,
             width,
@@ -43,13 +71,17 @@ impl HeadlessRenderSession {
         })
     }
 
-    pub fn render(&mut self, scene: &ProjectedScene) {
+    pub fn render(&mut self, layout: &SceneLayout, scene: &ProjectedScene) {
         self.renderer
-            .render(&self.device, &self.queue, &self.texture, scene);
+            .render(&self.device, &self.queue, &self.texture, layout, scene);
     }
 
-    pub fn render_blocking(&mut self, scene: &ProjectedScene) -> Result<(), MeridianError> {
-        self.render(scene);
+    pub fn render_blocking(
+        &mut self,
+        layout: &SceneLayout,
+        scene: &ProjectedScene,
+    ) -> Result<(), MeridianError> {
+        self.render(layout, scene);
         self.wait_for_gpu()
     }
 
@@ -132,10 +164,11 @@ impl HeadlessRenderSession {
 pub fn render_scene_headless_to_rgba(
     width: u32,
     height: u32,
+    layout: &SceneLayout,
     scene: &ProjectedScene,
 ) -> Result<Vec<u8>, MeridianError> {
     let mut session = HeadlessRenderSession::new(width, height)?;
-    session.render(scene);
+    session.render(layout, scene);
     session.readback_rgba()
 }
 
@@ -168,11 +201,12 @@ pub fn encode_rgba_to_png(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8
 pub fn save_scene_headless(
     width: u32,
     height: u32,
+    layout: &SceneLayout,
     scene: &ProjectedScene,
     format: ImageOutputFormat,
     output: &Path,
 ) -> Result<u64, MeridianError> {
-    let rgba = render_scene_headless_to_rgba(width, height, scene)?;
+    let rgba = render_scene_headless_to_rgba(width, height, layout, scene)?;
     let bytes = match format {
         ImageOutputFormat::Ppm => encode_rgba_to_ppm(width, height, &rgba),
         ImageOutputFormat::Png => encode_rgba_to_png(width, height, &rgba)?,

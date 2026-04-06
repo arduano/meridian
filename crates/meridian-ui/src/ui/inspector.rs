@@ -1,6 +1,7 @@
 use meridian_core::render::{
     KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
-    RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
+    ProjectorBackgroundConfig, ProjectorBackgroundScalingMode, RendererKind, SceneConfig,
+    ThreeDSceneConfig, ZenithPaletteSpec,
 };
 
 use super::{
@@ -13,6 +14,7 @@ pub fn rows_for_scene(scene: &SceneConfig) -> Vec<InspectorRow> {
     match scene {
         SceneConfig::TwoD(config) => {
             rows.push(row("Scene", "Scene Type", "2D"));
+            rows.extend(background_rows(&config.background));
             match &config.keyboard_height {
                 KeyboardHeightSpec::ScreenPercent { height } => {
                     rows.push(row(
@@ -33,6 +35,7 @@ pub fn rows_for_scene(scene: &SceneConfig) -> Vec<InspectorRow> {
         SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => {
             rows.push(row("Scene", "Scene Type", "3D"));
             rows.push(row("Scene", "Projector", "piano_trail_classic"));
+            rows.extend(background_rows(&config.background));
             rows.push(row(
                 "Camera",
                 "FOV",
@@ -119,6 +122,24 @@ fn row(
         section: section.into(),
         label: label.into(),
         value: value.into(),
+    }
+}
+
+fn background_rows(config: &ProjectorBackgroundConfig) -> Vec<InspectorRow> {
+    match config {
+        ProjectorBackgroundConfig::None => vec![row("Background", "Source", "none")],
+        ProjectorBackgroundConfig::PngFile { path, scaling } => vec![
+            row("Background", "Source", "png_file"),
+            row(
+                "Background",
+                "Scaling",
+                match scaling {
+                    ProjectorBackgroundScalingMode::Stretch => "stretch",
+                    ProjectorBackgroundScalingMode::Cover => "cover",
+                },
+            ),
+            row("Background", "Path", path.clone()),
+        ],
     }
 }
 

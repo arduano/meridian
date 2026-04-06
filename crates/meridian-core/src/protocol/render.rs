@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -10,7 +11,7 @@ use super::{
     state::StateSnapshot,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct FrameStats {
     pub visible_notes: usize,
     pub active_keys: usize,
@@ -41,6 +42,50 @@ pub struct RenderedFrame {
     pub scene: ProjectedScene,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, TS, ValueEnum)]
+#[serde(rename_all = "snake_case")]
+pub enum FrameColorMode {
+    #[default]
+    Premultiplied,
+    Straight,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct ImageExportConfig {
+    #[serde(default)]
+    pub color_mode: FrameColorMode,
+    #[serde(default)]
+    pub export_premultiplied_rgb: bool,
+    #[serde(default)]
+    pub export_straight_rgb: bool,
+    #[serde(default)]
+    pub export_alpha_mask: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct ImageExportArtifacts {
+    #[serde(default)]
+    pub premultiplied_rgb: Option<PathBuf>,
+    #[serde(default)]
+    pub straight_rgb: Option<PathBuf>,
+    #[serde(default)]
+    pub alpha_mask: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct VideoExportConfig {
+    #[serde(default)]
+    pub color_mode: FrameColorMode,
+    #[serde(default)]
+    pub export_alpha_mask: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct VideoExportArtifacts {
+    #[serde(default)]
+    pub alpha_mask: Option<PathBuf>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoRenderConfig {
     pub midi_path: Option<PathBuf>,
@@ -56,6 +101,8 @@ pub struct VideoRenderConfig {
     pub last_key: Option<u8>,
     #[serde(default)]
     pub ffmpeg_args: Vec<String>,
+    #[serde(default)]
+    pub export: VideoExportConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -89,12 +136,15 @@ pub enum VideoRenderEvent {
         job_id: VideoRenderJobId,
         midi: Option<PathBuf>,
         output: PathBuf,
+        exports: VideoExportArtifacts,
         fps: f64,
         width: u32,
         height: u32,
         total_frames: u64,
         duration_seconds: f64,
         ffmpeg_command: Vec<String>,
+        #[serde(default)]
+        alpha_ffmpeg_command: Option<Vec<String>>,
     },
     RenderProgress {
         job_id: VideoRenderJobId,
@@ -116,6 +166,7 @@ pub enum VideoRenderEvent {
         elapsed_seconds: f64,
         average_fps: f64,
         output: PathBuf,
+        exports: VideoExportArtifacts,
     },
     RenderFailed {
         message: String,

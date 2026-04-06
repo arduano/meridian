@@ -18,6 +18,24 @@ pub enum RendererKind {
     PianoTrailClassic,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectorBackgroundScalingMode {
+    Stretch,
+    Cover,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "source", rename_all = "snake_case")]
+pub enum ProjectorBackgroundConfig {
+    None,
+    PngFile {
+        path: String,
+        #[serde(default)]
+        scaling: ProjectorBackgroundScalingMode,
+    },
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 pub struct FlatNoteProjectorConfig {
     #[serde(default)]
@@ -71,6 +89,8 @@ pub enum KeyboardHeightSpec {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 pub struct TwoDSceneConfig {
     #[serde(default)]
+    pub background: ProjectorBackgroundConfig,
+    #[serde(default)]
     pub keyboard_height: KeyboardHeightSpec,
     #[serde(default)]
     pub notes: NoteProjectorConfig,
@@ -80,6 +100,8 @@ pub struct TwoDSceneConfig {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 pub struct PianoTrailClassicSceneConfig {
+    #[serde(default)]
+    pub background: ProjectorBackgroundConfig,
     #[serde(default = "default_piano_trail_classic_same_width_notes")]
     pub same_width_notes: bool,
     #[serde(default = "default_piano_trail_classic_fov")]
@@ -255,6 +277,7 @@ impl Default for KeyboardHeightSpec {
 impl Default for TwoDSceneConfig {
     fn default() -> Self {
         Self {
+            background: ProjectorBackgroundConfig::default(),
             keyboard_height: KeyboardHeightSpec::default(),
             notes: NoteProjectorConfig::default(),
             keyboard: KeyboardProjectorConfig::default(),
@@ -285,6 +308,7 @@ impl Default for SceneLayout {
 impl Default for PianoTrailClassicSceneConfig {
     fn default() -> Self {
         Self {
+            background: ProjectorBackgroundConfig::default(),
             same_width_notes: default_piano_trail_classic_same_width_notes(),
             fov: default_piano_trail_classic_fov(),
             view_height: default_piano_trail_classic_view_height(),
@@ -317,6 +341,18 @@ impl Default for PianoTrailClassicSceneConfig {
 impl Default for ThreeDSceneConfig {
     fn default() -> Self {
         Self::PianoTrailClassic(PianoTrailClassicSceneConfig::default())
+    }
+}
+
+impl Default for ProjectorBackgroundScalingMode {
+    fn default() -> Self {
+        Self::Stretch
+    }
+}
+
+impl Default for ProjectorBackgroundConfig {
+    fn default() -> Self {
+        Self::None
     }
 }
 
@@ -365,15 +401,21 @@ impl SceneLayout {
     }
 
     pub fn set_renderer_kind(&mut self, renderer: RendererKind) {
+        let background = self.scene.background().clone();
         self.scene = match renderer {
             RendererKind::Flat => SceneConfig::TwoD(TwoDSceneConfig {
+                background,
                 keyboard_height: KeyboardHeightSpec::default(),
                 notes: NoteProjectorConfig::Flat(FlatNoteProjectorConfig::default()),
                 keyboard: KeyboardProjectorConfig::Flat(FlatKeyboardProjectorConfig),
             }),
-            RendererKind::Pfa => SceneConfig::TwoD(TwoDSceneConfig::default()),
+            RendererKind::Pfa => SceneConfig::TwoD(TwoDSceneConfig {
+                background,
+                ..TwoDSceneConfig::default()
+            }),
             RendererKind::PianoTrailClassic => SceneConfig::ThreeD(
                 ThreeDSceneConfig::PianoTrailClassic(PianoTrailClassicSceneConfig {
+                    background,
                     box_notes: true,
                     ..PianoTrailClassicSceneConfig::default()
                 }),
@@ -387,6 +429,22 @@ impl NoteProjectorConfig {
         match self {
             Self::Flat(config) => &config.palette,
             Self::Pfa(config) => &config.palette,
+        }
+    }
+}
+
+impl SceneConfig {
+    pub fn background(&self) -> &ProjectorBackgroundConfig {
+        match self {
+            Self::TwoD(config) => &config.background,
+            Self::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => &config.background,
+        }
+    }
+
+    pub fn background_mut(&mut self) -> &mut ProjectorBackgroundConfig {
+        match self {
+            Self::TwoD(config) => &mut config.background,
+            Self::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => &mut config.background,
         }
     }
 }

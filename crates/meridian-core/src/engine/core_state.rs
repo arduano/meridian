@@ -399,11 +399,12 @@ impl CoreState {
                 format,
                 viewport_width,
                 viewport_height,
+                export,
             } => {
                 let format = format.unwrap_or_else(|| {
                     crate::protocol::ImageOutputFormat::infer_from_path(&output)
                 });
-                self.save_frame_headless(output, format, viewport_width, viewport_height)
+                self.save_frame_headless(output, format, viewport_width, viewport_height, export)
             }
             CoreCommand::StartRenderVideo { config } => self.start_render_video(config),
             CoreCommand::CancelRenderVideo => self.cancel_render_video(),

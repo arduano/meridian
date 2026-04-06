@@ -6,8 +6,9 @@ use crate::render::{
     SceneLayout,
     piano_trail_classic::model::{PianoTrailClassicQuadInstance, PianoTrailClassicScene},
     shared::{
-        BuiltinProjectorImage, LoadedProjectorImage, PianoTrailClassicSceneConfig,
-        ProjectorImageConfig, ThreeDSceneConfig, load_projector_image,
+        BackgroundImageRenderer, BuiltinProjectorImage, LoadedProjectorImage,
+        PianoTrailClassicSceneConfig, ProjectorImageConfig, ThreeDSceneConfig,
+        load_projector_image,
     },
 };
 
@@ -21,11 +22,13 @@ const OPENGL_TO_WGPU: Mat4 = Mat4::from_cols_array(&[
 pub struct PianoTrailClassicRenderer {
     pipelines: PianoTrailClassicPipelines,
     depth: wgpu::Texture,
+    clear_color: wgpu::Color,
     note_quads: StreamingBufferPool<PianoTrailClassicQuadInstance>,
     white_key_quads: StreamingBufferPool<PianoTrailClassicQuadInstance>,
     black_key_quads: StreamingBufferPool<PianoTrailClassicQuadInstance>,
     aura_quads: StreamingBufferPool<PianoTrailClassicQuadInstance>,
     aura_texture: Option<AuraTextureState>,
+    background: BackgroundImageRenderer,
 }
 
 struct AuraTextureState {
@@ -37,14 +40,35 @@ struct AuraTextureState {
 
 impl PianoTrailClassicRenderer {
     pub fn new(device: &wgpu::Device, width: u32, height: u32) -> Self {
+        Self::new_with_clear_color(
+            device,
+            width,
+            height,
+            wgpu::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+        )
+    }
+
+    pub fn new_with_clear_color(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        clear_color: wgpu::Color,
+    ) -> Self {
         Self {
             pipelines: PianoTrailClassicPipelines::new(device),
             depth: create_depth_texture(device, width, height),
+            clear_color,
             note_quads: StreamingBufferPool::new("PianoTrailClassicNoteQuads"),
             white_key_quads: StreamingBufferPool::new("PianoTrailClassicWhiteKeyQuads"),
             black_key_quads: StreamingBufferPool::new("PianoTrailClassicBlackKeyQuads"),
             aura_quads: StreamingBufferPool::new("PianoTrailClassicAuraQuads"),
             aura_texture: None,
+            background: BackgroundImageRenderer::new(device, VIEWPORT_FORMAT),
         }
     }
 
@@ -76,6 +100,14 @@ impl PianoTrailClassicRenderer {
         self.ensure_aura_texture(device, queue, &config.aura_image);
 
         let target_view = target.create_view(&Default::default());
+        let has_background = self.background.render(
+            device,
+            queue,
+            &target_view,
+            (layout.viewport_width, layout.viewport_height),
+            &config.background,
+            self.clear_color,
+        );
         let depth_view = self.depth.create_view(&Default::default());
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("PianoTrailClassicEncoder"),
@@ -88,12 +120,11 @@ impl PianoTrailClassicRenderer {
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 1.0,
-                        }),
+                        load: if has_background {
+                            wgpu::LoadOp::Load
+                        } else {
+                            wgpu::LoadOp::Clear(self.clear_color)
+                        },
                         store: wgpu::StoreOp::Store,
                     },
                 })],

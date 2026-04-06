@@ -6,7 +6,10 @@ use pollster::block_on;
 use crate::{
     error::MeridianError,
     protocol::ImageOutputFormat,
-    render::{SceneLayout, piano_trail_classic::model::PianoTrailClassicScene},
+    render::{
+        SceneLayout, headless::HeadlessClearMode,
+        piano_trail_classic::model::PianoTrailClassicScene,
+    },
 };
 
 use super::renderer::PianoTrailClassicRenderer;
@@ -22,6 +25,14 @@ pub struct HeadlessRenderSession {
 
 impl HeadlessRenderSession {
     pub fn new(width: u32, height: u32) -> Result<Self, MeridianError> {
+        Self::new_with_clear_mode(width, height, HeadlessClearMode::OpaquePreview)
+    }
+
+    pub fn new_with_clear_mode(
+        width: u32,
+        height: u32,
+        clear_mode: HeadlessClearMode,
+    ) -> Result<Self, MeridianError> {
         let instance = wgpu::Instance::default();
         let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
             .map_err(|e| MeridianError::Wgpu(format!("request_adapter failed: {e}")))?;
@@ -37,7 +48,25 @@ impl HeadlessRenderSession {
         .map_err(|e| MeridianError::Wgpu(format!("request_device failed: {e}")))?;
         Ok(Self {
             texture: create_headless_target(&device, width, height)?,
-            renderer: PianoTrailClassicRenderer::new(&device, width, height),
+            renderer: PianoTrailClassicRenderer::new_with_clear_color(
+                &device,
+                width,
+                height,
+                match clear_mode {
+                    HeadlessClearMode::OpaquePreview => wgpu::Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 1.0,
+                    },
+                    HeadlessClearMode::Transparent => wgpu::Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.0,
+                    },
+                },
+            ),
             device,
             queue,
             width,

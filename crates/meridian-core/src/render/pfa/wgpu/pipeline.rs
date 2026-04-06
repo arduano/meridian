@@ -199,15 +199,6 @@ pub(super) fn create_depth_texture(device: &wgpu::Device, size: Extent3d) -> wgp
     })
 }
 
-pub(super) fn clear_color() -> wgpu::LoadOp<wgpu::Color> {
-    wgpu::LoadOp::Clear(wgpu::Color {
-        r: 0.02,
-        g: 0.05,
-        b: 0.08,
-        a: 1.0,
-    })
-}
-
 fn create_flat_pipeline(
     device: &wgpu::Device,
     flat_shader: &wgpu::ShaderModule,

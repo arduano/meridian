@@ -135,6 +135,7 @@ impl CoreState {
         format: crate::protocol::ImageOutputFormat,
         viewport_width: Option<u32>,
         viewport_height: Option<u32>,
+        export: crate::protocol::ImageExportConfig,
     ) -> Vec<CoreEvent> {
         match self.render_frame(viewport_width, viewport_height) {
             Ok(frame) => match self.display.save_frame_headless(
@@ -145,6 +146,7 @@ impl CoreState {
                 },
                 output,
                 format,
+                export,
                 frame.state,
             ) {
                 Ok(event) => vec![event],

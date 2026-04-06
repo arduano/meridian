@@ -2,7 +2,7 @@ use bytemuck::cast_slice;
 
 use crate::render::{SceneQuad, shared::NoteInstance};
 
-use super::{pipeline::clear_color, renderer::PrimitiveSceneRenderer};
+use super::renderer::PrimitiveSceneRenderer;
 
 pub(super) fn submit_note_chunks(
     renderer: &mut PrimitiveSceneRenderer,
@@ -13,6 +13,7 @@ pub(super) fn submit_note_chunks(
     pipeline: &wgpu::RenderPipeline,
     notes: &[NoteInstance],
     has_existing_color: bool,
+    clear_color: wgpu::Color,
     label: &'static str,
 ) -> bool {
     let mut rendered_any = false;
@@ -27,7 +28,7 @@ pub(super) fn submit_note_chunks(
         let color_load = if has_existing_color || rendered_any || chunk_index > 0 {
             wgpu::LoadOp::Load
         } else {
-            clear_color()
+            wgpu::LoadOp::Clear(clear_color)
         };
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(label),
@@ -84,6 +85,7 @@ pub(super) fn submit_quad_chunks(
     depth_view: Option<&wgpu::TextureView>,
     quads: &[SceneQuad],
     has_existing_color: bool,
+    clear_color: wgpu::Color,
     label: &'static str,
 ) -> bool {
     let mut rendered_any = false;
@@ -98,7 +100,7 @@ pub(super) fn submit_quad_chunks(
         let color_load = if has_existing_color || rendered_any || chunk_index > 0 {
             wgpu::LoadOp::Load
         } else {
-            clear_color()
+            wgpu::LoadOp::Clear(clear_color)
         };
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(label),
@@ -146,7 +148,12 @@ pub(super) fn submit_quad_chunks(
     rendered_any
 }
 
-pub(super) fn clear_target(device: &wgpu::Device, queue: &wgpu::Queue, view: &wgpu::TextureView) {
+pub(super) fn clear_target(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    view: &wgpu::TextureView,
+    clear_color: wgpu::Color,
+) {
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("MeridianSceneClear"),
     });
@@ -158,7 +165,7 @@ pub(super) fn clear_target(device: &wgpu::Device, queue: &wgpu::Queue, view: &wg
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: clear_color(),
+                    load: wgpu::LoadOp::Clear(clear_color),
                     store: wgpu::StoreOp::Store,
                 },
             })],

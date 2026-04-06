@@ -18,7 +18,9 @@ use super::{
         ProcessedMidiId,
     },
     process::{MidiProcessEvent, MidiProcessStatus},
-    render::{AudioRenderStatus, FrameStats, VideoRenderEvent, VideoRenderStatus},
+    render::{
+        AudioRenderStatus, FrameStats, ImageExportArtifacts, VideoRenderEvent, VideoRenderStatus,
+    },
     state::StateSnapshot,
 };
 
@@ -167,6 +169,7 @@ pub enum CoreEvent {
         state: StateSnapshot,
         stats: FrameStats,
         bytes_written: u64,
+        exports: ImageExportArtifacts,
     },
     VideoRender {
         event: VideoRenderEvent,

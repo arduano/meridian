@@ -1,8 +1,8 @@
 use bytemuck::cast_slice;
 
 use crate::render::{
-    SceneLayer, SceneQuad,
-    shared::{NoteInstance, NoteShaderKind, ProjectedScene},
+    SceneLayer, SceneLayout, SceneQuad,
+    shared::{BackgroundImageRenderer, NoteInstance, NoteShaderKind, ProjectedScene},
 };
 
 use super::{passes, pipeline::*};
@@ -11,14 +11,30 @@ pub struct PrimitiveSceneRenderer {
     pub(super) resources: RendererResources,
     pub(super) quad_instance_capacity: usize,
     pub(super) note_instance_capacity: usize,
+    pub(super) clear_color: wgpu::Color,
+    background: BackgroundImageRenderer,
 }
 
 impl PrimitiveSceneRenderer {
     pub fn new(device: &wgpu::Device) -> Self {
+        Self::new_with_clear_color(
+            device,
+            wgpu::Color {
+                r: 0.02,
+                g: 0.05,
+                b: 0.08,
+                a: 1.0,
+            },
+        )
+    }
+
+    pub fn new_with_clear_color(device: &wgpu::Device, clear_color: wgpu::Color) -> Self {
         Self {
             resources: create_renderer_resources(device),
             quad_instance_capacity: MIN_STREAMING_INSTANCE_QUADS,
             note_instance_capacity: MIN_STREAMING_INSTANCE_QUADS,
+            clear_color,
+            background: BackgroundImageRenderer::new(device, VIEWPORT_FORMAT),
         }
     }
 
@@ -27,6 +43,7 @@ impl PrimitiveSceneRenderer {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         target: &wgpu::Texture,
+        layout: &SceneLayout,
         scene: &ProjectedScene,
     ) {
         let view = target.create_view(&wgpu::TextureViewDescriptor::default());
@@ -67,7 +84,14 @@ impl PrimitiveSceneRenderer {
             NoteShaderKind::Flat => self.resources.flat_note_pipeline.clone(),
             NoteShaderKind::Pfa => self.resources.pfa_note_pipeline.clone(),
         };
-        let mut has_color = false;
+        let mut has_color = self.background.render(
+            device,
+            queue,
+            &view,
+            (layout.viewport_width, layout.viewport_height),
+            layout.scene.background(),
+            self.clear_color,
+        );
         for layer in note_layers {
             has_color = passes::submit_note_chunks(
                 self,
@@ -78,6 +102,7 @@ impl PrimitiveSceneRenderer {
                 &note_pipeline,
                 scene.note_layer(layer),
                 has_color,
+                self.clear_color,
                 "MeridianNoteChunk",
             ) || has_color;
         }
@@ -112,12 +137,13 @@ impl PrimitiveSceneRenderer {
                 None,
                 scene.layer(layer),
                 has_color,
+                self.clear_color,
                 "MeridianFlatChunk",
             ) || has_color;
         }
 
         if !has_color {
-            passes::clear_target(device, queue, &view);
+            passes::clear_target(device, queue, &view, self.clear_color);
         }
     }
 

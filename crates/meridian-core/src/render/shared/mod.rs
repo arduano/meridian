@@ -1,3 +1,4 @@
+mod background_image;
 mod config;
 mod key_layout;
 mod math;
@@ -10,6 +11,7 @@ mod scene;
 
 pub(crate) const LAYER_COUNT: usize = 7;
 
+pub(crate) use background_image::*;
 pub use config::*;
 pub(crate) use key_layout::*;
 pub(crate) use math::*;

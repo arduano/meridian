@@ -324,7 +324,17 @@ impl UiCoreBridge {
         renderer: RendererKind,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
-        let mut layout = SceneLayout::default();
+        let scene = model
+            .lock()
+            .expect("ui model mutex poisoned")
+            .snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.scene.clone())
+            .unwrap_or_default();
+        let mut layout = SceneLayout {
+            scene,
+            ..SceneLayout::default()
+        };
         layout.set_renderer_kind(renderer);
         self.request(
             CoreCommand::SetSceneConfig {

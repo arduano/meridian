@@ -13,8 +13,8 @@ use meridian_core::{
     },
     render::{
         KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
-        PFA_RED_TOP_BAR_COLOR, ProjectorImageConfig, RendererKind, SceneConfig, ThreeDSceneConfig,
-        ZenithPaletteSpec,
+        PFA_RED_TOP_BAR_COLOR, ProjectorBackgroundConfig, ProjectorBackgroundScalingMode,
+        ProjectorImageConfig, RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
     },
 };
 use slint::{ModelRc, SharedString, VecModel};
@@ -299,6 +299,7 @@ fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
     app.set_video_view_range_value_float(state.view_range as f32);
     app.set_video_first_key_text(state.first_key.to_string().into());
     app.set_video_last_key_text(state.last_key.to_string().into());
+    apply_background_to_app(app, state.scene.background());
 
     match &state.scene {
         SceneConfig::TwoD(config) => {
@@ -454,6 +455,24 @@ fn apply_ptc_defaults_to_app(app: &App) {
     app.set_video_ptc_aura_image_source_text("builtin".into());
     app.set_video_ptc_aura_image_name_text("ring".into());
     app.set_video_ptc_aura_image_path_text("(aura png)".into());
+}
+
+fn apply_background_to_app(app: &App, background: &ProjectorBackgroundConfig) {
+    match background {
+        ProjectorBackgroundConfig::None => {
+            app.set_video_background_source_text("none".into());
+            app.set_video_background_scale_text("stretch".into());
+            app.set_video_background_path_text("(background png)".into());
+        }
+        ProjectorBackgroundConfig::PngFile { path, scaling } => {
+            app.set_video_background_source_text("png_file".into());
+            app.set_video_background_scale_text(match scaling {
+                ProjectorBackgroundScalingMode::Stretch => "stretch".into(),
+                ProjectorBackgroundScalingMode::Cover => "cover".into(),
+            });
+            app.set_video_background_path_text(path.clone().into());
+        }
+    }
 }
 
 fn apply_palette_to_app(app: &App, palette: &NotePaletteConfig) {

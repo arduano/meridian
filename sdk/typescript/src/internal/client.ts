@@ -628,6 +628,8 @@ export interface VideoRenderOptions {
   timeSpace?: ProtocolVideoRenderConfig["time_space"];
   firstKey?: number | null;
   lastKey?: number | null;
+  rgbMode?: ProtocolVideoRenderConfig["export"]["color_mode"];
+  exportAlphaMask?: boolean | null;
   ffmpegArgs?: string[];
   onEvent?: (event: VideoRenderEvent) => void;
 }
@@ -1027,6 +1029,8 @@ export class VideoRenderTask
       timeSpace: options.timeSpace ?? null,
       firstKey: options.firstKey ?? null,
       lastKey: options.lastKey ?? null,
+      rgbMode: options.rgbMode ?? "premultiplied",
+      exportAlphaMask: options.exportAlphaMask ?? false,
       ffmpegArgs: options.ffmpegArgs ? [...options.ffmpegArgs] : [],
       ...(options.onEvent ? { onEvent: options.onEvent } : {}),
     };
@@ -1085,6 +1089,8 @@ export class VideoRenderTask
       timeSpace: this.#options.timeSpace ?? null,
       firstKey: this.#options.firstKey ?? null,
       lastKey: this.#options.lastKey ?? null,
+      rgbMode: this.#options.rgbMode ?? "premultiplied",
+      exportAlphaMask: this.#options.exportAlphaMask ?? false,
       ffmpegArgs: [...(this.#options.ffmpegArgs ?? [])],
       ...(this.#options.onEvent ? { onEvent: this.#options.onEvent } : {}),
     };
@@ -1370,6 +1376,10 @@ export class MeridianClient {
       time_space: options.timeSpace ?? null,
       first_key: options.firstKey ?? null,
       last_key: options.lastKey ?? null,
+      export: {
+        color_mode: options.rgbMode ?? "premultiplied",
+        export_alpha_mask: options.exportAlphaMask ?? false,
+      },
       ffmpeg_args: options.ffmpegArgs ?? [],
     };
     const events = await this.protocol.request({

@@ -5,11 +5,32 @@ use std::{
 
 use crate::MeridianError;
 
-pub fn spawn_ffmpeg(
+pub fn spawn_ffmpeg_rgba(
     output: &Path,
     fps: f64,
     width: u32,
     height: u32,
+    extra_args: &[String],
+) -> Result<(Child, ChildStdin, Vec<String>), MeridianError> {
+    spawn_ffmpeg(output, fps, width, height, "rgba", extra_args)
+}
+
+pub fn spawn_ffmpeg_gray(
+    output: &Path,
+    fps: f64,
+    width: u32,
+    height: u32,
+    extra_args: &[String],
+) -> Result<(Child, ChildStdin, Vec<String>), MeridianError> {
+    spawn_ffmpeg(output, fps, width, height, "gray", extra_args)
+}
+
+fn spawn_ffmpeg(
+    output: &Path,
+    fps: f64,
+    width: u32,
+    height: u32,
+    input_pix_fmt: &str,
     extra_args: &[String],
 ) -> Result<(Child, ChildStdin, Vec<String>), MeridianError> {
     let mut args = vec![
@@ -20,7 +41,7 @@ pub fn spawn_ffmpeg(
         "-f".to_string(),
         "rawvideo".to_string(),
         "-pix_fmt".to_string(),
-        "rgba".to_string(),
+        input_pix_fmt.to_string(),
         "-s:v".to_string(),
         format!("{width}x{height}"),
         "-r".to_string(),

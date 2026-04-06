@@ -7,7 +7,7 @@ use std::{
 
 use meridian_core::{
     MeridianError,
-    render::pfa::wgpu::{encode_rgba_to_png, render_scene_headless_to_rgba},
+    render::{headless::render_scene_headless_to_rgba, pfa::wgpu::encode_rgba_to_png},
     spawn_core,
 };
 use slint::{ComponentHandle, Image, PhysicalSize, Rgba8Pixel, SharedPixelBuffer};
@@ -64,6 +64,7 @@ fn inject_headless_viewport(
     let rgba = render_scene_headless_to_rgba(
         frame.layout.viewport_width,
         frame.layout.viewport_height,
+        &frame.layout,
         &frame.scene,
     )?;
     let buffer = SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(

@@ -33,7 +33,8 @@ use meridian_core::{
         DisplayTimeSpace, KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig,
         NoteProjectorConfig, PFA_BLUE_TOP_BAR_COLOR, PFA_GREEN_TOP_BAR_COLOR,
         PFA_RED_TOP_BAR_COLOR, PfaKeyboardProjectorConfig, PianoTrailClassicSceneConfig,
-        ProjectorImageConfig, RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
+        ProjectorBackgroundConfig, ProjectorBackgroundScalingMode, ProjectorImageConfig,
+        RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
     },
     spawn_core,
 };
@@ -51,6 +52,7 @@ use super::{
 
 static LAST_PALETTE_PNG: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
 static LAST_AURA_PNG: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
+static LAST_BACKGROUND_PNG: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 static EXPORT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -636,6 +638,7 @@ fn build_video_render_config(
         first_key: Some(snapshot.first_key),
         last_key: Some(snapshot.last_key),
         ffmpeg_args,
+        export: Default::default(),
     })
 }
 
@@ -1020,6 +1023,40 @@ fn wire_video_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mut
                         }
                     });
                 }
+                "background_source" => {
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        *background_mut(scene) = if value.as_str() == "png_file" {
+                            match LAST_BACKGROUND_PNG
+                                .lock()
+                                .expect("background png mutex poisoned")
+                                .clone()
+                            {
+                                Some(path) => ProjectorBackgroundConfig::PngFile {
+                                    path,
+                                    scaling: ProjectorBackgroundScalingMode::Stretch,
+                                },
+                                None => return,
+                            }
+                        } else {
+                            ProjectorBackgroundConfig::None
+                        };
+                    });
+                }
+                "background_scaling" => {
+                    let scaling = if value.as_str() == "cover" {
+                        ProjectorBackgroundScalingMode::Cover
+                    } else {
+                        ProjectorBackgroundScalingMode::Stretch
+                    };
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        if let ProjectorBackgroundConfig::PngFile {
+                            scaling: current, ..
+                        } = background_mut(scene)
+                        {
+                            *current = scaling;
+                        }
+                    });
+                }
                 "ptc_same_width_notes" => {
                     update_ptc_bool(&app, &bridge, &shared_state, value.as_str(), |c, v| {
                         c.same_width_notes = v
@@ -1336,6 +1373,24 @@ fn wire_video_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mut
                                 }
                             });
                         }
+                        "background_png" => {
+                            *LAST_BACKGROUND_PNG
+                                .lock()
+                                .expect("background png mutex poisoned") =
+                                Some(path.display().to_string());
+                            update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                                let scaling = match background_mut(scene) {
+                                    ProjectorBackgroundConfig::PngFile { scaling, .. } => *scaling,
+                                    ProjectorBackgroundConfig::None => {
+                                        ProjectorBackgroundScalingMode::Stretch
+                                    }
+                                };
+                                *background_mut(scene) = ProjectorBackgroundConfig::PngFile {
+                                    path: path.display().to_string(),
+                                    scaling,
+                                };
+                            });
+                        }
                         "aura_png" => {
                             *LAST_AURA_PNG.lock().expect("aura png mutex poisoned") =
                                 Some(path.display().to_string());
@@ -1369,6 +1424,11 @@ fn wire_video_callbacks(app: &App, bridge: &UiCoreBridge, shared_state: &Arc<Mut
                         {
                             *palette = ZenithPaletteSpec::Random;
                         }
+                    });
+                }
+                "background_png" => {
+                    update_video_scene(&app, &bridge, &shared_state, move |scene| {
+                        *background_mut(scene) = ProjectorBackgroundConfig::None;
                     });
                 }
                 "aura_png" => {
@@ -3488,6 +3548,10 @@ fn palette_mut(scene: &mut SceneConfig) -> Option<&mut NotePaletteConfig> {
             Some(&mut config.palette)
         }
     }
+}
+
+fn background_mut(scene: &mut SceneConfig) -> &mut ProjectorBackgroundConfig {
+    scene.background_mut()
 }
 
 fn ptc_mut(scene: &mut SceneConfig) -> Option<&mut PianoTrailClassicSceneConfig> {

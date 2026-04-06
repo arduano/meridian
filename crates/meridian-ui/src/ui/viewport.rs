@@ -160,9 +160,13 @@ impl ViewportRenderer {
         }
         self.last_frame_at = Some(now);
         match renderer {
-            ViewportBackend::TwoD(renderer) => {
-                renderer.render(device, queue, &viewport.texture, &frame.scene)
-            }
+            ViewportBackend::TwoD(renderer) => renderer.render(
+                device,
+                queue,
+                &viewport.texture,
+                &frame.layout,
+                &frame.scene,
+            ),
             ViewportBackend::ThreeD { renderer, .. } => {
                 let Some(scene) = frame.scene.piano_trail_classic() else {
                     return;
