@@ -329,6 +329,7 @@ export const midiTools = {
     return withDefaults({
       tool: "shared_metadata_track",
       destination: { mode: "create_new" },
+      strip_redundant_events: false,
       move_tempo_events: true,
       move_time_signatures: true,
       move_key_signatures: true,
@@ -338,6 +339,8 @@ export const midiTools = {
       move_midi_port_events: false,
       move_control_change_events: false,
       move_program_change_events: false,
+      move_pitch_bend_events: false,
+      move_channel_pressure_events: false,
       ...config,
     });
   },

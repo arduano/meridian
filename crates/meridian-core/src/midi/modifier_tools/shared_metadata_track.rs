@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    collections::{HashMap, VecDeque},
+    path::Path,
+};
 
 use midi_toolkit::{
     events::Event,
@@ -20,6 +23,7 @@ use crate::{
 #[serde(default)]
 pub struct SharedMetadataTrackTool {
     pub destination: SharedMetadataTrackDestination,
+    pub strip_redundant_events: bool,
     pub move_tempo_events: bool,
     pub move_time_signatures: bool,
     pub move_key_signatures: bool,
@@ -29,6 +33,8 @@ pub struct SharedMetadataTrackTool {
     pub move_midi_port_events: bool,
     pub move_control_change_events: bool,
     pub move_program_change_events: bool,
+    pub move_pitch_bend_events: bool,
+    pub move_channel_pressure_events: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
@@ -103,7 +109,7 @@ fn merged_selected_shared_events<'a>(
                 .expect("track iteration should exist for a known track index")
         })
         .collect::<Vec<_>>();
-    merge_events_array(iterators)
+    normalize_redundant_shared_events(merge_events_array(iterators), tool.strip_redundant_events)
 }
 
 fn selected_shared_track_events<'a>(
@@ -165,6 +171,42 @@ enum SharedTrackEventClass {
     MidiPort,
     ControlChange,
     ProgramChange,
+    PitchBend,
+    ChannelPressure,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum SharedEventRedundancyKey {
+    Tempo,
+    TimeSignature,
+    KeySignature,
+    ChannelPrefix,
+    MidiPort,
+    ProgramChange { channel: u8 },
+    ControlChange { channel: u8, controller: u8 },
+    PitchBend { channel: u8 },
+    ChannelPressure { channel: u8 },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum SharedEventStateValue {
+    Tempo(u32),
+    TimeSignature {
+        numerator: u8,
+        denominator: u8,
+        ticks_per_click: u8,
+        bb: u8,
+    },
+    KeySignature {
+        sf: u8,
+        mi: u8,
+    },
+    ChannelPrefix(u8),
+    MidiPort(u8),
+    ProgramChange(u8),
+    ControlChange(u8),
+    PitchBend(i16),
+    ChannelPressure(u8),
 }
 
 impl SharedMetadataTrackTool {
@@ -178,6 +220,8 @@ impl SharedMetadataTrackTool {
             || self.move_midi_port_events
             || self.move_control_change_events
             || self.move_program_change_events
+            || self.move_pitch_bend_events
+            || self.move_channel_pressure_events
     }
 }
 
@@ -226,6 +270,205 @@ fn selected_shared_event_class(
         }
         Event::ProgramChange(_) if tool.move_program_change_events => {
             Some(SharedTrackEventClass::ProgramChange)
+        }
+        Event::PitchWheelChange(_) if tool.move_pitch_bend_events => {
+            Some(SharedTrackEventClass::PitchBend)
+        }
+        Event::ChannelPressure(_) if tool.move_channel_pressure_events => {
+            Some(SharedTrackEventClass::ChannelPressure)
+        }
+        _ => None,
+    }
+}
+
+fn normalize_redundant_shared_events(
+    events: impl Iterator<Item = Result<Delta<u64, Event>, MeridianError>>,
+    strip_redundant_events: bool,
+) -> impl Iterator<Item = Result<Delta<u64, Event>, MeridianError>> {
+    let mut events = events.fuse();
+    let mut source_tick = 0_u64;
+    let mut output_tick = 0_u64;
+    let mut last_emitted_states = HashMap::new();
+    let mut current_tick: Option<u64> = None;
+    let mut current_events = Vec::new();
+    let mut pending = VecDeque::new();
+    let mut pending_error = None;
+
+    std::iter::from_fn(move || {
+        loop {
+            if let Some(event) = pending.pop_front() {
+                return Some(event);
+            }
+
+            if let Some(error) = pending_error.take() {
+                return Some(Err(error));
+            }
+
+            match events.next() {
+                Some(Ok(event)) => {
+                    source_tick = source_tick.saturating_add(event.delta);
+                    match current_tick {
+                        None => {
+                            current_tick = Some(source_tick);
+                            current_events.push(event.event);
+                        }
+                        Some(tick) if tick == source_tick => current_events.push(event.event),
+                        Some(tick) => {
+                            queue_normalized_tick_events(
+                                &mut pending,
+                                &mut output_tick,
+                                &mut last_emitted_states,
+                                tick,
+                                std::mem::take(&mut current_events),
+                                strip_redundant_events,
+                            );
+                            current_tick = Some(source_tick);
+                            current_events.push(event.event);
+                        }
+                    }
+                }
+                Some(Err(error)) => {
+                    if let Some(tick) = current_tick.take() {
+                        queue_normalized_tick_events(
+                            &mut pending,
+                            &mut output_tick,
+                            &mut last_emitted_states,
+                            tick,
+                            std::mem::take(&mut current_events),
+                            strip_redundant_events,
+                        );
+                        pending_error = Some(error);
+                    } else {
+                        return Some(Err(error));
+                    }
+                }
+                None => {
+                    if let Some(tick) = current_tick.take() {
+                        queue_normalized_tick_events(
+                            &mut pending,
+                            &mut output_tick,
+                            &mut last_emitted_states,
+                            tick,
+                            std::mem::take(&mut current_events),
+                            strip_redundant_events,
+                        );
+                    } else {
+                        return None;
+                    }
+                }
+            }
+        }
+    })
+}
+
+fn queue_normalized_tick_events(
+    pending: &mut VecDeque<Result<Delta<u64, Event>, MeridianError>>,
+    output_tick: &mut u64,
+    last_emitted_states: &mut HashMap<SharedEventRedundancyKey, SharedEventStateValue>,
+    tick: u64,
+    events: Vec<Event>,
+    strip_redundant_events: bool,
+) {
+    let normalized = if strip_redundant_events {
+        normalize_tick_events(events, last_emitted_states)
+    } else {
+        events
+    };
+    let emitted_any = !normalized.is_empty();
+    for (index, event) in normalized.into_iter().enumerate() {
+        let delta = if index == 0 {
+            tick.saturating_sub(*output_tick)
+        } else {
+            0
+        };
+        pending.push_back(Ok(Delta::new(delta, event)));
+    }
+    if emitted_any {
+        *output_tick = tick;
+    }
+}
+
+fn normalize_tick_events(
+    events: Vec<Event>,
+    last_emitted_states: &mut HashMap<SharedEventRedundancyKey, SharedEventStateValue>,
+) -> Vec<Event> {
+    let mut last_indices = HashMap::new();
+    for (index, event) in events.iter().enumerate() {
+        if let Some(key) = redundant_shared_event_key(event) {
+            last_indices.insert(key, index);
+        }
+    }
+
+    events
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, event)| {
+            let Some(key) = redundant_shared_event_key(&event) else {
+                return Some(event);
+            };
+            if last_indices.get(&key).copied() != Some(index) {
+                return None;
+            }
+
+            let Some(state) = redundant_shared_event_state(&event) else {
+                return Some(event);
+            };
+            if last_emitted_states.get(&key).copied() == Some(state) {
+                return None;
+            }
+
+            last_emitted_states.insert(key, state);
+            Some(event)
+        })
+        .collect()
+}
+
+fn redundant_shared_event_key(event: &Event) -> Option<SharedEventRedundancyKey> {
+    match event {
+        Event::Tempo(_) => Some(SharedEventRedundancyKey::Tempo),
+        Event::TimeSignature(_) => Some(SharedEventRedundancyKey::TimeSignature),
+        Event::KeySignature(_) => Some(SharedEventRedundancyKey::KeySignature),
+        Event::ChannelPrefix(_) => Some(SharedEventRedundancyKey::ChannelPrefix),
+        Event::MIDIPort(_) => Some(SharedEventRedundancyKey::MidiPort),
+        Event::ProgramChange(program) => Some(SharedEventRedundancyKey::ProgramChange {
+            channel: program.channel,
+        }),
+        Event::ControlChange(control) => Some(SharedEventRedundancyKey::ControlChange {
+            channel: control.channel,
+            controller: control.controller,
+        }),
+        Event::PitchWheelChange(bend) => Some(SharedEventRedundancyKey::PitchBend {
+            channel: bend.channel,
+        }),
+        Event::ChannelPressure(pressure) => Some(SharedEventRedundancyKey::ChannelPressure {
+            channel: pressure.channel,
+        }),
+        _ => None,
+    }
+}
+
+fn redundant_shared_event_state(event: &Event) -> Option<SharedEventStateValue> {
+    match event {
+        Event::Tempo(tempo) => Some(SharedEventStateValue::Tempo(tempo.tempo)),
+        Event::TimeSignature(signature) => Some(SharedEventStateValue::TimeSignature {
+            numerator: signature.numerator,
+            denominator: signature.denominator,
+            ticks_per_click: signature.ticks_per_click,
+            bb: signature.bb,
+        }),
+        Event::KeySignature(signature) => Some(SharedEventStateValue::KeySignature {
+            sf: signature.sf,
+            mi: signature.mi,
+        }),
+        Event::ChannelPrefix(prefix) => Some(SharedEventStateValue::ChannelPrefix(prefix.channel)),
+        Event::MIDIPort(port) => Some(SharedEventStateValue::MidiPort(port.channel)),
+        Event::ProgramChange(program) => {
+            Some(SharedEventStateValue::ProgramChange(program.program))
+        }
+        Event::ControlChange(control) => Some(SharedEventStateValue::ControlChange(control.value)),
+        Event::PitchWheelChange(bend) => Some(SharedEventStateValue::PitchBend(bend.pitch)),
+        Event::ChannelPressure(pressure) => {
+            Some(SharedEventStateValue::ChannelPressure(pressure.pressure))
         }
         _ => None,
     }
@@ -278,6 +521,7 @@ mod tests {
             &output,
             &MidiModifierTool::SharedMetadataTrack(SharedMetadataTrackTool {
                 destination: SharedMetadataTrackDestination::InsertInto { track_index: 1 },
+                strip_redundant_events: false,
                 move_tempo_events: true,
                 move_time_signatures: true,
                 move_key_signatures: true,
@@ -287,6 +531,8 @@ mod tests {
                 move_midi_port_events: false,
                 move_control_change_events: false,
                 move_program_change_events: false,
+                move_pitch_bend_events: false,
+                move_channel_pressure_events: false,
             }),
         )
         .expect("shared_metadata_track should succeed");
@@ -368,6 +614,7 @@ mod tests {
             &output,
             &MidiModifierTool::SharedMetadataTrack(SharedMetadataTrackTool {
                 destination: SharedMetadataTrackDestination::CreateNew,
+                strip_redundant_events: false,
                 move_tempo_events: true,
                 move_time_signatures: false,
                 move_key_signatures: false,
@@ -377,6 +624,8 @@ mod tests {
                 move_midi_port_events: false,
                 move_control_change_events: false,
                 move_program_change_events: false,
+                move_pitch_bend_events: false,
+                move_channel_pressure_events: false,
             }),
         )
         .expect("shared_metadata_track should succeed");
@@ -430,6 +679,7 @@ mod tests {
             &output,
             &MidiModifierTool::SharedMetadataTrack(SharedMetadataTrackTool {
                 destination: SharedMetadataTrackDestination::CreateNew,
+                strip_redundant_events: false,
                 move_tempo_events: false,
                 move_time_signatures: false,
                 move_key_signatures: false,
@@ -439,6 +689,8 @@ mod tests {
                 move_midi_port_events: false,
                 move_control_change_events: true,
                 move_program_change_events: true,
+                move_pitch_bend_events: false,
+                move_channel_pressure_events: false,
             }),
         )
         .expect("shared_metadata_track should succeed");
@@ -489,6 +741,7 @@ mod tests {
             &output,
             &MidiModifierTool::SharedMetadataTrack(SharedMetadataTrackTool {
                 destination: SharedMetadataTrackDestination::InsertInto { track_index: 1 },
+                strip_redundant_events: false,
                 move_tempo_events: true,
                 move_time_signatures: false,
                 move_key_signatures: false,
@@ -498,11 +751,190 @@ mod tests {
                 move_midi_port_events: false,
                 move_control_change_events: false,
                 move_program_change_events: false,
+                move_pitch_bend_events: false,
+                move_channel_pressure_events: false,
             }),
         )
         .expect_err("invalid insert index should fail");
 
         assert!(matches!(error, MeridianError::Validation(_)));
         assert!(!output.exists());
+    }
+
+    #[test]
+    fn shared_metadata_track_can_strip_redundant_state_events_on_same_tick() {
+        let dir = TestDir::new("modifier-shared-metadata-normalize");
+        let input = dir.path("input.mid");
+        let output = dir.path("output.mid");
+
+        write_toolkit_midi(
+            &input,
+            96,
+            &[vec![
+                tempo(0, 500_000),
+                tempo(0, 600_000),
+                Event::new_delta_control_change_event(0, 0, 7, 10),
+                Event::new_delta_control_change_event(0, 0, 7, 20),
+                Event::new_delta_program_change_event(0, 0, 1),
+                Event::new_delta_program_change_event(0, 0, 2),
+                note_on(5, 0, 60, 100),
+                note_off(10, 0, 60),
+            ]],
+        );
+
+        super::super::apply_modifier_tool_to_file(
+            &input,
+            &output,
+            &MidiModifierTool::SharedMetadataTrack(SharedMetadataTrackTool {
+                destination: SharedMetadataTrackDestination::CreateNew,
+                strip_redundant_events: true,
+                move_tempo_events: true,
+                move_time_signatures: false,
+                move_key_signatures: false,
+                move_text_events: false,
+                move_unknown_meta_events: false,
+                move_channel_prefix_events: false,
+                move_midi_port_events: false,
+                move_control_change_events: true,
+                move_program_change_events: true,
+                move_pitch_bend_events: false,
+                move_channel_pressure_events: false,
+            }),
+        )
+        .expect("shared_metadata_track should succeed");
+
+        let parsed = ParsedMidiFile::load_from_file(output).expect("parse output midi");
+        let track0 = read_track_events(&parsed, 0);
+
+        assert_eq!(track0.len(), 3);
+        assert!(matches!(
+            track0[0],
+            Delta {
+                delta: 0,
+                event: Event::Tempo(ref tempo)
+            } if tempo.tempo == 600_000
+        ));
+        assert!(matches!(
+            track0[1],
+            Delta {
+                delta: 0,
+                event: Event::ControlChange(ref control)
+            } if control.channel == 0 && control.controller == 7 && control.value == 20
+        ));
+        assert!(matches!(
+            track0[2],
+            Delta {
+                delta: 0,
+                event: Event::ProgramChange(ref program)
+            } if program.channel == 0 && program.program == 2
+        ));
+    }
+
+    #[test]
+    fn shared_metadata_track_can_strip_redundant_state_events_across_ticks() {
+        let dir = TestDir::new("modifier-shared-metadata-normalize-across-ticks");
+        let input = dir.path("input.mid");
+        let output = dir.path("output.mid");
+
+        write_toolkit_midi(
+            &input,
+            96,
+            &[vec![
+                tempo(0, 500_000),
+                Event::new_delta_control_change_event(0, 0, 7, 64),
+                Event::new_delta_pitch_wheel_change_event(0, 0, 1000),
+                Event::new_delta_channel_pressure_event(0, 0, 50),
+                tempo(5, 500_000),
+                Event::new_delta_control_change_event(0, 0, 7, 64),
+                Event::new_delta_pitch_wheel_change_event(0, 0, 1000),
+                Event::new_delta_channel_pressure_event(0, 0, 50),
+                tempo(5, 600_000),
+                Event::new_delta_control_change_event(0, 0, 7, 96),
+                Event::new_delta_pitch_wheel_change_event(0, 0, 2000),
+                Event::new_delta_channel_pressure_event(0, 0, 80),
+            ]],
+        );
+
+        super::super::apply_modifier_tool_to_file(
+            &input,
+            &output,
+            &MidiModifierTool::SharedMetadataTrack(SharedMetadataTrackTool {
+                destination: SharedMetadataTrackDestination::CreateNew,
+                strip_redundant_events: true,
+                move_tempo_events: true,
+                move_time_signatures: false,
+                move_key_signatures: false,
+                move_text_events: false,
+                move_unknown_meta_events: false,
+                move_channel_prefix_events: false,
+                move_midi_port_events: false,
+                move_control_change_events: true,
+                move_program_change_events: false,
+                move_pitch_bend_events: true,
+                move_channel_pressure_events: true,
+            }),
+        )
+        .expect("shared_metadata_track should succeed");
+
+        let parsed = ParsedMidiFile::load_from_file(output).expect("parse output midi");
+        let track0 = read_track_events(&parsed, 0);
+
+        assert_eq!(track0.len(), 8);
+        assert!(matches!(
+            track0[0],
+            Delta {
+                delta: 0,
+                event: Event::Tempo(ref tempo)
+            } if tempo.tempo == 500_000
+        ));
+        assert!(matches!(
+            track0[1],
+            Delta {
+                delta: 0,
+                event: Event::ControlChange(ref control)
+            } if control.channel == 0 && control.controller == 7 && control.value == 64
+        ));
+        assert!(matches!(
+            track0[2],
+            Delta {
+                delta: 0,
+                event: Event::PitchWheelChange(ref bend)
+            } if bend.channel == 0 && bend.pitch == 1000
+        ));
+        assert!(matches!(
+            track0[3],
+            Delta {
+                delta: 0,
+                event: Event::ChannelPressure(ref pressure)
+            } if pressure.channel == 0 && pressure.pressure == 50
+        ));
+        assert!(matches!(
+            track0[4],
+            Delta {
+                delta: 10,
+                event: Event::Tempo(ref tempo)
+            } if tempo.tempo == 600_000
+        ));
+        assert!(matches!(
+            track0[5],
+            Delta {
+                delta: 0,
+                event: Event::ControlChange(ref control)
+            } if control.channel == 0 && control.controller == 7 && control.value == 96
+        ));
+        assert!(matches!(
+            track0[6],
+            Delta {
+                delta: 0,
+                event: Event::PitchWheelChange(ref bend)
+            } if bend.channel == 0 && bend.pitch == 2000
+        ));
+        assert!(matches!(
+            track0[7],
+            Delta {
+                delta: 0,
+                event: Event::ChannelPressure(ref pressure)
+            } if pressure.channel == 0 && pressure.pressure == 80
+        ));
     }
 }
