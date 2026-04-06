@@ -3,6 +3,9 @@ use ts_rs::TS;
 
 use super::{NotePaletteConfig, ProjectorImageConfig};
 
+mod defaults;
+use defaults::*;
+
 pub const DEFAULT_PFA_KEYBOARD_ASPECT_RATIO: f32 = 0.084_937_5;
 pub const PFA_RED_TOP_BAR_COLOR: &str = "#950A06";
 pub const PFA_BLUE_TOP_BAR_COLOR: &str = "#0A0695";
@@ -457,62 +460,6 @@ impl ThreeDSceneConfig {
     }
 }
 
-const fn default_border_width() -> f32 {
-    1.0
-}
-
-fn default_top_bar_color() -> String {
-    PFA_RED_TOP_BAR_COLOR.to_string()
-}
-
-const fn default_top_bar_rgb() -> [f32; 3] {
-    [149.0 / 255.0, 10.0 / 255.0, 6.0 / 255.0]
-}
-
-const fn default_piano_trail_classic_same_width_notes() -> bool {
-    true
-}
-
-const fn default_piano_trail_classic_fov() -> f32 {
-    std::f32::consts::PI / 3.0
-}
-
-const fn default_piano_trail_classic_view_height() -> f32 {
-    0.5
-}
-
-const fn default_piano_trail_classic_view_offset() -> f32 {
-    0.4
-}
-
-const fn default_piano_trail_classic_cam_ang() -> f32 {
-    0.56
-}
-
-const fn default_piano_trail_classic_viewdist() -> f32 {
-    14.0
-}
-
-const fn default_piano_trail_classic_viewback() -> f32 {
-    0.2
-}
-
-const fn default_piano_trail_classic_note_down_speed() -> f32 {
-    0.6
-}
-
-const fn default_piano_trail_classic_note_up_speed() -> f32 {
-    0.2
-}
-
-const fn default_piano_trail_classic_show_keyboard() -> bool {
-    true
-}
-
-const fn default_piano_trail_classic_tilt_keys() -> bool {
-    true
-}
-
 fn normalize_top_bar_color(value: &str) -> Option<String> {
     let trimmed = value.trim();
     let hex = trimmed.strip_prefix('#').unwrap_or(trimmed);
@@ -530,22 +477,4 @@ fn parse_hex_color(value: &str) -> Option<[f32; 3]> {
         u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0,
         u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0,
     ])
-}
-
-const fn default_piano_trail_classic_aura_strength() -> f32 {
-    2.0
-}
-
-const fn default_piano_trail_classic_aura_enabled() -> bool {
-    true
-}
-
-const fn default_piano_trail_classic_notes_change_tint() -> bool {
-    false
-}
-
-fn default_piano_trail_classic_aura_image() -> ProjectorImageConfig {
-    ProjectorImageConfig::Builtin {
-        name: "ring".to_string(),
-    }
 }
