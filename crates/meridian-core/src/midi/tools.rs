@@ -12,6 +12,7 @@ pub use super::modifier_tools::{
     program::{ChannelProgram, ProgramTool},
     sysex::SysexTool,
     tempo_map::{TempoMapTool, TempoPoint},
+    time_warp::{TimeWarpPoint, TimeWarpTool},
     velocity_map::{VelocityMapTool, VelocityPoint},
 };
 
@@ -45,18 +46,6 @@ pub enum SelectableEventKind {
     Text,
     Sysex,
     MetaOther,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
-pub struct TimeWarpTool {
-    pub points: Vec<TimeWarpPoint>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-pub struct TimeWarpPoint {
-    pub source_tick: u64,
-    pub dest_tick: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]

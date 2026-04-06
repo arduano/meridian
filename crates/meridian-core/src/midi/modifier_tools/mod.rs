@@ -15,6 +15,7 @@ pub mod pitch_bend;
 pub mod program;
 pub mod sysex;
 pub mod tempo_map;
+pub mod time_warp;
 pub mod velocity_map;
 
 pub use change_ppq::ChangePpqTool;
@@ -29,6 +30,7 @@ pub use pitch_bend::PitchBendTool;
 pub use program::{ChannelProgram, ProgramTool};
 pub use sysex::SysexTool;
 pub use tempo_map::{TempoMapTool, TempoPoint};
+pub use time_warp::{TimeWarpPoint, TimeWarpTool};
 pub use velocity_map::{VelocityMapTool, VelocityPoint};
 
 pub fn apply_modifier_tool_to_file(
@@ -60,6 +62,9 @@ pub fn apply_modifier_tool_to_file(
         MidiModifierTool::Sysex(tool) => sysex::apply_sysex_tool_to_file(input, output, tool),
         MidiModifierTool::TempoMap(tool) => {
             tempo_map::apply_tempo_map_tool_to_file(input, output, tool)
+        }
+        MidiModifierTool::TimeWarp(tool) => {
+            time_warp::apply_time_warp_tool_to_file(input, output, tool)
         }
         MidiModifierTool::VelocityMap(tool) => {
             velocity_map::apply_velocity_map_tool_to_file(input, output, tool)
