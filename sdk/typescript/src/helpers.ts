@@ -204,7 +204,6 @@ export const midiTools = {
       force_program: null,
       strip_program_changes: false,
       startup_programs: [],
-      keep_only_startup: false,
       ...config,
     });
   },
@@ -226,7 +225,6 @@ export const midiTools = {
       offset: 0,
       min_bend: -8192,
       max_bend: 8191,
-      reset_at_start: false,
       ...config,
     });
   },
@@ -304,9 +302,7 @@ export const midiTools = {
   metaText(config: Partial<MetaTextTool> = {}): MetaTextTool {
     return withDefaults({
       tool: "meta_text",
-      strip_all_text: false,
       keep_kinds: [],
-      prefix_track_names: null,
       ...config,
     });
   },
