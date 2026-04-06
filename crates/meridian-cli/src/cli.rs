@@ -8,8 +8,8 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use meridian_core::{
     MeridianError,
     midi::{
-        MidiFileProcessingConfig, QuantizeTool, RangeSelectTool, SelectableEventKind, TempoMapTool,
-        analysis::MidiAnalysisKind,
+        MidiFileProcessingConfig, QuantizeMode, QuantizeTool, RangeSelectTool, SelectableEventKind,
+        TempoMapTool, analysis::MidiAnalysisKind,
     },
     protocol::{
         MidiAnalysisJobStatus, MidiProcessEvent, MidiProcessStatus, ProtocolClient,
@@ -338,12 +338,8 @@ pub struct ProcessQuantizeArgs {
     common: ProcessCommonArgs,
     #[arg(long)]
     grid_ticks: u64,
-    #[arg(long, default_value_t = 1.0)]
-    strength: f32,
-    #[arg(long)]
-    quantize_note_ends: bool,
-    #[arg(long, default_value_t = 0.0)]
-    swing: f32,
+    #[arg(long, value_enum, default_value_t = QuantizeModeArg::NoteStartOnly)]
+    mode: QuantizeModeArg,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -367,6 +363,13 @@ pub enum SelectableEventKindArg {
     Text,
     Sysex,
     MetaOther,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum QuantizeModeArg {
+    NoteStartOnly,
+    NoteStartAndEnd,
+    AllEvents,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -661,10 +664,12 @@ fn process_tempo_scale_tool(args: &ProcessTempoScaleArgs) -> TempoMapTool {
 
 fn process_quantize_tool(args: &ProcessQuantizeArgs) -> QuantizeTool {
     QuantizeTool {
-        grid_ticks: args.grid_ticks,
-        strength: args.strength,
-        quantize_note_ends: args.quantize_note_ends,
-        swing: args.swing,
+        rounding_ticks: args.grid_ticks,
+        mode: match args.mode {
+            QuantizeModeArg::NoteStartOnly => QuantizeMode::NoteStartOnly,
+            QuantizeModeArg::NoteStartAndEnd => QuantizeMode::NoteStartAndEnd,
+            QuantizeModeArg::AllEvents => QuantizeMode::AllEvents,
+        },
     }
 }
 

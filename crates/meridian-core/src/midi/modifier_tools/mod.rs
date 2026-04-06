@@ -9,10 +9,12 @@ pub mod channel_remap;
 mod common;
 pub mod control_change;
 pub mod extract_track;
+pub mod humanize;
 pub mod key_map;
 pub mod meta_text;
 pub mod pitch_bend;
 pub mod program;
+pub mod quantize;
 pub mod sysex;
 pub mod tempo_map;
 pub mod time_warp;
@@ -24,10 +26,12 @@ pub use control_change::{
     ControlChangeTool, ControlValue, ControllerMapEntry, ControllerScaleEntry,
 };
 pub use extract_track::ExtractTrackTool;
+pub use humanize::{HumanizeCollisionMode, HumanizeTool};
 pub use key_map::{KeyMapEntry, KeyMapTool, KeyRange};
 pub use meta_text::{MetaTextTool, TextKind};
 pub use pitch_bend::PitchBendTool;
 pub use program::{ChannelProgram, ProgramTool};
+pub use quantize::{QuantizeMode, QuantizeTool};
 pub use sysex::SysexTool;
 pub use tempo_map::{TempoMapTool, TempoPoint};
 pub use time_warp::{TimeWarpPoint, TimeWarpTool};
@@ -51,6 +55,9 @@ pub fn apply_modifier_tool_to_file(
         MidiModifierTool::ExtractTrack(tool) => {
             extract_track::apply_extract_track_tool_to_file(input, output, tool)
         }
+        MidiModifierTool::Humanize(tool) => {
+            humanize::apply_humanize_tool_to_file(input, output, tool)
+        }
         MidiModifierTool::KeyMap(tool) => key_map::apply_key_map_tool_to_file(input, output, tool),
         MidiModifierTool::MetaText(tool) => {
             meta_text::apply_meta_text_tool_to_file(input, output, tool)
@@ -59,6 +66,9 @@ pub fn apply_modifier_tool_to_file(
             pitch_bend::apply_pitch_bend_tool_to_file(input, output, tool)
         }
         MidiModifierTool::Program(tool) => program::apply_program_tool_to_file(input, output, tool),
+        MidiModifierTool::Quantize(tool) => {
+            quantize::apply_quantize_tool_to_file(input, output, tool)
+        }
         MidiModifierTool::Sysex(tool) => sysex::apply_sysex_tool_to_file(input, output, tool),
         MidiModifierTool::TempoMap(tool) => {
             tempo_map::apply_tempo_map_tool_to_file(input, output, tool)

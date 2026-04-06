@@ -49,6 +49,7 @@ export type { PfaNoteProjectorConfig } from "../generated/PfaNoteProjectorConfig
 export type { PianoTrailClassicSceneConfig } from "../generated/PianoTrailClassicSceneConfig.ts";
 export type { RepeatedNoteOnPolicy } from "../generated/RepeatedNoteOnPolicy.ts";
 export type { ProjectorImageConfig } from "../generated/ProjectorImageConfig.ts";
+export type { QuantizeMode } from "../generated/QuantizeMode.ts";
 export type { ProtocolCommand as MeridianProtocolCommand } from "../generated/ProtocolCommand.ts";
 export type { ProtocolAudioRenderConfig as SdkAudioRenderConfig } from "../generated/ProtocolAudioRenderConfig.ts";
 export type { ProtocolVideoRenderConfig } from "../generated/ProtocolVideoRenderConfig.ts";

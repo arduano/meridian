@@ -6,10 +6,12 @@ pub use super::modifier_tools::{
     channel_remap::{ChannelMapEntry, ChannelRemapTool},
     control_change::{ControlChangeTool, ControlValue, ControllerMapEntry, ControllerScaleEntry},
     extract_track::ExtractTrackTool,
+    humanize::{HumanizeCollisionMode, HumanizeTool},
     key_map::{KeyMapEntry, KeyMapTool, KeyRange},
     meta_text::{MetaTextTool, TextKind},
     pitch_bend::PitchBendTool,
     program::{ChannelProgram, ProgramTool},
+    quantize::{QuantizeMode, QuantizeTool},
     sysex::SysexTool,
     tempo_map::{TempoMapTool, TempoPoint},
     time_warp::{TimeWarpPoint, TimeWarpTool},
@@ -93,24 +95,6 @@ pub enum OrphanNoteOffPolicy {
     Keep,
     #[default]
     Drop,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
-pub struct QuantizeTool {
-    pub grid_ticks: u64,
-    pub strength: f32,
-    pub quantize_note_ends: bool,
-    pub swing: f32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
-pub struct HumanizeTool {
-    pub start_jitter: i64,
-    pub length_jitter: i64,
-    pub velocity_jitter: i16,
-    pub seed: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]

@@ -281,10 +281,8 @@ export const midiTools = {
   quantize(config: Partial<QuantizeTool> = {}): QuantizeTool {
     return withDefaults({
       tool: "quantize",
-      grid_ticks: 1,
-      strength: 1,
-      quantize_note_ends: false,
-      swing: 0,
+      rounding_ticks: 1,
+      mode: "note_start_only",
       ...config,
     });
   },
@@ -295,6 +293,7 @@ export const midiTools = {
       length_jitter: 0,
       velocity_jitter: 0,
       seed: 0,
+      collision_mode: "stable",
       ...config,
     });
   },
