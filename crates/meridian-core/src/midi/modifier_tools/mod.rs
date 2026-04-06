@@ -6,12 +6,22 @@ use super::tools::MidiModifierTool;
 
 pub mod channel_remap;
 mod common;
+pub mod control_change;
 pub mod key_map;
 pub mod meta_text;
+pub mod pitch_bend;
+pub mod program;
+pub mod velocity_map;
 
 pub use channel_remap::{ChannelMapEntry, ChannelRemapTool};
+pub use control_change::{
+    ControlChangeTool, ControlValue, ControllerMapEntry, ControllerScaleEntry,
+};
 pub use key_map::{KeyMapEntry, KeyMapTool, KeyRange};
 pub use meta_text::{MetaTextTool, TextKind};
+pub use pitch_bend::PitchBendTool;
+pub use program::{ChannelProgram, ProgramTool};
+pub use velocity_map::{VelocityMapTool, VelocityPoint};
 
 pub fn apply_modifier_tool_to_file(
     input: &Path,
@@ -22,9 +32,19 @@ pub fn apply_modifier_tool_to_file(
         MidiModifierTool::ChannelRemap(tool) => {
             channel_remap::apply_channel_remap_tool_to_file(input, output, tool)
         }
+        MidiModifierTool::ControlChange(tool) => {
+            control_change::apply_control_change_tool_to_file(input, output, tool)
+        }
         MidiModifierTool::KeyMap(tool) => key_map::apply_key_map_tool_to_file(input, output, tool),
         MidiModifierTool::MetaText(tool) => {
             meta_text::apply_meta_text_tool_to_file(input, output, tool)
+        }
+        MidiModifierTool::PitchBend(tool) => {
+            pitch_bend::apply_pitch_bend_tool_to_file(input, output, tool)
+        }
+        MidiModifierTool::Program(tool) => program::apply_program_tool_to_file(input, output, tool),
+        MidiModifierTool::VelocityMap(tool) => {
+            velocity_map::apply_velocity_map_tool_to_file(input, output, tool)
         }
         other => Err(MeridianError::Unsupported(format!(
             "modifier tool not implemented in new modifier pipeline: {}",

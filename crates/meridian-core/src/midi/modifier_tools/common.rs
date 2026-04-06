@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, path::Path};
 
 use midi_toolkit::{
     events::Event,
@@ -6,7 +6,28 @@ use midi_toolkit::{
     sequence::event::Delta,
 };
 
-use crate::error::MeridianError;
+use crate::{error::MeridianError, midi::parsed::ParsedMidiFile};
+
+pub(super) fn load_parsed_midi(input: &Path) -> Result<ParsedMidiFile, MeridianError> {
+    ParsedMidiFile::load_from_file(input.to_path_buf())
+}
+
+pub(super) fn open_midi_writer(output: &Path, ppq: u16) -> Result<MIDIWriter, MeridianError> {
+    MIDIWriter::new(output.to_string_lossy().as_ref(), ppq).map_err(midi_write_error)
+}
+
+pub(super) fn finish_midi_writer(writer: MIDIWriter) -> Result<(), MeridianError> {
+    let mut writer = writer;
+    writer.end().map_err(midi_write_error)
+}
+
+pub(super) fn track_events(
+    parsed: &ParsedMidiFile,
+    track_index: u32,
+) -> Option<impl Iterator<Item = Result<Delta<u64, Event>, MeridianError>> + '_> {
+    let track = parsed.midi().iter_track(track_index)?;
+    Some(track.map(map_toolkit_event_result))
+}
 
 pub(super) fn map_toolkit_event_result(
     event: Result<Delta<u64, Event>, impl Debug>,

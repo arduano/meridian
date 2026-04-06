@@ -2,7 +2,6 @@ use std::path::Path;
 
 use midi_toolkit::{
     events::{Event, MIDIEvent},
-    io::MIDIWriter,
     prelude::EventSequenceExt,
     sequence::event::Delta,
 };
@@ -12,10 +11,11 @@ use ts_rs::TS;
 use crate::{
     error::MeridianError,
     midi::{
+        MIDI_KEY_COUNT,
         modifier_tools::common::{
-            map_toolkit_event_result, midi_write_error, write_try_track_events,
+            finish_midi_writer, load_parsed_midi, open_midi_writer, track_events,
+            write_try_track_events,
         },
-        parsed::ParsedMidiFile,
     },
 };
 
@@ -44,35 +44,35 @@ pub(super) fn apply_key_map_tool_to_file(
     output: &Path,
     tool: &KeyMapTool,
 ) -> Result<(), MeridianError> {
-    let parsed = ParsedMidiFile::load_from_file(input.to_path_buf())?;
-    let writer = MIDIWriter::new(output.to_string_lossy().as_ref(), parsed.midi().ppq())
-        .map_err(midi_write_error)?;
+    let parsed = load_parsed_midi(input)?;
+    let key_lookup = build_key_lookup(tool);
+    let writer = open_midi_writer(output, parsed.midi().ppq())?;
 
     for track_index in 0..parsed.midi().track_count() {
-        let iter = key_mapped_track_events(&parsed, track_index as u32, tool)
+        let iter = key_mapped_track_events(&parsed, track_index as u32, key_lookup)
             .expect("track iteration should exist for a known track index");
         write_try_track_events(&writer, iter)?;
     }
 
-    let mut writer = writer;
-    writer.end().map_err(midi_write_error)?;
-    Ok(())
+    finish_midi_writer(writer)
 }
 
 fn key_mapped_track_events<'a>(
-    parsed: &'a ParsedMidiFile,
+    parsed: &'a crate::midi::parsed::ParsedMidiFile,
     track_index: u32,
-    tool: &'a KeyMapTool,
+    key_lookup: [Option<u8>; MIDI_KEY_COUNT],
 ) -> Option<impl Iterator<Item = Result<Delta<u64, Event>, MeridianError>> + 'a> {
-    let track = parsed.midi().iter_track(track_index)?;
-    let events = track.map(map_toolkit_event_result);
+    let events = track_events(parsed, track_index)?;
 
     // `filter_map_events` preserves delta timing across dropped events while letting the tool
     // rewrite the kept event in one pass.
-    Some(events.filter_map_events(move |event| map_key_mapped_event(event, tool)))
+    Some(events.filter_map_events(move |event| map_key_mapped_event(event, key_lookup)))
 }
 
-fn map_key_mapped_event(mut event: Event, tool: &KeyMapTool) -> Option<Event> {
+fn map_key_mapped_event(
+    mut event: Event,
+    key_lookup: [Option<u8>; MIDI_KEY_COUNT],
+) -> Option<Event> {
     if matches!(event, Event::TrackStart(_)) {
         return None;
     }
@@ -81,21 +81,27 @@ fn map_key_mapped_event(mut event: Event, tool: &KeyMapTool) -> Option<Event> {
         return Some(event);
     };
 
-    if let Some(entry) = tool.mappings.iter().find(|entry| entry.from == *key) {
-        *key = entry.to;
-        return Some(event);
+    *key = key_lookup[*key as usize]?;
+    Some(event)
+}
+
+fn build_key_lookup(tool: &KeyMapTool) -> [Option<u8>; MIDI_KEY_COUNT] {
+    let mut lookup = std::array::from_fn(|key| {
+        let key = key as u8;
+        if let Some(range) = &tool.fold_to_range {
+            Some(fold_key_to_range(key, range))
+        } else if tool.drop_unmapped {
+            None
+        } else {
+            Some(key)
+        }
+    });
+
+    for mapping in &tool.mappings {
+        lookup[mapping.from as usize] = Some(mapping.to);
     }
 
-    if let Some(range) = &tool.fold_to_range {
-        *key = fold_key_to_range(*key, range);
-        return Some(event);
-    }
-
-    if tool.drop_unmapped {
-        None
-    } else {
-        Some(event)
-    }
+    lookup
 }
 
 fn fold_key_to_range(mut key: u8, range: &KeyRange) -> u8 {

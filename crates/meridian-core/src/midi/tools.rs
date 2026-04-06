@@ -3,8 +3,12 @@ use ts_rs::TS;
 
 pub use super::modifier_tools::{
     channel_remap::{ChannelMapEntry, ChannelRemapTool},
+    control_change::{ControlChangeTool, ControlValue, ControllerMapEntry, ControllerScaleEntry},
     key_map::{KeyMapEntry, KeyMapTool, KeyRange},
     meta_text::{MetaTextTool, TextKind},
+    pitch_bend::PitchBendTool,
+    program::{ChannelProgram, ProgramTool},
+    velocity_map::{VelocityMapTool, VelocityPoint},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
@@ -78,74 +82,6 @@ pub enum TrackRouteTool {
 pub struct TrackMapEntry {
     pub from: usize,
     pub to: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
-pub struct ProgramTool {
-    pub force_program: Option<u8>,
-    pub strip_program_changes: bool,
-    pub startup_programs: Vec<ChannelProgram>,
-    pub keep_only_startup: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-pub struct ChannelProgram {
-    pub channel: u8,
-    pub program: u8,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
-pub struct ControlChangeTool {
-    pub strip_controllers: Vec<u8>,
-    pub remap_controllers: Vec<ControllerMapEntry>,
-    pub scale_controllers: Vec<ControllerScaleEntry>,
-    pub inject_start: Vec<ControlValue>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-pub struct ControllerMapEntry {
-    pub from: u8,
-    pub to: u8,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-pub struct ControllerScaleEntry {
-    pub controller: u8,
-    pub scale: f32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-pub struct ControlValue {
-    pub channel: u8,
-    pub controller: u8,
-    pub value: u8,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
-pub struct PitchBendTool {
-    pub strip: bool,
-    pub scale: f32,
-    pub offset: i16,
-    pub min_bend: i16,
-    pub max_bend: i16,
-    pub reset_at_start: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-#[serde(tag = "mode", rename_all = "snake_case")]
-pub enum VelocityMapTool {
-    Scale { scale: f32 },
-    Gamma { gamma: f32 },
-    Polyline { points: Vec<VelocityPoint> },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-pub struct VelocityPoint {
-    pub input: u8,
-    pub output: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]

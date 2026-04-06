@@ -2,7 +2,6 @@ use std::path::Path;
 
 use midi_toolkit::{
     events::{Event, TextEventKind},
-    io::MIDIWriter,
     prelude::EventSequenceExt,
     sequence::event::Delta,
 };
@@ -11,11 +10,9 @@ use ts_rs::TS;
 
 use crate::{
     error::MeridianError,
-    midi::{
-        modifier_tools::common::{
-            map_toolkit_event_result, midi_write_error, write_try_track_events,
-        },
-        parsed::ParsedMidiFile,
+    midi::modifier_tools::common::{
+        finish_midi_writer, load_parsed_midi, open_midi_writer, track_events,
+        write_try_track_events,
     },
 };
 
@@ -46,9 +43,8 @@ pub(super) fn apply_meta_text_tool_to_file(
     output: &Path,
     tool: &MetaTextTool,
 ) -> Result<(), MeridianError> {
-    let parsed = ParsedMidiFile::load_from_file(input.to_path_buf())?;
-    let writer = MIDIWriter::new(output.to_string_lossy().as_ref(), parsed.midi().ppq())
-        .map_err(midi_write_error)?;
+    let parsed = load_parsed_midi(input)?;
+    let writer = open_midi_writer(output, parsed.midi().ppq())?;
 
     for track_index in 0..parsed.midi().track_count() {
         let iter = filtered_track_text_events(&parsed, track_index as u32, tool)
@@ -56,18 +52,15 @@ pub(super) fn apply_meta_text_tool_to_file(
         write_try_track_events(&writer, iter)?;
     }
 
-    let mut writer = writer;
-    writer.end().map_err(midi_write_error)?;
-    Ok(())
+    finish_midi_writer(writer)
 }
 
 fn filtered_track_text_events<'a>(
-    parsed: &'a ParsedMidiFile,
+    parsed: &'a crate::midi::parsed::ParsedMidiFile,
     track_index: u32,
     tool: &'a MetaTextTool,
 ) -> Option<impl Iterator<Item = Result<Delta<u64, Event>, MeridianError>> + 'a> {
-    let track = parsed.midi().iter_track(track_index)?;
-    let events = track.map(map_toolkit_event_result);
+    let events = track_events(parsed, track_index)?;
 
     Some(events.filter_map_events(move |event| map_text_event(event, tool)))
 }
