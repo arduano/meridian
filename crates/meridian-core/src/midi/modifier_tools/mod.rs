@@ -16,6 +16,7 @@ pub mod note_length;
 pub mod pitch_bend;
 pub mod program;
 pub mod quantize;
+pub mod range_select;
 pub mod shared_metadata_track;
 pub mod sysex;
 pub mod tempo_map;
@@ -36,6 +37,7 @@ pub use note_length::NoteLengthTool;
 pub use pitch_bend::PitchBendTool;
 pub use program::{ChannelProgram, ProgramTool};
 pub use quantize::{QuantizeMode, QuantizeTool};
+pub use range_select::{RangeEdgeBehavior, RangeSelectTool};
 pub use shared_metadata_track::SharedMetadataTrackTool;
 pub use sysex::SysexTool;
 pub use tempo_map::{TempoMapTool, TempoPoint};
@@ -77,6 +79,9 @@ pub fn apply_modifier_tool_to_file(
         MidiModifierTool::Program(tool) => program::apply_program_tool_to_file(input, output, tool),
         MidiModifierTool::Quantize(tool) => {
             quantize::apply_quantize_tool_to_file(input, output, tool)
+        }
+        MidiModifierTool::RangeSelect(tool) => {
+            range_select::apply_range_select_tool_to_file(input, output, tool)
         }
         MidiModifierTool::SharedMetadataTrack(tool) => {
             shared_metadata_track::apply_shared_metadata_track_tool_to_file(input, output, tool)
@@ -134,7 +139,7 @@ mod tests {
     use crate::{
         error::MeridianError,
         midi::{
-            MidiModifierTool, RangeSelectTool,
+            MidiModifierTool, OverlapRepairTool,
             test_support::{TestDir, note_on, write_toolkit_midi},
         },
     };
@@ -150,7 +155,7 @@ mod tests {
         let error = apply_modifier_tool_to_file(
             &input,
             &output,
-            &MidiModifierTool::RangeSelect(RangeSelectTool::default()),
+            &MidiModifierTool::OverlapRepair(OverlapRepairTool::default()),
         )
         .expect_err("unsupported tool should fail");
 

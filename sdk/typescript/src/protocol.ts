@@ -56,9 +56,9 @@ export type { ProtocolVideoRenderConfig } from "../generated/ProtocolVideoRender
 export type { ProtocolEvent as CoreEvent } from "../generated/ProtocolEvent.ts";
 export type { ProtocolRequest as JsonRequest } from "../generated/ProtocolRequest.ts";
 export type { ProtocolResponse as JsonResponse } from "../generated/ProtocolResponse.ts";
+export type { RangeEdgeBehavior } from "../generated/RangeEdgeBehavior.ts";
 export type { RendererKind } from "../generated/RendererKind.ts";
 export type { SceneConfig } from "../generated/SceneConfig.ts";
-export type { SelectableEventKind } from "../generated/SelectableEventKind.ts";
 export type { SharedMetadataTrackDestination } from "../generated/SharedMetadataTrackDestination.ts";
 export type { SharedMetadataTrackTool } from "../generated/SharedMetadataTrackTool.ts";
 export type { StructureProcessingConfig } from "../generated/StructureProcessingConfig.ts";

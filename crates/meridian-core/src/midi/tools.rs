@@ -13,6 +13,7 @@ pub use super::modifier_tools::{
     pitch_bend::PitchBendTool,
     program::{ChannelProgram, ProgramTool},
     quantize::{QuantizeMode, QuantizeTool},
+    range_select::{RangeEdgeBehavior, RangeSelectTool},
     shared_metadata_track::SharedMetadataTrackTool,
     sysex::SysexTool,
     tempo_map::{TempoMapTool, TempoPoint},
@@ -20,38 +21,6 @@ pub use super::modifier_tools::{
     track_route::{TrackMapEntry, TrackRouteTool},
     velocity_map::{VelocityMapTool, VelocityPoint},
 };
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
-pub struct RangeSelectTool {
-    pub reset: bool,
-    pub track_min: Option<usize>,
-    pub track_max: Option<usize>,
-    pub channel_min: Option<u8>,
-    pub channel_max: Option<u8>,
-    pub key_min: Option<u8>,
-    pub key_max: Option<u8>,
-    pub velocity_min: Option<u8>,
-    pub velocity_max: Option<u8>,
-    pub tick_start: Option<u64>,
-    pub tick_end: Option<u64>,
-    pub event_kinds: Vec<SelectableEventKind>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum SelectableEventKind {
-    Note,
-    Tempo,
-    ProgramChange,
-    ControlChange,
-    PitchBend,
-    ChannelPressure,
-    PolyphonicPressure,
-    Text,
-    Sysex,
-    MetaOther,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]

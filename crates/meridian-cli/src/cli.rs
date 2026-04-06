@@ -8,7 +8,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use meridian_core::{
     MeridianError,
     midi::{
-        MidiFileProcessingConfig, QuantizeMode, QuantizeTool, RangeSelectTool, SelectableEventKind,
+        MidiFileProcessingConfig, QuantizeMode, QuantizeTool, RangeEdgeBehavior, RangeSelectTool,
         TempoMapTool, analysis::MidiAnalysisKind,
     },
     protocol::{
@@ -291,29 +291,17 @@ pub struct ProcessSelectArgs {
     #[command(flatten)]
     common: ProcessCommonArgs,
     #[arg(long)]
-    reset: bool,
+    start_ticks: u64,
     #[arg(long)]
-    track_min: Option<usize>,
+    end_ticks: u64,
     #[arg(long)]
-    track_max: Option<usize>,
+    offset_ticks: Option<u64>,
     #[arg(long)]
-    channel_min: Option<u8>,
+    track_select: Option<usize>,
     #[arg(long)]
-    channel_max: Option<u8>,
-    #[arg(long)]
-    key_min: Option<u8>,
-    #[arg(long)]
-    key_max: Option<u8>,
-    #[arg(long)]
-    velocity_min: Option<u8>,
-    #[arg(long)]
-    velocity_max: Option<u8>,
-    #[arg(long)]
-    tick_start: Option<u64>,
-    #[arg(long)]
-    tick_end: Option<u64>,
-    #[arg(long = "event-kind", value_enum)]
-    event_kinds: Vec<SelectableEventKindArg>,
+    preserve_system_events: bool,
+    #[arg(long, value_enum, default_value_t = RangeEdgeBehaviorArg::Trim)]
+    edge_behavior: RangeEdgeBehaviorArg,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -352,17 +340,10 @@ pub enum AnalysisKindArg {
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum SelectableEventKindArg {
-    Note,
-    Tempo,
-    ProgramChange,
-    ControlChange,
-    PitchBend,
-    ChannelPressure,
-    PolyphonicPressure,
-    Text,
-    Sysex,
-    MetaOther,
+pub enum RangeEdgeBehaviorArg {
+    Keep,
+    Skip,
+    Trim,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -620,35 +601,16 @@ fn build_process_config(common: &ProcessCommonArgs, tool: ProcessTool) -> MidiFi
 
 fn process_range_select_tool(args: &ProcessSelectArgs) -> RangeSelectTool {
     RangeSelectTool {
-        reset: args.reset,
-        track_min: args.track_min,
-        track_max: args.track_max,
-        channel_min: args.channel_min,
-        channel_max: args.channel_max,
-        key_min: args.key_min,
-        key_max: args.key_max,
-        velocity_min: args.velocity_min,
-        velocity_max: args.velocity_max,
-        tick_start: args.tick_start,
-        tick_end: args.tick_end,
-        event_kinds: args
-            .event_kinds
-            .iter()
-            .map(|kind| match kind {
-                SelectableEventKindArg::Note => SelectableEventKind::Note,
-                SelectableEventKindArg::Tempo => SelectableEventKind::Tempo,
-                SelectableEventKindArg::ProgramChange => SelectableEventKind::ProgramChange,
-                SelectableEventKindArg::ControlChange => SelectableEventKind::ControlChange,
-                SelectableEventKindArg::PitchBend => SelectableEventKind::PitchBend,
-                SelectableEventKindArg::ChannelPressure => SelectableEventKind::ChannelPressure,
-                SelectableEventKindArg::PolyphonicPressure => {
-                    SelectableEventKind::PolyphonicPressure
-                }
-                SelectableEventKindArg::Text => SelectableEventKind::Text,
-                SelectableEventKindArg::Sysex => SelectableEventKind::Sysex,
-                SelectableEventKindArg::MetaOther => SelectableEventKind::MetaOther,
-            })
-            .collect(),
+        start_ticks: args.start_ticks,
+        end_ticks: args.end_ticks,
+        offset_ticks: args.offset_ticks,
+        track_select: args.track_select,
+        preserve_system_events: args.preserve_system_events,
+        edge_behavior: match args.edge_behavior {
+            RangeEdgeBehaviorArg::Keep => RangeEdgeBehavior::Keep,
+            RangeEdgeBehaviorArg::Skip => RangeEdgeBehavior::Skip,
+            RangeEdgeBehaviorArg::Trim => RangeEdgeBehavior::Trim,
+        },
     }
 }
 
