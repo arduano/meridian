@@ -8,11 +8,13 @@ import {
   type AudioRenderJobId,
   type AudioRenderStatus,
   type AudioRenderStatusEventWrapper,
+  type ChangePpqTool,
   type ChannelRemapTool,
   type ControlChangeTool,
   type CoreEvent,
   type DedupeTool,
   type ErrorEvent,
+  type ExtractTrackTool,
   type HumanizeTool,
   type JsonResponse,
   type KeyMapTool,
@@ -25,9 +27,9 @@ import {
   type MidiAnalysisJobStatusEventWrapper,
   type MidiAnalysisKind,
   type MidiFileProcessingConfig,
-  type MidiLoadedEvent,
   type MidiFilesMergeConfig,
   type MidiFilesMergedEvent,
+  type MidiLoadedEvent,
   type MidiModifierTool,
   type MidiProcessEvent,
   type MidiProcessEventWrapper,
@@ -1138,9 +1140,13 @@ export class MeridianClient {
         this.midi({ ...options, tool: midiTools.tempoMap.scaleBpm(factor) }),
       replace: (
         points: TempoPoint[],
+        destination: Parameters<typeof midiTools.tempoMap.replace>[1],
         options: MidiModificationOptions,
       ): MidiProcessTask =>
-        this.midi({ ...options, tool: midiTools.tempoMap.replace(points) }),
+        this.midi({
+          ...options,
+          tool: midiTools.tempoMap.replace(points, destination),
+        }),
     },
     timeWarp: (
       options: MidiModificationOptions & Partial<ToolConfig<TimeWarpTool>>,
@@ -1192,6 +1198,19 @@ export class MeridianClient {
       ): MidiProcessTask =>
         this.midi({ ...options, tool: midiTools.velocityMap.polyline(points) }),
     },
+    changePpq: (
+      ppq: number,
+      options: MidiModificationOptions,
+    ): MidiProcessTask =>
+      this.midi({ ...options, tool: midiTools.changePpq({ ppq }) }),
+    extractTrack: (
+      trackIndex: number,
+      options: MidiModificationOptions,
+    ): MidiProcessTask =>
+      this.midi({
+        ...options,
+        tool: midiTools.extractTrack({ track_index: trackIndex }),
+      }),
     noteLength: (
       options: MidiModificationOptions & Partial<ToolConfig<NoteLengthTool>>,
     ): MidiProcessTask =>

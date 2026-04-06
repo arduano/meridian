@@ -60,6 +60,7 @@ export type { SceneConfig } from "../generated/SceneConfig.ts";
 export type { SelectableEventKind } from "../generated/SelectableEventKind.ts";
 export type { SharedMetadataTrackTool } from "../generated/SharedMetadataTrackTool.ts";
 export type { StructureProcessingConfig } from "../generated/StructureProcessingConfig.ts";
+export type { TempoMapDestination } from "../generated/TempoMapDestination.ts";
 export type { TempoPoint } from "../generated/TempoPoint.ts";
 export type { TextKind } from "../generated/TextKind.ts";
 export type { TimeWarpPoint } from "../generated/TimeWarpPoint.ts";
@@ -79,9 +80,11 @@ import type { ProtocolCommand } from "../generated/ProtocolCommand.ts";
 import type { ProtocolRequest } from "../generated/ProtocolRequest.ts";
 import type { ProtocolResponse } from "../generated/ProtocolResponse.ts";
 import type { AnalysisGuardTool as RawAnalysisGuardTool } from "../generated/AnalysisGuardTool.ts";
+import type { ChangePpqTool as GeneratedChangePpqTool } from "../generated/ChangePpqTool.ts";
 import type { ChannelRemapTool as RawChannelRemapTool } from "../generated/ChannelRemapTool.ts";
 import type { ControlChangeTool as RawControlChangeTool } from "../generated/ControlChangeTool.ts";
 import type { DedupeTool as RawDedupeTool } from "../generated/DedupeTool.ts";
+import type { ExtractTrackTool as GeneratedExtractTrackTool } from "../generated/ExtractTrackTool.ts";
 import type { HumanizeTool as RawHumanizeTool } from "../generated/HumanizeTool.ts";
 import type { KeyMapTool as RawKeyMapTool } from "../generated/KeyMapTool.ts";
 import type { MergeBalanceTool as RawMergeBalanceTool } from "../generated/MergeBalanceTool.ts";
@@ -106,6 +109,7 @@ export type TimeWarpTool = { tool: "time_warp" } & RawTimeWarpTool;
 export type ChannelRemapTool =
   & { tool: "channel_remap" }
   & RawChannelRemapTool;
+export type ChangePpqTool = { tool: "change_ppq" } & GeneratedChangePpqTool;
 export type TrackRouteTool = { tool: "track_route" } & RawTrackRouteTool;
 export type ProgramTool = { tool: "program" } & RawProgramTool;
 export type ControlChangeTool =
@@ -113,6 +117,9 @@ export type ControlChangeTool =
   & RawControlChangeTool;
 export type PitchBendTool = { tool: "pitch_bend" } & RawPitchBendTool;
 export type VelocityMapTool = { tool: "velocity_map" } & RawVelocityMapTool;
+export type ExtractTrackTool =
+  & { tool: "extract_track" }
+  & GeneratedExtractTrackTool;
 export type NoteLengthTool = { tool: "note_length" } & RawNoteLengthTool;
 export type OverlapRepairTool =
   & { tool: "overlap_repair" }

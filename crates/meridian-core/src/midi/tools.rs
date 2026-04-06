@@ -2,12 +2,16 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use super::modifier_tools::{
+    change_ppq::ChangePpqTool,
     channel_remap::{ChannelMapEntry, ChannelRemapTool},
     control_change::{ControlChangeTool, ControlValue, ControllerMapEntry, ControllerScaleEntry},
+    extract_track::ExtractTrackTool,
     key_map::{KeyMapEntry, KeyMapTool, KeyRange},
     meta_text::{MetaTextTool, TextKind},
     pitch_bend::PitchBendTool,
     program::{ChannelProgram, ProgramTool},
+    sysex::SysexTool,
+    tempo_map::{TempoMapTool, TempoPoint},
     velocity_map::{VelocityMapTool, VelocityPoint},
 };
 
@@ -41,20 +45,6 @@ pub enum SelectableEventKind {
     Text,
     Sysex,
     MetaOther,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-#[serde(tag = "mode", rename_all = "snake_case")]
-pub enum TempoMapTool {
-    Flatten { tempo: u32 },
-    ScaleBpm { factor: f64 },
-    Replace { points: Vec<TempoPoint> },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
-pub struct TempoPoint {
-    pub tick: u64,
-    pub tempo: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
@@ -145,13 +135,6 @@ pub struct DedupeTool {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
 #[serde(default)]
-pub struct SysexTool {
-    pub strip_all: bool,
-    pub prepend: Vec<Vec<u8>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, TS)]
-#[serde(default)]
 pub struct MergeBalanceTool {
     pub deconflict_channels: bool,
     pub strip_duplicate_start_state: bool,
@@ -189,6 +172,8 @@ pub enum MidiModifierTool {
     ControlChange(ControlChangeTool),
     PitchBend(PitchBendTool),
     VelocityMap(VelocityMapTool),
+    ChangePpq(ChangePpqTool),
+    ExtractTrack(ExtractTrackTool),
     NoteLength(NoteLengthTool),
     OverlapRepair(OverlapRepairTool),
     Quantize(QuantizeTool),

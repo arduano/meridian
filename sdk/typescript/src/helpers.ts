@@ -1,9 +1,11 @@
 import type {
   AnalysisGuardTool,
+  ChangePpqTool,
   ChannelRemapTool,
   ControlChangeTool,
   DedupeTool,
   EventFilterConfig,
+  ExtractTrackTool,
   FileTimeProcessingConfig,
   HumanizeTool,
   KeyMapTool,
@@ -21,6 +23,7 @@ import type {
   RangeSelectTool,
   StructureProcessingConfig,
   SysexTool,
+  TempoMapDestination,
   TempoMapTool,
   TempoPoint,
   TimeWarpTool,
@@ -171,8 +174,11 @@ export const midiTools = {
     scaleBpm(factor: number): TempoMapTool {
       return { tool: "tempo_map", mode: "scale_bpm", factor };
     },
-    replace(points: TempoPoint[]): TempoMapTool {
-      return { tool: "tempo_map", mode: "replace", points };
+    replace(
+      points: TempoPoint[],
+      destination: TempoMapDestination = "inject_into_first_track",
+    ): TempoMapTool {
+      return { tool: "tempo_map", mode: "replace", points, destination };
     },
   },
   timeWarp(config: Partial<TimeWarpTool> = {}): TimeWarpTool {
@@ -241,6 +247,18 @@ export const midiTools = {
     ): VelocityMapTool {
       return { tool: "velocity_map", mode: "polyline", points };
     },
+  },
+  changePpq(config: { ppq: number }): ChangePpqTool {
+    return withDefaults({
+      tool: "change_ppq",
+      ...config,
+    });
+  },
+  extractTrack(config: { track_index: number }): ExtractTrackTool {
+    return withDefaults({
+      tool: "extract_track",
+      ...config,
+    });
   },
   noteLength(config: Partial<NoteLengthTool> = {}): NoteLengthTool {
     return withDefaults({
