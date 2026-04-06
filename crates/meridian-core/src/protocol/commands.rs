@@ -55,6 +55,10 @@ pub enum CoreCommand {
     AnalyzeActiveMidi {
         bucket_count: Option<usize>,
     },
+    AnalyzeParsedMidi {
+        parsed_midi_id: ParsedMidiId,
+        bucket_count: Option<usize>,
+    },
     AnalyzeProcessedMidi {
         processed_midi_id: ProcessedMidiId,
         bucket_count: Option<usize>,

@@ -223,6 +223,10 @@ impl CoreState {
             CoreCommand::AnalyzeActiveMidi { bucket_count } => {
                 self.analyze_active_midi(bucket_count)
             }
+            CoreCommand::AnalyzeParsedMidi {
+                parsed_midi_id,
+                bucket_count,
+            } => self.analyze_parsed_midi(parsed_midi_id, bucket_count),
             CoreCommand::AnalyzeProcessedMidi {
                 processed_midi_id,
                 bucket_count,

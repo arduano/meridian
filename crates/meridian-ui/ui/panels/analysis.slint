@@ -927,7 +927,7 @@ export component AnalysisPanel inherits Rectangle {
 
                 Text {
                     text: root.midi-state == MidiLoadState.loading
-                        ? "Analysis is still loading. The summary zones will appear when the processed MIDI payload is ready."
+                        ? "Analysis is still loading. The summary zones will appear when the analysis payload is ready."
                         : root.midi-state == MidiLoadState.selected
                             ? "A MIDI is selected but not yet loaded for analysis."
                             : root.midi-state == MidiLoadState.error

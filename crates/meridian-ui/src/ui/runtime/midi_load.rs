@@ -290,21 +290,11 @@ fn load_analysis_resource_set(
     if !is_current() {
         return Ok(None);
     }
-    let processed_events = bridge.build_processed_midi(
-        parsed_midi_id,
-        MidiProcessingConfig::default(),
-        shared_state,
-    )?;
-    let (processed_midi_id, midi_length) = processed_result_from_events(&processed_events)?;
-    all_events.extend(processed_events);
-
-    let bucket_count = ((midi_length / 0.5).ceil() as usize).clamp(1, 8192);
     progress(0.82, "Computing bucketed note statistics…");
     if !is_current() {
         return Ok(None);
     }
-    let analysis_events =
-        bridge.analyze_processed_midi(processed_midi_id, Some(bucket_count), shared_state)?;
+    let analysis_events = bridge.analyze_parsed_midi(parsed_midi_id, None, shared_state)?;
     all_events.extend(analysis_events);
     if !is_current() {
         return Ok(None);
@@ -322,22 +312,6 @@ fn parsed_midi_id_from_events(events: &[CoreEvent]) -> Result<ParsedMidiId, Meri
             _ => None,
         })
         .ok_or_else(|| MeridianError::InvalidMidi("missing parsed MIDI id".into()))
-}
-
-fn processed_result_from_events(
-    events: &[CoreEvent],
-) -> Result<(ProcessedMidiId, f64), MeridianError> {
-    events
-        .iter()
-        .find_map(|event| match event {
-            CoreEvent::ProcessedMidiBuilt {
-                processed_midi_id,
-                midi_length,
-                ..
-            } => Some((*processed_midi_id, *midi_length)),
-            _ => None,
-        })
-        .ok_or_else(|| MeridianError::InvalidMidi("missing processed MIDI id".into()))
 }
 
 pub(super) fn reset_analysis_outputs(app: &App) {

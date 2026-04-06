@@ -186,6 +186,20 @@ impl UiCoreBridge {
         )
     }
 
+    pub fn analyze_parsed_midi(
+        &self,
+        parsed_midi_id: ParsedMidiId,
+        bucket_count: Option<usize>,
+        model: &Arc<Mutex<UiViewModel>>,
+    ) -> Result<Vec<CoreEvent>, MeridianError> {
+        self.request(
+            CoreCommand::AnalyzeParsedMidi {
+                parsed_midi_id,
+                bucket_count,
+            },
+            model,
+        )
+    }
     pub fn start_process_midi_file(
         &self,
         input: PathBuf,

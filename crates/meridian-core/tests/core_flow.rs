@@ -326,6 +326,51 @@ fn midi_analysis_job_runs_without_building_display_cache() {
 }
 
 #[test]
+fn analyze_parsed_midi_returns_analysis_without_building_processed_midi() {
+    let midi = support::write_test_midi();
+    let core = spawn_core();
+    let parsed_events = core
+        .request(CoreCommand::LoadParsedMidi { path: midi })
+        .expect("load parsed midi");
+    let parsed_midi_id = match parsed_events.as_slice() {
+        [CoreEvent::ParsedMidiLoaded { parsed_midi_id, .. }] => *parsed_midi_id,
+        other => panic!("unexpected parsed midi events: {other:?}"),
+    };
+
+    let events = core
+        .request(CoreCommand::AnalyzeParsedMidi {
+            parsed_midi_id,
+            bucket_count: None,
+        })
+        .expect("analyze parsed midi");
+
+    match events.as_slice() {
+        [
+            CoreEvent::MidiAnalysis {
+                processed_midi_id,
+                analysis,
+                ..
+            },
+        ] => {
+            assert!(processed_midi_id.is_none());
+            assert_eq!(analysis.total_notes, 2);
+            assert_eq!(analysis.events.note_on_events, 2);
+            assert_eq!(analysis.events.note_off_events, 2);
+            assert!(!analysis.buckets.is_empty());
+            assert_eq!(
+                analysis
+                    .buckets
+                    .iter()
+                    .map(|bucket| bucket.note_starts)
+                    .sum::<u64>(),
+                2
+            );
+        }
+        other => panic!("unexpected parsed analysis response: {other:?}"),
+    }
+}
+
+#[test]
 fn process_midi_file_applies_range_select_tool() {
     let dir = support::temp_dir("meridian-core-process-test");
     let midi = dir.join("input.mid");

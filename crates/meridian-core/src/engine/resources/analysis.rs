@@ -1,7 +1,7 @@
 use crate::{
     engine::support::error_event,
     midi::analysis::{analyze_midi, analyze_parsed_midi_with_progress},
-    protocol::{CoreErrorCode, CoreEvent, ProcessedMidiId},
+    protocol::{CoreErrorCode, CoreEvent, ParsedMidiId, ProcessedMidiId},
 };
 
 use super::super::core_state::CoreState;
@@ -137,6 +137,43 @@ impl CoreState {
                 resource.midi.analysis_cache().as_ref(),
                 bucket_count.unwrap_or(1024),
             ),
+        }]
+    }
+
+    pub(in crate::engine) fn analyze_parsed_midi(
+        &self,
+        parsed_midi_id: ParsedMidiId,
+        bucket_count: Option<usize>,
+    ) -> Vec<CoreEvent> {
+        let Some(parsed) = self.parsed_midis.get(&parsed_midi_id) else {
+            return vec![error_event(
+                CoreErrorCode::InvalidCommand,
+                format!("unknown parsed_midi_id {}", parsed_midi_id.0),
+            )];
+        };
+        let Ok(cached) = parsed.cache_stack.analysis_cache() else {
+            return vec![error_event(
+                CoreErrorCode::Internal,
+                "failed to build analysis cache",
+            )];
+        };
+        let bucket_count = bucket_count
+            .unwrap_or_else(|| ((cached.midi_length() / 0.5).ceil() as usize).clamp(1, 8192));
+        let analysis = match analyze_parsed_midi_with_progress(
+            parsed.cache_stack.parsed(),
+            cached.as_ref(),
+            bucket_count,
+            |_| {},
+        ) {
+            Ok(analysis) => analysis,
+            Err(error) => {
+                return vec![error_event(CoreErrorCode::Internal, error.to_string())];
+            }
+        };
+        vec![CoreEvent::MidiAnalysis {
+            processed_midi_id: None,
+            display_cache_id: None,
+            analysis,
         }]
     }
 }
