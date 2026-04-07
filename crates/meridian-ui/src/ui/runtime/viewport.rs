@@ -135,40 +135,42 @@ fn update_export_state_from_event(
         return;
     }
 
-    match event {
-        CoreEvent::VideoRender { event } => match event {
-            meridian_core::protocol::VideoRenderEvent::RenderFinished { output, .. } => {
-                if export.video_job_output.as_ref() == Some(output) {
-                    export.video_outcome = Some(RenderJobOutcome::Finished);
-                }
+    let Some(mode) = export.mode else {
+        return;
+    };
+    let Some(final_output) = export.final_output.clone() else {
+        return;
+    };
+
+    match (mode, event) {
+        (
+            RenderExportMode::VideoAudio | RenderExportMode::VideoOnly,
+            CoreEvent::VideoRender { event },
+        ) => match event {
+            meridian_core::protocol::VideoRenderEvent::RenderFinished { output, .. }
+                if output == &final_output =>
+            {
+                export.outcome = Some(RenderJobOutcome::Finished);
             }
             meridian_core::protocol::VideoRenderEvent::RenderCancelled { .. } => {
-                if export.mode.is_some_and(RenderExportMode::wants_video) {
-                    export.video_outcome = Some(RenderJobOutcome::Cancelled);
-                }
+                export.outcome = Some(RenderJobOutcome::Cancelled);
             }
             meridian_core::protocol::VideoRenderEvent::RenderFailed { message } => {
-                if export.mode.is_some_and(RenderExportMode::wants_video) {
-                    export.video_outcome = Some(RenderJobOutcome::Failed(message.clone()));
-                }
+                export.outcome = Some(RenderJobOutcome::Failed(message.clone()));
             }
             _ => {}
         },
-        CoreEvent::AudioRender { event } => match event {
-            meridian_core::audio::AudioRenderEvent::RenderFinished { output, .. } => {
-                if export.audio_job_output.as_ref() == Some(output) {
-                    export.audio_outcome = Some(RenderJobOutcome::Finished);
-                }
+        (RenderExportMode::AudioOnly, CoreEvent::AudioRender { event }) => match event {
+            meridian_core::audio::AudioRenderEvent::RenderFinished { output, .. }
+                if output == &final_output =>
+            {
+                export.outcome = Some(RenderJobOutcome::Finished);
             }
             meridian_core::audio::AudioRenderEvent::RenderCancelled { .. } => {
-                if export.mode.is_some_and(RenderExportMode::wants_audio) {
-                    export.audio_outcome = Some(RenderJobOutcome::Cancelled);
-                }
+                export.outcome = Some(RenderJobOutcome::Cancelled);
             }
             meridian_core::audio::AudioRenderEvent::RenderFailed { message } => {
-                if export.mode.is_some_and(RenderExportMode::wants_audio) {
-                    export.audio_outcome = Some(RenderJobOutcome::Failed(message.clone()));
-                }
+                export.outcome = Some(RenderJobOutcome::Failed(message.clone()));
             }
             _ => {}
         },
@@ -176,37 +178,9 @@ fn update_export_state_from_event(
     }
 }
 
-fn spawn_finalizer_task(
-    export_state: Arc<Mutex<RenderExportCoordinator>>,
-    spec: FinalizeSpec,
-    final_output: PathBuf,
-) {
-    std::thread::spawn(move || {
-        let result = run_finalizer(&spec, &final_output);
-        match &spec {
-            FinalizeSpec::MuxMp4 {
-                video_input,
-                audio_input,
-                ..
-            } => {
-                let _ = fs::remove_file(video_input);
-                let _ = fs::remove_file(audio_input);
-            }
-            FinalizeSpec::EncodeAudio { wav_input, .. } => {
-                let _ = fs::remove_file(wav_input);
-            }
-        }
-        export_state
-            .lock()
-            .expect("render export coordinator mutex poisoned")
-            .finalize_result = Some(result);
-    });
-}
-
 fn update_render_export_ui(app: &App, export_state: &Arc<Mutex<RenderExportCoordinator>>) {
     enum UiAction {
         None,
-        Finalize { spec: FinalizeSpec, output: PathBuf },
         Finished(PathBuf),
         Failed(String),
         Cancelled,
@@ -220,114 +194,59 @@ fn update_render_export_ui(app: &App, export_state: &Arc<Mutex<RenderExportCoord
             return;
         }
 
-        if export.finalizing {
-            if let Some(result) = export.finalize_result.take() {
+        let Some(mode) = export.mode else {
+            return;
+        };
+
+        let outcome = export.outcome.clone();
+        match outcome {
+            Some(RenderJobOutcome::Failed(message)) => {
                 export.active = false;
-                export.finalizing = false;
-                export.mode = None;
-                match result {
-                    Ok(()) => UiAction::Finished(
-                        export
-                            .final_output
-                            .clone()
-                            .unwrap_or_else(|| PathBuf::from("(output)")),
-                    ),
-                    Err(message) => UiAction::Failed(message),
-                }
-            } else {
+                UiAction::Failed(message)
+            }
+            Some(RenderJobOutcome::Cancelled) => {
+                export.active = false;
+                UiAction::Cancelled
+            }
+            Some(RenderJobOutcome::Finished) => {
+                export.active = false;
+                UiAction::Finished(
+                    export
+                        .final_output
+                        .clone()
+                        .unwrap_or_else(|| PathBuf::from("render.out")),
+                )
+            }
+            None => {
+                let progress = match mode {
+                    RenderExportMode::VideoAudio => app
+                        .get_video_render_progress()
+                        .min(app.get_audio_render_progress()),
+                    RenderExportMode::VideoOnly => app.get_video_render_progress(),
+                    RenderExportMode::AudioOnly => app.get_audio_render_progress(),
+                };
+                let status = match mode {
+                    RenderExportMode::VideoAudio => "Rendering video + audio",
+                    RenderExportMode::VideoOnly => "Rendering video",
+                    RenderExportMode::AudioOnly => "Rendering audio",
+                };
                 set_export_status(
                     app,
-                    "Finalizing output",
+                    status,
                     export
                         .final_output
                         .as_ref()
                         .map(|path| path.display().to_string())
-                        .unwrap_or_else(|| "encoding final output".into()),
-                    0.98,
+                        .unwrap_or_else(|| "working".into()),
+                    progress,
                 );
                 UiAction::None
-            }
-        } else {
-            let Some(mode) = export.mode else {
-                return;
-            };
-
-            if let Some(message) = match &export.video_outcome {
-                Some(RenderJobOutcome::Failed(message)) => Some(message.clone()),
-                _ => None,
-            } {
-                export.active = false;
-                UiAction::Failed(message)
-            } else if let Some(message) = match &export.audio_outcome {
-                Some(RenderJobOutcome::Failed(message)) => Some(message.clone()),
-                _ => None,
-            } {
-                export.active = false;
-                UiAction::Failed(message)
-            } else if matches!(export.video_outcome, Some(RenderJobOutcome::Cancelled))
-                || matches!(export.audio_outcome, Some(RenderJobOutcome::Cancelled))
-            {
-                export.active = false;
-                UiAction::Cancelled
-            } else {
-                let video_done = !mode.wants_video()
-                    || matches!(export.video_outcome, Some(RenderJobOutcome::Finished));
-                let audio_done = !mode.wants_audio()
-                    || matches!(export.audio_outcome, Some(RenderJobOutcome::Finished));
-
-                if video_done && audio_done {
-                    if let Some(spec) = export.finalize_spec.clone() {
-                        let output = export
-                            .final_output
-                            .clone()
-                            .unwrap_or_else(|| PathBuf::from("render.out"));
-                        export.finalizing = true;
-                        UiAction::Finalize { spec, output }
-                    } else {
-                        export.active = false;
-                        UiAction::Finished(
-                            export
-                                .final_output
-                                .clone()
-                                .unwrap_or_else(|| PathBuf::from("render.out")),
-                        )
-                    }
-                } else {
-                    let progress = match mode {
-                        RenderExportMode::VideoAudio => {
-                            (app.get_video_render_progress() + app.get_audio_render_progress())
-                                / 2.0
-                        }
-                        RenderExportMode::VideoOnly => app.get_video_render_progress(),
-                        RenderExportMode::AudioOnly => app.get_audio_render_progress(),
-                    };
-                    let status = match mode {
-                        RenderExportMode::VideoAudio => "Rendering video + audio",
-                        RenderExportMode::VideoOnly => "Rendering video",
-                        RenderExportMode::AudioOnly => "Rendering audio",
-                    };
-                    set_export_status(
-                        app,
-                        status,
-                        export
-                            .final_output
-                            .as_ref()
-                            .map(|path| path.display().to_string())
-                            .unwrap_or_else(|| "working".into()),
-                        progress,
-                    );
-                    UiAction::None
-                }
             }
         }
     };
 
     match action {
         UiAction::None => {}
-        UiAction::Finalize { spec, output } => {
-            set_export_status(app, "Finalizing output", output.display().to_string(), 0.98);
-            spawn_finalizer_task(Arc::clone(export_state), spec, output);
-        }
         UiAction::Finished(output) => {
             set_export_status(app, "Finished", output.display().to_string(), 1.0);
             if app.get_render_open_after_export() {

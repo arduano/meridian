@@ -10,8 +10,8 @@ use crate::{
         AnalysisJobId, AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, DisplayCacheId,
         ImageExportConfig, MidiAnalysisData, MidiAnalysisJobEvent, MidiAnalysisJobStatus,
         MidiAnalysisKind, MidiFileInspection, MidiProcessEvent, MidiProcessJobId,
-        MidiProcessStatus, PROTOCOL_VERSION, ParsedMidiId, VideoExportConfig, VideoRenderEvent,
-        VideoRenderStatus,
+        MidiProcessStatus, PROTOCOL_VERSION, ParsedMidiId, VideoAudioConfig, VideoExportConfig,
+        VideoRenderEvent, VideoRenderStatus,
     },
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
 };
@@ -25,6 +25,10 @@ pub struct ProtocolAudioRenderConfig {
     pub sample_rate: Option<u32>,
     pub channels: Option<u16>,
     pub use_limiter: Option<bool>,
+    #[serde(default)]
+    pub format: crate::protocol::AudioOutputFormat,
+    #[serde(default)]
+    pub ffmpeg_args: Vec<String>,
     pub soundfonts: Vec<PathBuf>,
 }
 
@@ -62,6 +66,8 @@ pub struct ProtocolVideoRenderConfig {
     pub ffmpeg_args: Vec<String>,
     #[serde(default)]
     pub export: VideoExportConfig,
+    #[serde(default)]
+    pub audio: Option<VideoAudioConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

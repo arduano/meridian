@@ -153,6 +153,30 @@ pub(in super::super) fn wire_render_export_callbacks(
     }
     {
         let app_weak = app.as_weak();
+        app.on_select_render_video_rgb_mode(move |mode| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let mode = match mode.as_str() {
+                "straight" => "straight",
+                _ => "premultiplied",
+            };
+            app.set_render_video_rgb_mode_text(mode.into());
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_toggle_render_export_alpha_mask(move || {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            app.set_render_export_alpha_mask(!app.get_render_export_alpha_mask());
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
         app.on_select_render_audio_bitrate(move |rate| {
             let Some(app) = app_weak.upgrade() else {
                 return;
@@ -309,89 +333,6 @@ pub(in super::super) fn wire_render_export_callbacks(
 
             app.set_render_output_path_text(final_output.display().to_string().into());
 
-            if mode.wants_audio() {
-                if app.get_audio_load_state() == MidiLoadState::Loading {
-                    fail_export(
-                        &app,
-                        &export_state,
-                        "audio cache is already loading; wait for it to finish first".into(),
-                    );
-                    return;
-                }
-                if app.get_audio_load_state() != MidiLoadState::Loaded {
-                    let midi_path = shared_state
-                        .lock()
-                        .expect("shared UI state mutex poisoned")
-                        .snapshot
-                        .as_ref()
-                        .and_then(|snapshot| snapshot.midi_path.clone())
-                        .or_else(|| {
-                            let selected = app.get_selected_midi_name();
-                            (!selected.is_empty()).then(|| PathBuf::from(selected.as_str()))
-                        });
-                    let Some(midi_path) = midi_path else {
-                        fail_export(&app, &export_state, "load a MIDI before exporting".into());
-                        return;
-                    };
-
-                    app.set_audio_load_state(MidiLoadState::Loading);
-                    app.set_audio_loading_progress(0.0);
-                    app.set_audio_loading_status("Preparing audio cache…".into());
-                    app.set_audio_load_error(Default::default());
-                    set_export_status(
-                        &app,
-                        "Preparing audio cache",
-                        final_output.display().to_string(),
-                        0.0,
-                    );
-                    app.window().request_redraw();
-
-                    let app_weak = app.as_weak();
-                    let bridge = bridge.clone();
-                    let shared_state = Arc::clone(&shared_state);
-                    let export_state = Arc::clone(&export_state);
-                    std::thread::spawn(move || {
-                        let result = bridge.load_audio_midi(midi_path, &shared_state);
-                        let _ = app_weak.upgrade_in_event_loop(move |app| match result {
-                            Ok(events) => {
-                                if let Some(message) = events_error_message(&events) {
-                                    app.set_audio_load_state(MidiLoadState::Error);
-                                    app.set_audio_load_error(message.clone().into());
-                                    app.set_audio_loading_status(Default::default());
-                                    fail_export(&app, &export_state, message);
-                                    return;
-                                }
-                                apply_events_to_app(&app, &shared_state, &events);
-                                app.set_audio_load_state(MidiLoadState::Loaded);
-                                app.set_audio_loading_progress(1.0);
-                                app.set_audio_loading_status("Audio ready".into());
-                                if export_state
-                                    .lock()
-                                    .expect("render export coordinator mutex poisoned")
-                                    .active
-                                {
-                                    if let Err(message) = start_render_export_jobs(
-                                        &app,
-                                        &bridge,
-                                        &shared_state,
-                                        &export_state,
-                                    ) {
-                                        fail_export(&app, &export_state, message);
-                                    }
-                                }
-                            }
-                            Err(error) => {
-                                app.set_audio_load_state(MidiLoadState::Error);
-                                app.set_audio_load_error(error.to_string().into());
-                                app.set_audio_loading_status(Default::default());
-                                fail_export(&app, &export_state, error.to_string());
-                            }
-                        });
-                    });
-                    return;
-                }
-            }
-
             set_export_status(
                 &app,
                 "Preparing export",
@@ -415,24 +356,13 @@ pub(in super::super) fn wire_render_export_callbacks(
                 return;
             };
 
-            let (active, finalizing) = {
+            let active = {
                 let export = export_state
                     .lock()
                     .expect("render export coordinator mutex poisoned");
-                (export.active, export.finalizing)
+                export.active
             };
             if !active {
-                return;
-            }
-
-            if finalizing {
-                set_export_status(
-                    &app,
-                    "Finalizing output",
-                    "Cancel is unavailable during final mux/encode".to_string(),
-                    app.get_render_export_progress(),
-                );
-                app.window().request_redraw();
                 return;
             }
 

@@ -45,6 +45,8 @@ pub fn run(
             sample_rate: Some(sample_rate),
             channels: Some(channels),
             use_limiter: Some(use_limiter),
+            format: meridian_core::protocol::AudioOutputFormat::Wav,
+            ffmpeg_args: Vec::new(),
             soundfonts: soundfonts.to_vec(),
         },
     })?;

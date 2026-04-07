@@ -4,7 +4,6 @@ use std::{
     fmt::Display,
     fs,
     path::{Path, PathBuf},
-    process::Command,
     rc::Rc,
     str::FromStr,
     sync::atomic::{AtomicU64, Ordering},
@@ -15,20 +14,20 @@ use std::{
 use meridian_core::{
     CoreHandle, MeridianError,
     audio::{
-        AudioConfig, AudioRenderConfig, ChannelCount, DEFAULT_SOUNDFONT, EnvelopeCurveType,
-        Interpolator, MeridianSoundfont, ThreadCount,
+        AudioConfig, ChannelCount, DEFAULT_SOUNDFONT, EnvelopeCurveType, Interpolator,
+        MeridianSoundfont, ThreadCount,
     },
     display::MIN_VIEW_RANGE_SECONDS,
     midi::{
         ChannelMapEntry, ChannelProgram, ChannelRemapTool, ControlChangeTool, ControlValue,
         ControllerMapEntry, ControllerScaleEntry, HumanizeTool, KeyMapEntry, KeyMapTool, KeyRange,
         MetaTextTool, MidiFileProcessingConfig, MidiFilesMergeConfig, MidiFilesMergeMode,
-        MidiModifierTool, MidiProcessingConfig, NoteLengthTool, PitchBendTool, ProgramTool,
-        QuantizeTool, RangeSelectTool, SharedMetadataTrackDestination, SharedMetadataTrackTool,
-        SysexTool, TempoMapDestination, TempoMapTool, TempoPoint, TextKind, TimeWarpPoint,
-        TimeWarpTool, TrackMapEntry, TrackRouteTool, VelocityMapTool, VelocityPoint,
+        MidiModifierTool, NoteLengthTool, PitchBendTool, ProgramTool, QuantizeTool,
+        RangeSelectTool, SharedMetadataTrackDestination, SharedMetadataTrackTool, SysexTool,
+        TempoMapDestination, TempoMapTool, TempoPoint, TextKind, TimeWarpPoint, TimeWarpTool,
+        TrackMapEntry, TrackRouteTool, VelocityMapTool, VelocityPoint,
     },
-    protocol::{CoreEvent, ParsedMidiId, ProcessedMidiId, StateSnapshot, VideoRenderConfig},
+    protocol::{CoreEvent, ParsedMidiId, StateSnapshot, VideoRenderConfig},
     render::{
         DisplayTimeSpace, KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig,
         NoteProjectorConfig, PFA_BLUE_TOP_BAR_COLOR, PFA_GREEN_TOP_BAR_COLOR,
@@ -53,7 +52,6 @@ use super::{
 static LAST_PALETTE_PNG: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
 static LAST_AURA_PNG: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 static LAST_BACKGROUND_PNG: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
-static EXPORT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 mod audio;
 mod export;

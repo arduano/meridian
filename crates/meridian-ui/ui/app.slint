@@ -286,7 +286,9 @@ export component App inherits Window {
     in-out property <string> render-video-crf-text: "18";
     in-out property <string> render-video-preset-text: "medium";
     in-out property <string> render-video-pix-fmt-text: "yuv420p";
+    in-out property <string> render-video-rgb-mode-text: "premultiplied";
     in-out property <string> render-audio-bitrate-text: "192k";
+    in-out property <bool> render-export-alpha-mask: false;
     in-out property <bool> render-use-limiter: true;
     in-out property <bool> render-open-after-export: false;
     in-out property <float> render-export-progress: 0;
@@ -475,8 +477,10 @@ export component App inherits Window {
     callback submit-custom-render-video-crf(string);
     callback select-render-video-preset(string);
     callback select-render-video-pix-fmt(string);
+    callback select-render-video-rgb-mode(string);
     callback select-render-audio-bitrate(string);
     callback submit-custom-render-audio-bitrate(string);
+    callback toggle-render-export-alpha-mask;
     callback toggle-render-use-limiter;
     callback toggle-render-open-after-export;
     callback start-export;
@@ -1051,7 +1055,9 @@ export component App inherits Window {
                     render-video-crf-text: root.render-video-crf-text;
                     render-video-preset-text: root.render-video-preset-text;
                     render-video-pix-fmt-text: root.render-video-pix-fmt-text;
+                    render-video-rgb-mode-text: root.render-video-rgb-mode-text;
                     render-audio-bitrate-text: root.render-audio-bitrate-text;
+                    render-export-alpha-mask: root.render-export-alpha-mask;
                     render-use-limiter: root.render-use-limiter;
                     render-open-after-export: root.render-open-after-export;
                     audio-supports-44100: root.audio-supports-44100;
@@ -1089,8 +1095,10 @@ export component App inherits Window {
                     submit-custom-crf(val) => { root.submit-custom-render-video-crf(val); }
                     select-video-preset(preset) => { root.select-render-video-preset(preset); }
                     select-video-pix-fmt(fmt) => { root.select-render-video-pix-fmt(fmt); }
+                    select-video-rgb-mode(mode) => { root.select-render-video-rgb-mode(mode); }
                     select-audio-bitrate(rate) => { root.select-render-audio-bitrate(rate); }
                     submit-custom-audio-bitrate(val) => { root.submit-custom-render-audio-bitrate(val); }
+                    toggle-export-alpha-mask => { root.toggle-render-export-alpha-mask(); }
                     toggle-use-limiter => { root.toggle-render-use-limiter(); }
                     toggle-open-after-export => { root.toggle-render-open-after-export(); }
                     start-export => { root.start-export(); }

@@ -1,8 +1,9 @@
 use std::{
-    fs::File,
-    io::BufWriter,
+    fs::{File, OpenOptions},
+    io::{BufWriter, Write},
     ops::RangeInclusive,
-    path::PathBuf,
+    path::{Path, PathBuf},
+    process::{Child, Command, Stdio},
     sync::atomic::{AtomicBool, Ordering},
 };
 
@@ -19,10 +20,11 @@ use xsynth_core::{
 use crate::{
     MeridianError,
     midi::{MidiCacheStack, audio_cache::InRamAudioCache},
-    protocol::AudioRenderJobId,
+    protocol::{AudioOutputFormat, AudioRenderJobId, VideoAudioConfig, VideoAudioProgress},
 };
 
 use super::{AudioBackend, AudioConfig, soundfont_cache::SoundfontCache};
+use crate::audio::MeridianSoundfont;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -33,6 +35,10 @@ pub struct AudioRenderConfig {
     pub sample_rate: Option<u32>,
     pub channels: Option<u16>,
     pub use_limiter: Option<bool>,
+    #[serde(default)]
+    pub format: AudioOutputFormat,
+    #[serde(default)]
+    pub ffmpeg_args: Vec<String>,
     #[serde(default)]
     pub soundfonts: Vec<PathBuf>,
 }
@@ -46,8 +52,113 @@ impl Default for AudioRenderConfig {
             sample_rate: None,
             channels: None,
             use_limiter: None,
+            format: AudioOutputFormat::Wav,
+            ffmpeg_args: Vec::new(),
             soundfonts: Vec::new(),
         }
+    }
+}
+
+pub(crate) fn resolve_video_audio_settings(
+    audio_config: &AudioConfig,
+    config: &VideoAudioConfig,
+) -> Result<(u32, u16, bool), MeridianError> {
+    let sample_rate = config
+        .sample_rate
+        .unwrap_or(audio_config.xsynth.render.audio_params.sample_rate);
+    let channels = config
+        .channels
+        .unwrap_or(audio_config.xsynth.render.audio_params.channels.count());
+    let use_limiter = config
+        .use_limiter
+        .unwrap_or(audio_config.xsynth.render.use_limiter);
+    ChannelCount::from_count(channels).ok_or_else(|| {
+        MeridianError::Platform(format!(
+            "unsupported channel count {}; only 1 or 2 are supported",
+            channels
+        ))
+    })?;
+    Ok((sample_rate, channels, use_limiter))
+}
+
+pub(crate) fn render_audio_pipe_from_cache(
+    events: &InRamAudioCache,
+    audio_config: &AudioConfig,
+    soundfont_cache: &SoundfontCache,
+    config: &VideoAudioConfig,
+    pipe_path: &Path,
+    cancel: &AtomicBool,
+    mut on_progress: impl FnMut(VideoAudioProgress),
+) -> Result<(), MeridianError> {
+    let (sample_rate, channels, use_limiter) = resolve_video_audio_settings(audio_config, config)?;
+    let audio_params = AudioStreamParams::new(
+        sample_rate,
+        ChannelCount::from_count(channels).expect("validated channel count"),
+    );
+    let mut render_audio_config = audio_config.clone();
+    if !config.soundfonts.is_empty() {
+        render_audio_config.soundfonts = config
+            .soundfonts
+            .iter()
+            .cloned()
+            .map(|path| MeridianSoundfont {
+                path,
+                ..MeridianSoundfont::default()
+            })
+            .collect();
+    }
+    let renderer = OfflineAudioRenderer::new_raw_pipe(
+        &render_audio_config,
+        soundfont_cache,
+        pipe_path,
+        audio_params,
+        use_limiter,
+    )?;
+    let noop_config = AudioRenderConfig {
+        output: pipe_path.to_path_buf(),
+        ..AudioRenderConfig::default()
+    };
+    let total_events = events.events().len();
+    on_progress(VideoAudioProgress {
+        total_events,
+        event_index: 0,
+        rendered_seconds: 0.0,
+    });
+    let result = run_audio_render_loop(
+        events,
+        &render_audio_config,
+        renderer,
+        &noop_config,
+        AudioRenderJobId(0),
+        cancel,
+        &mut |event| {
+            if let AudioRenderEvent::RenderProgress {
+                total_events,
+                event_index,
+                rendered_seconds,
+                ..
+            } = event
+            {
+                on_progress(VideoAudioProgress {
+                    total_events,
+                    event_index,
+                    rendered_seconds,
+                });
+            }
+        },
+    )?;
+    match result {
+        AudioRenderLoopResult::Finished {
+            rendered_seconds, ..
+        } => {
+            on_progress(VideoAudioProgress {
+                total_events,
+                event_index: total_events,
+                rendered_seconds,
+            });
+            Ok(())
+        }
+        AudioRenderLoopResult::Cancelled => Ok(()),
     }
 }
 
@@ -173,6 +284,86 @@ fn render_audio_inner(
         ));
     }
 
+    let settings = resolve_render_settings(audio_config, render_config)?;
+
+    callback(AudioRenderEvent::RenderStarted {
+        job_id,
+        output: render_config.output.clone(),
+        sample_rate: settings.sample_rate,
+        channels: settings.channels,
+        total_events: events.events().len(),
+    });
+
+    let outcome = match render_config.format {
+        AudioOutputFormat::Wav => {
+            let renderer = OfflineAudioRenderer::new_wav(
+                audio_config,
+                soundfont_cache,
+                &render_config.output,
+                settings.audio_params()?,
+                settings.use_limiter,
+            )?;
+            run_audio_render_loop(
+                events,
+                audio_config,
+                renderer,
+                render_config,
+                job_id,
+                cancel,
+                &mut callback,
+            )?
+        }
+        AudioOutputFormat::Flac | AudioOutputFormat::Mp3 => render_encoded_audio(
+            events,
+            audio_config,
+            soundfont_cache,
+            render_config,
+            settings,
+            job_id,
+            cancel,
+            &mut callback,
+        )?,
+    };
+
+    if let AudioRenderLoopResult::Finished {
+        frames_written,
+        rendered_seconds,
+    } = outcome
+    {
+        callback(AudioRenderEvent::RenderFinished {
+            job_id,
+            output: render_config.output.clone(),
+            frames_written,
+            rendered_seconds,
+        });
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ResolvedAudioRenderSettings {
+    sample_rate: u32,
+    channels: u16,
+    use_limiter: bool,
+}
+
+impl ResolvedAudioRenderSettings {
+    fn audio_params(self) -> Result<AudioStreamParams, MeridianError> {
+        let channel_count = ChannelCount::from_count(self.channels).ok_or_else(|| {
+            MeridianError::Platform(format!(
+                "unsupported channel count {}; only 1 or 2 are supported",
+                self.channels
+            ))
+        })?;
+        Ok(AudioStreamParams::new(self.sample_rate, channel_count))
+    }
+}
+
+fn resolve_render_settings(
+    audio_config: &AudioConfig,
+    render_config: &AudioRenderConfig,
+) -> Result<ResolvedAudioRenderSettings, MeridianError> {
     let sample_rate = render_config
         .sample_rate
         .unwrap_or(audio_config.xsynth.render.audio_params.sample_rate);
@@ -183,32 +374,46 @@ fn render_audio_inner(
         .use_limiter
         .unwrap_or(audio_config.xsynth.render.use_limiter);
 
-    let channel_count = ChannelCount::from_count(channels).ok_or_else(|| {
+    ChannelCount::from_count(channels).ok_or_else(|| {
         MeridianError::Platform(format!(
             "unsupported channel count {}; only 1 or 2 are supported",
             channels
         ))
     })?;
-    let audio_params = AudioStreamParams::new(sample_rate, channel_count);
-    callback(AudioRenderEvent::RenderStarted {
-        job_id,
-        output: render_config.output.clone(),
+
+    Ok(ResolvedAudioRenderSettings {
         sample_rate,
         channels,
-        total_events: events.events().len(),
-    });
-
-    let mut renderer = OfflineAudioRenderer::new(
-        audio_config,
-        soundfont_cache,
-        render_config.output.clone(),
-        audio_params,
         use_limiter,
-    )?;
+    })
+}
 
+enum AudioRenderLoopResult {
+    Finished {
+        frames_written: u64,
+        rendered_seconds: f64,
+    },
+    Cancelled,
+}
+
+fn run_audio_render_loop(
+    events: &InRamAudioCache,
+    audio_config: &AudioConfig,
+    mut renderer: OfflineAudioRenderer,
+    render_config: &AudioRenderConfig,
+    job_id: AudioRenderJobId,
+    cancel: &AtomicBool,
+    callback: &mut impl FnMut(AudioRenderEvent),
+) -> Result<AudioRenderLoopResult, MeridianError> {
     let mut current_time = 0.0;
     let total_events = events.events().len();
-    let progress_stride = progress_stride(total_events);
+    let total_duration_seconds = events
+        .events()
+        .last()
+        .map(|event| event.time)
+        .unwrap_or(0.0);
+    let progress_stride_seconds = progress_stride_seconds(total_duration_seconds);
+    let mut next_progress_seconds = progress_stride_seconds;
     for (event_index, event) in events.events().iter().enumerate() {
         if cancel.load(Ordering::SeqCst) {
             callback(AudioRenderEvent::RenderCancelled {
@@ -219,13 +424,43 @@ fn render_audio_inner(
                 rendered_seconds: current_time,
                 frames_written: renderer.frames_written(),
             });
-            return Ok(());
+            return Ok(AudioRenderLoopResult::Cancelled);
         }
 
-        let delta = (event.time - current_time).max(0.0);
-        if delta > 0.0 {
+        while current_time + f64::EPSILON < event.time {
+            if cancel.load(Ordering::SeqCst) {
+                callback(AudioRenderEvent::RenderCancelled {
+                    job_id,
+                    output: render_config.output.clone(),
+                    event_index,
+                    total_events,
+                    rendered_seconds: current_time,
+                    frames_written: renderer.frames_written(),
+                });
+                return Ok(AudioRenderLoopResult::Cancelled);
+            }
+
+            let next_time = next_progress_seconds.min(event.time);
+            let delta = (next_time - current_time).max(0.0);
+            if delta <= 0.0 {
+                break;
+            }
+
             renderer.render_batch(delta)?;
-            current_time = event.time;
+            current_time = next_time;
+
+            if current_time + f64::EPSILON >= next_progress_seconds {
+                emit_audio_render_progress(
+                    callback,
+                    job_id,
+                    event_index,
+                    total_events,
+                    current_time,
+                    current_time,
+                    &renderer,
+                );
+                next_progress_seconds += progress_stride_seconds;
+            }
         }
 
         for packed in event.iter_events() {
@@ -236,17 +471,16 @@ fn render_audio_inner(
             );
         }
 
-        if event_index == 0 || event_index + 1 == total_events || event_index % progress_stride == 0
-        {
-            callback(AudioRenderEvent::RenderProgress {
+        if event_index == 0 || event_index + 1 == total_events {
+            emit_audio_render_progress(
+                callback,
                 job_id,
-                event_index: event_index + 1,
+                event_index + 1,
                 total_events,
-                time_seconds: event.time,
-                rendered_seconds: current_time,
-                frames_written: renderer.frames_written(),
-                voice_count: renderer.voice_count(),
-            });
+                event.time,
+                current_time,
+                &renderer,
+            );
         }
     }
 
@@ -257,32 +491,82 @@ fn render_audio_inner(
         ChannelAudioEvent::ResetControl,
     )));
     let frames_written = renderer.finalize()?;
-
-    callback(AudioRenderEvent::RenderFinished {
-        job_id,
-        output: render_config.output.clone(),
+    Ok(AudioRenderLoopResult::Finished {
         frames_written,
         rendered_seconds: current_time,
-    });
+    })
+}
 
-    Ok(())
+fn emit_audio_render_progress(
+    callback: &mut impl FnMut(AudioRenderEvent),
+    job_id: AudioRenderJobId,
+    event_index: usize,
+    total_events: usize,
+    time_seconds: f64,
+    rendered_seconds: f64,
+    renderer: &OfflineAudioRenderer,
+) {
+    callback(AudioRenderEvent::RenderProgress {
+        job_id,
+        event_index,
+        total_events,
+        time_seconds,
+        rendered_seconds,
+        frames_written: renderer.frames_written(),
+        voice_count: renderer.voice_count(),
+    });
 }
 
 struct OfflineAudioRenderer {
     channel_group: ChannelGroup,
-    writer: WavWriter<BufWriter<File>>,
+    writer: AudioSampleWriter,
     limiter: Option<VolumeLimiter>,
     output_vec: Vec<f32>,
     missed_samples: f64,
+    sample_rate: u32,
     channels: u16,
     frames_written: u64,
 }
 
 impl OfflineAudioRenderer {
-    fn new(
+    fn new_wav(
         audio_config: &AudioConfig,
         soundfont_cache: &SoundfontCache,
-        output: PathBuf,
+        output: &Path,
+        audio_params: AudioStreamParams,
+        use_limiter: bool,
+    ) -> Result<Self, MeridianError> {
+        let writer = AudioSampleWriter::create_wav(output, audio_params)?;
+        Self::new_with_writer(
+            audio_config,
+            soundfont_cache,
+            writer,
+            audio_params,
+            use_limiter,
+        )
+    }
+
+    fn new_raw_pipe(
+        audio_config: &AudioConfig,
+        soundfont_cache: &SoundfontCache,
+        pipe_path: &Path,
+        audio_params: AudioStreamParams,
+        use_limiter: bool,
+    ) -> Result<Self, MeridianError> {
+        let writer = AudioSampleWriter::create_raw_pipe(pipe_path)?;
+        Self::new_with_writer(
+            audio_config,
+            soundfont_cache,
+            writer,
+            audio_params,
+            use_limiter,
+        )
+    }
+
+    fn new_with_writer(
+        audio_config: &AudioConfig,
+        soundfont_cache: &SoundfontCache,
+        writer: AudioSampleWriter,
         audio_params: AudioStreamParams,
         use_limiter: bool,
     ) -> Result<Self, MeridianError> {
@@ -298,18 +582,6 @@ impl OfflineAudioRenderer {
         } else {
             None
         };
-        let spec = WavSpec {
-            channels: audio_params.channels.count(),
-            sample_rate: audio_params.sample_rate,
-            bits_per_sample: 32,
-            sample_format: SampleFormat::Float,
-        };
-        let writer = WavWriter::create(&output, spec).map_err(|e| {
-            MeridianError::Platform(format!(
-                "failed to create wav writer {}: {e}",
-                output.display()
-            ))
-        })?;
         let mut channel_group = ChannelGroup::new(group_options);
         channel_group.send_event(SynthEvent::AllChannels(ChannelEvent::Config(
             ChannelConfigEvent::SetLayerCount(layers),
@@ -323,6 +595,7 @@ impl OfflineAudioRenderer {
             limiter: use_limiter.then(|| VolumeLimiter::new(audio_params.channels.count())),
             output_vec: vec![0.0],
             missed_samples: 0.0,
+            sample_rate: audio_params.sample_rate,
             channels: audio_params.channels.count(),
             frames_written: 0,
         })
@@ -339,7 +612,7 @@ impl OfflineAudioRenderer {
             return Ok(());
         }
 
-        let samples = self.writer.spec().sample_rate as f64 * seconds + self.missed_samples;
+        let samples = self.sample_rate as f64 * seconds + self.missed_samples;
         self.missed_samples = samples % 1.0;
         let sample_count = samples as usize * self.channels as usize;
         self.output_vec.resize(sample_count, 0.0);
@@ -347,21 +620,15 @@ impl OfflineAudioRenderer {
         if let Some(limiter) = &mut self.limiter {
             limiter.limit(&mut self.output_vec);
         }
-        for sample in &self.output_vec {
-            self.writer
-                .write_sample(*sample)
-                .map_err(|e| MeridianError::Platform(format!("failed to write wav sample: {e}")))?;
-        }
+        self.writer.write_samples(&self.output_vec)?;
         self.frames_written += sample_count as u64 / self.channels as u64;
         Ok(())
     }
 
     fn finalize(mut self) -> Result<u64, MeridianError> {
         loop {
-            self.output_vec.resize(
-                self.writer.spec().sample_rate as usize * self.channels as usize,
-                0.0,
-            );
+            self.output_vec
+                .resize(self.sample_rate as usize * self.channels as usize, 0.0);
             self.channel_group.read_samples(&mut self.output_vec);
             if let Some(limiter) = &mut self.limiter {
                 limiter.limit(&mut self.output_vec);
@@ -373,16 +640,10 @@ impl OfflineAudioRenderer {
             if is_silent {
                 break;
             }
-            for sample in &self.output_vec {
-                self.writer.write_sample(*sample).map_err(|e| {
-                    MeridianError::Platform(format!("failed to write wav sample: {e}"))
-                })?;
-            }
+            self.writer.write_samples(&self.output_vec)?;
             self.frames_written += self.output_vec.len() as u64 / self.channels as u64;
         }
-        self.writer.finalize().map_err(|e| {
-            MeridianError::Platform(format!("failed to finalize xsynth wav render: {e}"))
-        })?;
+        self.writer.finalize()?;
         Ok(self.frames_written)
     }
 
@@ -399,8 +660,328 @@ impl OfflineAudioRenderer {
     }
 }
 
-fn progress_stride(total_events: usize) -> usize {
-    (total_events / 200).max(1)
+enum AudioSampleWriter {
+    Wav(WavWriter<BufWriter<File>>),
+    RawF32(BufWriter<File>),
+}
+
+impl AudioSampleWriter {
+    fn create_wav(output: &Path, audio_params: AudioStreamParams) -> Result<Self, MeridianError> {
+        let spec = WavSpec {
+            channels: audio_params.channels.count(),
+            sample_rate: audio_params.sample_rate,
+            bits_per_sample: 32,
+            sample_format: SampleFormat::Float,
+        };
+        let writer = WavWriter::create(output, spec).map_err(|error| {
+            MeridianError::Platform(format!(
+                "failed to create wav writer {}: {error}",
+                output.display()
+            ))
+        })?;
+        Ok(Self::Wav(writer))
+    }
+
+    fn create_raw_pipe(pipe_path: &Path) -> Result<Self, MeridianError> {
+        let writer = OpenOptions::new()
+            .write(true)
+            .open(pipe_path)
+            .map_err(|error| {
+                MeridianError::Platform(format!(
+                    "failed to open audio pipe {}: {error}",
+                    pipe_path.display()
+                ))
+            })?;
+        Ok(Self::RawF32(BufWriter::new(writer)))
+    }
+
+    fn write_samples(&mut self, samples: &[f32]) -> Result<(), MeridianError> {
+        match self {
+            Self::Wav(writer) => {
+                for sample in samples {
+                    writer.write_sample(*sample).map_err(|error| {
+                        MeridianError::Platform(format!("failed to write wav sample: {error}"))
+                    })?;
+                }
+            }
+            Self::RawF32(writer) => {
+                for sample in samples {
+                    writer.write_all(&sample.to_le_bytes()).map_err(|error| {
+                        MeridianError::Platform(format!(
+                            "failed to write audio pipe sample: {error}"
+                        ))
+                    })?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn finalize(self) -> Result<(), MeridianError> {
+        match self {
+            Self::Wav(writer) => writer.finalize().map_err(|error| {
+                MeridianError::Platform(format!("failed to finalize xsynth wav render: {error}"))
+            }),
+            Self::RawF32(mut writer) => writer.flush().map_err(Into::into),
+        }
+    }
+}
+
+fn render_encoded_audio(
+    events: &InRamAudioCache,
+    audio_config: &AudioConfig,
+    soundfont_cache: &SoundfontCache,
+    render_config: &AudioRenderConfig,
+    settings: ResolvedAudioRenderSettings,
+    job_id: AudioRenderJobId,
+    cancel: &AtomicBool,
+    callback: &mut impl FnMut(AudioRenderEvent),
+) -> Result<AudioRenderLoopResult, MeridianError> {
+    #[cfg(unix)]
+    {
+        return render_encoded_audio_unix(
+            events,
+            audio_config,
+            soundfont_cache,
+            render_config,
+            settings,
+            job_id,
+            cancel,
+            callback,
+        );
+    }
+
+    #[cfg(not(unix))]
+    {
+        return render_encoded_audio_fallback(
+            events,
+            audio_config,
+            soundfont_cache,
+            render_config,
+            settings,
+            job_id,
+            cancel,
+            callback,
+        );
+    }
+}
+
+#[cfg(unix)]
+fn render_encoded_audio_unix(
+    events: &InRamAudioCache,
+    audio_config: &AudioConfig,
+    soundfont_cache: &SoundfontCache,
+    render_config: &AudioRenderConfig,
+    settings: ResolvedAudioRenderSettings,
+    job_id: AudioRenderJobId,
+    cancel: &AtomicBool,
+    callback: &mut impl FnMut(AudioRenderEvent),
+) -> Result<AudioRenderLoopResult, MeridianError> {
+    let fifo = crate::ffmpeg::FifoGuard::create(&render_config.output, "audio")?;
+    let audio_params = settings.audio_params()?;
+    let mut encoder = spawn_audio_encoder(
+        &render_config.output,
+        render_config.format,
+        settings.sample_rate,
+        settings.channels,
+        &render_config.ffmpeg_args,
+        fifo.path(),
+    )?;
+    let renderer = match OfflineAudioRenderer::new_raw_pipe(
+        audio_config,
+        soundfont_cache,
+        fifo.path(),
+        audio_params,
+        settings.use_limiter,
+    ) {
+        Ok(renderer) => renderer,
+        Err(error) => {
+            let _ = encoder.kill();
+            let _ = encoder.wait();
+            return Err(error);
+        }
+    };
+    let result = run_audio_render_loop(
+        events,
+        audio_config,
+        renderer,
+        render_config,
+        job_id,
+        cancel,
+        callback,
+    );
+    match result {
+        Ok(AudioRenderLoopResult::Finished {
+            frames_written,
+            rendered_seconds,
+        }) => {
+            let status = encoder.wait()?;
+            if !status.success() {
+                return Err(MeridianError::Platform(format!(
+                    "ffmpeg exited with status {status}"
+                )));
+            }
+            Ok(AudioRenderLoopResult::Finished {
+                frames_written,
+                rendered_seconds,
+            })
+        }
+        Ok(AudioRenderLoopResult::Cancelled) => {
+            let _ = encoder.kill();
+            let _ = encoder.wait();
+            Ok(AudioRenderLoopResult::Cancelled)
+        }
+        Err(error) => {
+            let _ = encoder.kill();
+            let _ = encoder.wait();
+            Err(error)
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn render_encoded_audio_fallback(
+    events: &InRamAudioCache,
+    audio_config: &AudioConfig,
+    soundfont_cache: &SoundfontCache,
+    render_config: &AudioRenderConfig,
+    settings: ResolvedAudioRenderSettings,
+    job_id: AudioRenderJobId,
+    cancel: &AtomicBool,
+    callback: &mut impl FnMut(AudioRenderEvent),
+) -> Result<AudioRenderLoopResult, MeridianError> {
+    let temp_output = crate::ffmpeg::next_temp_path(&render_config.output, "audio", "wav");
+    let temp_guard = crate::ffmpeg::TempPathGuard::new(temp_output.clone());
+    let renderer = OfflineAudioRenderer::new_wav(
+        audio_config,
+        soundfont_cache,
+        &temp_output,
+        settings.audio_params()?,
+        settings.use_limiter,
+    )?;
+    let result = run_audio_render_loop(
+        events,
+        audio_config,
+        renderer,
+        render_config,
+        job_id,
+        cancel,
+        callback,
+    )?;
+    match result {
+        AudioRenderLoopResult::Finished {
+            frames_written,
+            rendered_seconds,
+        } => {
+            encode_audio_file(
+                &temp_output,
+                &render_config.output,
+                render_config.format,
+                &render_config.ffmpeg_args,
+            )?;
+            drop(temp_guard);
+            Ok(AudioRenderLoopResult::Finished {
+                frames_written,
+                rendered_seconds,
+            })
+        }
+        AudioRenderLoopResult::Cancelled => Ok(AudioRenderLoopResult::Cancelled),
+    }
+}
+
+fn spawn_audio_encoder(
+    output: &Path,
+    format: AudioOutputFormat,
+    sample_rate: u32,
+    channels: u16,
+    extra_args: &[String],
+    input: &Path,
+) -> Result<Child, MeridianError> {
+    let mut args = vec![
+        "-hide_banner".to_string(),
+        "-loglevel".to_string(),
+        "error".to_string(),
+        "-y".to_string(),
+        "-f".to_string(),
+        "f32le".to_string(),
+        "-ar".to_string(),
+        sample_rate.to_string(),
+        "-ac".to_string(),
+        channels.to_string(),
+        "-i".to_string(),
+        input.display().to_string(),
+    ];
+    match format {
+        AudioOutputFormat::Wav => {}
+        AudioOutputFormat::Flac => {}
+        AudioOutputFormat::Mp3 => {
+            args.extend([
+                "-codec:a".to_string(),
+                "libmp3lame".to_string(),
+                "-q:a".to_string(),
+                "2".to_string(),
+            ]);
+        }
+    }
+    args.extend(extra_args.iter().cloned());
+    args.push(output.display().to_string());
+
+    Command::new("ffmpeg")
+        .args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .map_err(|error| MeridianError::Platform(format!("failed to spawn ffmpeg: {error}")))
+}
+
+#[cfg(not(unix))]
+fn encode_audio_file(
+    input: &Path,
+    output: &Path,
+    format: AudioOutputFormat,
+    extra_args: &[String],
+) -> Result<(), MeridianError> {
+    let mut args = vec![
+        "-hide_banner".to_string(),
+        "-loglevel".to_string(),
+        "error".to_string(),
+        "-y".to_string(),
+        "-i".to_string(),
+        input.display().to_string(),
+    ];
+    match format {
+        AudioOutputFormat::Wav => {}
+        AudioOutputFormat::Flac => {}
+        AudioOutputFormat::Mp3 => {
+            args.extend([
+                "-codec:a".to_string(),
+                "libmp3lame".to_string(),
+                "-q:a".to_string(),
+                "2".to_string(),
+            ]);
+        }
+    }
+    args.extend(extra_args.iter().cloned());
+    args.push(output.display().to_string());
+    let status = Command::new("ffmpeg")
+        .args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit())
+        .status()
+        .map_err(|error| MeridianError::Platform(format!("failed to spawn ffmpeg: {error}")))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(MeridianError::Platform(format!(
+            "ffmpeg exited with status {status}"
+        )))
+    }
+}
+
+fn progress_stride_seconds(total_duration_seconds: f64) -> f64 {
+    (total_duration_seconds / 400.0).clamp(0.05, 1.0)
 }
 
 fn dispatch_packed_event(

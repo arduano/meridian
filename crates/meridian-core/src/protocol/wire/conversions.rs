@@ -9,6 +9,8 @@ impl From<ProtocolAudioRenderConfig> for crate::audio::AudioRenderConfig {
             sample_rate: value.sample_rate,
             channels: value.channels,
             use_limiter: value.use_limiter,
+            format: value.format,
+            ffmpeg_args: value.ffmpeg_args,
             soundfonts: value.soundfonts,
         }
     }
@@ -36,6 +38,7 @@ impl From<ProtocolVideoRenderConfig> for crate::protocol::VideoRenderConfig {
             last_key: value.last_key,
             ffmpeg_args: value.ffmpeg_args,
             export: value.export,
+            audio: value.audio,
         }
     }
 }

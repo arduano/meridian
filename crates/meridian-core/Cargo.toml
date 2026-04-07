@@ -13,6 +13,7 @@ flate2.workspace = true
 flume.workspace = true
 glam.workspace = true
 hound.workspace = true
+libc.workspace = true
 midi-toolkit-rs.workspace = true
 midly.workspace = true
 png.workspace = true

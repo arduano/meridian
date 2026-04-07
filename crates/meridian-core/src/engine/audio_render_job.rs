@@ -28,6 +28,18 @@ impl CoreState {
             )];
         }
 
+        if let Some(path) = config.midi_path.clone() {
+            let current_path = self.snapshot().midi_path;
+            if current_path.as_ref() != Some(&path) || self.current_audio_cache.is_none() {
+                let events = self.load_audio_midi(path);
+                if !events
+                    .iter()
+                    .all(|event| matches!(event, CoreEvent::MidiLoaded { .. }))
+                {
+                    return events;
+                }
+            }
+        }
         let Some(audio_cache) = self.current_audio_cache.clone() else {
             return vec![error_event(
                 CoreErrorCode::NoMidiLoaded,

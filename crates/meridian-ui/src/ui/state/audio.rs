@@ -159,7 +159,7 @@ pub(super) fn apply_audio_to_app(
         )
         .into(),
     );
-    apply_audio_render_status_to_app(app, audio_render_status);
+    apply_audio_render_status_to_app(app, audio_render_status, state.midi_length);
 }
 
 pub(super) fn curve_name(curve: EnvelopeCurveType) -> &'static str {
@@ -185,7 +185,19 @@ pub(super) fn keep_velocity_text(ignore_range: &std::ops::RangeInclusive<u8>) ->
     }
 }
 
-pub(super) fn apply_audio_render_status_to_app(app: &App, status: &AudioRenderStatus) {
+pub(super) fn apply_audio_render_status_to_app(
+    app: &App,
+    status: &AudioRenderStatus,
+    total_duration_seconds: f64,
+) {
+    let duration_progress = |rendered_seconds: f64| {
+        if total_duration_seconds <= 0.0 {
+            0.0
+        } else {
+            (rendered_seconds / total_duration_seconds).clamp(0.0, 1.0) as f32
+        }
+    };
+
     match status {
         AudioRenderStatus::Idle => {
             app.set_audio_render_progress(0.0);
@@ -195,16 +207,10 @@ pub(super) fn apply_audio_render_status_to_app(app: &App, status: &AudioRenderSt
         }
         AudioRenderStatus::Running {
             output,
-            total_events,
-            event_index,
             rendered_seconds,
             ..
         } => {
-            let progress = if *total_events == 0 {
-                0.0
-            } else {
-                *event_index as f32 / *total_events as f32
-            };
+            let progress = duration_progress(*rendered_seconds);
             app.set_audio_render_progress(progress);
             app.set_audio_render_status("Rendering WAV".into());
             app.set_audio_render_elapsed(format!("{rendered_seconds:.1} s").into());
@@ -212,16 +218,10 @@ pub(super) fn apply_audio_render_status_to_app(app: &App, status: &AudioRenderSt
         }
         AudioRenderStatus::Cancelling {
             output,
-            total_events,
-            event_index,
             rendered_seconds,
             ..
         } => {
-            let progress = if *total_events == 0 {
-                0.0
-            } else {
-                *event_index as f32 / *total_events as f32
-            };
+            let progress = duration_progress(*rendered_seconds);
             app.set_audio_render_progress(progress);
             app.set_audio_render_status("Cancelling render".into());
             app.set_audio_render_elapsed(format!("{rendered_seconds:.1} s").into());

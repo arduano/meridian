@@ -5,14 +5,22 @@ use std::{
 
 use crate::MeridianError;
 
+pub struct VideoFfmpegAudioInput<'a> {
+    pub pipe_path: &'a Path,
+    pub sample_rate: u32,
+    pub channels: u16,
+    pub extra_args: &'a [String],
+}
+
 pub fn spawn_ffmpeg_rgba(
     output: &Path,
     fps: f64,
     width: u32,
     height: u32,
     extra_args: &[String],
+    audio_input: Option<VideoFfmpegAudioInput<'_>>,
 ) -> Result<(Child, ChildStdin, Vec<String>), MeridianError> {
-    spawn_ffmpeg(output, fps, width, height, "rgba", extra_args)
+    spawn_ffmpeg(output, fps, width, height, "rgba", extra_args, audio_input)
 }
 
 pub fn spawn_ffmpeg_gray(
@@ -22,7 +30,7 @@ pub fn spawn_ffmpeg_gray(
     height: u32,
     extra_args: &[String],
 ) -> Result<(Child, ChildStdin, Vec<String>), MeridianError> {
-    spawn_ffmpeg(output, fps, width, height, "gray", extra_args)
+    spawn_ffmpeg(output, fps, width, height, "gray", extra_args, None)
 }
 
 fn spawn_ffmpeg(
@@ -32,6 +40,7 @@ fn spawn_ffmpeg(
     height: u32,
     input_pix_fmt: &str,
     extra_args: &[String],
+    audio_input: Option<VideoFfmpegAudioInput<'_>>,
 ) -> Result<(Child, ChildStdin, Vec<String>), MeridianError> {
     let mut args = vec![
         "-hide_banner".to_string(),
@@ -48,12 +57,30 @@ fn spawn_ffmpeg(
         fps.to_string(),
         "-i".to_string(),
         "pipe:0".to_string(),
-        "-an".to_string(),
+    ];
+    if let Some(audio_input) = audio_input {
+        args.extend([
+            "-f".to_string(),
+            "f32le".to_string(),
+            "-ar".to_string(),
+            audio_input.sample_rate.to_string(),
+            "-ac".to_string(),
+            audio_input.channels.to_string(),
+            "-i".to_string(),
+            audio_input.pipe_path.display().to_string(),
+            "-c:a".to_string(),
+            "aac".to_string(),
+        ]);
+        args.extend(audio_input.extra_args.iter().cloned());
+    } else {
+        args.push("-an".to_string());
+    }
+    args.extend([
         "-c:v".to_string(),
         "libx264".to_string(),
         "-pix_fmt".to_string(),
         "yuv420p".to_string(),
-    ];
+    ]);
     args.extend(extra_args.iter().cloned());
     args.push(output.display().to_string());
 

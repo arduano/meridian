@@ -47,64 +47,12 @@ pub(in super::super) fn start_render_export_jobs(
             .ok_or_else(|| "missing final export path".to_string())?
     };
 
-    let video_output = if mode == RenderExportMode::VideoAudio {
-        Some(next_export_temp_path(&final_output, "video", "mp4"))
-    } else if mode.wants_video() {
-        Some(final_output.clone())
-    } else {
-        None
-    };
-    let audio_output = if mode == RenderExportMode::VideoAudio {
-        Some(next_export_temp_path(&final_output, "audio", "wav"))
-    } else if mode == RenderExportMode::AudioOnly {
-        Some(if audio_format == AudioOnlyFormat::Wav {
-            final_output.clone()
-        } else {
-            next_export_temp_path(&final_output, "audio", "wav")
-        })
-    } else {
-        None
-    };
-    let finalize_spec = match mode {
-        RenderExportMode::VideoAudio => {
-            let mut extra_args = vec![];
-            let bitrate = app.get_render_audio_bitrate_text();
-            if !bitrate.is_empty() {
-                extra_args.extend(["-b:a".to_string(), bitrate.to_string()]);
-            }
-            extra_args.extend(shell_words(
-                app.get_render_audio_ffmpeg_args_text().as_str(),
-            ));
-            Some(FinalizeSpec::MuxMp4 {
-                video_input: video_output
-                    .clone()
-                    .expect("video+audio export must have a temporary video output"),
-                audio_input: audio_output
-                    .clone()
-                    .expect("video+audio export must have a temporary audio output"),
-                extra_args,
-            })
-        }
-        RenderExportMode::AudioOnly if audio_format != AudioOnlyFormat::Wav => {
-            let extra_args = shell_words(app.get_render_audio_ffmpeg_args_text().as_str());
-            Some(FinalizeSpec::EncodeAudio {
-                wav_input: audio_output
-                    .clone()
-                    .expect("encoded audio export must render a temporary wav"),
-                format: audio_format,
-                extra_args,
-            })
-        }
-        _ => None,
-    };
-
-    let video_config = video_output
-        .clone()
-        .map(|output| build_video_render_config(app, &snapshot, output))
+    let video_config = mode
+        .wants_video()
+        .then(|| build_video_render_config(app, &snapshot, final_output.clone(), mode))
         .transpose()?;
-    let audio_config = audio_output
-        .clone()
-        .map(|output| build_audio_render_config(app, &snapshot, output))
+    let audio_config = (mode == RenderExportMode::AudioOnly)
+        .then(|| build_audio_render_config(app, &snapshot, final_output.clone(), audio_format))
         .transpose()?;
 
     {
@@ -115,13 +63,7 @@ pub(in super::super) fn start_render_export_jobs(
             return Err("export was cancelled".into());
         }
         export.mode = Some(mode);
-        export.video_job_output = video_output;
-        export.audio_job_output = audio_output;
-        export.video_outcome = None;
-        export.audio_outcome = None;
-        export.finalize_spec = finalize_spec;
-        export.finalizing = false;
-        export.finalize_result = None;
+        export.outcome = None;
     }
 
     if let Some(config) = video_config {

@@ -4,6 +4,7 @@ pub mod audio;
 pub mod display;
 pub mod engine;
 pub mod error;
+mod ffmpeg;
 pub mod midi;
 pub mod protocol;
 pub mod render;

@@ -35,9 +35,11 @@ export component RenderPanel inherits Rectangle {
     in property <string> render-video-crf-text: "18";
     in property <string> render-video-preset-text: "medium";
     in property <string> render-video-pix-fmt-text: "yuv420p";
+    in property <string> render-video-rgb-mode-text: "premultiplied";
     in property <string> render-video-ffmpeg-args-text: "";
     in property <string> render-audio-bitrate-text: "192k";
     in property <string> render-audio-ffmpeg-args-text: "";
+    in property <bool> render-export-alpha-mask: false;
     in property <bool> render-use-limiter: true;
     in property <bool> render-open-after-export: false;
 
@@ -78,10 +80,12 @@ export component RenderPanel inherits Rectangle {
     callback submit-custom-crf(string);
     callback select-video-preset(string);
     callback select-video-pix-fmt(string);
+    callback select-video-rgb-mode(string);
     callback change-video-ffmpeg-args(string);
     callback select-audio-bitrate(string);
     callback submit-custom-audio-bitrate(string);
     callback change-audio-ffmpeg-args(string);
+    callback toggle-export-alpha-mask;
     callback toggle-use-limiter;
     callback toggle-open-after-export;
     callback start-export;
@@ -148,6 +152,14 @@ export component RenderPanel inherits Rectangle {
             : root.render-mode-text == "video_only"
                 ? "Render Video"
                 : "Render Audio";
+    private property <bool> single-mode-pass-active:
+        !root.is-combined-mode
+        && (root.audio-only ? root.audio-render-status != "Idle" : root.video-render-status != "Idle");
+    private property <string> single-mode-pass-label: root.audio-only ? "Audio" : "Video";
+    private property <string> single-mode-pass-status:
+        root.audio-only ? root.audio-render-status : root.video-render-status;
+    private property <string> single-mode-pass-elapsed:
+        root.audio-only ? root.audio-render-elapsed : root.video-render-elapsed;
 
     clip: true;
 
@@ -342,6 +354,49 @@ export component RenderPanel inherits Rectangle {
                     active: root.render-video-fps-text == "120";
                     pressed => { root.select-fps("120"); }
                 }
+            }
+
+            if root.wants-video : Rectangle { height: 4px; }
+
+            if root.wants-video : InlineOptionRow {
+                label: "RGB";
+                OptionChip {
+                    label: "Premultiplied";
+                    active: root.render-video-rgb-mode-text == "premultiplied";
+                    pressed => { root.select-video-rgb-mode("premultiplied"); }
+                }
+                OptionChip {
+                    label: "Straight";
+                    active: root.render-video-rgb-mode-text == "straight";
+                    pressed => { root.select-video-rgb-mode("straight"); }
+                }
+            }
+
+            if root.wants-video : Rectangle { height: 4px; }
+
+            if root.wants-video : InlineOptionRow {
+                label: "Alpha Mask";
+                OptionChip {
+                    label: "Off";
+                    active: !root.render-export-alpha-mask;
+                    pressed => { root.toggle-export-alpha-mask(); }
+                }
+                OptionChip {
+                    label: "On";
+                    active: root.render-export-alpha-mask;
+                    pressed => { root.toggle-export-alpha-mask(); }
+                }
+            }
+
+            if root.wants-video : Rectangle { height: 4px; }
+
+            if root.wants-video : Text {
+                text: root.render-export-alpha-mask
+                    ? "Writes an additional grayscale sidecar video next to the main MP4 as *.alpha.mp4."
+                    : "Alpha mask export is off. Main MP4 uses the selected RGB interpretation.";
+                color: #6b7d94;
+                font-size: 10px;
+                wrap: word-wrap;
             }
 
             // Video encoding options (collapsible)
@@ -835,7 +890,32 @@ export component RenderPanel inherits Rectangle {
                         }
                     }
 
-                    ProgressBar { progress: root.export-progress; }
+                    if !root.is-combined-mode : ProgressBar { progress: root.export-progress; }
+
+                    if root.single-mode-pass-active : HorizontalLayout {
+                        spacing: 8px;
+                        height: 20px;
+
+                        Text {
+                            text: root.single-mode-pass-label;
+                            color: #4d6580;
+                            font-size: 10px;
+                            min-width: 44px;
+                            vertical-alignment: center;
+                        }
+                        StatusBadge {
+                            label: root.single-mode-pass-status;
+                            active: root.single-mode-pass-status != "Idle";
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        Text {
+                            text: root.single-mode-pass-elapsed;
+                            color: #3d5068;
+                            font-family: "monospace";
+                            font-size: 10px;
+                            vertical-alignment: center;
+                        }
+                    }
 
                     // Per-pass breakdown (only shown for combined video+audio renders)
                     if root.is-combined-mode : Rectangle { height: 2px; }

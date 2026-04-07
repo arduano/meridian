@@ -11,7 +11,7 @@ use crate::{
         CoreErrorCode, CoreEvent, VideoRenderConfig, VideoRenderEvent, VideoRenderJobId,
         VideoRenderStatus,
     },
-    video::render_video,
+    video::{VideoRenderAudioInputs, render_video},
 };
 
 use super::{
@@ -27,6 +27,33 @@ impl CoreState {
                 "a video render is already active",
             )];
         }
+
+        let audio_inputs = if config.audio.is_some() {
+            if let Some(path) = config.midi_path.clone() {
+                let current_path = self.snapshot().midi_path;
+                if current_path.as_ref() != Some(&path) || self.current_audio_cache.is_none() {
+                    let events = self.load_audio_midi(path);
+                    if !events
+                        .iter()
+                        .all(|event| matches!(event, CoreEvent::MidiLoaded { .. }))
+                    {
+                        return events;
+                    }
+                }
+            }
+            let Some(audio_cache) = self.current_audio_cache.clone() else {
+                return vec![error_event(
+                    CoreErrorCode::NoMidiLoaded,
+                    "no midi loaded for audio render",
+                )];
+            };
+            Some(VideoRenderAudioInputs {
+                audio_cache,
+                audio_config: self.audio_config.clone(),
+            })
+        } else {
+            None
+        };
 
         let cancel = Arc::new(AtomicBool::new(false));
         let job_id = VideoRenderJobId(self.next_resource_id);
@@ -44,14 +71,22 @@ impl CoreState {
                 frame_index: 0,
                 current_time: 0.0,
                 elapsed_seconds: 0.0,
+                audio_progress: None,
             },
         });
 
         let core_handle = self.core_handle.clone();
         thread::spawn(move || {
-            let _ = render_video(job_id, &core_handle, &config, &cancel, |event| {
-                let _ = core_handle.publish_video_event(event);
-            });
+            let _ = render_video(
+                job_id,
+                &core_handle,
+                &config,
+                audio_inputs,
+                &cancel,
+                |event| {
+                    let _ = core_handle.publish_video_event(event);
+                },
+            );
         });
 
         vec![CoreEvent::VideoRenderStatus {
@@ -73,6 +108,7 @@ impl CoreState {
                     frame_index,
                     current_time,
                     elapsed_seconds,
+                    audio_progress,
                 } = &job.status
                 {
                     job.status = VideoRenderStatus::Cancelling {
@@ -85,6 +121,7 @@ impl CoreState {
                         frame_index: *frame_index,
                         current_time: *current_time,
                         elapsed_seconds: *elapsed_seconds,
+                        audio_progress: audio_progress.clone(),
                     };
                 }
                 vec![CoreEvent::VideoRenderStatus {
@@ -107,6 +144,7 @@ impl CoreState {
                 width,
                 height,
                 total_frames,
+                audio_progress,
                 ..
             } => {
                 self.render_job = self.render_job.take().map(|job| RenderJobState {
@@ -121,6 +159,7 @@ impl CoreState {
                         frame_index: 0,
                         current_time: 0.0,
                         elapsed_seconds: 0.0,
+                        audio_progress: audio_progress.clone(),
                     },
                 });
             }
@@ -130,6 +169,7 @@ impl CoreState {
                 total_frames,
                 current_time,
                 elapsed_seconds,
+                audio_progress,
                 ..
             } => {
                 if let Some(job) = &mut self.render_job {
@@ -161,6 +201,7 @@ impl CoreState {
                             frame_index: *frame_index,
                             current_time: *current_time,
                             elapsed_seconds: *elapsed_seconds,
+                            audio_progress: audio_progress.clone(),
                         },
                         VideoRenderStatus::Cancelling { .. } => VideoRenderStatus::Cancelling {
                             job_id: *job_id,
@@ -172,6 +213,7 @@ impl CoreState {
                             frame_index: *frame_index,
                             current_time: *current_time,
                             elapsed_seconds: *elapsed_seconds,
+                            audio_progress: audio_progress.clone(),
                         },
                         VideoRenderStatus::Idle => return,
                     };

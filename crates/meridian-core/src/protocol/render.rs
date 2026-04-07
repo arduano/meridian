@@ -86,6 +86,36 @@ pub struct VideoExportArtifacts {
     pub alpha_mask: Option<PathBuf>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct VideoAudioProgress {
+    #[serde(default)]
+    pub total_events: usize,
+    #[serde(default)]
+    pub event_index: usize,
+    #[serde(default)]
+    pub rendered_seconds: f64,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, TS, ValueEnum, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AudioOutputFormat {
+    #[default]
+    Wav,
+    Flac,
+    Mp3,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+pub struct VideoAudioConfig {
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u16>,
+    pub use_limiter: Option<bool>,
+    #[serde(default)]
+    pub soundfonts: Vec<PathBuf>,
+    #[serde(default)]
+    pub ffmpeg_args: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoRenderConfig {
     pub midi_path: Option<PathBuf>,
@@ -103,6 +133,8 @@ pub struct VideoRenderConfig {
     pub ffmpeg_args: Vec<String>,
     #[serde(default)]
     pub export: VideoExportConfig,
+    #[serde(default)]
+    pub audio: Option<VideoAudioConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -145,6 +177,8 @@ pub enum VideoRenderEvent {
         ffmpeg_command: Vec<String>,
         #[serde(default)]
         alpha_ffmpeg_command: Option<Vec<String>>,
+        #[serde(default)]
+        audio_progress: Option<VideoAudioProgress>,
     },
     RenderProgress {
         job_id: VideoRenderJobId,
@@ -153,6 +187,8 @@ pub enum VideoRenderEvent {
         current_time: f64,
         elapsed_seconds: f64,
         average_fps: f64,
+        #[serde(default)]
+        audio_progress: Option<VideoAudioProgress>,
     },
     RenderCancelled {
         job_id: VideoRenderJobId,
@@ -187,6 +223,8 @@ pub enum VideoRenderStatus {
         frame_index: u64,
         current_time: f64,
         elapsed_seconds: f64,
+        #[serde(default)]
+        audio_progress: Option<VideoAudioProgress>,
     },
     Cancelling {
         job_id: VideoRenderJobId,
@@ -198,5 +236,7 @@ pub enum VideoRenderStatus {
         frame_index: u64,
         current_time: f64,
         elapsed_seconds: f64,
+        #[serde(default)]
+        audio_progress: Option<VideoAudioProgress>,
     },
 }

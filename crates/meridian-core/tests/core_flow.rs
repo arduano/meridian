@@ -859,6 +859,7 @@ fn video_render_smokes_when_ffmpeg_is_available() {
                 last_key: None,
                 ffmpeg_args: vec!["-y".to_string()],
                 export: Default::default(),
+                audio: None,
             },
         })
         .expect("start video render");

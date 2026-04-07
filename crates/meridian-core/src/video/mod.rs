@@ -5,14 +5,20 @@ use std::{
     path::PathBuf,
     process::{Child, ChildStdin},
     sync::atomic::{AtomicBool, Ordering},
+    sync::{Arc, Mutex},
+    thread::{self, JoinHandle},
     time::Instant,
 };
 
 use crate::{
     CoreHandle, MeridianError,
+    audio::{
+        AudioConfig, SoundfontCache, render_audio_pipe_from_cache, resolve_video_audio_settings,
+    },
+    midi::audio_cache::InRamAudioCache,
     protocol::{
-        CoreCommand, CoreEvent, VideoExportArtifacts, VideoRenderConfig, VideoRenderEvent,
-        VideoRenderJobId,
+        CoreCommand, CoreEvent, VideoAudioProgress, VideoExportArtifacts, VideoRenderConfig,
+        VideoRenderEvent, VideoRenderJobId,
     },
     render::{
         export::ExportFrame,
@@ -21,7 +27,12 @@ use crate::{
     spawn_core,
 };
 
-pub use ffmpeg::{spawn_ffmpeg_gray, spawn_ffmpeg_rgba};
+pub use ffmpeg::{VideoFfmpegAudioInput, spawn_ffmpeg_gray, spawn_ffmpeg_rgba};
+
+pub struct VideoRenderAudioInputs {
+    pub audio_cache: Arc<InRamAudioCache>,
+    pub audio_config: AudioConfig,
+}
 
 impl VideoRenderConfig {
     pub fn validate(&self) -> Result<(), MeridianError> {
@@ -41,11 +52,12 @@ pub fn render_video(
     job_id: VideoRenderJobId,
     core: &CoreHandle,
     config: &VideoRenderConfig,
-    cancel: &AtomicBool,
+    audio_inputs: Option<VideoRenderAudioInputs>,
+    cancel: &Arc<AtomicBool>,
     mut on_event: impl FnMut(VideoRenderEvent),
 ) -> Result<(), MeridianError> {
     let original_state = read_core_state(core)?;
-    let result = render_video_inner(job_id, core, config, cancel, &mut on_event);
+    let result = render_video_inner(job_id, core, config, audio_inputs, cancel, &mut on_event);
     let restore_result = restore_core_state(core, &original_state);
 
     if let Err(error) = result {
@@ -67,19 +79,21 @@ fn render_video_inner(
     job_id: VideoRenderJobId,
     core: &CoreHandle,
     config: &VideoRenderConfig,
-    cancel: &AtomicBool,
+    audio_inputs: Option<VideoRenderAudioInputs>,
+    cancel: &Arc<AtomicBool>,
     on_event: &mut impl FnMut(VideoRenderEvent),
 ) -> Result<(), MeridianError> {
     config.validate()?;
 
     if should_use_isolated_core(config) {
         let isolated = spawn_core();
-        let result = render_video_with_core(job_id, &isolated, config, cancel, on_event);
+        let result =
+            render_video_with_core(job_id, &isolated, config, audio_inputs, cancel, on_event);
         let _ = isolated.request(CoreCommand::Shutdown);
         return result;
     }
 
-    render_video_with_core(job_id, core, config, cancel, on_event)
+    render_video_with_core(job_id, core, config, audio_inputs, cancel, on_event)
 }
 
 fn should_use_isolated_core(config: &VideoRenderConfig) -> bool {
@@ -94,7 +108,8 @@ fn render_video_with_core(
     job_id: VideoRenderJobId,
     core: &CoreHandle,
     config: &VideoRenderConfig,
-    cancel: &AtomicBool,
+    audio_inputs: Option<VideoRenderAudioInputs>,
+    cancel: &Arc<AtomicBool>,
     on_event: &mut impl FnMut(VideoRenderEvent),
 ) -> Result<(), MeridianError> {
     let default_layout = crate::render::SceneLayout::default();
@@ -146,13 +161,29 @@ fn render_video_with_core(
     let frame0 = core.render_frame(Some(config.width), Some(config.height))?;
     let duration_seconds = frame0.state.midi_length.max(0.0);
     let total_frames = (duration_seconds * config.fps).ceil().max(1.0) as u64;
+    let mut audio_mux = match config.audio.as_ref() {
+        Some(audio) => Some(VideoAudioMux::spawn(config, audio, audio_inputs, cancel)?),
+        None => None,
+    };
     let (mut ffmpeg_child, mut ffmpeg_stdin, ffmpeg_command) = spawn_ffmpeg_rgba(
         &config.output,
         config.fps,
         config.width,
         config.height,
         &config.ffmpeg_args,
+        audio_mux
+            .as_ref()
+            .map(|mux| mux.ffmpeg_input())
+            .transpose()?,
     )?;
+    if let Some(audio_mux) = audio_mux.as_mut() {
+        if let Err(error) = audio_mux.start() {
+            drop(ffmpeg_stdin);
+            let _ = ffmpeg_child.kill();
+            let _ = ffmpeg_child.wait();
+            return Err(error);
+        }
+    }
     let alpha_output = config
         .export
         .export_alpha_mask
@@ -164,6 +195,9 @@ fn render_video_with_core(
                 drop(ffmpeg_stdin);
                 let _ = ffmpeg_child.kill();
                 let _ = ffmpeg_child.wait();
+                if let Some(audio_mux) = audio_mux.as_mut() {
+                    audio_mux.cancel_and_join();
+                }
                 return Err(error);
             }
         };
@@ -188,6 +222,7 @@ fn render_video_with_core(
         duration_seconds,
         ffmpeg_command,
         alpha_ffmpeg_command,
+        audio_progress: audio_mux.as_ref().map(|mux| mux.progress()),
     });
 
     let start = Instant::now();
@@ -203,6 +238,9 @@ fn render_video_with_core(
                 drop(encoder.stdin.take());
                 let _ = encoder.child.kill();
                 let _ = encoder.child.wait();
+            }
+            if let Some(audio_mux) = audio_mux.as_mut() {
+                audio_mux.cancel_and_join();
             }
             on_event(VideoRenderEvent::RenderCancelled {
                 job_id,
@@ -244,6 +282,7 @@ fn render_video_with_core(
             current_time,
             elapsed_seconds,
             average_fps,
+            audio_progress: audio_mux.as_ref().map(|mux| mux.progress()),
         });
     }
 
@@ -253,11 +292,22 @@ fn render_video_with_core(
     }
     let status = ffmpeg_child.wait()?;
     if !status.success() {
+        if let Some(audio_mux) = audio_mux.as_mut() {
+            audio_mux.cancel_and_join();
+        }
         return Err(MeridianError::Platform(format!(
             "ffmpeg exited with status {status}"
         )));
     }
-    wait_for_alpha_ffmpeg(alpha_ffmpeg)?;
+    if let Err(error) = wait_for_alpha_ffmpeg(alpha_ffmpeg) {
+        if let Some(audio_mux) = audio_mux.as_mut() {
+            audio_mux.cancel_and_join();
+        }
+        return Err(error);
+    }
+    if let Some(audio_mux) = audio_mux.take() {
+        audio_mux.finish()?;
+    }
 
     let elapsed_seconds = start.elapsed().as_secs_f64();
     let average_fps = if elapsed_seconds > 0.0 {
@@ -276,6 +326,161 @@ fn render_video_with_core(
         },
     });
     Ok(())
+}
+
+enum VideoAudioMux {
+    #[cfg(unix)]
+    Pipe {
+        fifo: crate::ffmpeg::FifoGuard,
+        sample_rate: u32,
+        channels: u16,
+        cancel: Arc<AtomicBool>,
+        progress: Arc<Mutex<VideoAudioProgress>>,
+        worker: Option<JoinHandle<Result<(), MeridianError>>>,
+        inputs: Option<VideoRenderAudioInputs>,
+        audio: crate::protocol::VideoAudioConfig,
+    },
+}
+
+impl VideoAudioMux {
+    fn spawn(
+        config: &VideoRenderConfig,
+        audio: &crate::protocol::VideoAudioConfig,
+        audio_inputs: Option<VideoRenderAudioInputs>,
+        cancel: &Arc<AtomicBool>,
+    ) -> Result<Self, MeridianError> {
+        #[cfg(unix)]
+        {
+            let inputs = audio_inputs.ok_or_else(|| {
+                MeridianError::Platform("missing cached audio data for muxed video render".into())
+            })?;
+            let (sample_rate, channels, _) =
+                resolve_video_audio_settings(&inputs.audio_config, audio)?;
+            let total_events = inputs.audio_cache.events().len();
+            let fifo = crate::ffmpeg::FifoGuard::create(&config.output, "audio")?;
+            let _ = cancel;
+            return Ok(Self::Pipe {
+                fifo,
+                sample_rate,
+                channels,
+                cancel: Arc::clone(cancel),
+                progress: Arc::new(Mutex::new(VideoAudioProgress {
+                    total_events,
+                    event_index: 0,
+                    rendered_seconds: 0.0,
+                })),
+                worker: None,
+                inputs: Some(inputs),
+                audio: audio.clone(),
+            });
+        }
+
+        #[cfg(not(unix))]
+        {
+            let _ = (config, audio, audio_inputs, cancel);
+            Err(MeridianError::Unsupported(
+                "muxed audio video export currently requires unix named pipes".into(),
+            ))
+        }
+    }
+
+    fn ffmpeg_input(&self) -> Result<VideoFfmpegAudioInput<'_>, MeridianError> {
+        match self {
+            #[cfg(unix)]
+            Self::Pipe {
+                fifo,
+                sample_rate,
+                channels,
+                audio,
+                ..
+            } => Ok(VideoFfmpegAudioInput {
+                pipe_path: fifo.path(),
+                sample_rate: *sample_rate,
+                channels: *channels,
+                extra_args: &audio.ffmpeg_args,
+            }),
+        }
+    }
+
+    fn start(&mut self) -> Result<(), MeridianError> {
+        match self {
+            #[cfg(unix)]
+            Self::Pipe {
+                fifo,
+                cancel,
+                progress,
+                worker,
+                inputs,
+                audio,
+                ..
+            } => {
+                if worker.is_some() {
+                    return Ok(());
+                }
+                let inputs = inputs.take().ok_or_else(|| {
+                    MeridianError::Platform("audio mux inputs were already consumed".into())
+                })?;
+                let pipe_path = fifo.path().to_path_buf();
+                let audio = audio.clone();
+                let cancel = Arc::clone(cancel);
+                let progress = Arc::clone(progress);
+                *worker = Some(thread::spawn(move || {
+                    let soundfont_cache = SoundfontCache::new();
+                    render_audio_pipe_from_cache(
+                        inputs.audio_cache.as_ref(),
+                        &inputs.audio_config,
+                        &soundfont_cache,
+                        &audio,
+                        &pipe_path,
+                        cancel.as_ref(),
+                        |next| {
+                            *progress.lock().expect("audio mux progress mutex poisoned") = next;
+                        },
+                    )
+                }));
+                Ok(())
+            }
+        }
+    }
+
+    fn finish(self) -> Result<(), MeridianError> {
+        match self {
+            #[cfg(unix)]
+            Self::Pipe { worker, .. } => join_audio_worker(worker),
+        }
+    }
+
+    fn progress(&self) -> VideoAudioProgress {
+        match self {
+            #[cfg(unix)]
+            Self::Pipe { progress, .. } => progress
+                .lock()
+                .expect("audio mux progress mutex poisoned")
+                .clone(),
+        }
+    }
+
+    fn cancel_and_join(&mut self) {
+        #[cfg(unix)]
+        let Self::Pipe { cancel, worker, .. } = self;
+        {
+            cancel.store(true, Ordering::SeqCst);
+            if let Some(worker) = worker.take() {
+                let _ = worker.join();
+            }
+        }
+    }
+}
+
+fn join_audio_worker(
+    worker: Option<JoinHandle<Result<(), MeridianError>>>,
+) -> Result<(), MeridianError> {
+    let Some(worker) = worker else {
+        return Ok(());
+    };
+    worker
+        .join()
+        .map_err(|_| MeridianError::Platform("audio mux worker panicked".into()))?
 }
 
 struct AlphaFfmpeg {

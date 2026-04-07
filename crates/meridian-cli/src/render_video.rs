@@ -62,6 +62,7 @@ pub fn run(
                 color_mode: rgb_mode,
                 export_alpha_mask,
             },
+            audio: None,
         },
     })?;
     write_events(&mut stdout, &start_response.events)?;

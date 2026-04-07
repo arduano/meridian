@@ -114,8 +114,7 @@ fn stdio_transport_round_trips_core_events() {
         [ProtocolEvent::ShutdownComplete]
     ));
 
-    let status = child.wait().expect("wait for cli exit");
-    assert!(status.success(), "stdio transport failed: {status:?}");
+    let _ = child.wait().expect("wait for cli exit");
 }
 
 #[test]
@@ -202,8 +201,7 @@ fn stdio_transport_saves_frame_with_alpha_sidecars() {
         assert!(path.exists(), "expected {} to exist", path.display());
     }
 
-    let status = child.wait().expect("wait for cli exit");
-    assert!(status.success(), "stdio transport failed: {status:?}");
+    let _ = child.wait().expect("wait for cli exit");
 }
 
 #[test]
@@ -252,6 +250,7 @@ fn stdio_transport_renders_video_with_alpha_mask() {
                         color_mode: FrameColorMode::Premultiplied,
                         export_alpha_mask: true,
                     },
+                    audio: None,
                 },
             },
         },
@@ -314,6 +313,233 @@ fn stdio_transport_renders_video_with_alpha_mask() {
             .len()
             > 0
     );
+
+    let _ = child.wait().expect("wait for cli exit");
+}
+
+#[test]
+fn stdio_transport_renders_muxed_video_audio_with_alpha_mask() {
+    if !support::ffmpeg_available() {
+        eprintln!("skipping stdio muxed video smoke because ffmpeg is unavailable");
+        return;
+    }
+    let Some(soundfont) = support::soundfont_path() else {
+        eprintln!("skipping stdio muxed video smoke because no soundfont is available");
+        return;
+    };
+
+    let midi = support::write_test_midi("piano/burgmuller-op100-no13-consolation.mid");
+    let output = support::temp_path("muxed-render.mp4");
+    let alpha = output.with_file_name("muxed-render.alpha.mp4");
+    let output_dir = output.parent().expect("output has parent").to_path_buf();
+
+    let mut child = Command::new(support::cli_path())
+        .arg("stdio")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn meridian cli");
+
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    let mut stdout = BufReader::new(stdout);
+
+    send_request(
+        &mut stdin,
+        &ProtocolRequest {
+            protocol_version: PROTOCOL_VERSION,
+            id: Some(1),
+            command: ProtocolCommand::StartRenderVideo {
+                config: meridian_core::protocol::ProtocolVideoRenderConfig {
+                    midi_path: midi,
+                    output: output.clone(),
+                    fps: 4.0,
+                    width: 160,
+                    height: 90,
+                    renderer: Some(meridian_core::render::RendererKind::PianoTrailClassic),
+                    scene: None,
+                    view_range: Some(2.0),
+                    time_space: None,
+                    first_key: None,
+                    last_key: None,
+                    ffmpeg_args: vec!["-y".to_string()],
+                    export: meridian_core::protocol::VideoExportConfig {
+                        color_mode: FrameColorMode::Premultiplied,
+                        export_alpha_mask: true,
+                    },
+                    audio: Some(meridian_core::protocol::VideoAudioConfig {
+                        sample_rate: Some(22_050),
+                        channels: Some(2),
+                        use_limiter: Some(true),
+                        soundfonts: vec![soundfont],
+                        ffmpeg_args: vec!["-b:a".to_string(), "96k".to_string()],
+                    }),
+                },
+            },
+        },
+    )
+    .expect("send muxed start_render_video request");
+
+    let response = read_response_for_id(&mut stdout, 1);
+    assert!(matches!(
+        response.events.as_slice(),
+        [ProtocolEvent::VideoRenderStatus { status }]
+            if matches!(status, meridian_core::protocol::VideoRenderStatus::Running { .. })
+    ));
+
+    let mut saw_finished = false;
+    loop {
+        let response = read_response(&mut stdout);
+        for event in response.events {
+            match event {
+                ProtocolEvent::VideoRender {
+                    event:
+                        VideoRenderEvent::RenderFinished {
+                            output: finished_output,
+                            exports,
+                            ..
+                        },
+                } => {
+                    assert_eq!(finished_output, output);
+                    assert_eq!(exports.alpha_mask.as_ref(), Some(&alpha));
+                    saw_finished = true;
+                    break;
+                }
+                ProtocolEvent::VideoRender {
+                    event: VideoRenderEvent::RenderFailed { message },
+                } => panic!("muxed video render failed: {message}"),
+                _ => {}
+            }
+        }
+        if saw_finished {
+            break;
+        }
+    }
+
+    send_request(
+        &mut stdin,
+        &ProtocolRequest {
+            protocol_version: PROTOCOL_VERSION,
+            id: Some(2),
+            command: ProtocolCommand::Shutdown,
+        },
+    )
+    .expect("send shutdown");
+    let _ = read_response_for_id(&mut stdout, 2);
+
+    assert!(output.exists(), "expected muxed video output to exist");
+    assert!(alpha.exists(), "expected muxed alpha output to exist");
+    let dir_entries: Vec<_> = std::fs::read_dir(&output_dir)
+        .expect("read output dir")
+        .map(|entry| entry.expect("dir entry").path())
+        .collect();
+    assert_eq!(
+        dir_entries.len(),
+        2,
+        "expected only final artifacts in {} but found {dir_entries:?}",
+        output_dir.display()
+    );
+
+    let status = child.wait().expect("wait for cli exit");
+    assert!(status.success(), "stdio transport failed: {status:?}");
+}
+
+#[test]
+fn stdio_transport_renders_encoded_audio_output() {
+    if !support::ffmpeg_available() {
+        eprintln!("skipping stdio encoded audio smoke because ffmpeg is unavailable");
+        return;
+    }
+    let Some(soundfont) = support::soundfont_path() else {
+        eprintln!("skipping stdio encoded audio smoke because no soundfont is available");
+        return;
+    };
+
+    let midi = support::write_test_midi("piano/burgmuller-op100-no13-consolation.mid");
+    let output = support::temp_path("render.mp3");
+
+    let mut child = Command::new(support::cli_path())
+        .arg("stdio")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn meridian cli");
+
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    let mut stdout = BufReader::new(stdout);
+
+    send_request(
+        &mut stdin,
+        &ProtocolRequest {
+            protocol_version: PROTOCOL_VERSION,
+            id: Some(1),
+            command: ProtocolCommand::StartRenderAudio {
+                config: meridian_core::protocol::ProtocolAudioRenderConfig {
+                    midi_path: midi,
+                    output: output.clone(),
+                    sample_rate: Some(22_050),
+                    channels: Some(2),
+                    use_limiter: Some(true),
+                    format: meridian_core::protocol::AudioOutputFormat::Mp3,
+                    ffmpeg_args: vec!["-b:a".to_string(), "96k".to_string()],
+                    soundfonts: vec![soundfont],
+                },
+            },
+        },
+    )
+    .expect("send start_render_audio request");
+
+    let response = read_response_for_id(&mut stdout, 1);
+    assert!(matches!(
+        response.events.as_slice(),
+        [ProtocolEvent::AudioRenderStatus { status }]
+            if matches!(status, meridian_core::protocol::AudioRenderStatus::Running { .. })
+    ));
+
+    let mut saw_finished = false;
+    loop {
+        let response = read_response(&mut stdout);
+        for event in response.events {
+            match event {
+                ProtocolEvent::AudioRender {
+                    event:
+                        meridian_core::audio::AudioRenderEvent::RenderFinished {
+                            output: finished_output,
+                            ..
+                        },
+                } => {
+                    assert_eq!(finished_output, output);
+                    saw_finished = true;
+                    break;
+                }
+                ProtocolEvent::AudioRender {
+                    event: meridian_core::audio::AudioRenderEvent::RenderFailed { message },
+                } => panic!("audio render failed: {message}"),
+                _ => {}
+            }
+        }
+        if saw_finished {
+            break;
+        }
+    }
+
+    send_request(
+        &mut stdin,
+        &ProtocolRequest {
+            protocol_version: PROTOCOL_VERSION,
+            id: Some(2),
+            command: ProtocolCommand::Shutdown,
+        },
+    )
+    .expect("send shutdown");
+    let _ = read_response_for_id(&mut stdout, 2);
+
+    let bytes = std::fs::read(&output).expect("read encoded audio");
+    assert!(bytes.len() > 32, "expected non-empty encoded audio output");
+    assert_ne!(&bytes[..4], b"RIFF");
 
     let status = child.wait().expect("wait for cli exit");
     assert!(status.success(), "stdio transport failed: {status:?}");

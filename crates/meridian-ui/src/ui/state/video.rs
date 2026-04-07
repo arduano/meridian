@@ -245,26 +245,59 @@ pub(super) fn apply_video_render_status_to_app(app: &App, status: &VideoRenderSt
         }
         VideoRenderStatus::Running {
             output,
+            fps,
             total_frames,
             frame_index,
-            elapsed_seconds,
+            audio_progress,
             ..
         } => {
             let progress = if *total_frames == 0 {
                 0.0
             } else {
                 *frame_index as f32 / *total_frames as f32
+            };
+            let total_duration_seconds = if *fps > 0.0 {
+                *total_frames as f64 / *fps
+            } else {
+                0.0
+            };
+            let rendered_seconds = if *fps > 0.0 {
+                *frame_index as f64 / *fps
+            } else {
+                0.0
             };
             app.set_video_render_progress(progress);
             app.set_video_render_status("Rendering video".into());
-            app.set_video_render_elapsed(format!("{elapsed_seconds:.1} s").into());
+            app.set_video_render_elapsed(format!("{rendered_seconds:.1} s").into());
             app.set_video_render_output_text(file_name_or_full(output).into());
+            if let Some(audio_progress) = audio_progress {
+                let progress = if total_duration_seconds <= 0.0 {
+                    0.0
+                } else {
+                    (audio_progress.rendered_seconds / total_duration_seconds).clamp(0.0, 1.0)
+                        as f32
+                };
+                let status = if audio_progress.event_index >= audio_progress.total_events
+                    && audio_progress.total_events > 0
+                {
+                    "Audio ready"
+                } else {
+                    "Rendering audio"
+                };
+                app.set_audio_render_progress(progress);
+                app.set_audio_render_status(status.into());
+                app.set_audio_render_elapsed(
+                    format!("{:.1} s", audio_progress.rendered_seconds).into(),
+                );
+                app.set_audio_render_output_text(file_name_or_full(output).into());
+            }
         }
         VideoRenderStatus::Cancelling {
             output,
+            fps,
             total_frames,
             frame_index,
-            elapsed_seconds,
+            audio_progress,
             ..
         } => {
             let progress = if *total_frames == 0 {
@@ -272,10 +305,34 @@ pub(super) fn apply_video_render_status_to_app(app: &App, status: &VideoRenderSt
             } else {
                 *frame_index as f32 / *total_frames as f32
             };
+            let total_duration_seconds = if *fps > 0.0 {
+                *total_frames as f64 / *fps
+            } else {
+                0.0
+            };
+            let rendered_seconds = if *fps > 0.0 {
+                *frame_index as f64 / *fps
+            } else {
+                0.0
+            };
             app.set_video_render_progress(progress);
             app.set_video_render_status("Cancelling render".into());
-            app.set_video_render_elapsed(format!("{elapsed_seconds:.1} s").into());
+            app.set_video_render_elapsed(format!("{rendered_seconds:.1} s").into());
             app.set_video_render_output_text(file_name_or_full(output).into());
+            if let Some(audio_progress) = audio_progress {
+                let progress = if total_duration_seconds <= 0.0 {
+                    0.0
+                } else {
+                    (audio_progress.rendered_seconds / total_duration_seconds).clamp(0.0, 1.0)
+                        as f32
+                };
+                app.set_audio_render_progress(progress);
+                app.set_audio_render_status("Cancelling audio".into());
+                app.set_audio_render_elapsed(
+                    format!("{:.1} s", audio_progress.rendered_seconds).into(),
+                );
+                app.set_audio_render_output_text(file_name_or_full(output).into());
+            }
         }
     }
 }

@@ -294,6 +294,8 @@ export class MeridianClient {
       sample_rate: options.sampleRate ?? null,
       channels: options.channels ?? null,
       use_limiter: options.useLimiter ?? null,
+      format: "wav",
+      ffmpeg_args: [],
       soundfonts: options.soundfonts ?? [],
     };
     const events = await this.protocol.request({
@@ -339,6 +341,7 @@ export class MeridianClient {
         export_alpha_mask: options.exportAlphaMask ?? false,
       },
       ffmpeg_args: options.ffmpegArgs ?? [],
+      audio: null,
     };
     const events = await this.protocol.request({
       type: "start_render_video",
