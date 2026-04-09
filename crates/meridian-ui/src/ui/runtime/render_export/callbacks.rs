@@ -273,6 +273,9 @@ pub(in super::super) fn wire_render_export_callbacks(
             });
             std::thread::spawn(move || {
                 let mut dialog = rfd::FileDialog::new();
+                if let Some(parent) = suggested_output.parent() {
+                    dialog = dialog.set_directory(parent);
+                }
                 if let Some(name) = suggested_output.file_name().and_then(OsStr::to_str) {
                     dialog = dialog.set_file_name(name);
                 }

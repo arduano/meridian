@@ -194,12 +194,18 @@ pub(super) fn default_render_output_path(
         .and_then(OsStr::to_str)
         .filter(|name| !name.is_empty())
         .unwrap_or("render");
-    let ext = if mode == RenderExportMode::AudioOnly {
-        audio_format.extension()
+    let file_name = if mode == RenderExportMode::AudioOnly {
+        format!("{stem}.rendered.{}", audio_format.extension())
     } else {
-        "mp4"
+        format!("{stem}.rendered.mp4")
     };
-    format!("{stem}.{ext}")
+    selected
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(|parent| parent.join(file_name.clone()))
+        .unwrap_or_else(|| PathBuf::from(file_name))
+        .display()
+        .to_string()
 }
 
 pub(super) fn normalize_output_path(
@@ -305,6 +311,33 @@ pub(super) fn current_export_output_path(app: &App) -> Result<PathBuf, String> {
         return Err("select a MIDI before exporting".into());
     }
     Ok(normalize_output_path(Path::new(&raw), mode, audio_format))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_video_output_path_is_next_to_selected_midi() {
+        let path = default_render_output_path(
+            "/tmp/example/song.mid",
+            RenderExportMode::VideoAudio,
+            AudioOnlyFormat::Wav,
+        );
+
+        assert_eq!(path, "/tmp/example/song.rendered.mp4");
+    }
+
+    #[test]
+    fn default_audio_output_path_uses_rendered_suffix() {
+        let path = default_render_output_path(
+            "/tmp/example/song.mid",
+            RenderExportMode::AudioOnly,
+            AudioOnlyFormat::Flac,
+        );
+
+        assert_eq!(path, "/tmp/example/song.rendered.flac");
+    }
 }
 
 pub(super) fn build_video_render_config(
