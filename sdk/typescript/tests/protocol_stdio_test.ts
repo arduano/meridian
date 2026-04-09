@@ -197,6 +197,7 @@ Deno.test("stdio protocol smoke tests video render", async () => {
           export_alpha_mask: false,
         },
         ffmpeg_args: ["-y"],
+        audio: null,
       },
     });
     const status = events[0];
@@ -303,6 +304,7 @@ Deno.test("stdio protocol accepts explicit scene config for video render", async
           export_alpha_mask: false,
         },
         ffmpeg_args: ["-y"],
+        audio: null,
       },
     });
     const status = events[0];
@@ -371,6 +373,8 @@ Deno.test("stdio protocol smoke tests audio render when a soundfont is available
         sample_rate: 22_050,
         channels: 2,
         use_limiter: false,
+        format: "wav",
+        ffmpeg_args: [],
         soundfonts: [soundfont],
       },
     });

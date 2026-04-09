@@ -21,6 +21,7 @@ import type {
   ProtocolVideoRenderConfig,
   QuantizeTool,
   RangeSelectTool,
+  SharedMetadataTrackTool,
   SdkAudioRenderConfig,
   SysexTool,
   TempoPoint,
@@ -93,7 +94,9 @@ export class MeridianClient {
         this.midi({ ...options, tool: midiTools.tempoMap.scaleBpm(factor) }),
       replace: (
         points: TempoPoint[],
-        destination: Parameters<typeof midiTools.tempoMap.replace>[1],
+        destination:
+          | Parameters<typeof midiTools.tempoMap.replace>[1]
+          | undefined,
         options: MidiModificationOptions,
       ): MidiProcessTask =>
         this.midi({
@@ -182,6 +185,12 @@ export class MeridianClient {
       options: MidiModificationOptions & Partial<ToolConfig<MetaTextTool>>,
     ): MidiProcessTask =>
       this.#withTool(options, (tool) => midiTools.metaText(tool)),
+    sharedMetadataTrack: (
+      options:
+        & MidiModificationOptions
+        & Partial<ToolConfig<SharedMetadataTrackTool>>,
+    ): MidiProcessTask =>
+      this.#withTool(options, (tool) => midiTools.sharedMetadataTrack(tool)),
     sysex: (
       options: MidiModificationOptions & Partial<ToolConfig<SysexTool>>,
     ): MidiProcessTask =>

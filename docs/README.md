@@ -5,5 +5,5 @@ fit cleanly in the top-level README.
 
 ## Sections
 
-- [TypeScript SDK](./typescript-sdk/README.md): Deno-centric SDK docs scaffold,
-  with detailed setup and initialization guidance and lighter API placeholders.
+- [TypeScript SDK](./typescript-sdk/README.md): setup, API surface, modifier
+  tool reference, and runnable example links for the Deno-first SDK.

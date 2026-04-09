@@ -1,6 +1,6 @@
 # TypeScript SDK
 
-This section is the initial docs scaffold for the Meridian TypeScript SDK in
+This section documents the Meridian TypeScript SDK in
 [`sdk/typescript`](../../sdk/typescript).
 
 The SDK is currently documented as **Deno-first** because the existing examples,
@@ -17,6 +17,9 @@ runtime can:
 
 - [Getting Started](./getting-started.md): requirements, permissions,
   installation shape, initialization, and first client setup
+- [MIDI Modification Tools](./midi-modification-tools.md): every current
+  modifier tool, with TypeScript snippets, runnable examples, and
+  implementation limits
 - [Audio Rendering](./audio-rendering.md): soundfont requirements, WAV render
   flow, progress events, and task lifecycle
 - [Video Rendering](./video-rendering.md): renderer selection, `ffmpeg`
@@ -25,7 +28,8 @@ runtime can:
   is expected to work in other runtimes
 - [API Overview](./api-overview.md): high-level SDK surface map without
   per-function deep dives
-- [Examples](./examples.md): current example entry points in the repository
+- [Examples](./examples.md): runnable TypeScript example entry points in the
+  repository
 
 ## Current Status
 
@@ -33,4 +37,4 @@ runtime can:
 - Source root: [`sdk/typescript/src`](../../sdk/typescript/src)
 - Examples: [`sdk/typescript/examples`](../../sdk/typescript/examples)
 - Today’s docs assume repo-local development first, with package-manager
-  distribution documentation to be filled in later
+  distribution documentation still to be added later

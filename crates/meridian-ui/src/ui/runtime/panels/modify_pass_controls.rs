@@ -35,10 +35,10 @@ pub(super) fn reset_modify_pass_control_fields(app: &App) {
     app.set_modify_note_length_max_ticks_text("".into());
     app.set_modify_note_length_scale_text("1.0".into());
     app.set_modify_note_length_fixed_ticks_text("".into());
-    app.set_modify_quantize_grid_ticks_text("120".into());
+    app.set_modify_quantize_grid_ticks_text("0.25".into());
     app.set_modify_quantize_mode_text("note_start_only".into());
-    app.set_modify_humanize_start_jitter_text("8".into());
-    app.set_modify_humanize_length_jitter_text("6".into());
+    app.set_modify_humanize_start_jitter_text("0".into());
+    app.set_modify_humanize_length_jitter_text("0".into());
     app.set_modify_humanize_velocity_jitter_text("5".into());
     app.set_modify_humanize_seed_text("1".into());
     app.set_modify_humanize_collision_mode_text("stable".into());
@@ -48,6 +48,22 @@ pub(super) fn reset_modify_pass_control_fields(app: &App) {
     app.set_modify_meta_keep_kinds_text("".into());
     app.set_modify_sysex_strip_all_text("off".into());
     app.set_modify_sysex_prepend_text("".into());
+    app.set_modify_change_ppq_text("480".into());
+    app.set_modify_extract_track_index_text("0".into());
+    app.set_modify_shared_dest_mode_text("create_new".into());
+    app.set_modify_shared_dest_track_text("0".into());
+    app.set_modify_shared_strip_redundant_text("off".into());
+    app.set_modify_shared_move_tempo_text("on".into());
+    app.set_modify_shared_move_time_sig_text("on".into());
+    app.set_modify_shared_move_key_sig_text("on".into());
+    app.set_modify_shared_move_text_text("off".into());
+    app.set_modify_shared_move_unknown_meta_text("off".into());
+    app.set_modify_shared_move_channel_prefix_text("off".into());
+    app.set_modify_shared_move_midi_port_text("off".into());
+    app.set_modify_shared_move_cc_text("off".into());
+    app.set_modify_shared_move_program_text("off".into());
+    app.set_modify_shared_move_pitch_bend_text("off".into());
+    app.set_modify_shared_move_channel_pressure_text("off".into());
 }
 
 pub(super) fn sync_modify_pass_controls(app: &App, config: &MidiFileProcessingConfig) {
@@ -55,10 +71,13 @@ pub(super) fn sync_modify_pass_controls(app: &App, config: &MidiFileProcessingCo
 
     match &config.tool {
         MidiModifierTool::RangeSelect(tool) => {
+            let ppq = get_ppq(app);
             app.set_modify_range_track_select_text(option_text(tool.track_select).into());
-            app.set_modify_range_start_ticks_text(tool.start_ticks.to_string().into());
-            app.set_modify_range_end_ticks_text(tool.end_ticks.to_string().into());
-            app.set_modify_range_offset_ticks_text(option_text(tool.offset_ticks).into());
+            app.set_modify_range_start_ticks_text(format_notes(tool.start_ticks, ppq).into());
+            app.set_modify_range_end_ticks_text(format_notes(tool.end_ticks, ppq).into());
+            app.set_modify_range_offset_ticks_text(
+                tool.offset_ticks.map(|t| format_notes(t, ppq)).unwrap_or_default().into(),
+            );
             app.set_modify_range_preserve_system_text(
                 toggle_text(tool.preserve_system_events).into(),
             );
@@ -77,13 +96,15 @@ pub(super) fn sync_modify_pass_controls(app: &App, config: &MidiFileProcessingCo
                 points,
                 destination,
             } => {
+                let ppq = get_ppq(app);
                 app.set_modify_tempo_mode_text("replace".into());
-                app.set_modify_tempo_replace_points_text(format_tempo_points(points).into());
+                app.set_modify_tempo_replace_points_text(format_tempo_points_notes(points, ppq).into());
                 app.set_modify_tempo_scale_factor_text(format_serde_enum(destination).into());
             }
         },
         MidiModifierTool::TimeWarp(tool) => {
-            app.set_modify_time_warp_points_text(format_time_warp_points(&tool.points).into());
+            let ppq = get_ppq(app);
+            app.set_modify_time_warp_points_text(format_time_warp_points_notes(&tool.points, ppq).into());
         }
         MidiModifierTool::ChannelRemap(tool) => {
             app.set_modify_channel_remap_mappings_text(
@@ -146,23 +167,28 @@ pub(super) fn sync_modify_pass_controls(app: &App, config: &MidiFileProcessingCo
                 app.set_modify_velocity_points_text(format_velocity_points(points).into());
             }
         },
-        MidiModifierTool::ChangePpq(_) => {}
+        MidiModifierTool::ChangePpq(tool) => {
+            app.set_modify_change_ppq_text(tool.ppq.to_string().into());
+        }
         MidiModifierTool::ExtractTrack(tool) => {
-            app.set_modify_range_track_select_text(tool.track_index.to_string().into());
+            app.set_modify_extract_track_index_text(tool.track_index.to_string().into());
         }
         MidiModifierTool::NoteLength(tool) => {
-            app.set_modify_note_length_min_ticks_text(option_text(tool.min_ticks).into());
-            app.set_modify_note_length_max_ticks_text(option_text(tool.max_ticks).into());
+            let ppq = get_ppq(app);
+            app.set_modify_note_length_min_ticks_text(format_option_notes(tool.min_ticks, ppq).into());
+            app.set_modify_note_length_max_ticks_text(format_option_notes(tool.max_ticks, ppq).into());
             app.set_modify_note_length_scale_text(option_text(tool.scale).into());
-            app.set_modify_note_length_fixed_ticks_text(option_text(tool.fixed_ticks).into());
+            app.set_modify_note_length_fixed_ticks_text(format_option_notes(tool.fixed_ticks, ppq).into());
         }
         MidiModifierTool::Quantize(tool) => {
-            app.set_modify_quantize_grid_ticks_text(tool.rounding_ticks.to_string().into());
+            let ppq = get_ppq(app);
+            app.set_modify_quantize_grid_ticks_text(format_notes(tool.rounding_ticks as u64, ppq).into());
             app.set_modify_quantize_mode_text(format_serde_enum(&tool.mode).into());
         }
         MidiModifierTool::Humanize(tool) => {
-            app.set_modify_humanize_start_jitter_text(tool.start_jitter.to_string().into());
-            app.set_modify_humanize_length_jitter_text(tool.length_jitter.to_string().into());
+            let ppq = get_ppq(app);
+            app.set_modify_humanize_start_jitter_text(format_notes(tool.start_jitter as u64, ppq).into());
+            app.set_modify_humanize_length_jitter_text(format_notes(tool.length_jitter as u64, ppq).into());
             app.set_modify_humanize_velocity_jitter_text(tool.velocity_jitter.to_string().into());
             app.set_modify_humanize_seed_text(tool.seed.to_string().into());
             app.set_modify_humanize_collision_mode_text(
@@ -181,7 +207,27 @@ pub(super) fn sync_modify_pass_controls(app: &App, config: &MidiFileProcessingCo
             app.set_modify_sysex_strip_all_text(toggle_text(tool.strip_all).into());
             app.set_modify_sysex_prepend_text(format_sysex_messages(&tool.prepend).into());
         }
-        MidiModifierTool::SharedMetadataTrack(_) => {}
+        MidiModifierTool::SharedMetadataTrack(tool) => {
+            app.set_modify_shared_dest_mode_text(match &tool.destination {
+                SharedMetadataTrackDestination::CreateNew => "create_new",
+                SharedMetadataTrackDestination::InsertInto { .. } => "insert_into",
+            }.into());
+            if let SharedMetadataTrackDestination::InsertInto { track_index } = &tool.destination {
+                app.set_modify_shared_dest_track_text(track_index.to_string().into());
+            }
+            app.set_modify_shared_strip_redundant_text(toggle_text(tool.strip_redundant_events).into());
+            app.set_modify_shared_move_tempo_text(toggle_text(tool.move_tempo_events).into());
+            app.set_modify_shared_move_time_sig_text(toggle_text(tool.move_time_signatures).into());
+            app.set_modify_shared_move_key_sig_text(toggle_text(tool.move_key_signatures).into());
+            app.set_modify_shared_move_text_text(toggle_text(tool.move_text_events).into());
+            app.set_modify_shared_move_unknown_meta_text(toggle_text(tool.move_unknown_meta_events).into());
+            app.set_modify_shared_move_channel_prefix_text(toggle_text(tool.move_channel_prefix_events).into());
+            app.set_modify_shared_move_midi_port_text(toggle_text(tool.move_midi_port_events).into());
+            app.set_modify_shared_move_cc_text(toggle_text(tool.move_control_change_events).into());
+            app.set_modify_shared_move_program_text(toggle_text(tool.move_program_change_events).into());
+            app.set_modify_shared_move_pitch_bend_text(toggle_text(tool.move_pitch_bend_events).into());
+            app.set_modify_shared_move_channel_pressure_text(toggle_text(tool.move_channel_pressure_events).into());
+        }
     }
 }
 
@@ -196,7 +242,8 @@ pub(super) fn update_modify_control(app: &App, key: &str, value: &str) -> Result
                 if key == "range.track_select" {
                     tool.track_select = parse_optional_value(value, "range track")?;
                 } else {
-                    tool.offset_ticks = parse_optional_value(value, "range offset ticks")?;
+                    let ppq = get_ppq(app);
+                    tool.offset_ticks = parse_optional_notes(value, ppq, "range offset")?;
                 }
             }
         }
@@ -218,14 +265,16 @@ pub(super) fn update_modify_control(app: &App, key: &str, value: &str) -> Result
             if let MidiModifierTool::RangeSelect(tool) =
                 ensure_tool_for_pass(&mut config, "range_select")
             {
-                tool.start_ticks = parse_value(value, "range start ticks")?;
+                let ppq = get_ppq(app);
+                tool.start_ticks = parse_notes(value, ppq, "range start")?;
             }
         }
         "range.end_ticks" => {
             if let MidiModifierTool::RangeSelect(tool) =
                 ensure_tool_for_pass(&mut config, "range_select")
             {
-                tool.end_ticks = parse_value(value, "range end ticks")?;
+                let ppq = get_ppq(app);
+                tool.end_ticks = parse_notes(value, ppq, "range end")?;
             }
         }
         "tempo.mode" => {
@@ -251,15 +300,17 @@ pub(super) fn update_modify_control(app: &App, key: &str, value: &str) -> Result
             });
         }
         "tempo.replace_points" => {
+            let ppq = get_ppq(app);
             config.tool = MidiModifierTool::TempoMap(TempoMapTool::Replace {
-                points: parse_tempo_points(value)?,
+                points: parse_tempo_points_notes(value, ppq)?,
                 destination: TempoMapDestination::InjectIntoFirstTrack,
             });
         }
         "time_warp.points" => {
             if let MidiModifierTool::TimeWarp(tool) = ensure_tool_for_pass(&mut config, "time_warp")
             {
-                tool.points = parse_time_warp_points(value)?;
+                let ppq = get_ppq(app);
+                tool.points = parse_time_warp_points_notes(value, ppq)?;
             }
         }
         "channel_remap.mappings" => {
@@ -393,14 +444,16 @@ pub(super) fn update_modify_control(app: &App, key: &str, value: &str) -> Result
             if let MidiModifierTool::NoteLength(tool) =
                 ensure_tool_for_pass(&mut config, "note_length")
             {
-                tool.min_ticks = parse_optional_value(value, "minimum note length")?;
+                let ppq = get_ppq(app);
+                tool.min_ticks = parse_optional_notes(value, ppq, "minimum note length")?;
             }
         }
         "note_length.max_ticks" => {
             if let MidiModifierTool::NoteLength(tool) =
                 ensure_tool_for_pass(&mut config, "note_length")
             {
-                tool.max_ticks = parse_optional_value(value, "maximum note length")?;
+                let ppq = get_ppq(app);
+                tool.max_ticks = parse_optional_notes(value, ppq, "maximum note length")?;
             }
         }
         "note_length.scale" => {
@@ -414,13 +467,15 @@ pub(super) fn update_modify_control(app: &App, key: &str, value: &str) -> Result
             if let MidiModifierTool::NoteLength(tool) =
                 ensure_tool_for_pass(&mut config, "note_length")
             {
-                tool.fixed_ticks = parse_optional_value(value, "fixed note length")?;
+                let ppq = get_ppq(app);
+                tool.fixed_ticks = parse_optional_notes(value, ppq, "fixed note length")?;
             }
         }
         "quantize.grid_ticks" => {
             if let MidiModifierTool::Quantize(tool) = ensure_tool_for_pass(&mut config, "quantize")
             {
-                tool.rounding_ticks = parse_value(value, "quantize grid")?;
+                let ppq = get_ppq(app);
+                tool.rounding_ticks = parse_notes(value, ppq, "quantize grid")?;
             }
         }
         "quantize.mode" => {
@@ -432,13 +487,15 @@ pub(super) fn update_modify_control(app: &App, key: &str, value: &str) -> Result
         "humanize.start_jitter" => {
             if let MidiModifierTool::Humanize(tool) = ensure_tool_for_pass(&mut config, "humanize")
             {
-                tool.start_jitter = parse_value(value, "humanize start jitter")?;
+                let ppq = get_ppq(app);
+                tool.start_jitter = parse_notes(value, ppq, "humanize start jitter")? as i64;
             }
         }
         "humanize.length_jitter" => {
             if let MidiModifierTool::Humanize(tool) = ensure_tool_for_pass(&mut config, "humanize")
             {
-                tool.length_jitter = parse_value(value, "humanize length jitter")?;
+                let ppq = get_ppq(app);
+                tool.length_jitter = parse_notes(value, ppq, "humanize length jitter")? as i64;
             }
         }
         "humanize.velocity_jitter" => {
@@ -488,6 +545,133 @@ pub(super) fn update_modify_control(app: &App, key: &str, value: &str) -> Result
         "sysex.prepend" => {
             if let MidiModifierTool::Sysex(tool) = ensure_tool_for_pass(&mut config, "sysex") {
                 tool.prepend = parse_sysex_messages(value)?;
+            }
+        }
+        "change_ppq.ppq" => {
+            if let MidiModifierTool::ChangePpq(tool) =
+                ensure_tool_for_pass(&mut config, "change_ppq")
+            {
+                tool.ppq = parse_value(value, "target PPQ")?;
+            }
+        }
+        "extract_track.track_index" => {
+            if let MidiModifierTool::ExtractTrack(tool) =
+                ensure_tool_for_pass(&mut config, "extract_track")
+            {
+                tool.track_index = parse_value(value, "track index")?;
+            }
+        }
+        "shared_metadata.dest_mode" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.destination = match value.trim() {
+                    "create_new" => SharedMetadataTrackDestination::CreateNew,
+                    "insert_into" => SharedMetadataTrackDestination::InsertInto { track_index: 0 },
+                    other => return Err(format!("invalid destination mode: {other}")),
+                };
+            }
+        }
+        "shared_metadata.dest_track" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                let idx = parse_value(value, "destination track index")?;
+                tool.destination = SharedMetadataTrackDestination::InsertInto { track_index: idx };
+            }
+        }
+        "shared_metadata.strip_redundant" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.strip_redundant_events =
+                    parse_bool_toggle(value, "strip redundant toggle")?;
+            }
+        }
+        "shared_metadata.move_tempo" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.move_tempo_events = parse_bool_toggle(value, "move tempo toggle")?;
+            }
+        }
+        "shared_metadata.move_time_sig" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.move_time_signatures =
+                    parse_bool_toggle(value, "move time signatures toggle")?;
+            }
+        }
+        "shared_metadata.move_key_sig" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.move_key_signatures =
+                    parse_bool_toggle(value, "move key signatures toggle")?;
+            }
+        }
+        "shared_metadata.move_text" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.move_text_events = parse_bool_toggle(value, "move text events toggle")?;
+            }
+        }
+        "shared_metadata.move_unknown_meta" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.move_unknown_meta_events =
+                    parse_bool_toggle(value, "move unknown meta toggle")?;
+            }
+        }
+        "shared_metadata.move_channel_prefix" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.move_channel_prefix_events =
+                    parse_bool_toggle(value, "move channel prefix toggle")?;
+            }
+        }
+        "shared_metadata.move_midi_port" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.move_midi_port_events =
+                    parse_bool_toggle(value, "move midi port toggle")?;
+            }
+        }
+        "shared_metadata.move_cc" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.move_control_change_events =
+                    parse_bool_toggle(value, "move control change toggle")?;
+            }
+        }
+        "shared_metadata.move_program" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.move_program_change_events =
+                    parse_bool_toggle(value, "move program change toggle")?;
+            }
+        }
+        "shared_metadata.move_pitch_bend" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.move_pitch_bend_events =
+                    parse_bool_toggle(value, "move pitch bend toggle")?;
+            }
+        }
+        "shared_metadata.move_channel_pressure" => {
+            if let MidiModifierTool::SharedMetadataTrack(tool) =
+                ensure_tool_for_pass(&mut config, "shared_metadata_track")
+            {
+                tool.move_channel_pressure_events =
+                    parse_bool_toggle(value, "move channel pressure toggle")?;
             }
         }
         other => return Err(format!("unknown modify control: {other}")),

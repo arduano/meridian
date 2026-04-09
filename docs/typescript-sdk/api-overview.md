@@ -30,8 +30,37 @@ Runtime-specific helpers:
 - `video.render(...)`
 - `close()`
 
+Current `modification.*` helpers cover every modifier tool exposed by
+`meridian-core`:
+
+- `rangeSelect(...)`
+- `tempoMap.flatten(...)`
+- `tempoMap.scaleBpm(...)`
+- `tempoMap.replace(...)`
+- `timeWarp(...)`
+- `channelRemap(...)`
+- `trackRoute.collapseAll(...)`
+- `trackRoute.splitByChannel(...)`
+- `trackRoute.map(...)`
+- `program(...)`
+- `controlChange(...)`
+- `pitchBend(...)`
+- `velocityMap.scale(...)`
+- `velocityMap.gamma(...)`
+- `velocityMap.polyline(...)`
+- `changePpq(...)`
+- `extractTrack(...)`
+- `noteLength(...)`
+- `quantize(...)`
+- `humanize(...)`
+- `keyMap(...)`
+- `metaText(...)`
+- `sharedMetadataTrack(...)`
+- `sysex(...)`
+
 Detailed workflow docs:
 
+- [MIDI Modification Tools](./midi-modification-tools.md)
 - [Audio Rendering](./audio-rendering.md)
 - [Video Rendering](./video-rendering.md)
 
@@ -71,6 +100,9 @@ Current helper areas:
 - default processing config builders
 - deep merge utilities
 - `midiTools` convenience builders for modification workflows
+
+`midiTools` now includes builders for every currently supported modifier tool,
+including `sharedMetadataTrack(...)`.
 
 Detailed helper docs: TBD.
 

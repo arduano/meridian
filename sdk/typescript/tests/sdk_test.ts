@@ -137,6 +137,36 @@ Deno.test("midi processing start returns a live job handle", async () => {
   }
 });
 
+Deno.test("shared metadata track helper is exposed through the SDK", async () => {
+  const executablePath = defaultExecutablePath();
+  await ensureExecutable(executablePath);
+
+  const tempDir = await Deno.makeTempDir({
+    prefix: "meridian-sdk-shared-metadata-",
+  });
+  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const output = `${tempDir}/out.mid`;
+
+  const client = await createDenoMeridianClient(executablePath);
+  try {
+    const result = await client.modification.sharedMetadataTrack({
+      input: midiPath,
+      output,
+      destination: { mode: "create_new" },
+      move_tempo_events: true,
+    });
+
+    if (result.output_track_count < 2) {
+      throw new Error(
+        `Expected shared metadata track to create at least 2 tracks, got ${result.output_track_count}`,
+      );
+    }
+    await Deno.stat(output);
+  } finally {
+    await client.close();
+  }
+});
+
 Deno.test("midi merge runs through the SDK", async () => {
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);

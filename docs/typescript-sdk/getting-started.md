@@ -245,6 +245,7 @@ The examples page links to one file for each of those flows.
 
 ## Next Pages
 
+- [MIDI Modification Tools](./midi-modification-tools.md)
 - [Audio Rendering](./audio-rendering.md)
 - [Video Rendering](./video-rendering.md)
 - [Runtime Support](./runtime-support.md)

@@ -92,6 +92,16 @@ pub(super) fn pass_metadata(pass_key: &str) -> (&'static str, &'static str, &'st
             "Move shared conductor and setup events into one track, optionally stripping redundant state.",
             "Useful when you want a clean shared metadata lane before export or downstream conversion.",
         ),
+        "change_ppq" => (
+            "Change PPQ",
+            "Resample every tick in the file to a new pulses-per-quarter-note resolution.",
+            "Common values: 96, 120, 240, 480, 960. This changes tick density, not musical timing.",
+        ),
+        "extract_track" => (
+            "Extract Track",
+            "Write one source track into a new single-track MIDI file.",
+            "Use the zero-based track index shown in the source-file stats strip above.",
+        ),
         _ => (
             "Custom Pipeline",
             "The current JSON does not map cleanly to one preset button.",
@@ -179,6 +189,8 @@ pub(super) fn tool_for_pass(pass_key: &str) -> MidiModifierTool {
             move_pitch_bend_events: false,
             move_channel_pressure_events: false,
         }),
+        "change_ppq" => MidiModifierTool::ChangePpq(ChangePpqTool { ppq: 480 }),
+        "extract_track" => MidiModifierTool::ExtractTrack(ExtractTrackTool { track_index: 0 }),
         _ => MidiModifierTool::Quantize(QuantizeTool {
             rounding_ticks: 120,
             mode: meridian_core::midi::QuantizeMode::NoteStartOnly,

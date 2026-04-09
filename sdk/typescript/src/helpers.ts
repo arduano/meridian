@@ -18,8 +18,10 @@ import type {
   TempoMapTool,
   TempoPoint,
   TimeWarpTool,
+  TrackMapEntry,
   TrackRouteTool,
   VelocityMapTool,
+  VelocityPoint,
 } from "./protocol.ts";
 
 export type DeepPartial<T> = T extends (infer U)[] ? U[]
@@ -99,10 +101,7 @@ export const midiTools = {
     splitByChannel(): TrackRouteTool {
       return { tool: "track_route", mode: "split_by_channel" };
     },
-    map(
-      mappings: TrackRouteTool extends { mode: "map"; mappings: infer P } ? P
-        : never,
-    ): TrackRouteTool {
+    map(mappings: TrackMapEntry[]): TrackRouteTool {
       return { tool: "track_route", mode: "map", mappings };
     },
   },
@@ -143,10 +142,7 @@ export const midiTools = {
     gamma(gamma: number): VelocityMapTool {
       return { tool: "velocity_map", mode: "gamma", gamma };
     },
-    polyline(
-      points: VelocityMapTool extends { mode: "polyline"; points: infer P } ? P
-        : never,
-    ): VelocityMapTool {
+    polyline(points: VelocityPoint[]): VelocityMapTool {
       return { tool: "velocity_map", mode: "polyline", points };
     },
   },

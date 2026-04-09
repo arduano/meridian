@@ -1,6 +1,7 @@
 export const PROTOCOL_VERSION = 1 as const;
 
 export type { AnalysisJobId } from "../generated/AnalysisJobId.ts";
+export type { AudioOutputFormat } from "../generated/AudioOutputFormat.ts";
 export type { AudioRenderEvent } from "../generated/AudioRenderEvent.ts";
 export type { AudioRenderJobId } from "../generated/AudioRenderJobId.ts";
 export type { AudioRenderStatus } from "../generated/AudioRenderStatus.ts";
@@ -12,10 +13,13 @@ export type { ControllerScaleEntry } from "../generated/ControllerScaleEntry.ts"
 export type { CoreErrorCode } from "../generated/CoreErrorCode.ts";
 export type { DisplayTimeSpace } from "../generated/DisplayTimeSpace.ts";
 export type { DisplayCacheId } from "../generated/DisplayCacheId.ts";
-export type { EventFilterConfig } from "../generated/EventFilterConfig.ts";
-export type { FileTimeProcessingConfig } from "../generated/FileTimeProcessingConfig.ts";
 export type { FlatKeyboardProjectorConfig } from "../generated/FlatKeyboardProjectorConfig.ts";
 export type { FlatNoteProjectorConfig } from "../generated/FlatNoteProjectorConfig.ts";
+export type { FrameColorMode } from "../generated/FrameColorMode.ts";
+export type { FrameStats } from "../generated/FrameStats.ts";
+export type { ImageExportArtifacts } from "../generated/ImageExportArtifacts.ts";
+export type { ImageExportConfig } from "../generated/ImageExportConfig.ts";
+export type { ImageOutputFormat } from "../generated/ImageOutputFormat.ts";
 export type { KeyMapEntry } from "../generated/KeyMapEntry.ts";
 export type { KeyRange } from "../generated/KeyRange.ts";
 export type { KeyboardHeightSpec } from "../generated/KeyboardHeightSpec.ts";
@@ -38,16 +42,12 @@ export type { MidiModifierTool } from "../generated/MidiModifierTool.ts";
 export type { MidiProcessEvent } from "../generated/MidiProcessEvent.ts";
 export type { MidiProcessJobId } from "../generated/MidiProcessJobId.ts";
 export type { MidiProcessStatus } from "../generated/MidiProcessStatus.ts";
-export type { NoteProcessingConfig } from "../generated/NoteProcessingConfig.ts";
 export type { NotePaletteConfig } from "../generated/NotePaletteConfig.ts";
 export type { NoteProjectorConfig } from "../generated/NoteProjectorConfig.ts";
-export type { OrphanNoteOffPolicy } from "../generated/OrphanNoteOffPolicy.ts";
 export type { ParsedMidiId } from "../generated/ParsedMidiId.ts";
-export type { PitchProcessingConfig } from "../generated/PitchProcessingConfig.ts";
 export type { PfaKeyboardProjectorConfig } from "../generated/PfaKeyboardProjectorConfig.ts";
 export type { PfaNoteProjectorConfig } from "../generated/PfaNoteProjectorConfig.ts";
 export type { PianoTrailClassicSceneConfig } from "../generated/PianoTrailClassicSceneConfig.ts";
-export type { RepeatedNoteOnPolicy } from "../generated/RepeatedNoteOnPolicy.ts";
 export type { ProjectorBackgroundConfig } from "../generated/ProjectorBackgroundConfig.ts";
 export type { ProjectorBackgroundScalingMode } from "../generated/ProjectorBackgroundScalingMode.ts";
 export type { ProjectorImageConfig } from "../generated/ProjectorImageConfig.ts";
@@ -58,47 +58,45 @@ export type { ProtocolVideoRenderConfig } from "../generated/ProtocolVideoRender
 export type { ProtocolEvent as CoreEvent } from "../generated/ProtocolEvent.ts";
 export type { ProtocolRequest as JsonRequest } from "../generated/ProtocolRequest.ts";
 export type { ProtocolResponse as JsonResponse } from "../generated/ProtocolResponse.ts";
+export type { ProtocolSchemaDemo } from "../generated/ProtocolSchemaDemo.ts";
+export type { ProtocolStateSnapshot } from "../generated/ProtocolStateSnapshot.ts";
 export type { RangeEdgeBehavior } from "../generated/RangeEdgeBehavior.ts";
 export type { RendererKind } from "../generated/RendererKind.ts";
 export type { SceneConfig } from "../generated/SceneConfig.ts";
 export type { SharedMetadataTrackDestination } from "../generated/SharedMetadataTrackDestination.ts";
-export type { SharedMetadataTrackTool } from "../generated/SharedMetadataTrackTool.ts";
-export type { StructureProcessingConfig } from "../generated/StructureProcessingConfig.ts";
 export type { TempoMapDestination } from "../generated/TempoMapDestination.ts";
 export type { TempoPoint } from "../generated/TempoPoint.ts";
 export type { TextKind } from "../generated/TextKind.ts";
 export type { TimeWarpPoint } from "../generated/TimeWarpPoint.ts";
 export type { ThreeDSceneConfig } from "../generated/ThreeDSceneConfig.ts";
 export type { TrackMapEntry } from "../generated/TrackMapEntry.ts";
-export type { TrimProcessingConfig } from "../generated/TrimProcessingConfig.ts";
 export type { TwoDSceneConfig } from "../generated/TwoDSceneConfig.ts";
 export type { VelocityPoint } from "../generated/VelocityPoint.ts";
+export type { VideoAudioConfig } from "../generated/VideoAudioConfig.ts";
+export type { VideoExportArtifacts } from "../generated/VideoExportArtifacts.ts";
+export type { VideoExportConfig } from "../generated/VideoExportConfig.ts";
 export type { VideoRenderEvent } from "../generated/VideoRenderEvent.ts";
 export type { VideoRenderJobId } from "../generated/VideoRenderJobId.ts";
 export type { VideoRenderStatus } from "../generated/VideoRenderStatus.ts";
 export type { ZenithPaletteSpec } from "../generated/ZenithPaletteSpec.ts";
-export type { ZeroVelocityNoteOnMode } from "../generated/ZeroVelocityNoteOnMode.ts";
 
 import type { ProtocolEvent } from "../generated/ProtocolEvent.ts";
 import type { ProtocolCommand } from "../generated/ProtocolCommand.ts";
 import type { ProtocolRequest } from "../generated/ProtocolRequest.ts";
 import type { ProtocolResponse } from "../generated/ProtocolResponse.ts";
-import type { AnalysisGuardTool as RawAnalysisGuardTool } from "../generated/AnalysisGuardTool.ts";
 import type { ChangePpqTool as GeneratedChangePpqTool } from "../generated/ChangePpqTool.ts";
 import type { ChannelRemapTool as RawChannelRemapTool } from "../generated/ChannelRemapTool.ts";
 import type { ControlChangeTool as RawControlChangeTool } from "../generated/ControlChangeTool.ts";
-import type { DedupeTool as RawDedupeTool } from "../generated/DedupeTool.ts";
 import type { ExtractTrackTool as GeneratedExtractTrackTool } from "../generated/ExtractTrackTool.ts";
 import type { HumanizeTool as RawHumanizeTool } from "../generated/HumanizeTool.ts";
 import type { KeyMapTool as RawKeyMapTool } from "../generated/KeyMapTool.ts";
-import type { MergeBalanceTool as RawMergeBalanceTool } from "../generated/MergeBalanceTool.ts";
 import type { MetaTextTool as RawMetaTextTool } from "../generated/MetaTextTool.ts";
 import type { NoteLengthTool as RawNoteLengthTool } from "../generated/NoteLengthTool.ts";
-import type { OverlapRepairTool as RawOverlapRepairTool } from "../generated/OverlapRepairTool.ts";
 import type { PitchBendTool as RawPitchBendTool } from "../generated/PitchBendTool.ts";
 import type { ProgramTool as RawProgramTool } from "../generated/ProgramTool.ts";
 import type { QuantizeTool as RawQuantizeTool } from "../generated/QuantizeTool.ts";
 import type { RangeSelectTool as RawRangeSelectTool } from "../generated/RangeSelectTool.ts";
+import type { SharedMetadataTrackTool as RawSharedMetadataTrackTool } from "../generated/SharedMetadataTrackTool.ts";
 import type { SysexTool as RawSysexTool } from "../generated/SysexTool.ts";
 import type { TempoMapTool as RawTempoMapTool } from "../generated/TempoMapTool.ts";
 import type { TimeWarpTool as RawTimeWarpTool } from "../generated/TimeWarpTool.ts";
@@ -125,21 +123,14 @@ export type ExtractTrackTool =
   & { tool: "extract_track" }
   & GeneratedExtractTrackTool;
 export type NoteLengthTool = { tool: "note_length" } & RawNoteLengthTool;
-export type OverlapRepairTool =
-  & { tool: "overlap_repair" }
-  & RawOverlapRepairTool;
 export type QuantizeTool = { tool: "quantize" } & RawQuantizeTool;
 export type HumanizeTool = { tool: "humanize" } & RawHumanizeTool;
 export type KeyMapTool = { tool: "key_map" } & RawKeyMapTool;
-export type DedupeTool = { tool: "dedupe" } & RawDedupeTool;
 export type MetaTextTool = { tool: "meta_text" } & RawMetaTextTool;
+export type SharedMetadataTrackTool =
+  & { tool: "shared_metadata_track" }
+  & RawSharedMetadataTrackTool;
 export type SysexTool = { tool: "sysex" } & RawSysexTool;
-export type MergeBalanceTool =
-  & { tool: "merge_balance" }
-  & RawMergeBalanceTool;
-export type AnalysisGuardTool =
-  & { tool: "analysis_guard" }
-  & RawAnalysisGuardTool;
 
 export type ErrorEvent = Extract<ProtocolEvent, { type: "error" }>;
 export type ParsedMidiLoadedEvent = Extract<
@@ -200,6 +191,7 @@ export type ResponseFor<C extends ProtocolCommand> = C extends
   { type: "load_parsed_midi" } ? [ParsedMidiLoadedEvent] | [ErrorEvent]
   : C extends { type: "inspect_midi_files" }
     ? [MidiFilesInspectedEvent] | [ErrorEvent]
+  : C extends { type: "load_midi" } ? [MidiLoadedEvent] | [ErrorEvent]
   : C extends { type: "load_audio_midi" } ? [MidiLoadedEvent] | [ErrorEvent]
   : C extends { type: "start_midi_analysis_job" }
     ? [MidiAnalysisJobStatusEventWrapper] | [ErrorEvent]
