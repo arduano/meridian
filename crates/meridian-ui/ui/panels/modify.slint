@@ -1353,24 +1353,27 @@ export component ModifyPanel inherits Rectangle {
                             }
                         }
 
-                        Rectangle {
-                            width: 56px;
-                            height: 26px;
-                            border-radius: 5px;
-                            background: browse-touch.has-hover ? #1a2b40 : #141e2e;
+                        VerticalLayout {
+                            alignment: center;
+                            Rectangle {
+                                width: 56px;
+                                height: 26px;
+                                border-radius: 5px;
+                                background: browse-touch.has-hover ? #1a2b40 : #141e2e;
 
-                            Text {
-                                text: "Browse";
-                                color: #8899b0;
-                                font-size: 10px;
-                                font-weight: 600;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
-                            }
+                                Text {
+                                    text: "Browse";
+                                    color: #8899b0;
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
 
-                            browse-touch := TouchArea {
-                                mouse-cursor: pointer;
-                                clicked => { root.browse-output(); }
+                                browse-touch := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { root.browse-output(); }
+                                }
                             }
                         }
                     }
@@ -1461,15 +1464,21 @@ export component ModifyPanel inherits Rectangle {
                         horizontal-stretch: 1;
                     }
 
-                    OptionChip {
-                        label: root.advanced-open ? "Hide" : "Show";
-                        active: root.advanced-open;
-                        pressed => { root.advanced-open = !root.advanced-open; }
+                    VerticalLayout {
+                        alignment: center;
+                        OptionChip {
+                            label: root.advanced-open ? "Hide" : "Show";
+                            active: root.advanced-open;
+                            pressed => { root.advanced-open = !root.advanced-open; }
+                        }
                     }
-                    OptionChip {
-                        label: "Reset";
-                        active: false;
-                        pressed => { root.reset-config(); }
+                    VerticalLayout {
+                        alignment: center;
+                        OptionChip {
+                            label: "Reset";
+                            active: false;
+                            pressed => { root.reset-config(); }
+                        }
                     }
                 }
 
