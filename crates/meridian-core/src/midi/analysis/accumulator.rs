@@ -1,74 +1,13 @@
-use std::collections::VecDeque;
-
 use midi_toolkit::events::{Event, TextEventKind};
-use rustc_hash::FxHashMap;
 
 use crate::midi::{MIDIAnalysisSummary, TrackAndChannel};
 
 use super::types::{
-    CachedMidiAnalysis, MidiAnalysisEventMetrics, MidiAnalysisNoteMetrics, MidiAnalysisTempoMetrics,
+    CachedBucketDelta, CachedBucketStart, CachedMidiAnalysis, MidiAnalysisEventMetrics,
+    MidiAnalysisNoteMetrics, MidiAnalysisTempoMetrics,
 };
 
 const NOTE_START_HISTOGRAM_BINS: usize = 257;
-
-pub(super) struct AnalysisKeyState {
-    block_size: usize,
-    open_notes: FxHashMap<TrackAndChannel, VecDeque<f64>>,
-}
-
-impl AnalysisKeyState {
-    pub(super) fn new() -> Self {
-        Self {
-            block_size: 0,
-            open_notes: FxHashMap::default(),
-        }
-    }
-
-    pub(super) fn add_note(&mut self, track_chan: TrackAndChannel, start_seconds: f64) {
-        self.block_size += 1;
-        self.open_notes
-            .entry(track_chan)
-            .or_default()
-            .push_back(start_seconds);
-    }
-
-    pub(super) fn end_note(
-        &mut self,
-        key_index: usize,
-        track_chan: TrackAndChannel,
-        end_seconds: f64,
-        analysis: &mut MidiAnalysisAccumulator,
-    ) {
-        let Some(queue) = self.open_notes.get_mut(&track_chan) else {
-            return;
-        };
-        let Some(start_seconds) = queue.pop_front() else {
-            return;
-        };
-        if queue.is_empty() {
-            self.open_notes.remove(&track_chan);
-        }
-        let _ = key_index;
-        analysis.observe_note_end((end_seconds - start_seconds).max(0.0));
-        analysis.observe_note_release();
-    }
-
-    pub(super) fn flush_block(&mut self, key_index: usize, analysis: &mut MidiAnalysisAccumulator) {
-        if self.block_size > 0 {
-            analysis.observe_block(key_index, self.block_size);
-            self.block_size = 0;
-        }
-    }
-
-    pub(super) fn end_all(&mut self, end_seconds: f64, analysis: &mut MidiAnalysisAccumulator) {
-        for (_, mut queue) in self.open_notes.drain() {
-            for start_seconds in queue.drain(..) {
-                analysis.observe_note_end((end_seconds - start_seconds).max(0.0));
-                analysis.observe_note_release();
-            }
-        }
-    }
-}
 
 pub(crate) struct MidiAnalysisAccumulator {
     key_note_counts: Vec<u64>,
@@ -266,10 +205,35 @@ impl MidiAnalysisAccumulator {
     }
 
     pub(crate) fn finalize(
-        mut self,
+        self,
         midi_length: f64,
         total_notes: u64,
         actual_track_count: usize,
+    ) -> CachedMidiAnalysis {
+        let events = self.events.clone();
+        let velocity_note_on_counts = self.velocity_note_on_counts.clone();
+        self.finalize_with_overrides(
+            midi_length,
+            total_notes,
+            0,
+            actual_track_count,
+            events,
+            velocity_note_on_counts,
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    pub(crate) fn finalize_with_overrides(
+        mut self,
+        midi_length: f64,
+        total_notes: u64,
+        total_event_count: u64,
+        actual_track_count: usize,
+        events: MidiAnalysisEventMetrics,
+        velocity_note_on_counts: Vec<u64>,
+        bucket_starts: Vec<CachedBucketStart>,
+        bucket_active_deltas: Vec<CachedBucketDelta>,
     ) -> CachedMidiAnalysis {
         self.flush_pending_onset();
         let trailing_span = (midi_length - self.last_tempo_seconds).max(0.0);
@@ -301,6 +265,7 @@ impl MidiAnalysisAccumulator {
         CachedMidiAnalysis::from_parts(
             midi_length,
             total_notes,
+            total_event_count,
             actual_track_count,
             self.key_note_counts.clone(),
             MIDIAnalysisSummary {
@@ -311,10 +276,10 @@ impl MidiAnalysisAccumulator {
                 densest_key: self.densest_key,
                 densest_key_notes: self.densest_key_notes,
             },
-            self.events,
+            events,
             MidiAnalysisNoteMetrics {
                 pitch_class_note_counts: self.pitch_class_note_counts,
-                velocity_note_on_counts: self.velocity_note_on_counts,
+                velocity_note_on_counts,
                 track_note_counts: self.track_note_counts,
                 channel_note_counts: self.channel_note_counts,
                 track_channel_note_counts: self.track_channel_note_counts,
@@ -344,6 +309,8 @@ impl MidiAnalysisAccumulator {
                     self.current_bpm
                 },
             },
+            bucket_starts,
+            bucket_active_deltas,
         )
     }
 }
@@ -394,8 +361,4 @@ impl RollingNpsPeak {
     fn peak(&self) -> u64 {
         self.peak
     }
-}
-
-pub(super) fn is_zero_velocity_note_off(velocity: u8) -> bool {
-    velocity == 0
 }

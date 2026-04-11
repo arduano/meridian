@@ -13,9 +13,23 @@ pub fn analyze_file_metrics(
     parsed: &ParsedMidiFile,
     actual_track_count: usize,
 ) -> MidiAnalysisFileMetrics {
+    analyze_file_metrics_with_values(
+        parsed,
+        actual_track_count,
+        parsed.total_event_count().unwrap_or(0),
+        None,
+    )
+}
+
+pub fn analyze_file_metrics_with_values(
+    parsed: &ParsedMidiFile,
+    actual_track_count: usize,
+    total_event_count: u64,
+    gzip_bytes: Option<u64>,
+) -> MidiAnalysisFileMetrics {
     let header = parsed.header();
     let source_bytes = parsed.signature().length_in_bytes;
-    let gzip_bytes = parsed.cached_gzip_size().unwrap_or(0);
+    let gzip_bytes = gzip_bytes.unwrap_or_else(|| parsed.cached_gzip_size().unwrap_or(0));
     MidiAnalysisFileMetrics {
         source_bytes,
         gzip_bytes,
@@ -28,7 +42,7 @@ pub fn analyze_file_metrics(
         declared_track_count: header.declared_track_count,
         actual_track_count,
         ticks_per_quarter: ((header.time_division & 0x8000) == 0).then_some(header.time_division),
-        total_event_count: parsed.total_event_count().unwrap_or(0),
+        total_event_count,
     }
 }
 

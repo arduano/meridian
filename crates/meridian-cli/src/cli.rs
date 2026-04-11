@@ -2,8 +2,6 @@ mod args;
 mod output;
 mod process_tools;
 
-use std::time::Duration;
-
 use meridian_core::{
     MeridianError,
     protocol::{
@@ -124,9 +122,7 @@ fn run_analyze(args: args::AnalyzeArgs) -> Result<(), MeridianError> {
     };
 
     let result = loop {
-        let event = client
-            .recv_timeout(Duration::from_secs(30))
-            .map_err(|_| MeridianError::Platform("timed out waiting for analysis job".into()))?;
+        let event = client.recv()?;
         if let ProtocolEvent::MidiAnalysisJob { event } = event {
             match event {
                 meridian_core::protocol::MidiAnalysisJobEvent::Progress {
@@ -188,9 +184,7 @@ fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), Merid
     };
 
     let result = loop {
-        let event = client
-            .recv_timeout(Duration::from_secs(30))
-            .map_err(|_| MeridianError::Platform("timed out waiting for midi processing".into()))?;
+        let event = client.recv()?;
         if let ProtocolEvent::MidiProcess { event } = event {
             match event {
                 MidiProcessEvent::ProcessStarted {

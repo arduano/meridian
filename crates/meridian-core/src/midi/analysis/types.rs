@@ -3,6 +3,18 @@ use ts_rs::TS;
 
 use crate::midi::{MIDIAnalysisSummary, display_cache::DisplayMidiCache};
 
+#[derive(Debug, Clone)]
+pub(crate) struct CachedBucketStart {
+    pub(crate) time_seconds: f64,
+    pub(crate) count: u64,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CachedBucketDelta {
+    pub(crate) time_seconds: f64,
+    pub(crate) delta: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct MidiAnalysisBucket {
     pub time_seconds: f64,
@@ -100,34 +112,43 @@ pub struct MidiAnalysisTempoMetrics {
 pub struct CachedMidiAnalysis {
     midi_length: f64,
     total_notes: u64,
+    total_event_count: u64,
     actual_track_count: usize,
     key_note_counts: Vec<u64>,
     summary: MIDIAnalysisSummary,
     events: MidiAnalysisEventMetrics,
     notes: MidiAnalysisNoteMetrics,
     tempo: MidiAnalysisTempoMetrics,
+    bucket_starts: Box<[CachedBucketStart]>,
+    bucket_active_deltas: Box<[CachedBucketDelta]>,
 }
 
 impl CachedMidiAnalysis {
     pub(crate) fn from_parts(
         midi_length: f64,
         total_notes: u64,
+        total_event_count: u64,
         actual_track_count: usize,
         key_note_counts: Vec<u64>,
         summary: MIDIAnalysisSummary,
         events: MidiAnalysisEventMetrics,
         notes: MidiAnalysisNoteMetrics,
         tempo: MidiAnalysisTempoMetrics,
+        bucket_starts: Vec<CachedBucketStart>,
+        bucket_active_deltas: Vec<CachedBucketDelta>,
     ) -> Self {
         Self {
             midi_length,
             total_notes,
+            total_event_count,
             actual_track_count,
             key_note_counts,
             summary,
             events,
             notes,
             tempo,
+            bucket_starts: bucket_starts.into_boxed_slice(),
+            bucket_active_deltas: bucket_active_deltas.into_boxed_slice(),
         }
     }
 
@@ -137,6 +158,10 @@ impl CachedMidiAnalysis {
 
     pub fn total_notes(&self) -> u64 {
         self.total_notes
+    }
+
+    pub fn total_event_count(&self) -> u64 {
+        self.total_event_count
     }
 
     pub fn actual_track_count(&self) -> usize {
@@ -170,6 +195,18 @@ impl CachedMidiAnalysis {
         midi_length: f64,
     ) -> Vec<MidiAnalysisBucket> {
         super::build_buckets_from_display_cache(cache, bucket_count, midi_length)
+    }
+
+    pub(crate) fn build_buckets_from_note_spans(
+        &self,
+        bucket_count: usize,
+    ) -> Vec<MidiAnalysisBucket> {
+        super::build_buckets_from_sparse_data(
+            &self.bucket_starts,
+            &self.bucket_active_deltas,
+            bucket_count,
+            self.midi_length,
+        )
     }
 }
 

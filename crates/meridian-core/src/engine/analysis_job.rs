@@ -2,8 +2,7 @@ use std::thread;
 
 use crate::{
     midi::analysis::{
-        MidiAnalysisKind, analyze_cached_midi, build_buckets_from_parsed_with_progress,
-        select_analysis_kinds,
+        MidiAnalysisKind, analyze_cached_midi_with_gzip_bytes, select_analysis_kinds,
     },
     protocol::{
         AnalysisJobId, CoreErrorCode, CoreEvent, MidiAnalysisJobEvent, MidiAnalysisJobStatus,
@@ -41,6 +40,15 @@ impl CoreState {
         let core_handle = self.core_handle.clone();
         let cache_stack = parsed.cache_stack.clone();
         thread::spawn(move || {
+            let gzip_handle = if kinds.is_empty() || kinds.contains(&MidiAnalysisKind::File) {
+                let parsed = std::sync::Arc::clone(cache_stack.parsed());
+                Some(thread::spawn(move || {
+                    parsed.cached_gzip_size().unwrap_or(0)
+                }))
+            } else {
+                None
+            };
+
             let _ = core_handle.publish_analysis_job_event(MidiAnalysisJobEvent::Started {
                 job_id,
                 parsed_midi_id,
@@ -65,37 +73,24 @@ impl CoreState {
             };
 
             let buckets = if kinds.is_empty() || kinds.contains(&MidiAnalysisKind::Buckets) {
-                let buckets = build_buckets_from_parsed_with_progress(
-                    cache_stack.parsed(),
-                    bucket_count.unwrap_or(1024),
-                    analysis.midi_length(),
-                    |progress| {
-                        let _ = core_handle.publish_analysis_job_event(
-                            MidiAnalysisJobEvent::Progress {
-                                job_id,
-                                progress: (0.95 + progress.clamp(0.0, 1.0) * 0.05).clamp(0.95, 1.0),
-                                status: "building bucket summary".into(),
-                            },
-                        );
-                    },
-                );
-                match buckets {
-                    Ok(buckets) => buckets,
-                    Err(error) => {
-                        let _ =
-                            core_handle.publish_analysis_job_event(MidiAnalysisJobEvent::Failed {
-                                job_id,
-                                message: error.to_string(),
-                            });
-                        return;
-                    }
-                }
+                let _ = core_handle.publish_analysis_job_event(MidiAnalysisJobEvent::Progress {
+                    job_id,
+                    progress: 0.975,
+                    status: "building bucket summary".into(),
+                });
+                analysis.build_buckets_from_note_spans(bucket_count.unwrap_or(1024))
             } else {
                 Vec::new()
             };
 
+            let gzip_bytes = gzip_handle.and_then(|handle| handle.join().ok());
             let result = select_analysis_kinds(
-                analyze_cached_midi(cache_stack.parsed(), analysis.as_ref(), buckets),
+                analyze_cached_midi_with_gzip_bytes(
+                    cache_stack.parsed(),
+                    analysis.as_ref(),
+                    buckets,
+                    gzip_bytes,
+                ),
                 &kinds,
             );
             let _ = core_handle
