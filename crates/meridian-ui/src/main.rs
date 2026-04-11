@@ -11,16 +11,16 @@ use meridian_core::render::RendererKind;
 struct Cli {
     #[arg(long)]
     midi: Option<PathBuf>,
-    #[arg(long, default_value_t = 0.0)]
-    time: f64,
-    #[arg(long, default_value_t = 0.5)]
-    view_range: f64,
-    #[arg(long, default_value_t = 0)]
-    first_key: u8,
-    #[arg(long, default_value_t = 127)]
-    last_key: u8,
-    #[arg(long, value_parser = parse_renderer, default_value = "pfa")]
-    renderer: RendererKind,
+    #[arg(long)]
+    time: Option<f64>,
+    #[arg(long)]
+    view_range: Option<f64>,
+    #[arg(long)]
+    first_key: Option<u8>,
+    #[arg(long)]
+    last_key: Option<u8>,
+    #[arg(long, value_parser = parse_renderer)]
+    renderer: Option<RendererKind>,
     #[arg(long, env = "MERIDIAN_DISABLE_WGPU", default_value_t = false)]
     disable_wgpu: bool,
     #[cfg(feature = "debug-snapshots")]

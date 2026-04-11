@@ -4,18 +4,18 @@ use std::{
 };
 
 use meridian_core::{
-    CoreHandle, MeridianError,
-    audio::{AudioBackend, AudioConfig, AudioRenderConfig},
+    audio::{AudioConfig, AudioRenderConfig},
     display::MIN_VIEW_RANGE_SECONDS,
     midi::{
-        MidiFileInspection, MidiFileProcessingConfig, MidiFilesMergeConfig, MidiProcessingConfig,
-        analysis::MidiAnalysisKind,
+        analysis::MidiAnalysisKind, MidiFileInspection, MidiFileProcessingConfig,
+        MidiFilesMergeConfig, MidiProcessingConfig,
     },
     protocol::{CoreCommand, CoreEvent, MidiProcessStatus, ParsedMidiId, VideoRenderConfig},
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
+    CoreHandle, MeridianError,
 };
 
-use super::{state::UiOptions, view_model::UiViewModel};
+use super::{state::UiStartupOptions, view_model::UiViewModel};
 
 #[derive(Clone)]
 pub struct UiCoreBridge {
@@ -37,31 +37,26 @@ impl UiCoreBridge {
 
     pub fn initialize(
         &self,
-        options: &UiOptions,
+        options: &UiStartupOptions,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<(), MeridianError> {
-        let mut layout = SceneLayout::default();
-        layout.set_renderer_kind(options.renderer);
         for events in [
             self.request(
                 CoreCommand::SetAudioConfig {
-                    config: AudioConfig {
-                        backend: AudioBackend::Xsynth,
-                        ..AudioConfig::default()
-                    },
+                    config: options.audio.clone(),
                 },
                 model,
             )?,
             self.request(
                 CoreCommand::SetSceneConfig {
-                    scene: layout.scene.clone(),
+                    scene: options.scene.clone(),
                 },
                 model,
             )?,
             self.request(
                 CoreCommand::SetViewRange {
                     seconds: options.view_range,
-                    time_space: None,
+                    time_space: Some(options.time_space),
                 },
                 model,
             )?,

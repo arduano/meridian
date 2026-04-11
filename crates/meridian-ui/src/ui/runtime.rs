@@ -12,7 +12,6 @@ use std::{
 };
 
 use meridian_core::{
-    CoreHandle, MeridianError,
     audio::{
         AudioConfig, ChannelCount, EnvelopeCurveType, Interpolator, MeridianSoundfont, ThreadCount,
     },
@@ -30,20 +29,23 @@ use meridian_core::{
     protocol::{CoreEvent, ParsedMidiId, StateSnapshot, VideoRenderConfig},
     render::{
         DisplayTimeSpace, KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig,
-        NoteProjectorConfig, PFA_BLUE_TOP_BAR_COLOR, PFA_GREEN_TOP_BAR_COLOR,
-        PFA_RED_TOP_BAR_COLOR, PfaKeyboardProjectorConfig, PianoTrailClassicSceneConfig,
+        NoteProjectorConfig, PfaKeyboardProjectorConfig, PianoTrailClassicSceneConfig,
         ProjectorBackgroundConfig, ProjectorBackgroundScalingMode, ProjectorImageConfig,
-        RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
+        RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec, PFA_BLUE_TOP_BAR_COLOR,
+        PFA_GREEN_TOP_BAR_COLOR, PFA_RED_TOP_BAR_COLOR,
     },
-    spawn_core,
+    spawn_core, CoreHandle, MeridianError,
 };
 use serde_json::Value;
+use slint::winit_030::{winit, EventResult, WinitWindowAccessor};
 use slint::ComponentHandle;
-use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
 
 use super::{
     core_bridge::UiCoreBridge,
-    state::{UiOptions, app_has_active_midi_load, apply_events_to_app, apply_merge_sources_to_app},
+    state::{
+        app_has_active_midi_load, apply_events_to_app, apply_merge_sources_to_app, UiOptions,
+        UiStartupOptions,
+    },
     view::{App, MidiLoadState},
     view_model::{MergeSourceInspection, MergeSourceViewModel, UiViewModel},
     viewport::ViewportRenderer,
@@ -59,6 +61,7 @@ mod midi_callbacks;
 mod midi_load;
 mod midi_state;
 mod panels;
+mod persistence;
 mod render_export;
 mod transport;
 mod video;
@@ -72,8 +75,10 @@ use midi_load::*;
 use midi_state::*;
 use panels::{
     append_merge_source_paths, default_modify_output_path, events_error_message,
-    initialize_merge_panel, initialize_modify_panel, wire_merge_callbacks, wire_modify_callbacks,
+    initialize_merge_panel, initialize_modify_panel, load_modify_pass_into_app,
+    validate_modify_config, wire_merge_callbacks, wire_modify_callbacks,
 };
+use persistence::*;
 use render_export::*;
 use transport::wire_transport_callbacks;
 use video::wire_video_callbacks;

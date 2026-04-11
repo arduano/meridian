@@ -204,7 +204,7 @@ pub(super) fn default_modify_config(pass_key: &str) -> MidiFileProcessingConfig 
     }
 }
 
-pub(super) fn load_modify_pass_into_app(app: &App, pass_key: &str) {
+pub(in super::super) fn load_modify_pass_into_app(app: &App, pass_key: &str) {
     let config = MidiFileProcessingConfig {
         tool: tool_for_pass(pass_key),
     };
@@ -223,7 +223,7 @@ pub(super) fn sync_modify_pass_metadata_from_config(app: &App, config: &MidiFile
     sync_modify_pass_metadata(app, tool_key(&config.tool));
 }
 
-pub(super) fn validate_modify_config(app: &App) {
+pub(in super::super) fn validate_modify_config(app: &App) {
     match parse_modify_config_text(app.get_modify_config_text().as_str()) {
         Ok(config) => {
             app.set_modify_last_valid_config_text(serialize_modify_config(&config).into());

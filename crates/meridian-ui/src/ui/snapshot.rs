@@ -6,14 +6,16 @@ use std::{
 };
 
 use meridian_core::{
-    MeridianError,
-    render::{headless::render_scene_headless_to_rgba, pfa::wgpu::encode_rgba_to_png},
-    spawn_core,
+    render::{headless::render_scene_headless_to_rgba, pfa::wgpu::encode_rgba_to_png, SceneLayout},
+    spawn_core, MeridianError,
 };
 use slint::{ComponentHandle, Image, PhysicalSize, Rgba8Pixel, SharedPixelBuffer};
 
 use super::{
-    core_bridge::UiCoreBridge, runtime::initialize_core, state::UiOptions, view::App,
+    core_bridge::UiCoreBridge,
+    runtime::initialize_core,
+    state::{UiOptions, UiStartupOptions},
+    view::App,
     view_model::UiViewModel,
 };
 
@@ -42,7 +44,36 @@ pub fn write_debug_snapshot(
 
     let bridge = UiCoreBridge::new(spawn_core());
     let shared_state = Arc::new(Mutex::new(UiViewModel::default()));
-    initialize_core(&bridge, &options, &app, &shared_state)?;
+    let mut startup = UiStartupOptions {
+        disable_wgpu: options.disable_wgpu,
+        ..UiStartupOptions::default()
+    };
+    if let Some(renderer) = options.renderer {
+        let mut layout = SceneLayout {
+            scene: startup.scene.clone(),
+            ..SceneLayout::default()
+        };
+        layout.set_renderer_kind(renderer);
+        startup.scene = layout.scene;
+    }
+    if let Some(midi_path) = &options.midi_path {
+        startup.midi_path = Some(midi_path.clone());
+    }
+    if let Some(start_time) = options.start_time {
+        startup.start_time = start_time.max(0.0);
+    }
+    if let Some(view_range) = options.view_range {
+        startup.view_range = view_range.max(meridian_core::display::MIN_VIEW_RANGE_SECONDS);
+    }
+    if let Some(first_key) = options.first_key {
+        startup.first_key = first_key;
+    }
+    if let Some(last_key) = options.last_key {
+        startup.last_key = last_key;
+    }
+    startup.first_key = startup.first_key.min(startup.last_key);
+    startup.last_key = startup.last_key.max(startup.first_key);
+    initialize_core(&bridge, &startup, &app, &shared_state)?;
     inject_headless_viewport(&app, bridge.core())?;
 
     let output = output.to_path_buf();

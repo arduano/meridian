@@ -66,8 +66,10 @@ pub(super) struct RenderExportCoordinator {
 }
 
 pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
+    let persisted_config = load_ui_config();
+    let startup = build_startup_options(&options, persisted_config.as_ref());
     let backend_selector = slint::BackendSelector::new();
-    if options.disable_wgpu {
+    if startup.disable_wgpu {
         backend_selector
             .select()
             .map_err(|e| MeridianError::Platform(e.to_string()))?;
@@ -79,6 +81,7 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     }
 
     let app = App::new().map_err(|e| MeridianError::Platform(e.to_string()))?;
+    apply_persisted_window_preferences(&app, persisted_config.as_ref());
     let bridge = UiCoreBridge::new(spawn_core());
     let shared_state = Arc::new(Mutex::new(UiViewModel::default()));
     let preview_load_generation = Arc::new(AtomicU64::new(0));
@@ -88,9 +91,10 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let export_state = Arc::new(Mutex::new(RenderExportCoordinator::default()));
     let pending_viewport_image = Rc::new(RefCell::new(None));
     let viewport_size = Rc::new(RefCell::new((1280_u32, 720_u32)));
-    initialize_core(&bridge, &options, &app, &shared_state)?;
+    initialize_core(&bridge, &startup, &app, &shared_state)?;
     initialize_merge_panel(&app, &shared_state);
     initialize_modify_panel(&app, &bridge, &shared_state);
+    restore_persisted_ui_state(&app, &bridge, &shared_state, persisted_config.as_ref());
     install_core_event_listener(&app, bridge.core(), &shared_state, &export_state);
     install_midi_process_listener(&app, bridge.core(), &shared_state);
     wire_callbacks(
@@ -118,18 +122,23 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
         &shared_state,
         &pending_viewport_image,
         &viewport_size,
-        options.disable_wgpu,
+        startup.disable_wgpu,
         &export_state,
     );
+    let _config_persistence_timer =
+        install_config_persistence_timer(&app, &shared_state, persisted_config.clone());
 
     app.window().request_redraw();
-    app.run()
-        .map_err(|e| MeridianError::Platform(e.to_string()))
+    let run_result = app
+        .run()
+        .map_err(|e| MeridianError::Platform(e.to_string()));
+    let _ = save_ui_config_now(&app, &shared_state, persisted_config.as_ref());
+    run_result
 }
 
 pub(crate) fn initialize_core(
     bridge: &UiCoreBridge,
-    options: &UiOptions,
+    options: &UiStartupOptions,
     app: &App,
     shared_state: &Arc<Mutex<UiViewModel>>,
 ) -> Result<(), MeridianError> {

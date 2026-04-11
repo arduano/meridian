@@ -4,7 +4,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use meridian_core::{protocol::StateSnapshot, render::RendererKind};
+use meridian_core::{
+    audio::{AudioBackend, AudioConfig},
+    protocol::StateSnapshot,
+    render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
+};
 
 use super::{view::App, view_model::UiViewModel};
 
@@ -19,11 +23,11 @@ mod video;
 #[derive(Debug, Clone)]
 pub struct UiOptions {
     pub midi_path: Option<PathBuf>,
-    pub renderer: RendererKind,
-    pub start_time: f64,
-    pub view_range: f64,
-    pub first_key: u8,
-    pub last_key: u8,
+    pub renderer: Option<RendererKind>,
+    pub start_time: Option<f64>,
+    pub view_range: Option<f64>,
+    pub first_key: Option<u8>,
+    pub last_key: Option<u8>,
     pub disable_wgpu: bool,
 }
 
@@ -31,9 +35,44 @@ impl Default for UiOptions {
     fn default() -> Self {
         Self {
             midi_path: None,
-            renderer: RendererKind::Pfa,
+            renderer: None,
+            start_time: None,
+            view_range: None,
+            first_key: None,
+            last_key: None,
+            disable_wgpu: matches!(
+                env::var("MERIDIAN_DISABLE_WGPU").as_deref(),
+                Ok("1" | "true" | "yes")
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UiStartupOptions {
+    pub midi_path: Option<PathBuf>,
+    pub audio: AudioConfig,
+    pub scene: SceneConfig,
+    pub start_time: f64,
+    pub view_range: f64,
+    pub time_space: DisplayTimeSpace,
+    pub first_key: u8,
+    pub last_key: u8,
+    pub disable_wgpu: bool,
+}
+
+impl Default for UiStartupOptions {
+    fn default() -> Self {
+        Self {
+            midi_path: None,
+            audio: AudioConfig {
+                backend: AudioBackend::Xsynth,
+                ..AudioConfig::default()
+            },
+            scene: SceneLayout::default().scene,
             start_time: 0.0,
             view_range: 0.5,
+            time_space: DisplayTimeSpace::Time,
             first_key: 0,
             last_key: 127,
             disable_wgpu: matches!(

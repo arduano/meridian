@@ -8,6 +8,7 @@ mod modify_parsers;
 use modify_parsers::*;
 mod modify_tools;
 use modify_tools::*;
+pub(super) use modify_tools::{load_modify_pass_into_app, validate_modify_config};
 mod modify_controls;
 use modify_controls::*;
 pub(super) use modify_controls::{default_modify_output_path, events_error_message};
