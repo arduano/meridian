@@ -1,8 +1,118 @@
 use super::*;
 use std::sync::{
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc,
-    atomic::{AtomicBool, Ordering},
 };
+
+static MERGE_SOURCE_INSPECTION_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+fn invalidate_merge_source_inspection() {
+    MERGE_SOURCE_INSPECTION_GENERATION.fetch_add(1, Ordering::SeqCst);
+}
+
+fn next_merge_source_inspection_generation() -> u64 {
+    MERGE_SOURCE_INSPECTION_GENERATION
+        .fetch_add(1, Ordering::SeqCst)
+        .wrapping_add(1)
+}
+
+fn merge_source_inspection_is_current(generation: u64) -> bool {
+    MERGE_SOURCE_INSPECTION_GENERATION.load(Ordering::SeqCst) == generation
+}
+
+fn loading_merge_sources_from_model(shared_state: &Arc<Mutex<UiViewModel>>) -> Vec<PathBuf> {
+    shared_state
+        .lock()
+        .expect("ui model mutex poisoned")
+        .merge
+        .sources
+        .iter()
+        .filter(|source| matches!(source.inspection, MergeSourceInspection::Loading))
+        .map(|source| source.path.clone())
+        .collect()
+}
+
+fn refresh_merge_source_inspection(
+    app: &App,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    pending: Vec<PathBuf>,
+) {
+    if pending.is_empty() {
+        return;
+    }
+
+    let generation = next_merge_source_inspection_generation();
+    app.set_merge_status_text("Inspecting sources".into());
+    app.set_merge_detail_text(
+        format!(
+            "Loading {} MIDI source{}.",
+            pending.len(),
+            if pending.len() == 1 { "" } else { "s" }
+        )
+        .into(),
+    );
+    app.set_merge_progress(0.02);
+    apply_merge_sources_to_app(app, shared_state);
+    app.window().request_redraw();
+
+    let app_weak = app.as_weak();
+    let shared_state = Arc::clone(shared_state);
+    std::thread::spawn(move || {
+        let total = pending.len().max(1);
+        for (index, path) in pending.iter().cloned().enumerate() {
+            let inspection = meridian_core::midi::inspect::inspect_midi_file(path);
+            let shared_state = Arc::clone(&shared_state);
+            let progress = ((index + 1) as f32 / total as f32).clamp(0.0, 1.0);
+            let detail = format!(
+                "Inspected {} of {} source{}.",
+                index + 1,
+                total,
+                if total == 1 { "" } else { "s" }
+            );
+            let _ = app_weak.upgrade_in_event_loop(move |app| {
+                if !merge_source_inspection_is_current(generation) {
+                    return;
+                }
+
+                let mut updated = false;
+                {
+                    let mut model = shared_state.lock().expect("ui model mutex poisoned");
+                    if let Some(source) = model
+                        .merge
+                        .sources
+                        .iter_mut()
+                        .find(|source| source.path == inspection.path)
+                    {
+                        source.inspection = if let Some(message) = inspection.error.clone() {
+                            MergeSourceInspection::Error(message)
+                        } else {
+                            MergeSourceInspection::Ready(inspection)
+                        };
+                        updated = true;
+                    }
+                }
+                if !updated {
+                    return;
+                }
+
+                apply_merge_sources_to_app(&app, &shared_state);
+                app.set_merge_progress(progress);
+                if progress < 1.0 {
+                    app.set_merge_status_text("Inspecting sources".into());
+                    app.set_merge_detail_text(detail.into());
+                } else {
+                    app.set_merge_status_text("Ready".into());
+                    app.set_merge_detail_text(
+                        "Source queue updated. Reorder files, choose a merge recipe, then write output."
+                            .into(),
+                    );
+                    app.set_merge_progress(0.0);
+                }
+                app.window().request_redraw();
+            });
+        }
+    });
+}
 
 pub(in super::super) fn initialize_merge_panel(app: &App, shared_state: &Arc<Mutex<UiViewModel>>) {
     apply_merge_sources_to_app(app, shared_state);
@@ -50,11 +160,13 @@ pub(in super::super) fn wire_merge_callbacks(
             if app.get_merge_job_active() {
                 return;
             }
+            invalidate_merge_source_inspection();
             {
                 let mut model = shared_state.lock().expect("ui model mutex poisoned");
                 model.merge.sources.clear();
             }
             app.set_merge_output_path_text("".into());
+            app.set_merge_progress(0.0);
             app.set_merge_status_text("Ready".into());
             app.set_merge_detail_text("Drop MIDI files here or browse to assemble a merge.".into());
             app.set_merge_result_output_text("merged-output.mid".into());
@@ -72,19 +184,38 @@ pub(in super::super) fn wire_merge_callbacks(
             if app.get_merge_job_active() {
                 return;
             }
+            let mut removed = false;
             {
                 let mut model = shared_state.lock().expect("ui model mutex poisoned");
                 let index = index.max(0) as usize;
                 if index < model.merge.sources.len() {
                     model.merge.sources.remove(index);
+                    removed = true;
                 }
             }
+            if !removed {
+                return;
+            }
+            invalidate_merge_source_inspection();
             apply_merge_sources_to_app(&app, &shared_state);
             if app.get_merge_output_path_text().is_empty() {
                 if let Some(path) = merge_default_output_from_model(&shared_state) {
                     app.set_merge_output_path_text(path.display().to_string().into());
                     app.set_merge_result_output_text(file_name_or_path(&path).into());
                 }
+            }
+            let pending = loading_merge_sources_from_model(&shared_state);
+            if pending.is_empty() {
+                app.set_merge_progress(0.0);
+                app.set_merge_status_text("Ready".into());
+                app.set_merge_detail_text(if merge_inputs_from_model(&shared_state).is_empty() {
+                    "Drop MIDI files here or browse to assemble a merge.".into()
+                } else {
+                    "Source queue updated. Reorder files, choose a merge recipe, then write output."
+                        .into()
+                });
+            } else {
+                refresh_merge_source_inspection(&app, &shared_state, pending);
             }
             app.window().request_redraw();
         });
@@ -180,6 +311,11 @@ pub(in super::super) fn wire_merge_callbacks(
                     return;
                 }
             };
+            if let Err(message) = validate_merge_job_output_path(&inputs, &output) {
+                set_merge_ui_failure(&app, &message);
+                app.window().request_redraw();
+                return;
+            }
             app.set_merge_output_path_text(output.display().to_string().into());
 
             let config = build_merge_config(&app);
@@ -321,66 +457,11 @@ pub(in super::super) fn append_merge_source_paths(
             app.set_merge_result_output_text(file_name_or_path(&path).into());
         }
     }
-    app.set_merge_status_text("Inspecting sources".into());
-    app.set_merge_detail_text(
-        format!(
-            "Loading {} new MIDI source{}.",
-            pending.len(),
-            if pending.len() == 1 { "" } else { "s" }
-        )
-        .into(),
+    refresh_merge_source_inspection(
+        app,
+        shared_state,
+        loading_merge_sources_from_model(shared_state),
     );
-    app.set_merge_progress(0.02);
-    apply_merge_sources_to_app(app, shared_state);
-    app.window().request_redraw();
-
-    let app_weak = app.as_weak();
-    let shared_state = Arc::clone(shared_state);
-    std::thread::spawn(move || {
-        let total = pending.len().max(1);
-        for (index, path) in pending.iter().cloned().enumerate() {
-            let inspection = meridian_core::midi::inspect::inspect_midi_file(path);
-            let shared_state = Arc::clone(&shared_state);
-            let progress = ((index + 1) as f32 / total as f32).clamp(0.0, 1.0);
-            let detail = format!(
-                "Inspected {} of {} source{}.",
-                index + 1,
-                total,
-                if total == 1 { "" } else { "s" }
-            );
-            let _ = app_weak.upgrade_in_event_loop(move |app| {
-                {
-                    let mut model = shared_state.lock().expect("ui model mutex poisoned");
-                    if let Some(source) = model
-                        .merge
-                        .sources
-                        .iter_mut()
-                        .find(|source| source.path == inspection.path)
-                    {
-                        source.inspection = if let Some(message) = inspection.error.clone() {
-                            MergeSourceInspection::Error(message)
-                        } else {
-                            MergeSourceInspection::Ready(inspection)
-                        };
-                    }
-                }
-                apply_merge_sources_to_app(&app, &shared_state);
-                app.set_merge_progress(progress);
-                if progress < 1.0 {
-                    app.set_merge_status_text("Inspecting sources".into());
-                    app.set_merge_detail_text(detail.into());
-                } else {
-                    app.set_merge_status_text("Ready".into());
-                    app.set_merge_detail_text(
-                        "Source queue updated. Reorder files, choose a merge recipe, then write output."
-                            .into(),
-                    );
-                    app.set_merge_progress(0.0);
-                }
-                app.window().request_redraw();
-            });
-        }
-    });
 }
 
 pub(super) fn merge_inputs_from_model(shared_state: &Arc<Mutex<UiViewModel>>) -> Vec<PathBuf> {

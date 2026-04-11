@@ -134,6 +134,13 @@ pub(in super::super) fn wire_modify_callbacks(
                     return;
                 }
             };
+            if let Err(message) =
+                validate_modify_job_output_path(Path::new(selected.as_str()), &output)
+            {
+                set_modify_ui_failure(&app, &message);
+                app.window().request_redraw();
+                return;
+            }
             app.set_modify_output_path_text(output.display().to_string().into());
 
             let config = match parse_modify_config(&app) {

@@ -59,6 +59,10 @@ pub(super) fn default_merge_output_path(inputs: &[PathBuf]) -> PathBuf {
 }
 
 pub(super) fn normalize_merge_output_path(path: &Path) -> PathBuf {
+    normalize_midi_output_path(path)
+}
+
+fn normalize_midi_output_path(path: &Path) -> PathBuf {
     let mut normalized = path.to_path_buf();
     let has_midi_extension = normalized
         .extension()
@@ -76,6 +80,64 @@ pub(super) fn current_merge_output_path(app: &App) -> Result<PathBuf, String> {
         return Err("choose an output path".into());
     }
     Ok(normalize_merge_output_path(Path::new(raw.as_str())))
+}
+
+fn resolve_midi_job_path(path: &Path) -> PathBuf {
+    let normalized = normalize_midi_output_path(path);
+    if normalized.is_absolute() {
+        normalized
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(&normalized))
+            .unwrap_or(normalized)
+    }
+}
+
+fn midi_paths_conflict(input: &Path, output: &Path) -> bool {
+    let resolved_input = resolve_midi_job_path(input);
+    let resolved_output = resolve_midi_job_path(output);
+    if resolved_input == resolved_output {
+        return true;
+    }
+
+    match (
+        std::fs::canonicalize(&resolved_input),
+        std::fs::canonicalize(&resolved_output),
+    ) {
+        (Ok(canonical_input), Ok(canonical_output)) => canonical_input == canonical_output,
+        _ => false,
+    }
+}
+
+pub(super) fn validate_modify_job_output_path(
+    selected: &Path,
+    output: &Path,
+) -> Result<(), String> {
+    if midi_paths_conflict(selected, output) {
+        Err(format!(
+            "output path must differ from the selected input MIDI ({})",
+            file_name_or_path(selected)
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+pub(super) fn validate_merge_job_output_path(
+    inputs: &[PathBuf],
+    output: &Path,
+) -> Result<(), String> {
+    if let Some(conflict) = inputs
+        .iter()
+        .find(|input| midi_paths_conflict(input, output))
+    {
+        Err(format!(
+            "output path must differ from merge input {}",
+            file_name_or_path(conflict)
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 pub(super) fn set_merge_ui_failure(app: &App, message: &str) {
@@ -101,15 +163,7 @@ pub(in super::super) fn default_modify_output_path(selected_midi_name: &str) -> 
 }
 
 pub(super) fn normalize_modify_output_path(path: &std::path::Path) -> PathBuf {
-    let mut normalized = path.to_path_buf();
-    let has_midi_extension = normalized
-        .extension()
-        .and_then(OsStr::to_str)
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("mid") || ext.eq_ignore_ascii_case("midi"));
-    if !has_midi_extension {
-        normalized.set_extension("mid");
-    }
-    normalized
+    normalize_midi_output_path(path)
 }
 
 pub(super) fn current_modify_output_path(app: &App) -> Result<PathBuf, String> {
@@ -207,6 +261,51 @@ pub(super) fn update_pfa_note_bool(
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn modify_output_guard_rejects_same_path_after_normalization() {
+        let selected = PathBuf::from("fixtures/input.mid");
+        let output = PathBuf::from("fixtures/input");
+
+        let error = validate_modify_job_output_path(&selected, &output).unwrap_err();
+
+        assert!(error.contains("selected input MIDI"));
+    }
+
+    #[test]
+    fn modify_output_guard_rejects_relative_and_absolute_same_path() {
+        let relative = PathBuf::from("fixtures/shared.mid");
+        let absolute = std::env::current_dir().unwrap().join(&relative);
+
+        assert!(validate_modify_job_output_path(&absolute, &relative).is_err());
+    }
+
+    #[test]
+    fn merge_output_guard_rejects_any_matching_input() {
+        let inputs = vec![
+            PathBuf::from("fixtures/first.mid"),
+            PathBuf::from("fixtures/second.midi"),
+        ];
+        let output = PathBuf::from("fixtures/second.midi");
+
+        let error = validate_merge_job_output_path(&inputs, &output).unwrap_err();
+
+        assert!(error.contains("merge input"));
+        assert!(error.contains("second.midi"));
+    }
+
+    #[test]
+    fn merge_output_guard_allows_distinct_output() {
+        let inputs = vec![PathBuf::from("fixtures/first.mid")];
+        let output = PathBuf::from("fixtures/merged.mid");
+
+        assert!(validate_merge_job_output_path(&inputs, &output).is_ok());
+    }
 }
 
 pub(super) fn update_pfa_keyboard_bool(
