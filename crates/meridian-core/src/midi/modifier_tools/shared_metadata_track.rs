@@ -13,9 +13,12 @@ use ts_rs::TS;
 
 use crate::{
     error::MeridianError,
-    midi::modifier_tools::common::{
-        finish_midi_writer, load_parsed_midi, open_midi_writer, track_events,
-        write_try_track_events,
+    midi::{
+        modifier_tools::common::{
+            ToolProgress, finish_midi_writer, map_progress_range, open_midi_writer, track_events,
+            write_try_track_events,
+        },
+        parsed::ParsedMidiFile,
     },
 };
 
@@ -47,28 +50,35 @@ pub enum SharedMetadataTrackDestination {
     },
 }
 
-pub(super) fn apply_shared_metadata_track_tool_to_file(
-    input: &Path,
+pub(super) fn apply_shared_metadata_track_tool_to_parsed_file(
+    parsed: &ParsedMidiFile,
     output: &Path,
     tool: &SharedMetadataTrackTool,
+    progress: &mut ToolProgress<'_>,
 ) -> Result<(), MeridianError> {
-    let parsed = load_parsed_midi(input)?;
+    progress.report(0, "Scanning shared events")?;
     validate_shared_metadata_track_tool(&parsed, tool)?;
     let writer = open_midi_writer(output, parsed.midi().ppq())?;
     let has_selected_shared_events = has_selected_shared_events(&parsed, tool)?;
 
     if !tool.moves_any_events() || !has_selected_shared_events {
-        write_all_body_tracks(&writer, &parsed, tool)?;
+        write_all_body_tracks(&writer, &parsed, tool, progress, 20, 100)?;
         return finish_midi_writer(writer);
     }
 
     match tool.destination {
         SharedMetadataTrackDestination::CreateNew => {
+            progress.report(30, "Building shared metadata track")?;
             write_try_track_events(&writer, merged_selected_shared_events(&parsed, tool))?;
-            write_all_body_tracks(&writer, &parsed, tool)?;
+            write_all_body_tracks(&writer, &parsed, tool, progress, 40, 100)?;
         }
         SharedMetadataTrackDestination::InsertInto { track_index } => {
-            for source_track_index in 0..parsed.midi().track_count() {
+            let track_count = parsed.midi().track_count();
+            for source_track_index in 0..track_count {
+                progress.report(
+                    map_progress_range(40, 100, source_track_index, track_count),
+                    "Writing body tracks",
+                )?;
                 if source_track_index == track_index {
                     let metadata = merged_selected_shared_events(&parsed, tool);
                     let body = body_track_events(&parsed, source_track_index as u32, tool)
@@ -80,6 +90,7 @@ pub(super) fn apply_shared_metadata_track_tool_to_file(
                     write_try_track_events(&writer, body)?;
                 }
             }
+            progress.report(100, "Writing body tracks")?;
         }
     }
 
@@ -90,12 +101,21 @@ fn write_all_body_tracks(
     writer: &midi_toolkit::io::MIDIWriter,
     parsed: &crate::midi::parsed::ParsedMidiFile,
     tool: &SharedMetadataTrackTool,
+    progress: &mut ToolProgress<'_>,
+    start_percent: u8,
+    end_percent: u8,
 ) -> Result<(), MeridianError> {
-    for track_index in 0..parsed.midi().track_count() {
+    let track_count = parsed.midi().track_count();
+    for track_index in 0..track_count {
+        progress.report(
+            map_progress_range(start_percent, end_percent, track_index, track_count),
+            "Writing body tracks",
+        )?;
         let iter = body_track_events(parsed, track_index as u32, tool)
             .expect("track iteration should exist for a known track index");
         write_try_track_events(writer, iter)?;
     }
+    progress.report(end_percent, "Writing body tracks")?;
     Ok(())
 }
 

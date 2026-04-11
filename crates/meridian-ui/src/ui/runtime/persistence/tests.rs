@@ -5,7 +5,7 @@ use tempfile::tempdir;
 
 use super::build_startup_options;
 use super::store::{
-    load_ui_config_from_dir, save_ui_config_to_dir, CONFIG_BAK_FILE_NAME, CONFIG_FILE_NAME,
+    CONFIG_BAK_FILE_NAME, CONFIG_FILE_NAME, load_ui_config_from_dir, save_ui_config_to_dir,
 };
 use crate::ui::runtime::persistence::schema::{
     ExportPreferences, MergePreferences, ModifyPreferences, UiConfigFile, UiPreferences,

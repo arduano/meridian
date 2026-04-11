@@ -37,11 +37,7 @@ pub(super) fn option_text<T: ToString>(value: Option<T>) -> String {
 }
 
 pub(super) fn toggle_text(value: bool) -> &'static str {
-    if value {
-        "on"
-    } else {
-        "off"
-    }
+    if value { "on" } else { "off" }
 }
 
 pub(super) fn parse_value<T>(raw: &str, label: &str) -> Result<T, String>

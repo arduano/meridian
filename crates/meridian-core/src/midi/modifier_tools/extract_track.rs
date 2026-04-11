@@ -6,9 +6,12 @@ use ts_rs::TS;
 
 use crate::{
     error::MeridianError,
-    midi::modifier_tools::common::{
-        finish_midi_writer, load_parsed_midi, open_midi_writer, track_events,
-        write_try_track_events,
+    midi::{
+        modifier_tools::common::{
+            ToolProgress, finish_midi_writer, open_midi_writer, track_events,
+            write_try_track_events,
+        },
+        parsed::ParsedMidiFile,
     },
 };
 
@@ -17,18 +20,21 @@ pub struct ExtractTrackTool {
     pub track_index: usize,
 }
 
-pub(super) fn apply_extract_track_tool_to_file(
-    input: &Path,
+pub(super) fn apply_extract_track_tool_to_parsed_file(
+    parsed: &ParsedMidiFile,
     output: &Path,
     tool: &ExtractTrackTool,
+    progress: &mut ToolProgress<'_>,
 ) -> Result<(), MeridianError> {
-    let parsed = load_parsed_midi(input)?;
+    let label = format!("Extracting track {}", tool.track_index);
+    progress.report(0, &label)?;
     validate_extract_track_tool(&parsed, tool)?;
 
     let writer = open_midi_writer(output, parsed.midi().ppq())?;
     let iter = extracted_track_events(&parsed, tool.track_index as u32)
         .expect("track iteration should exist for a validated track index");
     write_try_track_events(&writer, iter)?;
+    progress.report(100, &label)?;
     finish_midi_writer(writer)
 }
 

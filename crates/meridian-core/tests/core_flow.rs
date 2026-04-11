@@ -657,8 +657,9 @@ fn process_midi_file_job_reports_status_and_finishes() {
     ));
 
     let mut saw_started = false;
+    let mut saw_progress = false;
     let mut saw_finished = false;
-    for _ in 0..10 {
+    for _ in 0..32 {
         let event = event_rx
             .recv_timeout(Duration::from_secs(1))
             .expect("receive job event");
@@ -672,6 +673,12 @@ fn process_midi_file_job_reports_status_and_finishes() {
                     assert_eq!(started_input, midi);
                     assert_eq!(started_output, output);
                     saw_started = true;
+                }
+                MidiProcessEvent::Progress {
+                    progress_percent, ..
+                } => {
+                    assert!(progress_percent <= 100);
+                    saw_progress = true;
                 }
                 MidiProcessEvent::ProcessFinished {
                     input: finished_input,
@@ -690,6 +697,7 @@ fn process_midi_file_job_reports_status_and_finishes() {
     }
 
     assert!(saw_started);
+    assert!(saw_progress);
     assert!(saw_finished);
     assert!(output.exists());
 

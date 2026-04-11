@@ -12,6 +12,92 @@ pub(super) fn load_parsed_midi(input: &Path) -> Result<ParsedMidiFile, MeridianE
     ParsedMidiFile::load_from_file(input.to_path_buf())
 }
 
+pub(super) struct ToolProgress<'a> {
+    on_progress: &'a mut dyn FnMut(u8, &str),
+    should_cancel: &'a dyn Fn() -> bool,
+    last_progress_percent: Option<u8>,
+    last_label: Option<String>,
+}
+
+impl<'a> ToolProgress<'a> {
+    pub(super) fn new(
+        on_progress: &'a mut dyn FnMut(u8, &str),
+        should_cancel: &'a dyn Fn() -> bool,
+    ) -> Self {
+        Self {
+            on_progress,
+            should_cancel,
+            last_progress_percent: None,
+            last_label: None,
+        }
+    }
+
+    pub(super) fn report(
+        &mut self,
+        progress_percent: u8,
+        label: &str,
+    ) -> Result<(), MeridianError> {
+        ensure_not_cancelled(self.should_cancel)?;
+        let progress_percent = progress_percent.min(100);
+        if self.last_progress_percent == Some(progress_percent)
+            && self.last_label.as_deref() == Some(label)
+        {
+            return Ok(());
+        }
+
+        self.last_progress_percent = Some(progress_percent);
+        self.last_label = Some(label.to_owned());
+        (self.on_progress)(progress_percent, label);
+        Ok(())
+    }
+
+    pub(super) fn report_steps_completed(
+        &mut self,
+        completed: usize,
+        total: usize,
+        label: &str,
+    ) -> Result<(), MeridianError> {
+        self.report(progress_percent(completed, total), label)
+    }
+}
+
+pub(super) fn ensure_not_cancelled(should_cancel: &dyn Fn() -> bool) -> Result<(), MeridianError> {
+    if should_cancel() {
+        Err(MeridianError::Cancelled("midi processing cancelled".into()))
+    } else {
+        Ok(())
+    }
+}
+
+pub(super) fn progress_percent(completed: usize, total: usize) -> u8 {
+    if total == 0 {
+        return 100;
+    }
+
+    ((completed.saturating_mul(100)) as f32 / total as f32)
+        .round()
+        .clamp(0.0, 100.0) as u8
+}
+
+pub(super) fn scale_progress_range(start_percent: u8, end_percent: u8, progress_percent: u8) -> u8 {
+    let span = end_percent.saturating_sub(start_percent) as u16;
+    let scaled = start_percent as u16 + (span * progress_percent.min(100) as u16 + 50) / 100;
+    scaled.min(100) as u8
+}
+
+pub(super) fn map_progress_range(
+    start_percent: u8,
+    end_percent: u8,
+    completed: usize,
+    total: usize,
+) -> u8 {
+    scale_progress_range(
+        start_percent,
+        end_percent,
+        progress_percent(completed, total),
+    )
+}
+
 pub(super) fn open_midi_writer(output: &Path, ppq: u16) -> Result<MIDIWriter, MeridianError> {
     MIDIWriter::new(output.to_string_lossy().as_ref(), ppq).map_err(midi_write_error)
 }

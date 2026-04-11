@@ -62,7 +62,6 @@ pub(super) fn wire_midi_callbacks(
                 if app.get_active_profile() == 6 {
                     append_merge_source_paths(
                         &app,
-                        &bridge,
                         &shared_state,
                         vec![PathBuf::from(path.as_str())],
                     );

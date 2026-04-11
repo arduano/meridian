@@ -97,6 +97,9 @@ impl ViewportRenderer {
 
     fn render(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
         if let Some(app) = self.app.upgrade() {
+            if !matches!(app.get_active_profile(), 0 | 1 | 3) {
+                return;
+            }
             if app_has_active_midi_load(&app) {
                 return;
             }

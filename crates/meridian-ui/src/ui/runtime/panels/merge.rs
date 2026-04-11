@@ -1,4 +1,8 @@
 use super::*;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 pub(in super::super) fn initialize_merge_panel(app: &App, shared_state: &Arc<Mutex<UiViewModel>>) {
     apply_merge_sources_to_app(app, shared_state);
@@ -9,19 +13,17 @@ pub(in super::super) fn initialize_merge_panel(app: &App, shared_state: &Arc<Mut
 
 pub(in super::super) fn wire_merge_callbacks(
     app: &App,
-    bridge: &UiCoreBridge,
+    _bridge: &UiCoreBridge,
     shared_state: &Arc<Mutex<UiViewModel>>,
 ) {
     {
         let app_weak = app.as_weak();
-        let bridge = bridge.clone();
         let shared_state = Arc::clone(shared_state);
         app.on_select_merge_files(move || {
             if app_weak.upgrade().is_none() {
                 return;
             }
             let app_weak = app_weak.clone();
-            let bridge = bridge.clone();
             let shared_state = Arc::clone(&shared_state);
             std::thread::spawn(move || {
                 let files = rfd::FileDialog::new()
@@ -33,7 +35,7 @@ pub(in super::super) fn wire_merge_callbacks(
                     return;
                 }
                 let _ = app_weak.upgrade_in_event_loop(move |app| {
-                    append_merge_source_paths(&app, &bridge, &shared_state, files);
+                    append_merge_source_paths(&app, &shared_state, files);
                 });
             });
         });
@@ -154,7 +156,6 @@ pub(in super::super) fn wire_merge_callbacks(
     }
     {
         let app_weak = app.as_weak();
-        let bridge = bridge.clone();
         let shared_state = Arc::clone(shared_state);
         app.on_start_merge_job(move || {
             let Some(app) = app_weak.upgrade() else {
@@ -182,30 +183,109 @@ pub(in super::super) fn wire_merge_callbacks(
             app.set_merge_output_path_text(output.display().to_string().into());
 
             let config = build_merge_config(&app);
-            let events = match bridge.merge_midi_files(inputs, output, config, &shared_state) {
-                Ok(events) => events,
-                Err(error) => {
-                    set_merge_ui_failure(&app, &error.to_string());
-                    app.window().request_redraw();
-                    return;
-                }
-            };
-
-            if let Some(message) = events_error_message(&events) {
-                set_merge_ui_failure(&app, &message);
-            } else {
-                apply_events_to_app(&app, &shared_state, &events);
+            let cancel = Arc::new(AtomicBool::new(false));
+            {
+                let mut model = shared_state.lock().expect("ui model mutex poisoned");
+                model.merge.cancel = Some(Arc::clone(&cancel));
             }
+            app.set_merge_job_active(true);
+            app.set_merge_progress(0.0);
+            app.set_merge_status_text("Processing MIDI".into());
+            app.set_merge_detail_text(format!("Writing {}", output.display()).into());
+            app.set_merge_result_output_text(file_name_or_path(&output).into());
             app.window().request_redraw();
+
+            let app_weak = app_weak.clone();
+            let shared_state = Arc::clone(&shared_state);
+            let output_label = file_name_or_path(&output);
+            let cancel_for_worker = Arc::clone(&cancel);
+            std::thread::spawn(move || {
+                let app_weak_for_progress = app_weak.clone();
+                let output_label_for_progress = output_label.clone();
+                let cancel_for_progress = Arc::clone(&cancel_for_worker);
+                let merge_result =
+                    meridian_core::midi::file_merge::merge_midi_files_to_file_with_progress_cancelable(
+                        &inputs,
+                        &output,
+                        &config,
+                        move || cancel_for_worker.load(Ordering::SeqCst),
+                        move |progress| {
+                            let fraction = (progress.progress_percent / 100.0).clamp(0.0, 1.0);
+                            let detail = progress.status;
+                            let output_label = output_label_for_progress.clone();
+                            let cancel_for_ui = Arc::clone(&cancel_for_progress);
+                            let _ = app_weak_for_progress.upgrade_in_event_loop(move |app| {
+                                app.set_merge_progress(fraction);
+                                app.set_merge_status_text(
+                                    if cancel_for_ui.load(Ordering::SeqCst) {
+                                        "Cancelling".into()
+                                    } else {
+                                        "Processing MIDI".into()
+                                    },
+                                );
+                                app.set_merge_detail_text(detail.into());
+                                app.set_merge_result_output_text(output_label.into());
+                                app.window().request_redraw();
+                            });
+                        },
+                    );
+                let _ = app_weak.upgrade_in_event_loop(move |app| {
+                    shared_state
+                        .lock()
+                        .expect("ui model mutex poisoned")
+                        .merge
+                        .cancel = None;
+                    match merge_result {
+                        Ok(summary) => {
+                            app.set_merge_job_active(false);
+                            app.set_merge_progress(1.0);
+                            apply_events_to_app(
+                                &app,
+                                &shared_state,
+                                &[CoreEvent::MidiFilesMerged {
+                                    output: summary.output,
+                                    input_count: summary.input_count,
+                                    output_track_count: summary.output_track_count,
+                                    output_ppq: summary.output_ppq,
+                                    total_events: summary.total_events,
+                                }],
+                            );
+                        }
+                        Err(MeridianError::Cancelled(_)) => {
+                            app.set_merge_job_active(false);
+                            app.set_merge_progress(0.0);
+                            app.set_merge_status_text("Cancelled".into());
+                            app.set_merge_detail_text("Merge cancelled".into());
+                            app.set_merge_result_output_text(output_label.into());
+                        }
+                        Err(error) => {
+                            set_merge_ui_failure(&app, &error.to_string());
+                        }
+                    }
+                    app.window().request_redraw();
+                });
+            });
         });
     }
     {
         let app_weak = app.as_weak();
+        let shared_state = Arc::clone(shared_state);
         app.on_cancel_merge_job(move || {
             let Some(app) = app_weak.upgrade() else {
                 return;
             };
-            set_merge_ui_failure(&app, "merge does not currently support cancellation");
+            let cancel = shared_state
+                .lock()
+                .expect("ui model mutex poisoned")
+                .merge
+                .cancel
+                .clone();
+            let Some(cancel) = cancel else {
+                return;
+            };
+            cancel.store(true, Ordering::SeqCst);
+            app.set_merge_status_text("Cancelling".into());
+            app.set_merge_detail_text("Stopping merge after the current step.".into());
             app.window().request_redraw();
         });
     }
@@ -213,7 +293,6 @@ pub(in super::super) fn wire_merge_callbacks(
 
 pub(in super::super) fn append_merge_source_paths(
     app: &App,
-    bridge: &UiCoreBridge,
     shared_state: &Arc<Mutex<UiViewModel>>,
     paths: Vec<PathBuf>,
 ) {
@@ -251,57 +330,56 @@ pub(in super::super) fn append_merge_source_paths(
         )
         .into(),
     );
+    app.set_merge_progress(0.02);
     apply_merge_sources_to_app(app, shared_state);
     app.window().request_redraw();
 
     let app_weak = app.as_weak();
-    let bridge = bridge.clone();
     let shared_state = Arc::clone(shared_state);
     std::thread::spawn(move || {
-        let result = bridge.inspect_midi_files(pending.clone(), &shared_state);
-        let _ = app_weak.upgrade_in_event_loop(move |app| {
-            {
-                let mut model = shared_state.lock().expect("ui model mutex poisoned");
-                match result {
-                    Ok(inspections) => {
-                        for inspection in inspections {
-                            if let Some(source) = model
-                                .merge
-                                .sources
-                                .iter_mut()
-                                .find(|source| source.path == inspection.path)
-                            {
-                                source.inspection = if let Some(message) = inspection.error.clone()
-                                {
-                                    MergeSourceInspection::Error(message)
-                                } else {
-                                    MergeSourceInspection::Ready(inspection)
-                                };
-                            }
-                        }
-                    }
-                    Err(error) => {
-                        for path in pending {
-                            if let Some(source) = model
-                                .merge
-                                .sources
-                                .iter_mut()
-                                .find(|source| source.path == path)
-                            {
-                                source.inspection = MergeSourceInspection::Error(error.to_string());
-                            }
-                        }
+        let total = pending.len().max(1);
+        for (index, path) in pending.iter().cloned().enumerate() {
+            let inspection = meridian_core::midi::inspect::inspect_midi_file(path);
+            let shared_state = Arc::clone(&shared_state);
+            let progress = ((index + 1) as f32 / total as f32).clamp(0.0, 1.0);
+            let detail = format!(
+                "Inspected {} of {} source{}.",
+                index + 1,
+                total,
+                if total == 1 { "" } else { "s" }
+            );
+            let _ = app_weak.upgrade_in_event_loop(move |app| {
+                {
+                    let mut model = shared_state.lock().expect("ui model mutex poisoned");
+                    if let Some(source) = model
+                        .merge
+                        .sources
+                        .iter_mut()
+                        .find(|source| source.path == inspection.path)
+                    {
+                        source.inspection = if let Some(message) = inspection.error.clone() {
+                            MergeSourceInspection::Error(message)
+                        } else {
+                            MergeSourceInspection::Ready(inspection)
+                        };
                     }
                 }
-            }
-            apply_merge_sources_to_app(&app, &shared_state);
-            app.set_merge_status_text("Ready".into());
-            app.set_merge_detail_text(
-                "Source queue updated. Reorder files, choose a merge recipe, then write output."
-                    .into(),
-            );
-            app.window().request_redraw();
-        });
+                apply_merge_sources_to_app(&app, &shared_state);
+                app.set_merge_progress(progress);
+                if progress < 1.0 {
+                    app.set_merge_status_text("Inspecting sources".into());
+                    app.set_merge_detail_text(detail.into());
+                } else {
+                    app.set_merge_status_text("Ready".into());
+                    app.set_merge_detail_text(
+                        "Source queue updated. Reorder files, choose a merge recipe, then write output."
+                            .into(),
+                    );
+                    app.set_merge_progress(0.0);
+                }
+                app.window().request_redraw();
+            });
+        }
     });
 }
 

@@ -9,8 +9,7 @@ use super::super::view_model::UiViewModel;
 use super::UiFrameUpdate;
 use super::analysis::apply_analysis_to_app;
 use super::audio::apply_audio_to_app;
-use super::formatting::{file_name_or_full, format_view_range_label};
-use super::merge::apply_merge_process_to_app;
+use super::formatting::{file_name_or_full, format_number, format_view_range_label};
 use super::modify::apply_modify_process_to_app;
 use super::video::{
     apply_video_render_status_to_app, apply_video_scene_to_app, renderer_summary, scene_summary,
@@ -98,10 +97,20 @@ pub(super) fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: 
             app.set_modify_detail_text(format!("Wrote {}", output.display()).into());
             app.set_modify_result_output_text(file_name_or_full(output).into());
         }
-        CoreEvent::MidiFilesMerged { output, .. } => {
+        CoreEvent::MidiFilesMerged {
+            output,
+            input_count,
+            output_track_count,
+            output_ppq,
+            total_events,
+        } => {
             app.set_merge_status_text("Finished".into());
             app.set_merge_detail_text(format!("Wrote {}", output.display()).into());
             app.set_merge_result_output_text(file_name_or_full(output).into());
+            app.set_merge_result_input_count_text(format_number(*input_count as u64).into());
+            app.set_merge_result_track_count_text(format_number(*output_track_count as u64).into());
+            app.set_merge_result_ppq_text(output_ppq.to_string().into());
+            app.set_merge_result_event_count_text(format_number(*total_events as u64).into());
         }
         CoreEvent::VideoRender { .. }
         | CoreEvent::VideoRenderStatus { .. }
@@ -176,7 +185,6 @@ pub(super) fn apply_state_to_app(
     apply_audio_to_app(app, state, &audio_render_status);
     apply_video_render_status_to_app(app, &video_render_status);
     apply_modify_process_to_app(app, &modify_process_status, modify_latest_event.as_ref());
-    apply_merge_process_to_app(app, &modify_process_status, modify_latest_event.as_ref());
 }
 
 pub(super) fn status_text(state: &StateSnapshot) -> String {

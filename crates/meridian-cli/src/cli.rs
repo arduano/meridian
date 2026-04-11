@@ -194,6 +194,13 @@ fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), Merid
                 } if event_job_id == job_id => {
                     eprintln!("process: {}", input.display());
                 }
+                MidiProcessEvent::Progress {
+                    job_id: event_job_id,
+                    progress_percent,
+                    label,
+                } if event_job_id == job_id => {
+                    eprintln!("process: {progress_percent:>3}% {label}");
+                }
                 MidiProcessEvent::ProcessFinished {
                     job_id: event_job_id,
                     ..

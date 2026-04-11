@@ -12,6 +12,7 @@ use std::{
 };
 
 use meridian_core::{
+    CoreHandle, MeridianError,
     audio::{
         AudioConfig, ChannelCount, EnvelopeCurveType, Interpolator, MeridianSoundfont, ThreadCount,
     },
@@ -29,22 +30,22 @@ use meridian_core::{
     protocol::{CoreEvent, ParsedMidiId, StateSnapshot, VideoRenderConfig},
     render::{
         DisplayTimeSpace, KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig,
-        NoteProjectorConfig, PfaKeyboardProjectorConfig, PianoTrailClassicSceneConfig,
+        NoteProjectorConfig, PFA_BLUE_TOP_BAR_COLOR, PFA_GREEN_TOP_BAR_COLOR,
+        PFA_RED_TOP_BAR_COLOR, PfaKeyboardProjectorConfig, PianoTrailClassicSceneConfig,
         ProjectorBackgroundConfig, ProjectorBackgroundScalingMode, ProjectorImageConfig,
-        RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec, PFA_BLUE_TOP_BAR_COLOR,
-        PFA_GREEN_TOP_BAR_COLOR, PFA_RED_TOP_BAR_COLOR,
+        RendererKind, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
     },
-    spawn_core, CoreHandle, MeridianError,
+    spawn_core,
 };
 use serde_json::Value;
-use slint::winit_030::{winit, EventResult, WinitWindowAccessor};
 use slint::ComponentHandle;
+use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
 
 use super::{
     core_bridge::UiCoreBridge,
     state::{
-        app_has_active_midi_load, apply_events_to_app, apply_merge_sources_to_app, UiOptions,
-        UiStartupOptions,
+        UiOptions, UiStartupOptions, app_has_active_midi_load, apply_events_to_app,
+        apply_merge_sources_to_app,
     },
     view::{App, MidiLoadState},
     view_model::{MergeSourceInspection, MergeSourceViewModel, UiViewModel},

@@ -7,7 +7,7 @@ use std::{
 use slint::ComponentHandle;
 
 use super::{
-    load_modify_pass_into_app, validate_modify_config, App, Arc, Mutex, UiCoreBridge, UiViewModel,
+    App, Arc, Mutex, UiCoreBridge, UiViewModel, load_modify_pass_into_app, validate_modify_config,
 };
 
 use super::{

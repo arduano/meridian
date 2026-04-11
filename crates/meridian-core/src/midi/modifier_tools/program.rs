@@ -6,9 +6,12 @@ use ts_rs::TS;
 
 use crate::{
     error::MeridianError,
-    midi::modifier_tools::common::{
-        finish_midi_writer, load_parsed_midi, open_midi_writer, track_events,
-        write_try_track_events,
+    midi::{
+        modifier_tools::common::{
+            ToolProgress, finish_midi_writer, open_midi_writer, track_events,
+            write_try_track_events,
+        },
+        parsed::ParsedMidiFile,
     },
 };
 
@@ -28,14 +31,15 @@ pub struct ChannelProgram {
     pub program: u8,
 }
 
-pub(super) fn apply_program_tool_to_file(
-    input: &Path,
+pub(super) fn apply_program_tool_to_parsed_file(
+    parsed: &ParsedMidiFile,
     output: &Path,
     tool: &ProgramTool,
+    progress: &mut ToolProgress<'_>,
 ) -> Result<(), MeridianError> {
+    let label = "Rewriting program changes";
+    progress.report(0, label)?;
     validate_program_tool(tool)?;
-
-    let parsed = load_parsed_midi(input)?;
     let startup_programs = build_startup_programs(&tool.startup_programs)?;
     let writer = open_midi_writer(output, parsed.midi().ppq())?;
     let track_count = parsed
@@ -44,6 +48,7 @@ pub(super) fn apply_program_tool_to_file(
         .max((!startup_programs.is_empty()) as usize);
 
     for track_index in 0..track_count {
+        progress.report_steps_completed(track_index, track_count, label)?;
         let source_track_exists = track_index < parsed.midi().track_count();
 
         if track_index == 0 && !startup_programs.is_empty() {
@@ -63,6 +68,7 @@ pub(super) fn apply_program_tool_to_file(
         write_try_track_events(&writer, body)?;
     }
 
+    progress.report(100, label)?;
     finish_midi_writer(writer)
 }
 

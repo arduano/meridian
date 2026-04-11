@@ -6,9 +6,12 @@ use ts_rs::TS;
 
 use crate::{
     error::MeridianError,
-    midi::modifier_tools::common::{
-        finish_midi_writer, load_parsed_midi, open_midi_writer, track_events,
-        write_try_track_events,
+    midi::{
+        modifier_tools::common::{
+            ToolProgress, finish_midi_writer, open_midi_writer, track_events,
+            write_try_track_events,
+        },
+        parsed::ParsedMidiFile,
     },
 };
 
@@ -19,12 +22,14 @@ pub struct SysexTool {
     pub prepend: Vec<Vec<u8>>,
 }
 
-pub(super) fn apply_sysex_tool_to_file(
-    input: &Path,
+pub(super) fn apply_sysex_tool_to_parsed_file(
+    parsed: &ParsedMidiFile,
     output: &Path,
     tool: &SysexTool,
+    progress: &mut ToolProgress<'_>,
 ) -> Result<(), MeridianError> {
-    let parsed = load_parsed_midi(input)?;
+    let label = "Rewriting SysEx events";
+    progress.report(0, label)?;
     let prepended_sysex = build_prepended_sysex(tool);
     let writer = open_midi_writer(output, parsed.midi().ppq())?;
     let track_count = parsed
@@ -33,6 +38,7 @@ pub(super) fn apply_sysex_tool_to_file(
         .max((!prepended_sysex.is_empty()) as usize);
 
     for track_index in 0..track_count {
+        progress.report_steps_completed(track_index, track_count, label)?;
         let source_track_exists = track_index < parsed.midi().track_count();
 
         if track_index == 0 && !prepended_sysex.is_empty() {
@@ -52,6 +58,7 @@ pub(super) fn apply_sysex_tool_to_file(
         write_try_track_events(&writer, body)?;
     }
 
+    progress.report(100, label)?;
     finish_midi_writer(writer)
 }
 

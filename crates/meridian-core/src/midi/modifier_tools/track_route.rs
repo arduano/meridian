@@ -10,9 +10,12 @@ use ts_rs::TS;
 
 use crate::{
     error::MeridianError,
-    midi::modifier_tools::common::{
-        finish_midi_writer, load_parsed_midi, open_midi_writer, track_events,
-        write_try_track_events,
+    midi::{
+        modifier_tools::common::{
+            ToolProgress, finish_midi_writer, map_progress_range, open_midi_writer, track_events,
+            write_try_track_events,
+        },
+        parsed::ParsedMidiFile,
     },
 };
 
@@ -32,46 +35,67 @@ pub struct TrackMapEntry {
     pub to: usize,
 }
 
-pub(super) fn apply_track_route_tool_to_file(
-    input: &Path,
+pub(super) fn apply_track_route_tool_to_parsed_file(
+    parsed: &ParsedMidiFile,
     output: &Path,
     tool: &TrackRouteTool,
+    progress: &mut ToolProgress<'_>,
 ) -> Result<(), MeridianError> {
-    let parsed = load_parsed_midi(input)?;
     validate_track_route_tool(&parsed, tool)?;
     let writer = open_midi_writer(output, parsed.midi().ppq())?;
 
     match tool {
         TrackRouteTool::CollapseAll => {
+            let label = "Collapsing tracks";
+            progress.report(0, label)?;
             let iter = merged_track_events_for_indices(&parsed, 0..parsed.midi().track_count())?;
             write_try_track_events(&writer, iter)?;
+            progress.report(100, label)?;
         }
         TrackRouteTool::SplitByChannel => {
+            progress.report(0, "Routing tracks")?;
             for bucket in 0..SPLIT_CHANNEL_BUCKETS {
+                let bucket_label = format!(
+                    "Routing channel bucket {}/{}",
+                    bucket + 1,
+                    SPLIT_CHANNEL_BUCKETS
+                );
+                progress.report(
+                    map_progress_range(0, 100, bucket, SPLIT_CHANNEL_BUCKETS),
+                    &bucket_label,
+                )?;
                 let mut iter = split_channel_track_events(&parsed, bucket).peekable();
                 if iter.peek().is_some() {
                     write_try_track_events(&writer, iter)?;
                 }
             }
+            progress.report(100, "Routing tracks")?;
         }
         TrackRouteTool::Map { mappings } => {
+            let label = "Routing tracks";
+            progress.report(0, label)?;
             let resolved_targets = build_track_route_targets(parsed.midi().track_count(), mappings);
             let max_target = resolved_targets.iter().copied().max().unwrap_or(0);
-            for target_index in 0..=max_target {
-                let source_indices =
-                    resolved_targets
+            let target_groups = (0..=max_target)
+                .filter_map(|target_index| {
+                    let sources = resolved_targets
                         .iter()
                         .enumerate()
                         .filter_map(|(source_index, &target)| {
                             (target == target_index).then_some(source_index)
-                        });
-                let sources = source_indices.collect::<Vec<_>>();
-                if sources.is_empty() {
-                    continue;
-                }
+                        })
+                        .collect::<Vec<_>>();
+                    (!sources.is_empty()).then_some(sources)
+                })
+                .collect::<Vec<_>>();
+            let target_group_count = target_groups.len().max(1);
+
+            for (group_index, sources) in target_groups.into_iter().enumerate() {
+                progress.report_steps_completed(group_index, target_group_count, label)?;
                 let iter = merged_track_events_for_indices(&parsed, sources.into_iter())?;
                 write_try_track_events(&writer, iter)?;
             }
+            progress.report(100, label)?;
         }
     }
 

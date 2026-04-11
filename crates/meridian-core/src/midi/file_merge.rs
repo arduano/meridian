@@ -200,45 +200,73 @@ pub fn merge_midi_files_to_file_with_progress(
     config: &MidiFilesMergeConfig,
     mut on_progress: impl FnMut(MidiFilesMergeProgress),
 ) -> Result<MidiFilesMergeSummary, MeridianError> {
+    merge_midi_files_to_file_with_progress_cancelable(
+        inputs,
+        output,
+        config,
+        || false,
+        move |progress| on_progress(progress),
+    )
+}
+
+pub fn merge_midi_files_to_file_with_progress_cancelable(
+    inputs: &[PathBuf],
+    output: &Path,
+    config: &MidiFilesMergeConfig,
+    is_cancelled: impl Fn() -> bool,
+    mut on_progress: impl FnMut(MidiFilesMergeProgress),
+) -> Result<MidiFilesMergeSummary, MeridianError> {
     if inputs.is_empty() {
         return Err(MeridianError::InvalidMidi(
             "midi merge input list is empty".into(),
         ));
     }
 
-    let parsed_inputs = ParsedMergeInputs::scan(inputs, config, &mut on_progress)?;
-    let writer = MIDIWriter::new(output.to_string_lossy().as_ref(), parsed_inputs.output_ppq)
-        .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
-    let mut state = MergeRunState::new(output, inputs.len(), parsed_inputs.output_ppq);
+    let result = (|| {
+        ensure_merge_not_cancelled(&is_cancelled)?;
+        let parsed_inputs = ParsedMergeInputs::scan(inputs, config, &mut on_progress)?;
+        let writer =
+            MIDIWriter::new(output.to_string_lossy().as_ref(), parsed_inputs.output_ppq)
+                .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
+        let mut state = MergeRunState::new(output, inputs.len(), parsed_inputs.output_ppq);
 
-    if config.normalize_metadata_track {
-        // Emit one merged metadata-only track up front, then strip metadata from body tracks.
+        if config.normalize_metadata_track {
+            ensure_merge_not_cancelled(&is_cancelled)?;
+            // Emit one merged metadata-only track up front, then strip metadata from body tracks.
+            on_progress(MidiFilesMergeProgress::new(
+                "Normalizing metadata track",
+                BODY_PROGRESS_START,
+            ));
+            state.record_track(write_metadata_track(&parsed_inputs, &writer)?);
+        }
+
+        write_body_tracks(
+            &parsed_inputs,
+            &writer,
+            config,
+            &mut state,
+            &is_cancelled,
+            &mut on_progress,
+        )?;
+
+        let mut writer = writer;
+        writer
+            .end()
+            .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
+
         on_progress(MidiFilesMergeProgress::new(
-            "Normalizing metadata track",
-            BODY_PROGRESS_START,
+            "Finished merging MIDI files",
+            COMPLETE_PROGRESS,
         ));
-        state.record_track(write_metadata_track(&parsed_inputs, &writer)?);
+
+        Ok(state.finish())
+    })();
+
+    if matches!(result, Err(MeridianError::Cancelled(_))) {
+        let _ = std::fs::remove_file(output);
     }
 
-    write_body_tracks(
-        &parsed_inputs,
-        &writer,
-        config,
-        &mut state,
-        &mut on_progress,
-    )?;
-
-    let mut writer = writer;
-    writer
-        .end()
-        .map_err(|error| MeridianError::MidiLoad(format!("midi write error: {error}")))?;
-
-    on_progress(MidiFilesMergeProgress::new(
-        "Finished merging MIDI files",
-        COMPLETE_PROGRESS,
-    ));
-
-    Ok(state.finish())
+    result
 }
 
 fn write_body_tracks(
@@ -246,6 +274,7 @@ fn write_body_tracks(
     writer: &MIDIWriter,
     config: &MidiFilesMergeConfig,
     state: &mut MergeRunState,
+    is_cancelled: &impl Fn() -> bool,
     on_progress: &mut impl FnMut(MidiFilesMergeProgress),
 ) -> Result<(), MeridianError> {
     let total_body_tracks = parsed_inputs.body_track_count(config.mode);
@@ -255,6 +284,7 @@ fn write_body_tracks(
         MidiFilesMergeMode::AppendTracks => {
             for parsed in &parsed_inputs.parsed_inputs {
                 for track_index in 0..parsed.midi().track_count() {
+                    ensure_merge_not_cancelled(is_cancelled)?;
                     on_progress(MidiFilesMergeProgress::new(
                         format!(
                             "Copying {} track {}/{}",
@@ -281,6 +311,7 @@ fn write_body_tracks(
         }
         MidiFilesMergeMode::MergeTracks => {
             for track_index in 0..parsed_inputs.max_track_count {
+                ensure_merge_not_cancelled(is_cancelled)?;
                 on_progress(MidiFilesMergeProgress::new(
                     format!("Merging track {}", track_index + 1),
                     merge_phase_progress(
@@ -467,6 +498,14 @@ fn is_metadata_event(event: &Event) -> bool {
 
 fn merge_phase_progress(completed_units: usize, total_units: usize) -> f32 {
     BODY_PROGRESS_START + (completed_units as f32 / total_units.max(1) as f32) * BODY_PROGRESS_SPAN
+}
+
+fn ensure_merge_not_cancelled(is_cancelled: &impl Fn() -> bool) -> Result<(), MeridianError> {
+    if is_cancelled() {
+        Err(MeridianError::Cancelled("midi merge cancelled".into()))
+    } else {
+        Ok(())
+    }
 }
 
 fn map_track_event_result(

@@ -414,14 +414,17 @@ pub(super) fn install_timer(
         Duration::from_millis(16),
         move || {
             if let Some(app) = app_for_timer.upgrade() {
+                let has_viewport = matches!(app.get_active_profile(), 0 | 1 | 3);
                 *viewport_size_for_timer.borrow_mut() = (
                     app.get_viewport_px_width().max(1.0) as u32,
                     app.get_viewport_px_height().max(1.0) as u32,
                 );
-                if let Some(image) = pending_viewport_image_for_timer.borrow_mut().take() {
-                    app.set_viewport_image(image);
+                if has_viewport {
+                    if let Some(image) = pending_viewport_image_for_timer.borrow_mut().take() {
+                        app.set_viewport_image(image);
+                    }
                 }
-                if !app_is_loading(&app) {
+                if has_viewport && !app_is_loading(&app) {
                     if let Ok(events) = bridge_for_timer.refresh_state(&shared_state_for_timer) {
                         apply_events_to_app(&app, &shared_state_for_timer, &events);
                         let playing = shared_state_for_timer
@@ -434,7 +437,7 @@ pub(super) fn install_timer(
                         }
                     }
                 }
-                if disable_wgpu || app.get_play_label() == "Pause" {
+                if has_viewport && (disable_wgpu || app.get_play_label() == "Pause") {
                     app.window().request_redraw();
                 }
                 update_render_export_ui(&app, &export_state_for_timer);

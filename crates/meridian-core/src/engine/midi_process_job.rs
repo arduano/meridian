@@ -1,14 +1,14 @@
 use std::{
     path::PathBuf,
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
+        Arc,
     },
     thread,
 };
 
 use crate::{
-    midi::{MidiFileProcessingConfig, file_processing::process_midi_file_job},
+    midi::{file_processing::process_midi_file_job, MidiFileProcessingConfig},
     protocol::{CoreErrorCode, CoreEvent, MidiProcessEvent, MidiProcessJobId, MidiProcessStatus},
 };
 
@@ -99,6 +99,7 @@ impl CoreState {
                         },
                     });
             }
+            MidiProcessEvent::Progress { .. } => {}
             MidiProcessEvent::ProcessFinished { .. }
             | MidiProcessEvent::ProcessCancelled { .. }
             | MidiProcessEvent::ProcessFailed { .. } => {
@@ -107,10 +108,13 @@ impl CoreState {
             }
         }
 
+        let should_broadcast_status = !matches!(event, MidiProcessEvent::Progress { .. });
         self.broadcast(CoreEvent::MidiProcess { event });
-        self.broadcast(CoreEvent::MidiProcessStatus {
-            status: self.midi_process_status(),
-        });
+        if should_broadcast_status {
+            self.broadcast(CoreEvent::MidiProcessStatus {
+                status: self.midi_process_status(),
+            });
+        }
     }
 
     pub(super) fn midi_process_status(&self) -> MidiProcessStatus {

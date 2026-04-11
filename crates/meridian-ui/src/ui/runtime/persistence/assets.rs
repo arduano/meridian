@@ -8,7 +8,7 @@ use meridian_core::render::{
     SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
 };
 
-use super::{schema::UiPreferences, LAST_AURA_PNG, LAST_BACKGROUND_PNG, LAST_PALETTE_PNG};
+use super::{LAST_AURA_PNG, LAST_BACKGROUND_PNG, LAST_PALETTE_PNG, schema::UiPreferences};
 
 pub(super) fn active_palette_path_from_scene(scene: &SceneConfig) -> Option<PathBuf> {
     match scene {

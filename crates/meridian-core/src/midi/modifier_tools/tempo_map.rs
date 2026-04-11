@@ -10,9 +10,12 @@ use ts_rs::TS;
 
 use crate::{
     error::MeridianError,
-    midi::modifier_tools::common::{
-        finish_midi_writer, load_parsed_midi, open_midi_writer, track_events,
-        write_try_track_events,
+    midi::{
+        modifier_tools::common::{
+            ToolProgress, finish_midi_writer, map_progress_range, open_midi_writer, track_events,
+            write_try_track_events,
+        },
+        parsed::ParsedMidiFile,
     },
 };
 
@@ -46,22 +49,24 @@ pub enum TempoMapDestination {
     CreateNewTempoTrack,
 }
 
-pub(super) fn apply_tempo_map_tool_to_file(
-    input: &Path,
+pub(super) fn apply_tempo_map_tool_to_parsed_file(
+    parsed: &ParsedMidiFile,
     output: &Path,
     tool: &TempoMapTool,
+    progress: &mut ToolProgress<'_>,
 ) -> Result<(), MeridianError> {
     validate_tempo_map_tool(tool)?;
-
-    let parsed = load_parsed_midi(input)?;
     let writer = open_midi_writer(output, parsed.midi().ppq())?;
 
     match tool {
         TempoMapTool::Flatten { tempo } => {
+            let label = "Rewriting tempo map";
+            progress.report(0, label)?;
             let flattened_tempo = vec![Event::new_delta_tempo_event(0, *tempo)];
             let track_count = parsed.midi().track_count().max(1);
 
             for track_index in 0..track_count {
+                progress.report_steps_completed(track_index, track_count, label)?;
                 let source_track_exists = track_index < parsed.midi().track_count();
                 if track_index == 0 {
                     let startup = flattened_tempo.iter().cloned().map(Ok);
@@ -78,25 +83,35 @@ pub(super) fn apply_tempo_map_tool_to_file(
                     write_try_track_events(&writer, body)?;
                 }
             }
+            progress.report(100, label)?;
         }
         TempoMapTool::ScaleBpm { factor } => {
-            for track_index in 0..parsed.midi().track_count() {
+            let label = "Rewriting tempo map";
+            let track_count = parsed.midi().track_count();
+            progress.report(0, label)?;
+            for track_index in 0..track_count {
+                progress.report_steps_completed(track_index, track_count, label)?;
                 let iter = scaled_tempo_track_events(&parsed, track_index as u32, *factor)
                     .expect("track iteration should exist for a known track index");
                 write_try_track_events(&writer, iter)?;
             }
+            progress.report(100, label)?;
         }
         TempoMapTool::Replace {
             points,
             destination,
         } => {
+            progress.report(0, "Building replacement tempo events")?;
             let replacement_tempos = build_replacement_tempo_events(points);
 
             match destination {
                 TempoMapDestination::InjectIntoFirstTrack => {
+                    let label = "Rewriting tempo map";
                     let track_count = parsed.midi().track_count().max(1);
 
                     for track_index in 0..track_count {
+                        progress
+                            .report(map_progress_range(10, 100, track_index, track_count), label)?;
                         let source_track_exists = track_index < parsed.midi().track_count();
                         if track_index == 0 {
                             let replacement = replacement_tempos.iter().cloned().map(Ok);
@@ -113,14 +128,21 @@ pub(super) fn apply_tempo_map_tool_to_file(
                             write_try_track_events(&writer, body)?;
                         }
                     }
+                    progress.report(100, label)?;
                 }
                 TempoMapDestination::CreateNewTempoTrack => {
+                    progress.report(10, "Writing tempo track")?;
                     write_try_track_events(&writer, replacement_tempos.iter().cloned().map(Ok))?;
-                    for track_index in 0..parsed.midi().track_count() {
+                    let track_count = parsed.midi().track_count();
+                    let label = "Rewriting tempo map";
+                    for track_index in 0..track_count {
+                        progress
+                            .report(map_progress_range(20, 100, track_index, track_count), label)?;
                         let body = non_tempo_track_events(&parsed, track_index as u32)
                             .expect("track iteration should exist for a known track index");
                         write_try_track_events(&writer, body)?;
                     }
+                    progress.report(100, label)?;
                 }
             }
         }

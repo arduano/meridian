@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{Arc, atomic::AtomicBool},
+};
 
 use meridian_core::{
     audio::AudioStatus,
@@ -91,6 +94,7 @@ impl Default for ModifyViewModel {
 #[derive(Debug, Clone, Default)]
 pub struct MergeViewModel {
     pub sources: Vec<MergeSourceViewModel>,
+    pub cancel: Option<Arc<AtomicBool>>,
 }
 
 #[derive(Debug, Clone)]

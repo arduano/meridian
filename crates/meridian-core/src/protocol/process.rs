@@ -13,6 +13,11 @@ pub enum MidiProcessEvent {
         input: PathBuf,
         output: PathBuf,
     },
+    Progress {
+        job_id: MidiProcessJobId,
+        progress_percent: u8,
+        label: String,
+    },
     ProcessFinished {
         job_id: MidiProcessJobId,
         input: PathBuf,

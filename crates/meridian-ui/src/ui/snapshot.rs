@@ -6,8 +6,9 @@ use std::{
 };
 
 use meridian_core::{
-    render::{headless::render_scene_headless_to_rgba, pfa::wgpu::encode_rgba_to_png, SceneLayout},
-    spawn_core, MeridianError,
+    MeridianError,
+    render::{SceneLayout, headless::render_scene_headless_to_rgba, pfa::wgpu::encode_rgba_to_png},
+    spawn_core,
 };
 use slint::{ComponentHandle, Image, PhysicalSize, Rgba8Pixel, SharedPixelBuffer};
 

@@ -2,7 +2,7 @@ use slint::ComponentHandle;
 
 use meridian_core::{display::MIN_VIEW_RANGE_SECONDS, render::SceneLayout};
 
-use super::{schema::UiConfigFile, App, UiOptions, UiStartupOptions};
+use super::{App, UiOptions, UiStartupOptions, schema::UiConfigFile};
 
 pub(in super::super) fn build_startup_options(
     launch: &UiOptions,

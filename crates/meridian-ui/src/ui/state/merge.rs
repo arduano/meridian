@@ -7,6 +7,26 @@ use super::super::view::{App, MergeSourceRow};
 use super::super::view_model::{MergeSourceInspection, UiViewModel};
 use super::formatting::{file_name_or_full, format_duration_short, format_number};
 
+fn latest_active_progress<'a>(
+    status: &MidiProcessStatus,
+    latest_event: Option<&'a MidiProcessEvent>,
+) -> Option<(f32, &'a str)> {
+    let job_id = match status {
+        MidiProcessStatus::Running { job_id, .. }
+        | MidiProcessStatus::Cancelling { job_id, .. } => *job_id,
+        MidiProcessStatus::Idle => return None,
+    };
+
+    match latest_event {
+        Some(MidiProcessEvent::Progress {
+            job_id: progress_job_id,
+            progress_percent,
+            label,
+        }) if *progress_job_id == job_id => Some((*progress_percent as f32 / 100.0, label)),
+        _ => None,
+    }
+}
+
 pub(super) fn apply_merge_sources_to_app(app: &App, shared_state: &Arc<Mutex<UiViewModel>>) {
     let sources = shared_state
         .lock()
@@ -120,15 +140,27 @@ pub(super) fn apply_merge_process_to_app(
 
     match status {
         MidiProcessStatus::Running { output, .. } => {
-            app.set_merge_progress(0.0);
+            let active_progress = latest_active_progress(status, latest_event);
+            app.set_merge_progress(active_progress.map(|(value, _)| value).unwrap_or(0.0));
             app.set_merge_status_text("Processing MIDI".into());
-            app.set_merge_detail_text(format!("Writing {}", output.display()).into());
+            app.set_merge_detail_text(
+                active_progress
+                    .map(|(_, label)| label.to_owned())
+                    .unwrap_or_else(|| format!("Writing {}", output.display()))
+                    .into(),
+            );
             app.set_merge_result_output_text(file_name_or_full(output).into());
         }
         MidiProcessStatus::Cancelling { output, .. } => {
-            app.set_merge_progress(0.0);
+            let active_progress = latest_active_progress(status, latest_event);
+            app.set_merge_progress(active_progress.map(|(value, _)| value).unwrap_or(0.0));
             app.set_merge_status_text("Cancelling".into());
-            app.set_merge_detail_text(format!("Stopping {}", output.display()).into());
+            app.set_merge_detail_text(
+                active_progress
+                    .map(|(_, label)| label.to_owned())
+                    .unwrap_or_else(|| format!("Stopping {}", output.display()))
+                    .into(),
+            );
             app.set_merge_result_output_text(file_name_or_full(output).into());
         }
         MidiProcessStatus::Idle => {
@@ -171,6 +203,10 @@ pub(super) fn apply_merge_process_to_app(
                         format!("Configured to write {}", output.display()).into(),
                     );
                     app.set_merge_result_output_text(file_name_or_full(output).into());
+                }
+                Some(MidiProcessEvent::Progress { label, .. }) => {
+                    app.set_merge_status_text("Ready".into());
+                    app.set_merge_detail_text(label.clone().into());
                 }
                 None => {
                     app.set_merge_status_text("Ready".into());

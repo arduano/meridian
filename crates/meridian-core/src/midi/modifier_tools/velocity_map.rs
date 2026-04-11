@@ -6,9 +6,12 @@ use ts_rs::TS;
 
 use crate::{
     error::MeridianError,
-    midi::modifier_tools::common::{
-        finish_midi_writer, load_parsed_midi, open_midi_writer, track_events,
-        write_try_track_events,
+    midi::{
+        modifier_tools::common::{
+            ToolProgress, finish_midi_writer, open_midi_writer, track_events,
+            write_try_track_events,
+        },
+        parsed::ParsedMidiFile,
     },
 };
 
@@ -28,23 +31,27 @@ pub struct VelocityPoint {
     pub output: u8,
 }
 
-pub(super) fn apply_velocity_map_tool_to_file(
-    input: &Path,
+pub(super) fn apply_velocity_map_tool_to_parsed_file(
+    parsed: &ParsedMidiFile,
     output: &Path,
     tool: &VelocityMapTool,
+    progress: &mut ToolProgress<'_>,
 ) -> Result<(), MeridianError> {
+    let label = "Remapping velocities";
+    progress.report(0, label)?;
     validate_velocity_map_tool(tool)?;
-
-    let parsed = load_parsed_midi(input)?;
     let velocity_lookup = build_velocity_lookup(tool);
     let writer = open_midi_writer(output, parsed.midi().ppq())?;
+    let track_count = parsed.midi().track_count();
 
-    for track_index in 0..parsed.midi().track_count() {
+    for track_index in 0..track_count {
+        progress.report_steps_completed(track_index, track_count, label)?;
         let iter = velocity_mapped_track_events(&parsed, track_index as u32, velocity_lookup)
             .expect("track iteration should exist for a known track index");
         write_try_track_events(&writer, iter)?;
     }
 
+    progress.report(100, label)?;
     finish_midi_writer(writer)
 }
 

@@ -93,6 +93,7 @@ component MergeSourceItem inherits Rectangle {
                             color: data.is_error ? #ff9dbc : data.is_loading ? #8abff7 : #7fd1c4;
                             font-size: Theme.font-size-xs;
                             font-weight: 700;
+                            vertical-alignment: center;
                         }
                     }
                 }
@@ -138,27 +139,33 @@ component MergeSourceItem inherits Rectangle {
 
         // ── Stats strip ──
         HorizontalLayout {
-            spacing: 12px;
+            spacing: 10px;
 
-            Text { text: "Tracks"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
-            Text { text: data.tracks_text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+            HorizontalLayout {
+                spacing: 4px;
+                Text { text: "Tracks"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
+                Text { text: data.tracks_text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+            }
 
-            Text { text: "·"; color: #1e2d40; font-size: Theme.font-size-xs; vertical-alignment: center; }
+            HorizontalLayout {
+                spacing: 4px;
+                Text { text: "Notes"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
+                Text { text: data.notes_text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+            }
 
-            Text { text: "Notes"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
-            Text { text: data.notes_text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+            HorizontalLayout {
+                spacing: 4px;
+                Text { text: "PPQ"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
+                Text { text: data.ppq_text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+            }
 
-            Text { text: "·"; color: #1e2d40; font-size: Theme.font-size-xs; vertical-alignment: center; }
+            HorizontalLayout {
+                spacing: 4px;
+                Text { text: "Length"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
+                Text { text: data.length_text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+            }
 
-            Text { text: "PPQ"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
-            Text { text: data.ppq_text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
-
-            Text { text: "·"; color: #1e2d40; font-size: Theme.font-size-xs; vertical-alignment: center; }
-
-            Text { text: "Length"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
-            Text { text: data.length_text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
-
-            Text { text: "·"; color: #1e2d40; font-size: Theme.font-size-xs; vertical-alignment: center; }
+            Rectangle { horizontal-stretch: 1; }
 
             Text { text: data.bpm_text; color: Theme.text-faint; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; vertical-alignment: center; }
         }
