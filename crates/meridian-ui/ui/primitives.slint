@@ -871,6 +871,7 @@ export component FilePicker inherits Rectangle {
     in property <string> file-label: "";
     in property <string> file-name: "(default)";
     in property <bool> enabled: true;
+    in property <bool> reset-enabled: true;
     callback browse;
     callback reset;
     callback toggle-enabled;
@@ -941,11 +942,13 @@ export component FilePicker inherits Rectangle {
                 width: 40px;
                 height: 28px;
                 border-radius: 5px;
-                background: reset-touch.has-hover ? #1a2b40 : #141e2e;
+                background: root.reset-enabled
+                    ? (reset-touch.has-hover ? #1a2b40 : #141e2e)
+                    : #0f1822;
 
                 Text {
                     text: "Reset";
-                    color: #6b7d94;
+                    color: root.reset-enabled ? #6b7d94 : #2f4158;
                     font-size: 10px;
                     font-weight: 600;
                     horizontal-alignment: center;
@@ -953,8 +956,8 @@ export component FilePicker inherits Rectangle {
                 }
 
                 reset-touch := TouchArea {
-                    mouse-cursor: pointer;
-                    clicked => { root.reset(); }
+                    mouse-cursor: root.reset-enabled ? pointer : default;
+                    clicked => { if (root.reset-enabled) { root.reset(); } }
                 }
             }
         }

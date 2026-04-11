@@ -72,3 +72,32 @@ fn render_audio_writes_output_file_when_soundfont_is_available() {
     assert!(bytes.len() > 12, "expected non-empty wav output");
     assert_eq!(&bytes[..4], b"RIFF");
 }
+
+#[test]
+fn render_audio_uses_embedded_default_soundfont_when_no_soundfont_is_passed() {
+    let midi = support::write_test_midi("burgmuller-op100-no13-consolation-default.mid");
+    let out = support::temp_path("render-default.wav");
+
+    let output = Command::new(support::cli_path())
+        .args([
+            "render",
+            "audio",
+            midi.to_string_lossy().as_ref(),
+            "--output",
+            out.to_string_lossy().as_ref(),
+            "--sample-rate",
+            "22050",
+            "--channels",
+            "2",
+        ])
+        .output()
+        .expect("run render audio command with embedded default soundfont");
+
+    assert!(
+        output.status.success(),
+        "render audio with embedded default failed: {output:?}"
+    );
+    let bytes = fs::read(&out).expect("read embedded-default audio output");
+    assert!(bytes.len() > 12, "expected non-empty wav output");
+    assert_eq!(&bytes[..4], b"RIFF");
+}

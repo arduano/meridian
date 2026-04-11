@@ -34,13 +34,17 @@ impl SoundfontCache {
             .map_err(|_| MeridianError::InvalidMidi("soundfont cache lock poisoned".into()))?;
         let mut out = Vec::new();
         for sf in soundfonts.iter().rev().filter(|sf| sf.enabled) {
-            let key = SoundfontCacheKey::new(sf, params);
+            let key = SoundfontCacheKey::new(sf, params)
+                .map_err(|e| MeridianError::MidiLoad(format!("soundfont resolve failed: {e}")))?;
             if let Some(existing) = loaded.get(&key) {
                 out.push(Arc::clone(existing));
                 continue;
             }
 
-            let soundfont = SampleSoundfont::new(&sf.path, params, sf.options)
+            let path = sf
+                .resolved_path()
+                .map_err(|e| MeridianError::MidiLoad(format!("soundfont resolve failed: {e}")))?;
+            let soundfont = SampleSoundfont::new(&path, params, sf.options)
                 .map_err(|e| MeridianError::MidiLoad(format!("soundfont load failed: {e:?}")))?;
             let soundfont: Arc<dyn SoundfontBase> = Arc::new(soundfont);
             loaded.insert(key, Arc::clone(&soundfont));

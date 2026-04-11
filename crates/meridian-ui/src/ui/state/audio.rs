@@ -15,11 +15,24 @@ pub(super) fn apply_audio_to_app(
         .iter()
         .filter(|soundfont| soundfont.enabled)
         .collect();
-    let primary_soundfont = enabled_soundfonts
-        .first()
-        .map(|soundfont| file_name_or_full(&soundfont.path))
-        .unwrap_or_else(|| "(none)".into());
+    let primary_soundfont = state.audio.soundfonts.first();
+    let primary_soundfont_text = match primary_soundfont {
+        Some(soundfont) if soundfont.uses_default() => "Default soundfont".to_string(),
+        Some(soundfont) => soundfont
+            .path_ref()
+            .map(file_name_or_full)
+            .unwrap_or_else(|| "(none)".into()),
+        None => "(none)".into(),
+    };
     let soundfont_count = enabled_soundfonts.len();
+    let soundfont_detail = match primary_soundfont {
+        Some(soundfont) if soundfont.uses_default() => {
+            format!("Default soundfont · {soundfont_count} loaded")
+        }
+        Some(_) => format!("Custom file · {soundfont_count} loaded"),
+        None => "No soundfont configured".into(),
+    };
+    let soundfont_can_reset = primary_soundfont.is_some_and(|soundfont| !soundfont.uses_default());
     let sample_rate = state
         .audio_status
         .stream_params
@@ -31,23 +44,26 @@ pub(super) fn apply_audio_to_app(
         .map(|params| params.channels.count())
         .unwrap_or(state.audio.xsynth.render.audio_params.channels.count());
     let engine_detail = format!(
-        "{} / FX {}",
-        state
+        "{} / FX {} / limiter {}",
+        match primary_soundfont {
+            Some(soundfont) if soundfont.uses_default() => "Default soundfont",
+            Some(_) => "Custom soundfont",
+            None => "No soundfont",
+        },
+        if state
             .audio
             .soundfonts
             .first()
-            .map(|soundfont| {
-                if soundfont.options.use_effects {
-                    "Effects on"
-                } else {
-                    "Effects off"
-                }
-            })
-            .unwrap_or("Default"),
-        if state.audio.xsynth.render.use_limiter {
-            "limiter on"
+            .is_some_and(|soundfont| soundfont.options.use_effects)
+        {
+            "on"
         } else {
-            "limiter off"
+            "off"
+        },
+        if state.audio.xsynth.render.use_limiter {
+            "on"
+        } else {
+            "off"
         }
     );
     let interpolation_text = state
@@ -120,8 +136,9 @@ pub(super) fn apply_audio_to_app(
     app.set_audio_render_window_text(
         format!("{:.1} ms", state.audio.xsynth.config.render_window_ms).into(),
     );
-    app.set_audio_soundfont_text(primary_soundfont.into());
-    app.set_audio_soundfont_count_text(format!("{soundfont_count} loaded").into());
+    app.set_audio_soundfont_text(primary_soundfont_text.into());
+    app.set_audio_soundfont_count_text(soundfont_detail.into());
+    app.set_audio_soundfont_can_reset(soundfont_can_reset);
     app.set_audio_soundfont_enabled(soundfont_enabled);
     app.set_audio_engine_detail_text(engine_detail.into());
     app.set_audio_effects_text(effects_text.into());

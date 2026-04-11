@@ -102,7 +102,7 @@ pub(crate) fn render_audio_pipe_from_cache(
             .iter()
             .cloned()
             .map(|path| MeridianSoundfont {
-                path,
+                path: Some(path),
                 ..MeridianSoundfont::default()
             })
             .collect();

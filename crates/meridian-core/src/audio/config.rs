@@ -1,4 +1,8 @@
-use std::path::PathBuf;
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
 
 use serde::{Deserialize, Serialize};
 use xsynth_core::{
@@ -8,31 +12,16 @@ use xsynth_core::{
 };
 use xsynth_realtime::XSynthRealtimeConfig;
 
-pub const DEFAULT_SOUNDFONT: &str =
-    "assets/soundfonts/freepats-upright-kw-small/UprightPianoKW-small-20190703.sfz";
+pub const EMBEDDED_DEFAULT_SOUNDFONT_ASSET: &str =
+    "assets/soundfonts/freepats-upright-kw-small/UprightPianoKW-small-20190703.sf2";
+pub const EMBEDDED_DEFAULT_SOUNDFONT_NAME: &str = "UprightPianoKW-small-20190703.sf2";
 
-fn default_soundfont_path() -> PathBuf {
-    if let Some(path) = std::env::var_os("MERIDIAN_SOUNDFONT") {
-        return PathBuf::from(path);
-    }
-
-    let relative = PathBuf::from(DEFAULT_SOUNDFONT);
-    if relative.exists() {
-        return relative;
-    }
-
-    if let Ok(exe) = std::env::current_exe() {
-        let exe_assets = exe
-            .parent()
-            .map(|parent| parent.join(DEFAULT_SOUNDFONT))
-            .unwrap_or_else(|| relative.clone());
-        if exe_assets.exists() {
-            return exe_assets;
-        }
-    }
-
-    PathBuf::from(DEFAULT_SOUNDFONT)
-}
+static EMBEDDED_DEFAULT_SOUNDFONT_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../",
+    "assets/soundfonts/freepats-upright-kw-small/UprightPianoKW-small-20190703.sf2"
+));
+static EMBEDDED_DEFAULT_SOUNDFONT_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -44,7 +33,7 @@ pub enum AudioBackend {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct MeridianSoundfont {
-    pub path: PathBuf,
+    pub path: Option<PathBuf>,
     pub enabled: bool,
     pub options: SoundfontInitOptions,
 }
@@ -52,9 +41,26 @@ pub struct MeridianSoundfont {
 impl Default for MeridianSoundfont {
     fn default() -> Self {
         Self {
-            path: default_soundfont_path(),
+            path: None,
             enabled: true,
             options: Default::default(),
+        }
+    }
+}
+
+impl MeridianSoundfont {
+    pub fn uses_default(&self) -> bool {
+        self.path.is_none()
+    }
+
+    pub fn path_ref(&self) -> Option<&Path> {
+        self.path.as_deref()
+    }
+
+    pub fn resolved_path(&self) -> io::Result<PathBuf> {
+        match &self.path {
+            Some(path) => Ok(path.clone()),
+            None => resolve_default_soundfont_path(),
         }
     }
 }
@@ -140,9 +146,9 @@ impl SoundfontCacheKey {
     pub(crate) fn new(
         soundfont: &MeridianSoundfont,
         params: xsynth_core::AudioStreamParams,
-    ) -> Self {
-        Self {
-            path: soundfont.path.clone(),
+    ) -> io::Result<Self> {
+        Ok(Self {
+            path: soundfont.resolved_path()?,
             bank: soundfont.options.bank,
             preset: soundfont.options.preset,
             use_effects: soundfont.options.use_effects,
@@ -155,7 +161,7 @@ impl SoundfontCacheKey {
             release_curve: curve_id(soundfont.options.vol_envelope_options.release_curve),
             sample_rate: params.sample_rate,
             channels: params.channels.count(),
-        }
+        })
     }
 }
 
@@ -163,5 +169,63 @@ fn curve_id(curve: EnvelopeCurveType) -> u8 {
     match curve {
         EnvelopeCurveType::Linear => 0,
         EnvelopeCurveType::Exponential => 1,
+    }
+}
+
+pub fn resolve_default_soundfont_path() -> io::Result<PathBuf> {
+    if let Some(path) = std::env::var_os("MERIDIAN_SOUNDFONT") {
+        return Ok(PathBuf::from(path));
+    }
+
+    if let Some(path) = EMBEDDED_DEFAULT_SOUNDFONT_PATH.get() {
+        return Ok(path.clone());
+    }
+
+    let directory = std::env::temp_dir()
+        .join("meridian")
+        .join("embedded-soundfonts");
+    fs::create_dir_all(&directory)?;
+    let output = directory.join(EMBEDDED_DEFAULT_SOUNDFONT_NAME);
+
+    let needs_write = match fs::metadata(&output) {
+        Ok(metadata) => metadata.len() != EMBEDDED_DEFAULT_SOUNDFONT_BYTES.len() as u64,
+        Err(_) => true,
+    };
+
+    if needs_write {
+        let temp = directory.join(format!(
+            ".{}.{}.tmp",
+            EMBEDDED_DEFAULT_SOUNDFONT_NAME,
+            std::process::id()
+        ));
+        fs::write(&temp, EMBEDDED_DEFAULT_SOUNDFONT_BYTES)?;
+        if fs::rename(&temp, &output).is_err() {
+            if !output.exists() {
+                fs::copy(&temp, &output)?;
+            }
+            let _ = fs::remove_file(&temp);
+        }
+    }
+
+    let _ = EMBEDDED_DEFAULT_SOUNDFONT_PATH.set(output.clone());
+    Ok(output)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_soundfont_uses_embedded_asset() {
+        let soundfont = MeridianSoundfont::default();
+        assert!(soundfont.uses_default());
+        let path = soundfont
+            .resolved_path()
+            .expect("embedded default soundfont should materialize");
+        assert!(path.is_file());
+        let len = fs::metadata(path)
+            .expect("embedded default soundfont metadata")
+            .len();
+        assert_eq!(len, EMBEDDED_DEFAULT_SOUNDFONT_BYTES.len() as u64);
     }
 }

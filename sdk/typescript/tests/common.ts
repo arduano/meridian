@@ -33,7 +33,7 @@ export async function defaultSoundfontPath(): Promise<string | null> {
 
   return await firstExistingPath([
     filePath(
-      "../../../assets/soundfonts/freepats-upright-kw-small/UprightPianoKW-small-20190703.sfz",
+      "../../../assets/soundfonts/freepats-upright-kw-small/UprightPianoKW-small-20190703.sf2",
     ),
   ]);
 }

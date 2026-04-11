@@ -59,7 +59,7 @@ impl CoreState {
                 .iter()
                 .cloned()
                 .map(|path| MeridianSoundfont {
-                    path,
+                    path: Some(path),
                     ..MeridianSoundfont::default()
                 })
                 .collect();

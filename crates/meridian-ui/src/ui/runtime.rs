@@ -14,8 +14,7 @@ use std::{
 use meridian_core::{
     CoreHandle, MeridianError,
     audio::{
-        AudioConfig, ChannelCount, DEFAULT_SOUNDFONT, EnvelopeCurveType, Interpolator,
-        MeridianSoundfont, ThreadCount,
+        AudioConfig, ChannelCount, EnvelopeCurveType, Interpolator, MeridianSoundfont, ThreadCount,
     },
     display::MIN_VIEW_RANGE_SECONDS,
     midi::{

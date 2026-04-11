@@ -77,7 +77,7 @@ pub fn soundfont_path() -> Option<PathBuf> {
 
     let bundled = repo_soundfonts_dir()
         .join("freepats-upright-kw-small")
-        .join("UprightPianoKW-small-20190703.sfz");
+        .join("UprightPianoKW-small-20190703.sf2");
     bundled.exists().then_some(bundled)
 }
 

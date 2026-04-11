@@ -68,7 +68,7 @@ pub(super) fn wire_audio_config_callbacks(
                     let _ = app_weak.upgrade_in_event_loop(move |app| {
                         update_audio_config(&app, &bridge, &shared_state, move |config| {
                             let soundfont = primary_soundfont(config);
-                            soundfont.path = path;
+                            soundfont.path = Some(path);
                             soundfont.enabled = true;
                         });
                     });
@@ -84,7 +84,7 @@ pub(super) fn wire_audio_config_callbacks(
             if let Some(app) = app_weak.upgrade() {
                 update_audio_config(&app, &bridge, &shared_state, move |config| {
                     let soundfont = primary_soundfont(config);
-                    soundfont.path = PathBuf::from(DEFAULT_SOUNDFONT);
+                    soundfont.path = None;
                     soundfont.enabled = true;
                 });
             }

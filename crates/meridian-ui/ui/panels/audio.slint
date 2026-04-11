@@ -47,6 +47,7 @@ export component AudioPanel inherits Rectangle {
     in property <string> audio-render-window-text: "10.0 ms";
     in property <string> soundfont-text: "(default)";
     in property <string> soundfont-count-text: "1 loaded";
+    in property <bool> audio-soundfont-can-reset: false;
     in property <bool> audio-soundfont-enabled: true;
     in property <string> audio-engine-detail-text: "Effects on / limiter off";
     in property <string> audio-effects-text: "on";
@@ -265,6 +266,7 @@ export component AudioPanel inherits Rectangle {
                 file-name: root.soundfont-text;
                 file-label: root.soundfont-count-text;
                 enabled: root.audio-soundfont-enabled;
+                reset-enabled: root.audio-soundfont-can-reset;
                 browse => { root.select-soundfont(); }
                 reset => { root.reset-soundfont(); }
                 toggle-enabled => { root.toggle-soundfont-enabled(); }

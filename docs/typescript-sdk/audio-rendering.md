@@ -48,7 +48,7 @@ reason to experiment otherwise.
 ### Soundfonts
 
 Audio rendering needs usable soundfont assets. In this repo, examples resolve a
-bundled SFZ soundfont under `assets/soundfonts` and also allow override through
+vendored soundfont under `assets/soundfonts` and also allow override through
 environment variables such as `MERIDIAN_EXAMPLE_SOUNDFONT` or
 `MERIDIAN_SOUNDFONT`.
 
@@ -82,7 +82,7 @@ try {
   const result = await client.audio.render({
     midiPath: "./song.mid",
     output: "./song.wav",
-    soundfonts: ["./assets/piano.sfz"],
+    soundfonts: ["./assets/piano.sf2"],
   });
 
   console.log(result.frames_written);
@@ -120,7 +120,7 @@ const result = await client.audio.render({
   sampleRate: 44100,
   channels: 2,
   useLimiter: true,
-  soundfonts: ["./assets/piano.sfz"],
+  soundfonts: ["./assets/piano.sf2"],
 });
 ```
 
@@ -189,7 +189,7 @@ That may resolve to:
 
 - an app-managed runtime audio config
 - a `MERIDIAN_SOUNDFONT` environment override
-- the bundled repo/runtime default soundfont path
+- Meridian's embedded default soundfont
 
 For local development, that fallback can be convenient. For reproducible
 application behavior, explicit `soundfonts` is usually the better choice.
@@ -241,7 +241,7 @@ Example:
 const result = await client.audio.render({
   midiPath: "./song.mid",
   output: "./song.wav",
-  soundfonts: ["./assets/piano.sfz"],
+  soundfonts: ["./assets/piano.sf2"],
   onEvent(event) {
     if (event.type === "render_progress") {
       console.log({
@@ -277,7 +277,7 @@ If you need cancellation or status refresh, use the job handle:
 const task = client.audio.render({
   midiPath: "./song.mid",
   output: "./song.wav",
-  soundfonts: ["./assets/piano.sfz"],
+  soundfonts: ["./assets/piano.sf2"],
 });
 
 const handle = await task.start();
@@ -309,7 +309,7 @@ Audio render handles support cancellation:
 const task = client.audio.render({
   midiPath: "./song.mid",
   output: "./song.wav",
-  soundfonts: ["./assets/piano.sfz"],
+  soundfonts: ["./assets/piano.sf2"],
 });
 
 const handle = await task.start();

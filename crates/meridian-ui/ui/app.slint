@@ -250,6 +250,7 @@ export component App inherits Window {
     in-out property <string> audio-render-window-text: "10.0 ms";
     in-out property <string> audio-soundfont-text: "(default)";
     in-out property <string> audio-soundfont-count-text: "1 loaded";
+    in-out property <bool> audio-soundfont-can-reset: false;
     in-out property <bool> audio-soundfont-enabled: true;
     in-out property <string> audio-engine-detail-text: "Nearest / FX on";
     in-out property <string> audio-effects-text: "on";
@@ -839,6 +840,7 @@ export component App inherits Window {
                     audio-render-window-text: root.audio-render-window-text;
                     soundfont-text:         root.audio-soundfont-text;
                     soundfont-count-text:   root.audio-soundfont-count-text;
+                    audio-soundfont-can-reset: root.audio-soundfont-can-reset;
                     audio-soundfont-enabled: root.audio-soundfont-enabled;
                     audio-engine-detail-text: root.audio-engine-detail-text;
                     audio-effects-text:    root.audio-effects-text;

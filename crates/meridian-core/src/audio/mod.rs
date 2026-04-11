@@ -8,8 +8,8 @@ mod xsynth;
 
 pub use clock::PlaybackClock;
 pub use config::{
-    AudioBackend, AudioConfig, DEFAULT_SOUNDFONT, MeridianSoundfont, XSynthRenderSettings,
-    XSynthSettings,
+    AudioBackend, AudioConfig, EMBEDDED_DEFAULT_SOUNDFONT_ASSET, EMBEDDED_DEFAULT_SOUNDFONT_NAME,
+    MeridianSoundfont, XSynthRenderSettings, XSynthSettings, resolve_default_soundfont_path,
 };
 pub use playback::LiveAudioSession;
 pub use player::{AudioStatus, MeridianAudioPlayer};
