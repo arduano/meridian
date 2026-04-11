@@ -1,137 +1,87 @@
 # meridian
 
-Seed repository for the new Rust rewrite direction: starting from the Slint + embedded `wgpu` proof of concept that will become a new Zenith-inspired application.
+Meridian is a Rust workspace for MIDI inspection, modification, audio rendering, and desktop visualization.
 
-## Architecture
+## Workspace
 
-The app is designed around Slint's documented texture-import path:
+- [`crates/meridian-core`](/home/arduano/programming/meridian/crates/meridian-core): core MIDI, rendering, protocol, and job logic
+- [`crates/meridian-cli`](/home/arduano/programming/meridian/crates/meridian-cli): CLI and stdio protocol frontend
+- [`crates/meridian-ui`](/home/arduano/programming/meridian/crates/meridian-ui): Slint desktop UI
+- [`sdk/typescript`](/home/arduano/programming/meridian/sdk/typescript): TypeScript SDK for driving `meridian-cli`
 
-- Slint owns the desktop window and normal surrounding UI layout.
-- Rust code hooks into `Window::set_rendering_notifier()`.
-- The notifier receives Slint's active shared `wgpu::Device` and `wgpu::Queue`.
-- Native Rust code allocates an off-screen `wgpu::Texture`, renders a procedural animated shader into it, and imports that texture into Slint with `slint::Image::try_from(texture)`.
-- The imported image is displayed in a clearly bounded viewport rectangle inside the Slint scene.
+## Requirements
 
-This is accelerated texture compositing inside the Slint window, not an HTML/WebGPU view and not a separate native child swapchain surface.
+- Rust toolchain compatible with [`rust-toolchain.toml`](/home/arduano/programming/meridian/rust-toolchain.toml)
+- On Linux, native libraries for ALSA, fontconfig, X11/Wayland, and OpenGL/Vulkan
+- `ffmpeg` for encoded audio/video rendering and related smoke tests
+- A real desktop session for running the UI; headless SSH sessions can still build and run non-UI paths
 
-## Current status
+The included [`shell.nix`](/home/arduano/programming/meridian/shell.nix) supplies the native Linux libraries expected by the Rust crates. On Linux, the safest default is to run Cargo commands through `nix-shell`.
 
-The source code in [src/main.rs](/home/arduano/programming/meridian/src/main.rs) is written against Slint's public `unstable-wgpu-28` integration API as documented by Slint. It demonstrates:
+If you use `direnv`, run `direnv allow` once in this repo. The included [`.envrc`](/home/arduano/programming/meridian/.envrc) loads the `shell.nix` environment and keeps the host Rust toolchain preferred.
 
-- surrounding Slint UI
-- a bordered embedded viewport rectangle
-- shared-device native `wgpu` rendering
-- texture import back into Slint layout
-- resize-aware viewport texture recreation
-- continuous redraw requests for animation
+## Common Commands
 
-The Rust source now verifies successfully with:
+Check the workspace:
 
 ```bash
-cargo fmt
-nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo check'
+nix-shell --run 'cargo check'
 ```
 
-A `shell.nix` is included to supply the expected native Linux development libraries on NixOS-friendly machines while still allowing the host Rust toolchain to drive the build.
-
-## Commands
-
-If you use `direnv`, run `direnv allow` once in this repo. The included [`.envrc`](/home/arduano/programming/meridian/.envrc) loads the existing [`shell.nix`](/home/arduano/programming/meridian/shell.nix) environment and prepends `/run/current-system/sw/bin` so the host Rust toolchain remains preferred.
-
-Build/check (recommended on this host):
+Run core library tests:
 
 ```bash
-nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo check'
+nix-shell --run 'cargo test -p meridian-core --lib'
 ```
 
-Run the CLI:
+Run the CLI help:
 
 ```bash
-nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run -p meridian-cli -- --help'
+nix-shell --run 'cargo run -p meridian-cli -- --help'
 ```
 
-Run stdio mode:
+Run CLI stdio protocol mode:
 
 ```bash
-nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run -p meridian-cli -- stdio'
+nix-shell --run 'cargo run -p meridian-cli -- stdio'
 ```
 
 Analyze a MIDI file:
 
 ```bash
-nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run -p meridian-cli -- analyze song.mid --pretty --buckets 64'
+nix-shell --run 'cargo run -p meridian-cli -- analyze song.mid --pretty --buckets 64'
 ```
 
-Process MIDI files:
+Process a MIDI file:
 
 ```bash
-# Flatten tempo map to a fixed tempo and write a new file
-nix-shell --run '\''PATH=/run/current-system/sw/bin:$PATH cargo run -p meridian-cli -- process tempo-flatten song.mid --output song_flat.mid --tempo 500000 --pretty'\''
-
-# Keep only a key range
-nix-shell --run '\''PATH=/run/current-system/sw/bin:$PATH cargo run -p meridian-cli -- process select song.mid --output right_hand.mid --key-min 60 --event-kind note --pretty'\''
+nix-shell --run "cargo run -p meridian-cli -- process select song.mid --output right-hand.mid --key-min 60 --event-kind note --pretty"
 ```
 
-Run without the accelerated viewport (A/B resize test):
+Run the desktop UI:
 
 ```bash
-MERIDIAN_DISABLE_WGPU=1 nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+nix-shell --run 'cargo run -p meridian-ui'
 ```
 
-Backend comparison commands (still with `MERIDIAN_DISABLE_WGPU=1`):
+Run the UI without the accelerated viewport:
 
 ```bash
-# Default backend/renderer choice
-MERIDIAN_DISABLE_WGPU=1 nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
-
-# Winit + FemtoVG
-MERIDIAN_DISABLE_WGPU=1 SLINT_BACKEND=winit-femtovg nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
-
-# Winit + software renderer
-MERIDIAN_DISABLE_WGPU=1 SLINT_BACKEND=winit-software nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
-
-# Winit + Skia renderer
-MERIDIAN_DISABLE_WGPU=1 SLINT_BACKEND=winit-skia nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
-
-# If Qt is installed and available
-MERIDIAN_DISABLE_WGPU=1 SLINT_BACKEND=Qt nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+nix-shell --run 'MERIDIAN_DISABLE_WGPU=1 cargo run -p meridian-ui'
 ```
 
-## What was attempted on this host
-
-Attempted directly on this host:
+Run TypeScript SDK checks:
 
 ```bash
-cargo check
-cargo run
-nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo check'
-nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo run'
+nix-shell --run 'cd sdk/typescript && deno check src/index.ts tests/sdk_test.ts tests/protocol_stdio_test.ts'
 ```
 
-Observed results:
+## Notes
 
-- Plain host `cargo check` reached `crates.io`, but failed on missing native Linux development dependencies (`fontconfig` via `pkg-config`).
-- A first `nix-shell` retry fixed those native libraries, but the Nix-shell-provided Rust toolchain was too old for `wgpu` 28.
-- Using the included `shell.nix` for native libraries **plus** the host Rust toolchain (`cargo 1.94` / `rustc 1.94`) succeeded for `cargo check`.
-- `cargo run` then reached actual runtime initialization and failed at the expected headless boundary: there is no active X11 or Wayland display in this NAS/SSH session.
-
-Verified successful build command:
-
-```bash
-nix-shell --run 'PATH=/run/current-system/sw/bin:$PATH cargo check'
-```
-
-Verified runtime failure on this host:
-
-```text
-Error: Error initializing winit event loop: ... neither WAYLAND_DISPLAY nor WAYLAND_SOCKET nor DISPLAY is set.
-```
-
-So the current blocker is no longer compilation — it is the lack of a real desktop/display session for actually opening the Slint window.
-
-## Headless and NAS notes
-
-See [NOTES.md](/home/arduano/programming/meridian/NOTES.md) for expected runtime blockers on headless NAS, Intel Arc, remote SSH, Wayland/X11, and display-server availability.
+- The repo is self-contained at the Cargo level and uses the published `midi-toolkit-rs` crate rather than requiring a sibling checkout.
+- The default audio configuration can use the embedded soundfont, or you can override it with `MERIDIAN_SOUNDFONT`.
+- Video and encoded audio rendering rely on `ffmpeg` being available on the host.
+- The UI needs a display server; expected headless failures are environmental, not compile failures.
 
 ## Licensing
 
@@ -141,4 +91,4 @@ Meridian uses a mixed licensing model:
 - [`meridian-cli`](/home/arduano/programming/meridian/crates/meridian-cli/Cargo.toml) is licensed under `GPL-3.0-only`.
 - [`meridian-ui`](/home/arduano/programming/meridian/crates/meridian-ui/Cargo.toml) is licensed under `GPL-3.0-only`.
 
-This split matches the current dependency constraints: the reusable core stays under the weaker copyleft already present in its `xsynth-*` dependencies, while the application frontends remain under GPL. See [LICENSE.md](/home/arduano/programming/meridian/LICENSE.md) for the repo-level summary and bundled license texts.
+See [LICENSE.md](/home/arduano/programming/meridian/LICENSE.md) for the repo-level summary and bundled license texts.

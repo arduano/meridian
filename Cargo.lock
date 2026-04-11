@@ -3286,6 +3286,8 @@ dependencies = [
 [[package]]
 name = "midi-toolkit-rs"
 version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ab511071c56dc4331a769c7a6b4d8e0baa4eb4fa9b77d07fb3d34c8c96059a8"
 dependencies = [
  "crossbeam-channel",
  "midi-toolkit-rs-derive",
@@ -3297,6 +3299,8 @@ dependencies = [
 [[package]]
 name = "midi-toolkit-rs-derive"
 version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36c27e4be7033e89d9be1c28c6a7887cf5d75296d27a979fd10af2bc5e5c8c8c"
 dependencies = [
  "convert_case 0.4.0",
  "num-traits",
