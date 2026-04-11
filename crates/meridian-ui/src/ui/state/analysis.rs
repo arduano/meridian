@@ -4,8 +4,8 @@ use slint::{ModelRc, SharedString, VecModel};
 use super::super::view::{App, BarValue, EventCount};
 use super::formatting::{
     build_bar_model, build_bar_model_sparse, build_key_bar_model, build_velocity_profile_model,
-    format_bytes, format_duration, format_duration_short, format_number, format_percentage,
-    format_percentage_compact, histogram_percentile, midi_note_name,
+    clamp_count_i32, format_bytes, format_duration, format_duration_short, format_number,
+    format_percentage, format_percentage_compact, histogram_percentile, midi_note_name,
 };
 
 pub(super) fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
@@ -191,7 +191,7 @@ pub(super) fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
         .map(|b| BarValue {
             value: b.note_starts as f32 / peak_bucket,
             label: SharedString::from(format!("{:.0}s", b.time_seconds)),
-            count: b.note_starts as i32,
+            count: clamp_count_i32(b.note_starts),
         })
         .collect();
     app.set_analysis_density_timeline(ModelRc::from(std::rc::Rc::new(VecModel::from(
@@ -226,7 +226,7 @@ pub(super) fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
         .filter(|(_, count)| *count > 0)
         .map(|(name, count)| EventCount {
             name: SharedString::from(name),
-            count: count as i32,
+            count: clamp_count_i32(count),
             fraction: count as f32 / total_accounted_events as f32,
             share_text: SharedString::from(format_percentage_compact(
                 count as f64 / total_accounted_events as f64,
@@ -312,7 +312,7 @@ pub(super) fn apply_analysis_to_app(app: &App, analysis: &MidiAnalysisData) {
         .filter(|(_, count)| *count > 0)
         .map(|(name, count)| EventCount {
             name: SharedString::from(name),
-            count: count as i32,
+            count: clamp_count_i32(count),
             fraction: count as f32 / non_note_total as f32,
             share_text: SharedString::from(format_percentage_compact(
                 count as f64 / non_note_total as f64,

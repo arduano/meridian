@@ -4,7 +4,10 @@ use crate::error::MeridianError;
 
 use super::{
     MIDIFileUnion, MidiBuildProgress,
-    analysis::{CachedMidiAnalysis, build_cached_midi_analysis_with_progress},
+    analysis::{
+        AnalysisProgressUpdate, CachedMidiAnalysis,
+        build_cached_midi_analysis_with_detailed_progress,
+    },
     audio_cache::InRamAudioCache,
     display_cache::DisplayMidiCache,
     materialized::{MaterializeOptions, build_materialized_midi_with_progress_cancelable},
@@ -124,7 +127,19 @@ impl MidiCacheStack {
 
     pub fn analysis_cache_with_progress(
         &self,
-        progress: impl FnMut(f32),
+        progress: impl FnMut(f32) + Send,
+    ) -> Result<Arc<CachedMidiAnalysis>, MeridianError> {
+        let progress = Mutex::new(progress);
+        self.analysis_cache_with_detailed_progress(move |update| {
+            if let Ok(mut callback) = progress.lock() {
+                (*callback)(update.progress);
+            }
+        })
+    }
+
+    pub fn analysis_cache_with_detailed_progress(
+        &self,
+        progress: impl Fn(AnalysisProgressUpdate) + Sync + Send,
     ) -> Result<Arc<CachedMidiAnalysis>, MeridianError> {
         let mut analysis = self
             .analysis
@@ -134,7 +149,7 @@ impl MidiCacheStack {
             return Ok(Arc::clone(cache));
         }
 
-        let cache = Arc::new(build_cached_midi_analysis_with_progress(
+        let cache = Arc::new(build_cached_midi_analysis_with_detailed_progress(
             self.parsed(),
             progress,
         )?);

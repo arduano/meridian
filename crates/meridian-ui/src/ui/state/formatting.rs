@@ -4,6 +4,10 @@ use slint::{ModelRc, SharedString, VecModel};
 
 use super::super::view::BarValue;
 
+pub(super) fn clamp_count_i32(count: u64) -> i32 {
+    count.min(i32::MAX as u64) as i32
+}
+
 pub(super) fn format_view_range_label(seconds: f64) -> String {
     if seconds < 1.0 {
         format!("{:.0} ms", seconds * 1000.0)
@@ -145,7 +149,7 @@ pub(super) fn build_velocity_profile_model(counts: &[u64]) -> ModelRc<BarValue> 
             BarValue {
                 value: normalized.sqrt(),
                 label: SharedString::from(label),
-                count: count as i32,
+                count: clamp_count_i32(count),
             }
         })
         .collect();
@@ -170,7 +174,7 @@ pub(super) fn build_bar_model_sparse(
             } else {
                 String::new()
             }),
-            count: c as i32,
+            count: clamp_count_i32(c),
         })
         .collect();
     ModelRc::from(std::rc::Rc::new(VecModel::from(bars)))
@@ -200,7 +204,7 @@ pub(super) fn build_bar_model(
         .map(|(i, &c)| BarValue {
             value: c as f32 / max,
             label: SharedString::from(label_fn(i)),
-            count: c as i32,
+            count: clamp_count_i32(c),
         })
         .collect();
     ModelRc::from(std::rc::Rc::new(VecModel::from(bars)))

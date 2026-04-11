@@ -2,7 +2,13 @@ mod accumulator;
 mod file_metrics;
 mod types;
 
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 use midi_toolkit::events::{Event, MIDIEventEnum, TextEventKind};
 use rayon::prelude::*;
@@ -22,6 +28,12 @@ pub use types::{
     CachedMidiAnalysis, MidiAnalysisBucket, MidiAnalysisData, MidiAnalysisEventMetrics,
     MidiAnalysisFileMetrics, MidiAnalysisKind, MidiAnalysisNoteMetrics, MidiAnalysisTempoMetrics,
 };
+
+#[derive(Debug, Clone)]
+pub struct AnalysisProgressUpdate {
+    pub progress: f32,
+    pub status: String,
+}
 
 #[derive(Debug, Clone)]
 struct TempoEventPoint {
@@ -107,19 +119,42 @@ struct TempoMap {
 
 pub fn build_cached_midi_analysis_with_progress(
     parsed: &ParsedMidiFile,
-    mut progress: impl FnMut(f32),
+    progress: impl FnMut(f32) + Send,
 ) -> Result<CachedMidiAnalysis, crate::error::MeridianError> {
-    progress(0.0);
-    let extracted = extract_analysis(parsed)?;
-    progress(0.4);
-    reduce_extracted_analysis(extracted, |value| progress(0.4 + value * 0.6))
+    let progress = Mutex::new(progress);
+    build_cached_midi_analysis_with_detailed_progress(parsed, |update| {
+        if let Ok(mut callback) = progress.lock() {
+            (*callback)(update.progress);
+        }
+    })
+}
+
+pub fn build_cached_midi_analysis_with_detailed_progress(
+    parsed: &ParsedMidiFile,
+    progress: impl Fn(AnalysisProgressUpdate) + Sync + Send,
+) -> Result<CachedMidiAnalysis, crate::error::MeridianError> {
+    progress(AnalysisProgressUpdate {
+        progress: 0.0,
+        status: "Preparing Analysis".into(),
+    });
+    let extracted = extract_analysis(parsed, &progress)?;
+    progress(AnalysisProgressUpdate {
+        progress: 0.65,
+        status: "Merging Extracted Analysis".into(),
+    });
+    reduce_extracted_analysis(extracted, |update| {
+        progress(AnalysisProgressUpdate {
+            progress: 0.65 + update.progress * 0.35,
+            status: update.status,
+        });
+    })
 }
 
 pub fn build_buckets_from_parsed_with_progress(
     parsed: &ParsedMidiFile,
     bucket_count: usize,
     _midi_length: f64,
-    mut progress: impl FnMut(f32),
+    mut progress: impl FnMut(f32) + Send,
 ) -> Result<Vec<MidiAnalysisBucket>, crate::error::MeridianError> {
     progress(0.0);
     let cached = build_cached_midi_analysis_with_progress(parsed, |value| progress(value * 0.9))?;
@@ -222,6 +257,7 @@ pub fn select_analysis_kinds(
 
 fn extract_analysis(
     parsed: &ParsedMidiFile,
+    progress: &(impl Fn(AnalysisProgressUpdate) + Sync),
 ) -> Result<ExtractedAnalysis, crate::error::MeridianError> {
     let midi = parsed.midi();
     let ppq = midi.ppq();
@@ -233,9 +269,38 @@ fn extract_analysis(
 
     let raw_track_count = midi.track_count();
     let actual_track_count = raw_track_count.max(1);
+    progress(AnalysisProgressUpdate {
+        progress: 0.0,
+        status: format!("Extracting Tracks 0/{actual_track_count}"),
+    });
+    let finished_tracks = AtomicUsize::new(0);
+    let reported_percent = AtomicUsize::new(0);
     let partials = (0..raw_track_count)
         .into_par_iter()
-        .map(|track_index| extract_track_analysis(midi, track_index as u32))
+        .map(|track_index| {
+            let result = extract_track_analysis(midi, track_index as u32);
+            let finished = finished_tracks.fetch_add(1, Ordering::Relaxed) + 1;
+            let percent = finished * 100 / actual_track_count;
+            let mut last = reported_percent.load(Ordering::Relaxed);
+            while percent > last {
+                match reported_percent.compare_exchange(
+                    last,
+                    percent,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(_) => {
+                        progress(AnalysisProgressUpdate {
+                            progress: (finished as f32 / actual_track_count as f32).clamp(0.0, 1.0),
+                            status: format!("Extracting Tracks {finished}/{actual_track_count}"),
+                        });
+                        break;
+                    }
+                    Err(updated) => last = updated,
+                }
+            }
+            result
+        })
         .collect::<Vec<_>>();
 
     let mut resolved_partials = Vec::with_capacity(partials.len());
@@ -551,10 +616,17 @@ fn extract_track_analysis(
 
 fn reduce_extracted_analysis(
     extracted: ExtractedAnalysis,
-    mut progress: impl FnMut(f32),
+    mut progress: impl FnMut(AnalysisProgressUpdate),
 ) -> Result<CachedMidiAnalysis, crate::error::MeridianError> {
+    progress(AnalysisProgressUpdate {
+        progress: 0.0,
+        status: "Building Tempo Map".into(),
+    });
     let tempo_map = build_tempo_map(extracted.ppq, extracted.max_tick, &extracted.tempo_events);
-    progress(0.2);
+    progress(AnalysisProgressUpdate {
+        progress: 0.1,
+        status: "Reducing Note Onsets".into(),
+    });
 
     let mut tick_seconds_cache = FxHashMap::<u64, f64>::default();
     let total_steps = (extracted.onset_counts.len()
@@ -589,7 +661,10 @@ fn reduce_extracted_analysis(
             || steps_completed == total_steps
             || steps_completed % progress_stride == 0
         {
-            progress(0.2 + 0.8 * (steps_completed as f32 / total_steps as f32));
+            progress(AnalysisProgressUpdate {
+                progress: 0.1 + 0.2 * (steps_completed as f32 / total_steps as f32),
+                status: "Reducing Note Onsets".into(),
+            });
         }
     }
 
@@ -623,6 +698,10 @@ fn reduce_extracted_analysis(
     }
 
     let mut bucket_active_deltas = Vec::with_capacity(extracted.active_deltas.len());
+    progress(AnalysisProgressUpdate {
+        progress: 0.3,
+        status: "Preparing Bucket Summary".into(),
+    });
     for (tick, delta) in &extracted.active_deltas {
         bucket_active_deltas.push(CachedBucketDelta {
             time_seconds: seconds_for_tick(
@@ -635,10 +714,17 @@ fn reduce_extracted_analysis(
         });
         steps_completed += 1;
         if steps_completed == total_steps || steps_completed % progress_stride == 0 {
-            progress(0.2 + 0.8 * (steps_completed as f32 / total_steps as f32));
+            progress(AnalysisProgressUpdate {
+                progress: 0.3 + 0.15 * (steps_completed as f32 / total_steps as f32),
+                status: "Preparing Bucket Summary".into(),
+            });
         }
     }
 
+    progress(AnalysisProgressUpdate {
+        progress: 0.45,
+        status: "Reducing Polyphony".into(),
+    });
     let (polyphony_area, max_simultaneous_notes) = reduce_polyphony(
         &extracted.tick_transitions,
         tempo_map.midi_length,
@@ -649,8 +735,13 @@ fn reduce_extracted_analysis(
         total_steps,
         progress_stride,
         &mut progress,
+        "Reducing Polyphony",
     );
 
+    progress(AnalysisProgressUpdate {
+        progress: 0.7,
+        status: "Reducing Note Durations".into(),
+    });
     let (total_note_duration_seconds, min_note_length_seconds, max_note_length_seconds) =
         reduce_durations(
             &extracted.intervals,
@@ -661,6 +752,7 @@ fn reduce_extracted_analysis(
             total_steps,
             progress_stride,
             &mut progress,
+            "Reducing Note Durations",
         );
 
     let avg_note_length_seconds = if extracted.total_notes > 0 {
@@ -684,7 +776,10 @@ fn reduce_extracted_analysis(
         0.0
     };
 
-    progress(1.0);
+    progress(AnalysisProgressUpdate {
+        progress: 1.0,
+        status: "Analysis Cache Complete".into(),
+    });
 
     Ok(CachedMidiAnalysis::from_parts(
         tempo_map.midi_length,
@@ -835,7 +930,8 @@ fn reduce_polyphony(
     steps_completed: &mut usize,
     total_steps: usize,
     progress_stride: usize,
-    progress: &mut impl FnMut(f32),
+    progress: &mut impl FnMut(AnalysisProgressUpdate),
+    status: &str,
 ) -> (f64, u64) {
     let mut polyphony_area = 0.0;
     let mut max_simultaneous_notes = 0_u64;
@@ -857,7 +953,10 @@ fn reduce_polyphony(
             index += 1;
             *steps_completed += 1;
             if *steps_completed == total_steps || *steps_completed % progress_stride == 0 {
-                progress(0.2 + 0.8 * (*steps_completed as f32 / total_steps as f32));
+                progress(AnalysisProgressUpdate {
+                    progress: 0.45 + 0.25 * (*steps_completed as f32 / total_steps as f32),
+                    status: status.into(),
+                });
             }
         }
 
@@ -877,7 +976,8 @@ fn reduce_durations(
     steps_completed: &mut usize,
     total_steps: usize,
     progress_stride: usize,
-    progress: &mut impl FnMut(f32),
+    progress: &mut impl FnMut(AnalysisProgressUpdate),
+    status: &str,
 ) -> (f64, f64, f64) {
     let mut total_note_duration_seconds = 0.0_f64;
     let mut min_note_length_seconds = f64::INFINITY;
@@ -895,7 +995,10 @@ fn reduce_durations(
         }
         *steps_completed += 1;
         if *steps_completed == total_steps || *steps_completed % progress_stride == 0 {
-            progress(0.2 + 0.8 * (*steps_completed as f32 / total_steps as f32));
+            progress(AnalysisProgressUpdate {
+                progress: 0.7 + 0.3 * (*steps_completed as f32 / total_steps as f32),
+                status: status.into(),
+            });
         }
     }
 

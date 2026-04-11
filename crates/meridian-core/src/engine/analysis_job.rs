@@ -33,7 +33,7 @@ impl CoreState {
             parsed_midi_id,
             kinds: kinds.clone(),
             progress: 0.0,
-            status: "queued".into(),
+            status: "Queued".into(),
         };
         self.analysis_jobs.insert(job_id, status.clone());
 
@@ -55,11 +55,11 @@ impl CoreState {
                 kinds: kinds.clone(),
             });
 
-            let analysis = match cache_stack.analysis_cache_with_progress(|progress| {
+            let analysis = match cache_stack.analysis_cache_with_detailed_progress(|update| {
                 let _ = core_handle.publish_analysis_job_event(MidiAnalysisJobEvent::Progress {
                     job_id,
-                    progress: progress.clamp(0.0, 0.95),
-                    status: "building parsed analysis".into(),
+                    progress: update.progress.clamp(0.0, 0.95),
+                    status: update.status,
                 });
             }) {
                 Ok(analysis) => analysis,
@@ -76,13 +76,20 @@ impl CoreState {
                 let _ = core_handle.publish_analysis_job_event(MidiAnalysisJobEvent::Progress {
                     job_id,
                     progress: 0.975,
-                    status: "building bucket summary".into(),
+                    status: "Building Bucket Summary".into(),
                 });
                 analysis.build_buckets_from_note_spans(bucket_count.unwrap_or(1024))
             } else {
                 Vec::new()
             };
 
+            if gzip_handle.is_some() {
+                let _ = core_handle.publish_analysis_job_event(MidiAnalysisJobEvent::Progress {
+                    job_id,
+                    progress: if buckets.is_empty() { 0.975 } else { 0.99 },
+                    status: "Computing File Metrics".into(),
+                });
+            }
             let gzip_bytes = gzip_handle.and_then(|handle| handle.join().ok());
             let result = select_analysis_kinds(
                 analyze_cached_midi_with_gzip_bytes(
@@ -114,7 +121,7 @@ impl CoreState {
                         parsed_midi_id: *parsed_midi_id,
                         kinds: kinds.clone(),
                         progress: 0.0,
-                        status: "started".into(),
+                        status: "Started".into(),
                     },
                 );
             }
