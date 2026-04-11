@@ -50,7 +50,8 @@
 //    PrimaryButton { label: "Go"; enabled: true; pressed => { … } }
 // ═══════════════════════════════════════════════════════════
 
-import { SliderCurve } from "structs.slint";
+import { SliderCurve, InspectorRow } from "structs.slint";
+import { Theme } from "theme.slint";
 
 
 // ── SectionHeader ──────────────────────────────────────────
@@ -61,10 +62,10 @@ export component SectionHeader inherits Text {
     in property <string> title;
 
     text: root.title;
-    color: #4d6580;
-    font-size: 10px;
+    color: Theme.text-muted;
+    font-size: Theme.font-size-sm;
     font-weight: 700;
-    letter-spacing: 0.8px;
+    letter-spacing: Theme.tracking-wide;
 }
 
 
@@ -74,7 +75,7 @@ export component SectionHeader inherits Text {
 
 export component Separator inherits Rectangle {
     height: 1px;
-    background: #111a28;
+    background: Theme.border-subtle;
 }
 
 
@@ -92,16 +93,16 @@ export component FieldRow inherits Rectangle {
     HorizontalLayout {
         Text {
             text: root.label;
-            color: #4d6580;
-            font-size: 11px;
+            color: Theme.text-muted;
+            font-size: Theme.font-size-md;
             vertical-alignment: center;
             horizontal-stretch: 1;
         }
         Text {
             text: root.value;
-            color: #b0c0d4;
-            font-family: "monospace";
-            font-size: 11px;
+            color: Theme.text-primary;
+            font-family: Theme.font-family-mono;
+            font-size: Theme.font-size-md;
             font-weight: 600;
             vertical-alignment: center;
         }
@@ -121,12 +122,12 @@ export component ToggleButton inherits Rectangle {
     horizontal-stretch: 1;
     height: 30px;
     border-radius: 6px;
-    background: root.active ? #1a2d4d : touch.has-hover ? #111c2e : transparent;
+    background: root.active ? Theme.surface-selected : touch.has-hover ? Theme.surface-control-hover-subtle : transparent;
 
     Text {
         text: root.label;
-        color: root.active ? #60a5fa : #6b7d94;
-        font-size: 12px;
+        color: root.active ? Theme.text-accent : Theme.text-secondary;
+        font-size: Theme.font-size-lg;
         font-weight: root.active ? 700 : 500;
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -151,13 +152,13 @@ export component PrimaryButton inherits Rectangle {
     height: 36px;
     border-radius: 8px;
     background: root.enabled
-        ? (touch.has-hover ? rgb(45, 112, 255) : rgb(37, 99, 235))
-        : #1a2538;
+        ? (touch.has-hover ? Theme.accent-fill-hover : Theme.accent-fill)
+        : Theme.surface-disabled;
 
     Text {
         text: root.label;
-        color: root.enabled ? #f0f4ff : #3d5068;
-        font-size: 13px;
+        color: root.enabled ? Theme.text-on-accent : Theme.text-faint;
+        font-size: Theme.font-size-xl;
         font-weight: 700;
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -179,13 +180,13 @@ export component ProgressBar inherits Rectangle {
 
     height: 6px;
     border-radius: 3px;
-    background: #111a28;
+    background: Theme.border-subtle;
 
     Rectangle {
         width: parent.width * max(0.0, min(1.0, root.progress));
         height: parent.height;
         border-radius: 3px;
-        background: rgb(37, 99, 235);
+        background: Theme.accent-fill;
     }
 }
 
@@ -193,8 +194,6 @@ export component ProgressBar inherits Rectangle {
 // ── InspectorLine ──────────────────────────────────────────
 // Badge + label + value row for the config inspector.
 // Usage:  InspectorLine { section: "Scene"; label: "FOV"; value: "60.00"; }
-
-import { InspectorRow } from "structs.slint";
 
 export component InspectorLine inherits Rectangle {
     in property <string> section;
@@ -213,12 +212,12 @@ export component InspectorLine inherits Rectangle {
             width: 52px;
             height: 20px;
             border-radius: 3px;
-            background: #0f1822;
+            background: Theme.surface-panel-alt;
 
             Text {
                 text: root.section;
-                color: #4d6580;
-                font-size: 9px;
+                color: Theme.text-muted;
+                font-size: Theme.font-size-xs;
                 font-weight: 600;
                 horizontal-alignment: center;
                 vertical-alignment: center;
@@ -227,17 +226,17 @@ export component InspectorLine inherits Rectangle {
 
         Text {
             text: root.label;
-            color: #7d8fa8;
-            font-size: 11px;
+            color: Theme.text-detail;
+            font-size: Theme.font-size-md;
             vertical-alignment: center;
             horizontal-stretch: 1;
         }
 
         Text {
             text: root.value;
-            color: #b0c0d4;
-            font-family: "monospace";
-            font-size: 10px;
+            color: Theme.text-primary;
+            font-family: Theme.font-family-mono;
+            font-size: Theme.font-size-sm;
             vertical-alignment: center;
         }
     }
@@ -259,9 +258,9 @@ export component OptionChip inherits Rectangle {
     min-width: 40px;
     height: 26px;
     border-radius: 5px;
-    background: root.active ? #1a2d4d : touch.has-hover ? #111c2e : #0a1018;
+    background: root.active ? Theme.surface-selected : touch.has-hover ? Theme.surface-control-hover-subtle : Theme.surface-canvas;
     border-width: 1px;
-    border-color: root.active ? #1e3a5f : #111a28;
+    border-color: root.active ? Theme.surface-selected-hover : Theme.border-subtle;
 
     HorizontalLayout {
         padding-left: 10px;
@@ -270,8 +269,8 @@ export component OptionChip inherits Rectangle {
 
         Text {
             text: root.label;
-            color: root.active ? #60a5fa : #6b7d94;
-            font-size: 11px;
+            color: root.active ? Theme.text-accent : Theme.text-secondary;
+            font-size: Theme.font-size-md;
             font-weight: root.active ? 700 : 500;
             horizontal-alignment: center;
             vertical-alignment: center;
@@ -308,8 +307,8 @@ export component InlineOptionRow inherits Rectangle {
         // Label
         Text {
             text: root.label;
-            color: #7d8fa8;
-            font-size: 11px;
+            color: Theme.text-detail;
+            font-size: Theme.font-size-md;
             vertical-alignment: center;
             min-width: 90px;
         }
@@ -388,8 +387,8 @@ export component InlineCustomRow inherits Rectangle {
             // Row label
             Text {
                 text: root.label;
-                color: #7d8fa8;
-                font-size: 11px;
+                color: Theme.text-detail;
+                font-size: Theme.font-size-md;
                 vertical-alignment: center;
                 min-width: 90px;
             }
@@ -411,16 +410,16 @@ export component InlineCustomRow inherits Rectangle {
                     height: 26px;
                     border-radius: 5px;
                     background: root.editing
-                        ? #1a2d4d
+                        ? Theme.surface-selected
                         : root.has-custom-value
                             ? #2a2210
-                            : custom-touch.has-hover ? #111c2e : #0a1018;
+                            : custom-touch.has-hover ? Theme.surface-control-hover-subtle : Theme.surface-canvas;
                     border-width: 1px;
                     border-color: root.editing
-                        ? #1e3a5f
+                        ? Theme.surface-selected-hover
                         : root.has-custom-value
                             ? #4a3820
-                            : #111a28;
+                            : Theme.border-subtle;
 
                     HorizontalLayout {
                         padding-left: 8px;
@@ -436,7 +435,7 @@ export component InlineCustomRow inherits Rectangle {
                                 width: 6px;
                                 height: 6px;
                                 border-radius: 3px;
-                                background: #f59e0b;
+                                background: Theme.status-warning;
                             }
                         }
 
@@ -445,11 +444,11 @@ export component InlineCustomRow inherits Rectangle {
                                 ? root.custom-display
                                 : "Custom";
                             color: root.editing
-                                ? #60a5fa
+                                ? Theme.text-accent
                                 : root.has-custom-value
-                                    ? #f59e0b
-                                    : #6b7d94;
-                            font-size: 11px;
+                                    ? Theme.status-warning
+                                    : Theme.text-secondary;
+                            font-size: Theme.font-size-md;
                             font-weight: root.editing || root.has-custom-value ? 700 : 500;
                             font-family: root.has-custom-value && !root.editing
                                 ? "monospace" : "";
@@ -480,15 +479,15 @@ export component InlineCustomRow inherits Rectangle {
                 horizontal-stretch: 1;
                 height: 28px;
                 border-radius: 5px;
-                background: #0a1018;
+                background: Theme.surface-canvas;
                 border-width: 1px;
-                border-color: custom-input.has-focus ? #2563eb : #1a2740;
+                border-color: custom-input.has-focus ? Theme.accent-border : Theme.border-strong;
 
                 custom-input := TextInput {
                     text: root.draft;
-                    color: #b0c0d4;
-                    font-size: 11px;
-                    font-family: "monospace";
+                    color: Theme.text-primary;
+                    font-size: Theme.font-size-md;
+                    font-family: Theme.font-family-mono;
                     horizontal-alignment: left;
                     vertical-alignment: center;
                     x: 8px;
@@ -509,12 +508,12 @@ export component InlineCustomRow inherits Rectangle {
                 width: 48px;
                 height: 28px;
                 border-radius: 5px;
-                background: apply-touch.has-hover ? #1e3a5f : #1a2d4d;
+                background: apply-touch.has-hover ? Theme.surface-selected-hover : Theme.surface-selected;
 
                 Text {
                     text: "Apply";
-                    color: #60a5fa;
-                    font-size: 10px;
+                    color: Theme.text-accent;
+                    font-size: Theme.font-size-sm;
                     font-weight: 700;
                     horizontal-alignment: center;
                     vertical-alignment: center;
@@ -618,8 +617,8 @@ export component SliderRow inherits Rectangle {
             // Row label
             Text {
                 text: root.label;
-                color: #7d8fa8;
-                font-size: 11px;
+                color: Theme.text-detail;
+                font-size: Theme.font-size-md;
                 vertical-alignment: center;
                 min-width: 72px;
                 horizontal-stretch: 0;
@@ -641,7 +640,7 @@ export component SliderRow inherits Rectangle {
                         width: parent.width;
                         height: 4px;
                         border-radius: 2px;
-                        background: #141e2e;
+                        background: Theme.surface-control;
                     }
                     // Fill
                     Rectangle {
@@ -650,7 +649,7 @@ export component SliderRow inherits Rectangle {
                         width: parent.width * root.slider-pos;
                         height: 4px;
                         border-radius: 2px;
-                        background: #1e3a5f;
+                        background: Theme.surface-selected-hover;
                     }
                     // Thumb
                     Rectangle {
@@ -661,9 +660,9 @@ export component SliderRow inherits Rectangle {
                         height: 10px;
                         border-radius: 5px;
                         background: slider-touch.has-hover || slider-touch.pressed
-                            ? #60a5fa : #3d5a80;
+                            ? Theme.text-accent : #3d5a80;
                         drop-shadow-blur: 2px;
-                        drop-shadow-color: #00000030;
+                        drop-shadow-color: Theme.shadow-soft;
                     }
 
                     slider-touch := TouchArea {
@@ -719,10 +718,10 @@ export component SliderRow inherits Rectangle {
                         height: 26px;
                         border-radius: 5px;
                         background: root.editing
-                            ? #1a2d4d
+                            ? Theme.surface-selected
                             : value-touch.has-hover ? #352e1a : #2a2210;
                         border-width: 1px;
-                        border-color: root.editing ? #1e3a5f : #4a3820;
+                        border-color: root.editing ? Theme.surface-selected-hover : #4a3820;
 
                         HorizontalLayout {
                             padding-left: 6px;
@@ -737,14 +736,14 @@ export component SliderRow inherits Rectangle {
                                     width: 5px;
                                     height: 5px;
                                     border-radius: 2.5px;
-                                    background: #f59e0b;
+                                    background: Theme.status-warning;
                                 }
                             }
 
                             Text {
                                 text: root.editing ? "Edit" : root.display-text;
-                                color: root.editing ? #60a5fa : #f59e0b;
-                                font-size: 10px;
+                                color: root.editing ? Theme.text-accent : Theme.status-warning;
+                                font-size: Theme.font-size-sm;
                                 font-weight: 700;
                                 font-family: root.editing ? "" : "monospace";
                                 horizontal-alignment: center;
@@ -769,12 +768,12 @@ export component SliderRow inherits Rectangle {
                         border-radius: 5px;
                         background: reset-touch.has-hover ? #162234 : #0f1724;
                         border-width: 1px;
-                        border-color: reset-touch.has-hover ? #29415f : #1a2740;
+                        border-color: reset-touch.has-hover ? #29415f : Theme.border-strong;
 
                         Text {
                             text: "↺";
                             color: reset-touch.has-hover ? #9ec5ff : #6b8bb3;
-                            font-size: 11px;
+                            font-size: Theme.font-size-md;
                             font-weight: 700;
                             horizontal-alignment: center;
                             vertical-alignment: center;
@@ -801,15 +800,15 @@ export component SliderRow inherits Rectangle {
                 horizontal-stretch: 1;
                 height: 28px;
                 border-radius: 5px;
-                background: #0a1018;
+                background: Theme.surface-canvas;
                 border-width: 1px;
-                border-color: slider-edit-input.has-focus ? #2563eb : #1a2740;
+                border-color: slider-edit-input.has-focus ? Theme.accent-border : Theme.border-strong;
 
                 slider-edit-input := TextInput {
                     text: root.draft;
-                    color: #b0c0d4;
-                    font-size: 11px;
-                    font-family: "monospace";
+                    color: Theme.text-primary;
+                    font-size: Theme.font-size-md;
+                    font-family: Theme.font-family-mono;
                     horizontal-alignment: left;
                     vertical-alignment: center;
                     x: 8px;
@@ -830,12 +829,12 @@ export component SliderRow inherits Rectangle {
                 width: 48px;
                 height: 28px;
                 border-radius: 5px;
-                background: slider-apply-touch.has-hover ? #1e3a5f : #1a2d4d;
+                background: slider-apply-touch.has-hover ? Theme.surface-selected-hover : Theme.surface-selected;
 
                 Text {
                     text: "Apply";
-                    color: #60a5fa;
-                    font-size: 10px;
+                    color: Theme.text-accent;
+                    font-size: Theme.font-size-sm;
                     font-weight: 700;
                     horizontal-alignment: center;
                     vertical-alignment: center;
@@ -878,7 +877,7 @@ export component FilePicker inherits Rectangle {
 
     height: 56px;
     border-radius: 8px;
-    background: #0c1420;
+    background: Theme.surface-panel;
 
     VerticalLayout {
         alignment: center;
@@ -891,7 +890,7 @@ export component FilePicker inherits Rectangle {
             // Icon
             Text {
                 text: "🎵";
-                font-size: 14px;
+                font-size: Theme.font-size-2xl;
                 vertical-alignment: center;
             }
 
@@ -903,15 +902,15 @@ export component FilePicker inherits Rectangle {
 
                 Text {
                     text: root.file-name;
-                    color: root.enabled ? #b0c0d4 : #3d5068;
-                    font-size: 11px;
+                    color: root.enabled ? Theme.text-primary : Theme.text-faint;
+                    font-size: Theme.font-size-md;
                     font-weight: 600;
                     overflow: elide;
                 }
                 Text {
                     text: root.file-label;
-                    color: #3d5068;
-                    font-size: 9px;
+                    color: Theme.text-faint;
+                    font-size: Theme.font-size-xs;
                     visible: root.file-label != "";
                 }
             }
@@ -921,12 +920,12 @@ export component FilePicker inherits Rectangle {
                 width: 56px;
                 height: 28px;
                 border-radius: 5px;
-                background: browse-touch.has-hover ? #1a2b40 : #141e2e;
+                background: browse-touch.has-hover ? Theme.surface-control-hover : Theme.surface-control;
 
                 Text {
                     text: "Browse";
-                    color: #8899b0;
-                    font-size: 10px;
+                    color: Theme.text-soft;
+                    font-size: Theme.font-size-sm;
                     font-weight: 600;
                     horizontal-alignment: center;
                     vertical-alignment: center;
@@ -943,13 +942,13 @@ export component FilePicker inherits Rectangle {
                 height: 28px;
                 border-radius: 5px;
                 background: root.reset-enabled
-                    ? (reset-touch.has-hover ? #1a2b40 : #141e2e)
-                    : #0f1822;
+                    ? (reset-touch.has-hover ? Theme.surface-control-hover : Theme.surface-control)
+                    : Theme.surface-panel-alt;
 
                 Text {
                     text: "Reset";
-                    color: root.reset-enabled ? #6b7d94 : #2f4158;
-                    font-size: 10px;
+                    color: root.reset-enabled ? Theme.text-secondary : #2f4158;
+                    font-size: Theme.font-size-sm;
                     font-weight: 600;
                     horizontal-alignment: center;
                     vertical-alignment: center;
@@ -977,7 +976,7 @@ export component StatusBadge inherits Rectangle {
 
     height: 22px;
     border-radius: 4px;
-    background: root.active ? #0c2a1a : #0f1822;
+    background: root.active ? #0c2a1a : Theme.surface-panel-alt;
 
     HorizontalLayout {
         padding-left: 8px;
@@ -986,8 +985,8 @@ export component StatusBadge inherits Rectangle {
 
         Text {
             text: root.label;
-            color: root.active ? #34d399 : #4d6580;
-            font-size: 10px;
+            color: root.active ? Theme.status-success : Theme.text-muted;
+            font-size: Theme.font-size-sm;
             font-weight: 600;
             vertical-alignment: center;
         }

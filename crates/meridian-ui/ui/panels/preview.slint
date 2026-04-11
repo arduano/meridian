@@ -8,6 +8,7 @@
 
 import { MidiLoadState } from "../structs.slint";
 import { MidiLoadingBar, MidiLoadedBar, MidiErrorBar } from "../midi_loading.slint";
+import { Theme } from "../theme.slint";
 
 export component PreviewWelcome inherits Rectangle {
     in property <MidiLoadState> midi-state: no-midi;
@@ -36,12 +37,12 @@ export component PreviewWelcome inherits Rectangle {
             Rectangle {
                 width: 420px;
                 border-radius: 16px;
-                background: #0a1220;
+                background: Theme.surface-card;
                 border-width: root.drop-hovering ? 2px : 1px;
-                border-color: root.drop-hovering ? rgb(37, 99, 235) : #141e2e;
+                border-color: root.drop-hovering ? Theme.accent-fill : Theme.surface-control;
 
                 drop-shadow-blur: root.drop-hovering ? 40px : 0px;
-                drop-shadow-color: root.drop-hovering ? #1a3a6040 : transparent;
+                drop-shadow-color: root.drop-hovering ? Theme.accent-glow : transparent;
 
                 VerticalLayout {
                     padding: 40px;
@@ -71,8 +72,8 @@ export component PreviewWelcome inherits Rectangle {
                     // ── Title ──
                     Text {
                         text: root.drop-hovering ? "Drop to open" : "Open a MIDI file";
-                        color: root.drop-hovering ? rgb(96, 165, 250) : #b0c0d4;
-                        font-size: 18px;
+                        color: root.drop-hovering ? rgb(96, 165, 250) : Theme.text-primary;
+                        font-size: Theme.font-size-display-md;
                         font-weight: 700;
                         horizontal-alignment: center;
 
@@ -86,8 +87,8 @@ export component PreviewWelcome inherits Rectangle {
                         text: root.drop-hovering
                             ? "Release to load this file"
                             : "Drag and drop a .mid file here, or browse to select one. Preview loads visuals and audio together, then starts playback.";
-                        color: #4d6580;
-                        font-size: 12px;
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size-lg;
                         horizontal-alignment: center;
                         wrap: word-wrap;
                     }
@@ -102,12 +103,12 @@ export component PreviewWelcome inherits Rectangle {
                             width: 160px;
                             height: 40px;
                             border-radius: 10px;
-                            background: browse-touch.has-hover ? rgb(45, 112, 255) : rgb(37, 99, 235);
+                            background: browse-touch.has-hover ? Theme.accent-fill-hover : Theme.accent-fill;
 
                             Text {
                                 text: "Browse Files";
-                                color: #f0f4ff;
-                                font-size: 14px;
+                                color: Theme.text-on-accent;
+                                font-size: Theme.font-size-2xl;
                                 font-weight: 700;
                                 horizontal-alignment: center;
                                 vertical-alignment: center;
@@ -146,8 +147,8 @@ export component PreviewWelcome inherits Rectangle {
 
                         Text {
                             text: "Preview loads display + audio together and jumps straight into playback.";
-                            color: #4d6580;
-                            font-size: 11px;
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-md;
                             horizontal-alignment: center;
                             wrap: word-wrap;
                         }
@@ -157,7 +158,7 @@ export component PreviewWelcome inherits Rectangle {
                         Rectangle {
                             height: 34px;
                             border-radius: 8px;
-                            background: #0c1525;
+                            background: Theme.surface-card-raised;
 
                             HorizontalLayout {
                                 padding-left: 12px;
@@ -166,15 +167,15 @@ export component PreviewWelcome inherits Rectangle {
 
                                 Text {
                                     text: "♪";
-                                    color: rgb(37, 99, 235);
-                                    font-size: 12px;
+                                    color: Theme.accent-fill;
+                                    font-size: Theme.font-size-lg;
                                     vertical-alignment: center;
                                 }
 
                                 Text {
                                     text: root.selected-midi-name;
-                                    color: #8899b0;
-                                    font-size: 12px;
+                                    color: Theme.text-soft;
+                                    font-size: Theme.font-size-lg;
                                     font-weight: 500;
                                     vertical-alignment: center;
                                     horizontal-stretch: 1;
@@ -190,12 +191,12 @@ export component PreviewWelcome inherits Rectangle {
                                         width: 40px;
                                         height: 22px;
                                         border-radius: 5px;
-                                        background: load-touch.has-hover ? rgb(45, 112, 255) : rgb(37, 99, 235);
+                                        background: load-touch.has-hover ? Theme.accent-fill-hover : Theme.accent-fill;
 
                                         Text {
                                             text: "Load";
-                                            color: #f0f4ff;
-                                            font-size: 10px;
+                                            color: Theme.text-on-accent;
+                                            font-size: Theme.font-size-sm;
                                             font-weight: 700;
                                             horizontal-alignment: center;
                                             vertical-alignment: center;
@@ -226,7 +227,7 @@ export component DropOverlay inherits Rectangle {
     in property <bool> visible-when: false;
 
     visible: root.visible-when;
-    background: #060a11c0;
+    background: Theme.overlay-background;
 
     // Border glow
     Rectangle {
@@ -236,7 +237,7 @@ export component DropOverlay inherits Rectangle {
         height: parent.height - 12px;
         border-radius: 12px;
         border-width: 2px;
-        border-color: rgb(37, 99, 235);
+        border-color: Theme.accent-fill;
         background: transparent;
     }
 
@@ -256,7 +257,7 @@ export component DropOverlay inherits Rectangle {
                         width: 56px;
                         height: 56px;
                         border-radius: 28px;
-                        background: #0f1e38;
+                        background: Theme.surface-badge;
 
                         Text {
                             text: "♪";
@@ -271,15 +272,15 @@ export component DropOverlay inherits Rectangle {
                 Text {
                     text: "Drop MIDI file to open";
                     color: rgb(96, 165, 250);
-                    font-size: 16px;
+                    font-size: Theme.font-size-display-sm;
                     font-weight: 700;
                     horizontal-alignment: center;
                 }
 
                 Text {
                     text: "Release to load this file into Meridian";
-                    color: #4d6580;
-                    font-size: 12px;
+                    color: Theme.text-muted;
+                    font-size: Theme.font-size-lg;
                     horizontal-alignment: center;
                 }
             }

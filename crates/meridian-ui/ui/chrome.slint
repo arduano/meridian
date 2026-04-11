@@ -1,3 +1,5 @@
+import { Theme } from "theme.slint";
+
 // ═══════════════════════════════════════════════════════════
 //  Chrome — structural components for the app shell.
 //  Profile tabs, transport controls, scrubber.
@@ -18,8 +20,8 @@ export component ProfileTab inherits Rectangle {
 
     Text {
         text: root.label;
-        color: root.active ? #e0eaf6 : touch.has-hover ? #8899b0 : #4d6580;
-        font-size: 12px;
+        color: root.active ? Theme.text-accent-strong : touch.has-hover ? Theme.text-soft : Theme.text-muted;
+        font-size: Theme.font-size-lg;
         font-weight: root.active ? 700 : 500;
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -28,7 +30,7 @@ export component ProfileTab inherits Rectangle {
     Rectangle {
         y: parent.height - 2px;
         height: 2px;
-        background: root.active ? rgb(37, 99, 235) : transparent;
+        background: root.active ? Theme.accent-fill : transparent;
     }
 
     touch := TouchArea {
@@ -52,7 +54,7 @@ export component TabGroupDivider inherits Rectangle {
         width: 1px;
         height: parent.height - 18px;
         border-radius: 0.5px;
-        background: #1a2740;
+        background: Theme.border-strong;
     }
 }
 
@@ -68,12 +70,12 @@ export component TransportButton inherits Rectangle {
     width: 32px;
     height: 32px;
     border-radius: 6px;
-    background: touch.has-hover ? #1a2b40 : root.active ? #162638 : transparent;
+    background: touch.has-hover ? Theme.surface-control-hover : root.active ? #162638 : transparent;
 
     Text {
         text: root.icon;
-        color: root.active ? #60a5fa : #8899b0;
-        font-size: 14px;
+        color: root.active ? Theme.text-accent : Theme.text-soft;
+        font-size: Theme.font-size-2xl;
         font-weight: 700;
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -107,7 +109,7 @@ export component TimeScrubber inherits Rectangle {
         width: parent.width;
         height: 4px;
         border-radius: 2px;
-        background: #141e2e;
+        background: Theme.surface-control;
     }
     // Fill
     Rectangle {
@@ -116,7 +118,7 @@ export component TimeScrubber inherits Rectangle {
         width: parent.width * root.fill-ratio;
         height: 4px;
         border-radius: 2px;
-        background: rgb(37, 99, 235);
+        background: Theme.accent-fill;
     }
     // Thumb
     Rectangle {
@@ -127,7 +129,7 @@ export component TimeScrubber inherits Rectangle {
         border-radius: 6px;
         background: touch.has-hover || touch.pressed ? #f0f4fa : #c0cce0;
         drop-shadow-blur: 3px;
-        drop-shadow-color: #00000030;
+        drop-shadow-color: Theme.shadow-soft;
     }
 
     touch := TouchArea {

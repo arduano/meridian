@@ -27,6 +27,7 @@ import {
 } from "../primitives.slint";
 import { MidiStateSection } from "../midi_loading.slint";
 import { TextEdit } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
 
 
 // ── ModifyPassButton ───────────────────────────────────────
@@ -43,7 +44,7 @@ component ModifyPassButton inherits Rectangle {
     border-radius: 8px;
     border-width: 1px;
     border-color: root.active ? #1f4b86 : #132031;
-    background: root.active ? #11243f : touch.has-hover ? #0e1724 : #0a1018;
+    background: root.active ? #11243f : touch.has-hover ? #0e1724 : Theme.surface-canvas;
 
     VerticalLayout {
         padding: 10px;
@@ -52,15 +53,15 @@ component ModifyPassButton inherits Rectangle {
 
         Text {
             text: root.title;
-            color: root.active ? #8cc2ff : #b0c0d4;
-            font-size: 11px;
+            color: root.active ? #8cc2ff : Theme.text-primary;
+            font-size: Theme.font-size-md;
             font-weight: 700;
             overflow: elide;
         }
         Text {
             text: root.subtitle;
-            color: root.active ? #6d97c8 : #4d6580;
-            font-size: 9px;
+            color: root.active ? #6d97c8 : Theme.text-muted;
+            font-size: Theme.font-size-xs;
             wrap: word-wrap;
         }
     }
@@ -71,20 +72,12 @@ component ModifyPassButton inherits Rectangle {
     }
 }
 
-// Invisible placeholder to keep the 3-column grid aligned.
-component PassButtonPlaceholder inherits Rectangle {
-    horizontal-stretch: 1;
-    height: 62px;
-    background: transparent;
-}
-
-
 // ── ModifyCard ─────────────────────────────────────────────
 // Rounded container card for grouped controls.
 
 component ModifyCard inherits Rectangle {
     border-radius: 10px;
-    background: #0c1420;
+    background: Theme.surface-panel;
     border-width: 1px;
     border-color: #132031;
 
@@ -359,9 +352,9 @@ export component ModifyPanel inherits Rectangle {
             if root.has-midi && root.analysis-note-count-text != "—" : Rectangle {
                 height: 28px;
                 border-radius: 6px;
-                background: #0a1220;
+                background: Theme.surface-card;
                 border-width: 1px;
-                border-color: #111a28;
+                border-color: Theme.border-subtle;
 
                 HorizontalLayout {
                     padding-left: 12px;
@@ -371,23 +364,23 @@ export component ModifyPanel inherits Rectangle {
 
                     HorizontalLayout {
                         spacing: 4px;
-                        Text { text: "Notes"; color: #3d5068; font-size: 9px; font-weight: 600; vertical-alignment: center; }
-                        Text { text: root.analysis-note-count-text; color: #6b7d94; font-size: 9px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; }
+                        Text { text: "Notes"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
+                        Text { text: root.analysis-note-count-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
                     }
                     HorizontalLayout {
                         spacing: 4px;
-                        Text { text: "Tracks"; color: #3d5068; font-size: 9px; font-weight: 600; vertical-alignment: center; }
-                        Text { text: root.analysis-track-count-text; color: #6b7d94; font-size: 9px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; }
+                        Text { text: "Tracks"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
+                        Text { text: root.analysis-track-count-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
                     }
                     HorizontalLayout {
                         spacing: 4px;
-                        Text { text: "PPQ"; color: #3d5068; font-size: 9px; font-weight: 600; vertical-alignment: center; }
-                        Text { text: root.analysis-ticks-per-quarter-text; color: #6b7d94; font-size: 9px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; }
+                        Text { text: "PPQ"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
+                        Text { text: root.analysis-ticks-per-quarter-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
                     }
                     HorizontalLayout {
                         spacing: 4px;
-                        Text { text: "Length"; color: #3d5068; font-size: 9px; font-weight: 600; vertical-alignment: center; }
-                        Text { text: root.analysis-midi-length-text; color: #6b7d94; font-size: 9px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; }
+                        Text { text: "Length"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
+                        Text { text: root.analysis-midi-length-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
                     }
                 }
             }
@@ -404,8 +397,8 @@ export component ModifyPanel inherits Rectangle {
             Rectangle { height: 4px; }
             Text {
                 text: "Choose a modifier to configure. Each pass transforms the MIDI in a specific way.";
-                color: #4d6580;
-                font-size: 10px;
+                color: Theme.text-muted;
+                font-size: Theme.font-size-sm;
                 wrap: word-wrap;
             }
             Rectangle { height: 10px; }
@@ -413,7 +406,7 @@ export component ModifyPanel inherits Rectangle {
             // ── Timing + Grid ──
             VerticalLayout {
                 spacing: 6px;
-                Text { text: "TIMING + GRID"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; }
+                Text { text: "TIMING + GRID"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-wide; }
                 HorizontalLayout {
                     spacing: 6px;
                     ModifyPassButton { title: "Range Select"; subtitle: "Extract a time range from the MIDI."; active: root.modify-pass-key-text == "range_select"; pressed => { root.select-pass("range_select"); } }
@@ -433,7 +426,7 @@ export component ModifyPanel inherits Rectangle {
             // ── Routing + Dynamics ──
             VerticalLayout {
                 spacing: 6px;
-                Text { text: "ROUTING + DYNAMICS"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; }
+                Text { text: "ROUTING + DYNAMICS"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-wide; }
                 HorizontalLayout {
                     spacing: 6px;
                     ModifyPassButton { title: "Channel Remap"; subtitle: "Rewrite channel numbers via a mapping table."; active: root.modify-pass-key-text == "channel_remap"; pressed => { root.select-pass("channel_remap"); } }
@@ -453,7 +446,7 @@ export component ModifyPanel inherits Rectangle {
             // ── Structure + Cleanup ──
             VerticalLayout {
                 spacing: 6px;
-                Text { text: "STRUCTURE + CLEANUP"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; }
+                Text { text: "STRUCTURE + CLEANUP"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-wide; }
                 HorizontalLayout {
                     spacing: 6px;
                     ModifyPassButton { title: "Control Change"; subtitle: "Strip, remap, scale, or inject CC events."; active: root.modify-pass-key-text == "control_change"; pressed => { root.select-pass("control_change"); } }
@@ -485,7 +478,7 @@ export component ModifyPanel inherits Rectangle {
                     Text {
                         text: root.modify-pass-title-text;
                         color: #e4eefc;
-                        font-size: 14px;
+                        font-size: Theme.font-size-2xl;
                         font-weight: 700;
                         horizontal-stretch: 1;
                     }
@@ -498,15 +491,15 @@ export component ModifyPanel inherits Rectangle {
 
                 if root.modify-pass-description-text != "" : Text {
                     text: root.modify-pass-description-text;
-                    color: #6b7d94;
-                    font-size: 11px;
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-size-md;
                     wrap: word-wrap;
                 }
 
                 if root.is-custom : Text {
                     text: "JSON contains a custom pipeline. Pick a pass above to use the structured controls.";
-                    color: #6b7d94;
-                    font-size: 11px;
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-size-md;
                     wrap: word-wrap;
                 }
 
@@ -565,8 +558,8 @@ export component ModifyPanel inherits Rectangle {
                     Rectangle { height: 2px; }
                     Text {
                         text: "Track = zero-based index, blank = all tracks. Start/End = positions in full notes (1.0 = whole note, 0.25 = quarter note). Offset = shift all positions after extraction (blank = keep original). Keep = notes can extend past boundaries · Skip = drop boundary-crossing notes · Trim = clamp note edges to range.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -593,8 +586,8 @@ export component ModifyPanel inherits Rectangle {
                     }
                     if root.modify-tempo-mode-text == "flatten" : Text {
                         text: "Microseconds per quarter note. 500000 = 120 BPM, 600000 = 100 BPM, 750000 = 80 BPM.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
 
@@ -616,8 +609,8 @@ export component ModifyPanel inherits Rectangle {
                     }
                     if root.modify-tempo-mode-text == "replace" : Text {
                         text: "Comma-separated position:tempo pairs in full notes, e.g. 0:500000, 0.5:600000. Positions must be ascending.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -638,8 +631,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Comma-separated source→dest full-note pairs, e.g. 0->0, 0.25->0.5, 1.0->0.75. Dest values must be monotonically increasing.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -672,8 +665,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Grid size in full notes. 0.25 = quarter note, 0.125 = eighth, 0.0625 = sixteenth, 1 = whole note.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -734,8 +727,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Jitter values are in full notes (1.0 = whole note). Seed makes results reproducible. Stable = same-position notes stay aligned · By Track = they can differ across tracks · By Note = stacked notes can diverge.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -786,8 +779,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Length values in full notes (0.25 = quarter note). Fixed length overrides scale. Clamps apply after both. Does not move note starts.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -808,8 +801,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Comma-separated from→to channel pairs, e.g. 0->1, 9->15. Channels are zero-based (0-15). Duplicate source channels are not allowed.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -837,20 +830,20 @@ export component ModifyPanel inherits Rectangle {
 
                     if root.modify-track-route-mode-text == "collapse_all" : Text {
                         text: "Merges every source track into a single output track.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                     if root.modify-track-route-mode-text == "split_by_channel" : Text {
                         text: "Creates one track per MIDI channel. Non-channel events go to a dedicated bucket track.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                     if root.modify-track-route-mode-text == "map" : Text {
                         text: "Comma-separated source→target track pairs, e.g. 0->0, 1->0, 2->1. Sources mapped to the same target are merged.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -886,8 +879,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Mappings = comma-separated from→to MIDI key pairs, e.g. 60->72, 61->73. Fold range = min-max, e.g. 48-72. Explicit mappings take precedence, then fold wraps remaining notes. Drop unmapped removes anything still unmatched.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -937,8 +930,8 @@ export component ModifyPanel inherits Rectangle {
                         text: root.modify-velocity-mode-text == "polyline"
                             ? "Comma-separated input:output velocity pairs, e.g. 0:0, 64:100, 127:127. Values clamped to 0-127."
                             : "Velocities are clamped to MIDI range (0-127) after transformation. Gamma < 1 boosts quiet notes, > 1 boosts loud notes.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -992,8 +985,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "When strip is on, all other controls are ignored. Transform pipeline: scale → offset → clamp. Range: -8192 to 8191 (14-bit MIDI bend).";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -1031,8 +1024,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Force program = 0-127 GM program number applied to all channels. Startup = comma-separated ch:program pairs, e.g. 0:0, 9:128. Strip removes existing program change events.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -1044,7 +1037,7 @@ export component ModifyPanel inherits Rectangle {
                     spacing: 4px;
                     alignment: start;
 
-                    Text { text: "STRIP"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.6px; }
+                    Text { text: "STRIP"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-tight; }
 
                     InlineCustomRow {
                         label: "Controllers";
@@ -1056,7 +1049,7 @@ export component ModifyPanel inherits Rectangle {
                     }
 
                     Rectangle { height: 2px; }
-                    Text { text: "REMAP"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.6px; }
+                    Text { text: "REMAP"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-tight; }
 
                     InlineCustomRow {
                         label: "Controllers";
@@ -1068,7 +1061,7 @@ export component ModifyPanel inherits Rectangle {
                     }
 
                     Rectangle { height: 2px; }
-                    Text { text: "SCALE"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.6px; }
+                    Text { text: "SCALE"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-tight; }
 
                     InlineCustomRow {
                         label: "Controllers";
@@ -1080,7 +1073,7 @@ export component ModifyPanel inherits Rectangle {
                     }
 
                     Rectangle { height: 2px; }
-                    Text { text: "STARTUP INJECTION"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.6px; }
+                    Text { text: "STARTUP INJECTION"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-tight; }
 
                     InlineCustomRow {
                         label: "Initial State";
@@ -1093,8 +1086,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Strip = comma-separated CC numbers, e.g. 64, 11. Remap = from→to pairs, e.g. 1->11, 7->11. Scale = cc:factor pairs, e.g. 7:0.8, 11:1.2. Inject = ch:cc=val triples, e.g. 0:7=100, 0:10=64.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -1115,8 +1108,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Zero-based track index. Emits a new single-track MIDI containing only the selected track's events plus any track-0 metadata.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -1142,8 +1135,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Pulses per quarter note. Higher values = finer tick resolution. This resamples all tick positions — musical timing is preserved.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -1164,8 +1157,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Comma-separated text event kinds to keep: track_name, marker, lyric, text, copyright, cue_point, program_name, device_name. Leave empty to drop all text meta events.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -1194,8 +1187,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Prepend messages are emitted at tick 0. Pipe-separated messages, space or comma-separated decimal bytes, e.g. 240 67 16 76 247 | 240 126 127 9 1 247.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -1229,7 +1222,7 @@ export component ModifyPanel inherits Rectangle {
                     }
 
                     Rectangle { height: 2px; }
-                    Text { text: "META EVENTS"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.6px; }
+                    Text { text: "META EVENTS"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-tight; }
 
                     InlineOptionRow {
                         label: "Tempo";
@@ -1274,7 +1267,7 @@ export component ModifyPanel inherits Rectangle {
                     }
 
                     Rectangle { height: 2px; }
-                    Text { text: "CHANNEL EVENTS"; color: #3d5068; font-size: 9px; font-weight: 700; letter-spacing: 0.6px; }
+                    Text { text: "CHANNEL EVENTS"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-tight; }
 
                     InlineOptionRow {
                         label: "Control Change";
@@ -1303,8 +1296,8 @@ export component ModifyPanel inherits Rectangle {
                     Rectangle { height: 2px; }
                     Text {
                         text: "Create New = adds a new track 0 for metadata. Insert Into = merges into an existing track. Strip Redundant removes duplicate state events at the same tick. Channel events are typically left off unless you have a specific need.";
-                        color: #3d5068;
-                        font-size: 9px;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-size-xs;
                         wrap: word-wrap;
                     }
                 }
@@ -1341,15 +1334,15 @@ export component ModifyPanel inherits Rectangle {
 
                             Text {
                                 text: root.has-output ? root.modify-output-path-text : "(choose output path)";
-                                color: root.has-output ? #b0c0d4 : #4d6580;
-                                font-size: 11px;
+                                color: root.has-output ? Theme.text-primary : Theme.text-muted;
+                                font-size: Theme.font-size-md;
                                 font-weight: 600;
                                 overflow: elide;
                             }
                             Text {
                                 text: "MIDI file (.mid)";
-                                color: #3d5068;
-                                font-size: 9px;
+                                color: Theme.text-faint;
+                                font-size: Theme.font-size-xs;
                             }
                         }
 
@@ -1359,12 +1352,12 @@ export component ModifyPanel inherits Rectangle {
                                 width: 56px;
                                 height: 26px;
                                 border-radius: 5px;
-                                background: browse-touch.has-hover ? #1a2b40 : #141e2e;
+                                background: browse-touch.has-hover ? Theme.surface-control-hover : Theme.surface-control;
 
                                 Text {
                                     text: "Browse";
-                                    color: #8899b0;
-                                    font-size: 10px;
+                                    color: Theme.text-soft;
+                                    font-size: Theme.font-size-sm;
                                     font-weight: 600;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
@@ -1400,7 +1393,7 @@ export component ModifyPanel inherits Rectangle {
                         Text {
                             text: "Cancel";
                             color: root.modify-job-active ? #ef6b73 : #415269;
-                            font-size: 12px;
+                            font-size: Theme.font-size-lg;
                             font-weight: 700;
                             horizontal-alignment: center;
                             vertical-alignment: center;
@@ -1421,24 +1414,24 @@ export component ModifyPanel inherits Rectangle {
 
                 if root.modify-detail-text != "" : Text {
                     text: root.modify-detail-text;
-                    color: #6b7d94;
-                    font-size: 10px;
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-size-sm;
                     wrap: word-wrap;
                 }
 
                 // ── Compact last-result ──
                 if root.modify-result-track-count-text != "—" : Rectangle {
                     height: 1px;
-                    background: #111a28;
+                    background: Theme.border-subtle;
                 }
                 if root.modify-result-track-count-text != "—" : VerticalLayout {
                     spacing: 2px;
-                    Text { text: "Last result"; color: #4d6580; font-size: 9px; font-weight: 700; letter-spacing: 0.6px; }
+                    Text { text: "Last result"; color: Theme.text-muted; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-tight; }
                     HorizontalLayout {
                         spacing: 16px;
-                        HorizontalLayout { spacing: 4px; Text { text: "Tracks"; color: #3d5068; font-size: 10px; vertical-alignment: center; } Text { text: root.modify-result-track-count-text; color: #6b7d94; font-size: 10px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; } }
-                        HorizontalLayout { spacing: 4px; Text { text: "PPQ"; color: #3d5068; font-size: 10px; vertical-alignment: center; } Text { text: root.modify-result-ppq-text; color: #6b7d94; font-size: 10px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; } }
-                        HorizontalLayout { spacing: 4px; Text { text: "Events"; color: #3d5068; font-size: 10px; vertical-alignment: center; } Text { text: root.modify-result-event-count-text; color: #6b7d94; font-size: 10px; font-family: "monospace"; font-weight: 600; vertical-alignment: center; } }
+                        HorizontalLayout { spacing: 4px; Text { text: "Tracks"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.modify-result-track-count-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
+                        HorizontalLayout { spacing: 4px; Text { text: "PPQ"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.modify-result-ppq-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
+                        HorizontalLayout { spacing: 4px; Text { text: "Events"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.modify-result-event-count-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
                     }
                 }
             }
@@ -1458,8 +1451,8 @@ export component ModifyPanel inherits Rectangle {
 
                     Text {
                         text: "Advanced JSON";
-                        color: #7d8fa8;
-                        font-size: 11px;
+                        color: Theme.text-detail;
+                        font-size: Theme.font-size-md;
                         font-weight: 700;
                         horizontal-stretch: 1;
                         vertical-alignment: center;
@@ -1485,8 +1478,8 @@ export component ModifyPanel inherits Rectangle {
 
                 Text {
                     text: root.modify-config-status-text;
-                    color: root.modify-config-valid ? #4d6580 : #ef6b73;
-                    font-size: 10px;
+                    color: root.modify-config-valid ? Theme.text-muted : #ef6b73;
+                    font-size: Theme.font-size-sm;
                     wrap: word-wrap;
                 }
 
@@ -1511,8 +1504,8 @@ export component ModifyPanel inherits Rectangle {
 
                 if !root.advanced-open : Text {
                     text: "Synchronized with controls above. Escape hatch for uncommon fields, multi-tool pipelines, and passes without structured controls.";
-                    color: #3d5068;
-                    font-size: 10px;
+                    color: Theme.text-faint;
+                    font-size: Theme.font-size-sm;
                     wrap: word-wrap;
                 }
             }

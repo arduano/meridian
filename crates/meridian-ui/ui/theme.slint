@@ -1,0 +1,67 @@
+// ═══════════════════════════════════════════════════════════
+//  Theme — shared palette and typography tokens for Meridian.
+//
+//  Values here intentionally match the existing UI exactly.
+//  The goal is consistency and deduplication, not a visual redesign.
+// ═══════════════════════════════════════════════════════════
+
+export global Theme {
+    // ── Palette ──
+    out property <color> window-background: #060a11;
+    out property <color> overlay-background: #060a11c0;
+
+    out property <color> surface-canvas: #0a1018;
+    out property <color> surface-card: #0a1220;
+    out property <color> surface-card-raised: #0c1525;
+    out property <color> surface-panel: #0c1420;
+    out property <color> surface-panel-alt: #0f1822;
+    out property <color> surface-badge: #0f1e38;
+    out property <color> surface-control: #141e2e;
+    out property <color> surface-control-hover: #1a2b40;
+    out property <color> surface-control-hover-subtle: #111c2e;
+    out property <color> surface-selected: #1a2d4d;
+    out property <color> surface-selected-hover: #1e3a5f;
+    out property <color> surface-disabled: #1a2538;
+
+    out property <color> border-subtle: #111a28;
+    out property <color> border-strong: #1a2740;
+    out property <color> accent-border: #2563eb;
+    out property <color> accent-border-soft: #2563eb40;
+    out property <color> accent-fill: rgb(37, 99, 235);
+    out property <color> accent-fill-hover: rgb(45, 112, 255);
+    out property <color> accent-glow: #1a3a6040;
+
+    out property <color> text-brand-muted: #2d3d52;
+    out property <color> text-faint: #3d5068;
+    out property <color> text-muted: #4d6580;
+    out property <color> text-secondary: #6b7d94;
+    out property <color> text-detail: #7d8fa8;
+    out property <color> text-soft: #8899b0;
+    out property <color> text-primary: #b0c0d4;
+    out property <color> text-primary-strong: #d5deea;
+    out property <color> text-accent: #60a5fa;
+    out property <color> text-accent-strong: #e0eaf6;
+    out property <color> text-on-accent: #f0f4ff;
+
+    out property <color> status-success: #34d399;
+    out property <color> status-warning: #f59e0b;
+    out property <color> status-danger: #f87171;
+
+    out property <color> shadow-soft: #00000030;
+
+    // ── Typography ──
+    out property <string> font-family-mono: "monospace";
+
+    out property <length> font-size-2xs: 8px;
+    out property <length> font-size-xs: 9px;
+    out property <length> font-size-sm: 10px;
+    out property <length> font-size-md: 11px;
+    out property <length> font-size-lg: 12px;
+    out property <length> font-size-xl: 13px;
+    out property <length> font-size-2xl: 14px;
+    out property <length> font-size-display-sm: 16px;
+    out property <length> font-size-display-md: 18px;
+
+    out property <length> tracking-wide: 0.8px;
+    out property <length> tracking-tight: 0.6px;
+}

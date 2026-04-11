@@ -1,5 +1,6 @@
 import { MergeSourceRow } from "../structs.slint";
 import { FieldRow, OptionChip, PrimaryButton, ProgressBar, SectionHeader, Separator } from "../primitives.slint";
+import { Theme } from "../theme.slint";
 
 component MiniActionButton inherits Rectangle {
     in property <string> label;
@@ -9,8 +10,8 @@ component MiniActionButton inherits Rectangle {
     height: 26px;
     border-radius: 6px;
     border-width: 1px;
-    border-color: root.enabled ? #1a2a40 : #111a28;
-    background: root.enabled ? (touch.has-hover ? #152338 : #0d1726) : #0a1018;
+    border-color: root.enabled ? #1a2a40 : Theme.border-subtle;
+    background: root.enabled ? (touch.has-hover ? #152338 : #0d1726) : Theme.surface-canvas;
 
     HorizontalLayout {
         padding-left: 10px;
@@ -19,8 +20,8 @@ component MiniActionButton inherits Rectangle {
 
         Text {
             text: root.label;
-            color: root.enabled ? #8ea6c2 : #3d5068;
-            font-size: 10px;
+            color: root.enabled ? #8ea6c2 : Theme.text-faint;
+            font-size: Theme.font-size-sm;
             font-weight: 700;
             vertical-alignment: center;
         }
@@ -40,7 +41,7 @@ component MergeMetricCell inherits Rectangle {
     border-radius: 8px;
     background: #0b1320;
     border-width: 1px;
-    border-color: #111a28;
+    border-color: Theme.border-subtle;
 
     VerticalLayout {
         padding-left: 10px;
@@ -49,8 +50,8 @@ component MergeMetricCell inherits Rectangle {
         padding-bottom: 8px;
         spacing: 1px;
 
-        Text { text: root.label; color: #40536d; font-size: 9px; font-weight: 700; }
-        Text { text: root.value; color: #9fb2c8; font-size: 10px; font-family: "monospace"; font-weight: 600; }
+        Text { text: root.label; color: #40536d; font-size: Theme.font-size-xs; font-weight: 700; }
+        Text { text: root.value; color: #9fb2c8; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; }
     }
 }
 
@@ -79,8 +80,8 @@ component MergeTextRow inherits Rectangle {
 
             Text {
                 text: root.label;
-                color: #7d8fa8;
-                font-size: 11px;
+                color: Theme.text-detail;
+                font-size: Theme.font-size-md;
                 vertical-alignment: center;
                 min-width: 100px;
             }
@@ -89,16 +90,16 @@ component MergeTextRow inherits Rectangle {
                 horizontal-stretch: 1;
                 height: 28px;
                 border-radius: 6px;
-                background: #0a1018;
+                background: Theme.surface-canvas;
                 border-width: 1px;
-                border-color: editor.has-focus ? #2563eb : #1a2740;
+                border-color: editor.has-focus ? Theme.accent-border : Theme.border-strong;
 
                 editor := TextInput {
                     text: root.draft;
-                    color: #b0c0d4;
-                    font-size: 11px;
+                    color: Theme.text-primary;
+                    font-size: Theme.font-size-md;
                     vertical-alignment: center;
-                    font-family: "monospace";
+                    font-family: Theme.font-family-mono;
                     x: 8px;
                     width: parent.width - 16px;
                     height: parent.height;
@@ -113,12 +114,12 @@ component MergeTextRow inherits Rectangle {
                 border-radius: 6px;
                 background: apply-area.has-hover ? #0f1724 : #09101a;
                 border-width: 1px;
-                border-color: #1a2740;
+                border-color: Theme.border-strong;
 
                 Text {
                     text: "Apply";
                     color: #8aa0bb;
-                    font-size: 10px;
+                    font-size: Theme.font-size-sm;
                     font-weight: 700;
                     horizontal-alignment: center;
                     vertical-alignment: center;
@@ -134,7 +135,7 @@ component MergeTextRow inherits Rectangle {
         if root.hint != "" : Text {
             text: root.hint;
             color: #556b86;
-            font-size: 9px;
+            font-size: Theme.font-size-xs;
             wrap: word-wrap;
         }
     }
@@ -147,9 +148,9 @@ component MergeSourceCard inherits Rectangle {
     callback remove-source(int);
 
     border-radius: 12px;
-    background: source-data.is_error ? #1a1014 : #0c1420;
+    background: source-data.is_error ? #1a1014 : Theme.surface-panel;
     border-width: 1px;
-    border-color: source-data.is_error ? #38212c : source-data.is_loading ? #19304a : #111a28;
+    border-color: source-data.is_error ? #38212c : source-data.is_loading ? #19304a : Theme.border-subtle;
 
     VerticalLayout {
         padding: 14px;
@@ -165,15 +166,15 @@ component MergeSourceCard inherits Rectangle {
                 Text {
                     text: source-data.name;
                     color: source-data.is_error ? #f0b8ca : #d7e2f0;
-                    font-size: 14px;
+                    font-size: Theme.font-size-2xl;
                     font-weight: 700;
                     overflow: elide;
                 }
                 Text {
                     text: source-data.path;
                     color: #60748f;
-                    font-size: 9px;
-                    font-family: "monospace";
+                    font-size: Theme.font-size-xs;
+                    font-family: Theme.font-family-mono;
                     overflow: elide;
                 }
             }
@@ -193,7 +194,7 @@ component MergeSourceCard inherits Rectangle {
                     Text {
                         text: source-data.status;
                         color: source-data.is_error ? #ff9dbc : source-data.is_loading ? #8abff7 : #7fd1c4;
-                        font-size: 10px;
+                        font-size: Theme.font-size-sm;
                         font-weight: 700;
                     }
                 }
@@ -215,8 +216,8 @@ component MergeSourceCard inherits Rectangle {
 
         HorizontalLayout {
             spacing: 20px;
-            Text { text: source-data.bpm_text; color: #87a0bc; font-size: 10px; font-family: "monospace"; }
-            Text { text: source-data.meta_text; color: #556b86; font-size: 10px; overflow: elide; }
+            Text { text: source-data.bpm_text; color: #87a0bc; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; }
+            Text { text: source-data.meta_text; color: #556b86; font-size: Theme.font-size-sm; overflow: elide; }
         }
     }
 }
@@ -255,7 +256,7 @@ export component MergePanel inherits Rectangle {
         root.has-sources && root.merge-output-path-text != "" && !root.merge-job-active;
 
     clip: true;
-    background: #0a1018;
+    background: Theme.surface-canvas;
 
     Flickable {
         width: parent.width;
@@ -287,13 +288,13 @@ export component MergePanel inherits Rectangle {
                     Text {
                         text: "Build a merge queue, inspect each source, then render a clean combined MIDI with track-layout and metadata rules baked in.";
                         color: #7590ad;
-                        font-size: 11px;
+                        font-size: Theme.font-size-md;
                         wrap: word-wrap;
                     }
 
                     Rectangle {
                         border-radius: 14px;
-                        background: #0a1220;
+                        background: Theme.surface-card;
                         border-width: 1px;
                         border-color: #17304a;
 
@@ -305,14 +306,14 @@ export component MergePanel inherits Rectangle {
                             Text {
                                 text: "Drag MIDIs into the window to append them to this merge.";
                                 color: #9fb5cd;
-                                font-size: 12px;
+                                font-size: Theme.font-size-lg;
                                 font-weight: 700;
                                 horizontal-alignment: center;
                             }
                             Text {
                                 text: "Each file gets a lightweight inspection pass first: track counts, tempo map activity, PPQ, note count, and rough timing.";
                                 color: #5d738e;
-                                font-size: 10px;
+                                font-size: Theme.font-size-sm;
                                 wrap: word-wrap;
                                 horizontal-alignment: center;
                             }
@@ -356,25 +357,25 @@ export component MergePanel inherits Rectangle {
             Rectangle { height: 6px; }
             Text {
                 text: "Order matters for track stacking, first-tempo preference, and any shared metadata lane you enable below.";
-                color: #4d6580;
-                font-size: 10px;
+                color: Theme.text-muted;
+                font-size: Theme.font-size-sm;
                 wrap: word-wrap;
             }
             Rectangle { height: 12px; }
 
             if !root.has-sources : Rectangle {
                 border-radius: 14px;
-                background: #0c1420;
+                background: Theme.surface-panel;
                 border-width: 1px;
-                border-color: #111a28;
+                border-color: Theme.border-subtle;
                 height: 120px;
 
                 VerticalLayout {
                     alignment: center;
                     spacing: 6px;
 
-                    Text { text: "No MIDI files queued"; color: #93a8c1; font-size: 14px; font-weight: 700; }
-                    Text { text: "Drop files here or use Add MIDI Files above."; color: #506683; font-size: 10px; }
+                    Text { text: "No MIDI files queued"; color: #93a8c1; font-size: Theme.font-size-2xl; font-weight: 700; }
+                    Text { text: "Drop files here or use Add MIDI Files above."; color: #506683; font-size: Theme.font-size-sm; }
                 }
             }
 
@@ -401,17 +402,17 @@ export component MergePanel inherits Rectangle {
 
                 Rectangle {
                     border-radius: 14px;
-                    background: #0c1420;
+                    background: Theme.surface-panel;
                     border-width: 1px;
-                    border-color: #111a28;
+                    border-color: Theme.border-subtle;
                     horizontal-stretch: 1;
 
                     VerticalLayout {
                         padding: 16px;
                         spacing: 10px;
 
-                        Text { text: "TRACK LAYOUT"; color: #d5deea; font-size: 12px; font-weight: 700; }
-                        Text { text: "Choose whether files append their tracks in order or merge matching track indexes together."; color: #5f7490; font-size: 10px; wrap: word-wrap; }
+                        Text { text: "TRACK LAYOUT"; color: Theme.text-primary-strong; font-size: Theme.font-size-lg; font-weight: 700; }
+                        Text { text: "Choose whether files append their tracks in order or merge matching track indexes together."; color: #5f7490; font-size: Theme.font-size-sm; wrap: word-wrap; }
 
                         HorizontalLayout {
                             spacing: 6px;
@@ -423,17 +424,17 @@ export component MergePanel inherits Rectangle {
 
                 Rectangle {
                     border-radius: 14px;
-                    background: #0c1420;
+                    background: Theme.surface-panel;
                     border-width: 1px;
-                    border-color: #111a28;
+                    border-color: Theme.border-subtle;
                     horizontal-stretch: 1;
 
                     VerticalLayout {
                         padding: 16px;
                         spacing: 10px;
 
-                        Text { text: "METADATA TRACK"; color: #d5deea; font-size: 12px; font-weight: 700; }
-                        Text { text: "Either keep metadata in place, or normalize shared metadata into a dedicated first track."; color: #5f7490; font-size: 10px; wrap: word-wrap; }
+                        Text { text: "METADATA TRACK"; color: Theme.text-primary-strong; font-size: Theme.font-size-lg; font-weight: 700; }
+                        Text { text: "Either keep metadata in place, or normalize shared metadata into a dedicated first track."; color: #5f7490; font-size: Theme.font-size-sm; wrap: word-wrap; }
 
                         HorizontalLayout {
                             spacing: 6px;
@@ -448,16 +449,16 @@ export component MergePanel inherits Rectangle {
 
             Rectangle {
                 border-radius: 14px;
-                background: #0c1420;
+                background: Theme.surface-panel;
                 border-width: 1px;
-                border-color: #111a28;
+                border-color: Theme.border-subtle;
 
                 VerticalLayout {
                     padding: 16px;
                     spacing: 10px;
 
-                    Text { text: "TIMING"; color: #d5deea; font-size: 12px; font-weight: 700; }
-                    Text { text: "Leave blank to keep the source PPQ when they already match, or set an override to scale everything into a new PPQ."; color: #5f7490; font-size: 10px; wrap: word-wrap; }
+                    Text { text: "TIMING"; color: Theme.text-primary-strong; font-size: Theme.font-size-lg; font-weight: 700; }
+                    Text { text: "Leave blank to keep the source PPQ when they already match, or set an override to scale everything into a new PPQ."; color: #5f7490; font-size: Theme.font-size-sm; wrap: word-wrap; }
                     MergeTextRow { label: "PPQ override"; value: root.merge-ppq-override-text; hint: "Blank keeps source PPQ."; submitted(text) => { root.update-merge-control("ppq_override", text); } }
                 }
             }
@@ -471,21 +472,21 @@ export component MergePanel inherits Rectangle {
 
             Rectangle {
                 border-radius: 14px;
-                background: #0c1420;
+                background: Theme.surface-panel;
                 border-width: 1px;
-                border-color: #111a28;
+                border-color: Theme.border-subtle;
 
                 VerticalLayout {
                     padding: 16px;
                     spacing: 12px;
 
-                    Text { text: "OUTPUT FILE"; color: #d5deea; font-size: 12px; font-weight: 700; }
+                    Text { text: "OUTPUT FILE"; color: Theme.text-primary-strong; font-size: Theme.font-size-lg; font-weight: 700; }
 
                     Rectangle {
                         border-radius: 10px;
                         background: #09101a;
                         border-width: 1px;
-                        border-color: #111a28;
+                        border-color: Theme.border-subtle;
 
                         HorizontalLayout {
                             padding-left: 12px;
@@ -497,8 +498,8 @@ export component MergePanel inherits Rectangle {
                             Text {
                                 text: root.merge-output-path-text != "" ? root.merge-output-path-text : "Choose an output path";
                                 color: root.merge-output-path-text != "" ? #a6b8cd : #506683;
-                                font-size: 10px;
-                                font-family: "monospace";
+                                font-size: Theme.font-size-sm;
+                                font-family: Theme.font-family-mono;
                                 horizontal-stretch: 1;
                                 overflow: elide;
                             }
@@ -507,8 +508,8 @@ export component MergePanel inherits Rectangle {
                         }
                     }
 
-                    Text { text: root.merge-status-text; color: #dbe6f3; font-size: 12px; font-weight: 700; }
-                    Text { text: root.merge-detail-text; color: #67809c; font-size: 10px; wrap: word-wrap; }
+                    Text { text: root.merge-status-text; color: #dbe6f3; font-size: Theme.font-size-lg; font-weight: 700; }
+                    Text { text: root.merge-detail-text; color: #67809c; font-size: Theme.font-size-sm; wrap: word-wrap; }
                     ProgressBar { progress: root.merge-progress; }
 
                     HorizontalLayout {

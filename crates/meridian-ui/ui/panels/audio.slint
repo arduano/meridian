@@ -14,6 +14,7 @@ import {
     InlineOptionRow, InlineCustomRow, FilePicker, StatusBadge
 } from "../primitives.slint";
 import { MidiStateSection } from "../midi_loading.slint";
+import { Theme } from "../theme.slint";
 
 export component AudioPanel inherits Rectangle {
     // ── MIDI state bindings ──
@@ -139,10 +140,10 @@ export component AudioPanel inherits Rectangle {
 
                 Text {
                     text: "Engine";
-                    color: #4d6580;
-                    font-size: 10px;
+                    color: Theme.text-muted;
+                    font-size: Theme.font-size-sm;
                     font-weight: 700;
-                    letter-spacing: 0.8px;
+                    letter-spacing: Theme.tracking-wide;
                     vertical-alignment: center;
                 }
 
@@ -155,9 +156,9 @@ export component AudioPanel inherits Rectangle {
 
                 Text {
                     text: root.audio-output-stream-text;
-                    color: #4d6580;
-                    font-family: "monospace";
-                    font-size: 10px;
+                    color: Theme.text-muted;
+                    font-family: Theme.font-family-mono;
+                    font-size: Theme.font-size-sm;
                     vertical-alignment: center;
                 }
             }
@@ -462,10 +463,10 @@ export component AudioPanel inherits Rectangle {
             // ── Envelope Curves ──
             Text {
                 text: "ENVELOPE CURVES";
-                color: #3d5068;
-                font-size: 9px;
+                color: Theme.text-faint;
+                font-size: Theme.font-size-xs;
                 font-weight: 700;
-                letter-spacing: 0.8px;
+                letter-spacing: Theme.tracking-wide;
             }
 
             Rectangle { height: 6px; }

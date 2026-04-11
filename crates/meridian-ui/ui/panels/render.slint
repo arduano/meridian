@@ -16,6 +16,7 @@ import {
     SectionHeader, Separator, FieldRow, ToggleButton, OptionChip, InlineOptionRow,
     InlineCustomRow, ProgressBar, StatusBadge, PrimaryButton
 } from "../primitives.slint";
+import { Theme } from "../theme.slint";
 
 export component RenderPanel inherits Rectangle {
     in property <string> selected-midi-name: "";
@@ -209,8 +210,8 @@ export component RenderPanel inherits Rectangle {
             Rectangle { height: 6px; }
             Text {
                 text: root.mode-summary;
-                color: #6b7d94;
-                font-size: 11px;
+                color: Theme.text-secondary;
+                font-size: Theme.font-size-md;
                 wrap: word-wrap;
             }
 
@@ -227,7 +228,7 @@ export component RenderPanel inherits Rectangle {
             Rectangle {
                 height: 58px;
                 border-radius: 8px;
-                background: #0c1420;
+                background: Theme.surface-panel;
 
                 HorizontalLayout {
                     padding-left: 12px;
@@ -241,8 +242,8 @@ export component RenderPanel inherits Rectangle {
 
                         Text {
                             text: root.render-output-path-text != "" ? root.render-output-path-text : "(choose output)";
-                            color: root.render-output-path-text != "" ? #b0c0d4 : #4d6580;
-                            font-size: 11px;
+                            color: root.render-output-path-text != "" ? Theme.text-primary : Theme.text-muted;
+                            font-size: Theme.font-size-md;
                             font-weight: 600;
                             overflow: elide;
                         }
@@ -250,8 +251,8 @@ export component RenderPanel inherits Rectangle {
                             text: root.audio-only
                                 ? "Audio file (" + root.audio-format-ext + ")"
                                 : root.video-container-label + " container";
-                            color: #3d5068;
-                            font-size: 9px;
+                            color: Theme.text-faint;
+                            font-size: Theme.font-size-xs;
                             overflow: elide;
                         }
                     }
@@ -263,12 +264,12 @@ export component RenderPanel inherits Rectangle {
                             width: 64px;
                             height: 28px;
                             border-radius: 5px;
-                            background: browse-touch.has-hover ? #1a2b40 : #141e2e;
+                            background: browse-touch.has-hover ? Theme.surface-control-hover : Theme.surface-control;
 
                             Text {
                                 text: "Browse";
-                                color: #8899b0;
-                                font-size: 10px;
+                                color: Theme.text-soft;
+                                font-size: Theme.font-size-sm;
                                 font-weight: 600;
                                 horizontal-alignment: center;
                                 vertical-alignment: center;
@@ -416,8 +417,8 @@ export component RenderPanel inherits Rectangle {
                 text: root.render-export-alpha-mask
                     ? "Writes an additional grayscale sidecar video next to the main " + root.video-container-label + " as *.alpha" + root.video-container-ext + "."
                     : "Alpha mask export is off. Main " + root.video-container-label + " uses the selected RGB interpretation.";
-                color: #6b7d94;
-                font-size: 10px;
+                color: Theme.text-secondary;
+                font-size: Theme.font-size-sm;
                 wrap: word-wrap;
             }
 
@@ -427,7 +428,7 @@ export component RenderPanel inherits Rectangle {
             if root.wants-video : Rectangle {
                 height: 24px;
                 border-radius: 4px;
-                background: enc-toggle-touch.has-hover ? #0c1420 : transparent;
+                background: enc-toggle-touch.has-hover ? Theme.surface-panel : transparent;
 
                 enc-toggle-touch := TouchArea {
                     mouse-cursor: pointer;
@@ -443,10 +444,10 @@ export component RenderPanel inherits Rectangle {
                         alignment: center;
                         Text {
                             text: "ENCODING";
-                            color: #4d6580;
-                            font-size: 10px;
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-sm;
                             font-weight: 700;
-                            letter-spacing: 0.8px;
+                            letter-spacing: Theme.tracking-wide;
                         }
                     }
 
@@ -455,8 +456,8 @@ export component RenderPanel inherits Rectangle {
                         padding-left: 5px;
                         Text {
                             text: root.encoding-open ? "▾" : "▸";
-                            color: #4d6580;
-                            font-size: 10px;
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-sm;
                         }
                     }
 
@@ -710,7 +711,7 @@ export component RenderPanel inherits Rectangle {
             Rectangle {
                 height: 24px;
                 border-radius: 4px;
-                background: adv-toggle-touch.has-hover ? #0c1420 : transparent;
+                background: adv-toggle-touch.has-hover ? Theme.surface-panel : transparent;
 
                 adv-toggle-touch := TouchArea {
                     mouse-cursor: pointer;
@@ -732,8 +733,8 @@ export component RenderPanel inherits Rectangle {
                         padding-left: 5px;
                         Text {
                             text: root.advanced-open ? "▾" : "▸";
-                            color: #4d6580;
-                            font-size: 10px;
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-sm;
                         }
                     }
 
@@ -748,22 +749,22 @@ export component RenderPanel inherits Rectangle {
 
                 Text {
                     text: "Video FFmpeg args";
-                    color: #7d8fa8;
-                    font-size: 11px;
+                    color: Theme.text-detail;
+                    font-size: Theme.font-size-md;
                 }
 
                 Rectangle {
                     height: 32px;
                     border-radius: 6px;
-                    background: #0a1018;
+                    background: Theme.surface-canvas;
                     border-width: 1px;
-                    border-color: video-ffmpeg-input.has-focus ? #2563eb : #1a2740;
+                    border-color: video-ffmpeg-input.has-focus ? Theme.accent-border : Theme.border-strong;
 
                     video-ffmpeg-input := TextInput {
                         text: root.render-video-ffmpeg-args-text;
-                        color: #b0c0d4;
-                        font-size: 11px;
-                        font-family: "monospace";
+                        color: Theme.text-primary;
+                        font-size: Theme.font-size-md;
+                        font-family: Theme.font-family-mono;
                         horizontal-alignment: left;
                         vertical-alignment: center;
                         x: 8px;
@@ -777,8 +778,8 @@ export component RenderPanel inherits Rectangle {
 
                 Text {
                     text: "Extra flags appended after the structured settings above. Overrides are last-wins.";
-                    color: #3d5068;
-                    font-size: 9px;
+                    color: Theme.text-faint;
+                    font-size: Theme.font-size-xs;
                     wrap: word-wrap;
                 }
             }
@@ -790,22 +791,22 @@ export component RenderPanel inherits Rectangle {
 
                 Text {
                     text: root.is-combined-mode ? "Audio / mux FFmpeg args" : "Audio FFmpeg args";
-                    color: #7d8fa8;
-                    font-size: 11px;
+                    color: Theme.text-detail;
+                    font-size: Theme.font-size-md;
                 }
 
                 Rectangle {
                     height: 32px;
                     border-radius: 6px;
-                    background: #0a1018;
+                    background: Theme.surface-canvas;
                     border-width: 1px;
-                    border-color: audio-ffmpeg-input.has-focus ? #2563eb : #1a2740;
+                    border-color: audio-ffmpeg-input.has-focus ? Theme.accent-border : Theme.border-strong;
 
                     audio-ffmpeg-input := TextInput {
                         text: root.render-audio-ffmpeg-args-text;
-                        color: #b0c0d4;
-                        font-size: 11px;
-                        font-family: "monospace";
+                        color: Theme.text-primary;
+                        font-size: Theme.font-size-md;
+                        font-family: Theme.font-family-mono;
                         horizontal-alignment: left;
                         vertical-alignment: center;
                         x: 8px;
@@ -823,8 +824,8 @@ export component RenderPanel inherits Rectangle {
                             ? "Extra flags for the mux/encode step. e.g. -movflags +faststart"
                             : "Extra flags for the mux/encode step. e.g. -metadata title=\"Song\"")
                         : "Extra flags for the audio encode step. e.g. -compression_level 8";
-                    color: #3d5068;
-                    font-size: 9px;
+                    color: Theme.text-faint;
+                    font-size: Theme.font-size-xs;
                     wrap: word-wrap;
                 }
             }
@@ -852,19 +853,19 @@ export component RenderPanel inherits Rectangle {
 
                     Text {
                         text: root.export-succeeded ? "✓" : root.export-failed ? "✗" : "—";
-                        color: root.export-succeeded ? #34d399
-                            : root.export-failed ? #f87171
-                            : #6b7d94;
-                        font-size: 14px;
+                        color: root.export-succeeded ? Theme.status-success
+                            : root.export-failed ? Theme.status-danger
+                            : Theme.text-secondary;
+                        font-size: Theme.font-size-2xl;
                         font-weight: 700;
                         vertical-alignment: center;
                     }
                     Text {
                         text: root.export-status;
-                        color: root.export-succeeded ? #34d399
-                            : root.export-failed ? #f87171
-                            : #6b7d94;
-                        font-size: 12px;
+                        color: root.export-succeeded ? Theme.status-success
+                            : root.export-failed ? Theme.status-danger
+                            : Theme.text-secondary;
+                        font-size: Theme.font-size-lg;
                         font-weight: 600;
                         vertical-alignment: center;
                     }
@@ -873,9 +874,9 @@ export component RenderPanel inherits Rectangle {
                         text: root.export-detail-text;
                         color: root.export-succeeded ? #1a6b4d
                             : root.export-failed ? #9b3030
-                            : #4d6580;
-                        font-family: "monospace";
-                        font-size: 10px;
+                            : Theme.text-muted;
+                        font-family: Theme.font-family-mono;
+                        font-size: Theme.font-size-sm;
                         vertical-alignment: center;
                         overflow: elide;
                     }
@@ -887,7 +888,7 @@ export component RenderPanel inherits Rectangle {
             // Active render progress (only visible during export)
             if root.render-busy : Rectangle {
                 border-radius: 8px;
-                background: #0c1420;
+                background: Theme.surface-panel;
 
                 VerticalLayout {
                     padding: 12px;
@@ -898,17 +899,17 @@ export component RenderPanel inherits Rectangle {
 
                         Text {
                             text: root.export-status;
-                            color: #b0c0d4;
-                            font-size: 12px;
+                            color: Theme.text-primary;
+                            font-size: Theme.font-size-lg;
                             font-weight: 600;
                             vertical-alignment: center;
                         }
                         Rectangle { horizontal-stretch: 1; }
                         Text {
                             text: root.export-detail-text;
-                            color: #4d6580;
-                            font-family: "monospace";
-                            font-size: 10px;
+                            color: Theme.text-muted;
+                            font-family: Theme.font-family-mono;
+                            font-size: Theme.font-size-sm;
                             vertical-alignment: center;
                             overflow: elide;
                         }
@@ -922,8 +923,8 @@ export component RenderPanel inherits Rectangle {
 
                         Text {
                             text: root.single-mode-pass-label;
-                            color: #4d6580;
-                            font-size: 10px;
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-sm;
                             min-width: 44px;
                             vertical-alignment: center;
                         }
@@ -934,9 +935,9 @@ export component RenderPanel inherits Rectangle {
                         Rectangle { horizontal-stretch: 1; }
                         Text {
                             text: root.single-mode-pass-elapsed;
-                            color: #3d5068;
-                            font-family: "monospace";
-                            font-size: 10px;
+                            color: Theme.text-faint;
+                            font-family: Theme.font-family-mono;
+                            font-size: Theme.font-size-sm;
                             vertical-alignment: center;
                         }
                     }
@@ -950,8 +951,8 @@ export component RenderPanel inherits Rectangle {
 
                         Text {
                             text: "Video";
-                            color: #4d6580;
-                            font-size: 10px;
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-sm;
                             min-width: 44px;
                             vertical-alignment: center;
                         }
@@ -962,9 +963,9 @@ export component RenderPanel inherits Rectangle {
                         Rectangle { horizontal-stretch: 1; }
                         Text {
                             text: root.video-render-elapsed;
-                            color: #3d5068;
-                            font-family: "monospace";
-                            font-size: 10px;
+                            color: Theme.text-faint;
+                            font-family: Theme.font-family-mono;
+                            font-size: Theme.font-size-sm;
                             vertical-alignment: center;
                         }
                     }
@@ -981,8 +982,8 @@ export component RenderPanel inherits Rectangle {
 
                         Text {
                             text: "Audio";
-                            color: #4d6580;
-                            font-size: 10px;
+                            color: Theme.text-muted;
+                            font-size: Theme.font-size-sm;
                             min-width: 44px;
                             vertical-alignment: center;
                         }
@@ -993,9 +994,9 @@ export component RenderPanel inherits Rectangle {
                         Rectangle { horizontal-stretch: 1; }
                         Text {
                             text: root.audio-render-elapsed;
-                            color: #3d5068;
-                            font-family: "monospace";
-                            font-size: 10px;
+                            color: Theme.text-faint;
+                            font-family: Theme.font-family-mono;
+                            font-size: Theme.font-size-sm;
                             vertical-alignment: center;
                         }
                     }
@@ -1030,7 +1031,7 @@ export component RenderPanel inherits Rectangle {
                     Text {
                         text: "Cancel";
                         color: #f6b4cb;
-                        font-size: 12px;
+                        font-size: Theme.font-size-lg;
                         font-weight: 700;
                         horizontal-alignment: center;
                         vertical-alignment: center;
@@ -1047,8 +1048,8 @@ export component RenderPanel inherits Rectangle {
             if !root.has-midi : Rectangle { height: 8px; }
             if !root.has-midi : Text {
                 text: "Load a MIDI file on the Preview tab to begin exporting.";
-                color: #4d6580;
-                font-size: 11px;
+                color: Theme.text-muted;
+                font-size: Theme.font-size-md;
                 wrap: word-wrap;
             }
 
@@ -1076,10 +1077,10 @@ export component RenderPanel inherits Rectangle {
 
                 Text {
                     text: "Visual";
-                    color: #4d6580;
-                    font-size: 10px;
+                    color: Theme.text-muted;
+                    font-size: Theme.font-size-sm;
                     font-weight: 700;
-                    letter-spacing: 0.8px;
+                    letter-spacing: Theme.tracking-wide;
                     vertical-alignment: center;
                     min-width: 52px;
                 }
@@ -1099,10 +1100,10 @@ export component RenderPanel inherits Rectangle {
 
                 Text {
                     text: "Audio";
-                    color: #4d6580;
-                    font-size: 10px;
+                    color: Theme.text-muted;
+                    font-size: Theme.font-size-sm;
                     font-weight: 700;
-                    letter-spacing: 0.8px;
+                    letter-spacing: Theme.tracking-wide;
                     vertical-alignment: center;
                     min-width: 52px;
                 }

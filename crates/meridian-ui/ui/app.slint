@@ -19,6 +19,7 @@ import { AudioPanel } from "panels/audio.slint";
 import { MergePanel } from "panels/merge.slint";
 import { ModifyPanel } from "panels/modify.slint";
 import { AnalysisPanel } from "panels/analysis.slint";
+import { Theme } from "theme.slint";
 
 export { InspectorRow, MidiLoadState, BarValue, EventCount, MergeSourceRow, SliderCurve }
 
@@ -519,7 +520,7 @@ export component App inherits Window {
     title: root.window-title;
     preferred-width: 1540px;
     preferred-height: 940px;
-    background: #060a11;
+    background: Theme.window-background;
 
     shortcut-scope := FocusScope {
         width: 0px;
@@ -573,7 +574,7 @@ export component App inherits Window {
             // ══════════════════════════════════════════
 
             Rectangle {
-                background: #0a1018;
+                background: Theme.surface-canvas;
                 min-height: 84px;
                 max-height: 84px;
 
@@ -617,12 +618,12 @@ export component App inherits Window {
                                         vertical-alignment: center;
                                     }
 
-                                    Text { text: "Meridian"; color: #2d3d52; font-size: 12px; font-weight: 600; vertical-alignment: center; }
+                                    Text { text: "Meridian"; color: Theme.text-brand-muted; font-size: Theme.font-size-lg; font-weight: 600; vertical-alignment: center; }
                                 }
                             }
                         }
 
-                        Rectangle { y: parent.height - 1px; height: 1px; background: #141e2e; }
+                        Rectangle { y: parent.height - 1px; height: 1px; background: Theme.surface-control; }
                     }
 
                     // ── Transport rail ──
@@ -656,11 +657,11 @@ export component App inherits Window {
                                 }
 
                                 // Time readout
-                                Text { text: root.time-text;   color: #b0c0d4; font-family: "monospace"; font-size: 11px; font-weight: 600; vertical-alignment: center; min-width: 58px; horizontal-alignment: right; }
-                                Text { text: "/";              color: #2d3d52; font-size: 11px; vertical-alignment: center; }
-                                Text { text: root.length-text; color: #4d6580; font-family: "monospace"; font-size: 11px; vertical-alignment: center; min-width: 58px; }
+                                Text { text: root.time-text;   color: Theme.text-primary; font-family: Theme.font-family-mono; font-size: Theme.font-size-md; font-weight: 600; vertical-alignment: center; min-width: 58px; horizontal-alignment: right; }
+                                Text { text: "/";              color: Theme.text-brand-muted; font-size: Theme.font-size-md; vertical-alignment: center; }
+                                Text { text: root.length-text; color: Theme.text-muted; font-family: Theme.font-family-mono; font-size: Theme.font-size-md; vertical-alignment: center; min-width: 58px; }
 
-                                Rectangle { width: 1px; background: #1a2740; }
+                                Rectangle { width: 1px; background: Theme.border-strong; }
 
                                 VerticalLayout {
                                     alignment: center;
@@ -720,10 +721,10 @@ export component App inherits Window {
                 horizontal-stretch: root.compact-viewport ? 1 : 0;
                 min-width: root.compact-viewport ? 100px : 0px;
                 max-width: root.compact-viewport ? 100000px : 0px;
-                background: #0a1018;
+                background: Theme.surface-canvas;
 
                 // Right-edge separator
-                Rectangle { x: parent.width - 1px; width: 1px; height: parent.height; background: #141e2e; }
+                Rectangle { x: parent.width - 1px; width: 1px; height: parent.height; background: Theme.surface-control; }
 
                 VideoPanel {
                     visible: root.active-profile == 1;
@@ -935,8 +936,8 @@ export component App inherits Window {
                                 spacing: 4px;
                                 alignment: center;
 
-                                Text { text: root.fps-text; color: #4d6580; font-family: "monospace"; font-size: 10px; vertical-alignment: center; }
-                                Text { text: "fps";         color: #2d3d52; font-size: 9px;           vertical-alignment: center; }
+                                Text { text: root.fps-text; color: Theme.text-muted; font-family: Theme.font-family-mono; font-size: Theme.font-size-sm; vertical-alignment: center; }
+                                Text { text: "fps";         color: Theme.text-brand-muted; font-size: Theme.font-size-xs;           vertical-alignment: center; }
                             }
 
                             // Expanded: stats for nerds
@@ -948,41 +949,41 @@ export component App inherits Window {
                                     spacing: 4px;
                                     height: 20px;
 
-                                    Text { text: root.fps-text; color: #60a5fa; font-family: "monospace"; font-size: 11px; font-weight: 700; vertical-alignment: center; }
-                                    Text { text: "fps";         color: #3d5068; font-size: 9px; vertical-alignment: center; }
+                                    Text { text: root.fps-text; color: Theme.text-accent; font-family: Theme.font-family-mono; font-size: Theme.font-size-md; font-weight: 700; vertical-alignment: center; }
+                                    Text { text: "fps";         color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
                                     Rectangle { horizontal-stretch: 1; }
-                                    Text { text: root.viewport-text; color: #2d3d52; font-family: "monospace"; font-size: 9px; vertical-alignment: center; }
+                                    Text { text: root.viewport-text; color: Theme.text-brand-muted; font-family: Theme.font-family-mono; font-size: Theme.font-size-xs; vertical-alignment: center; }
                                 }
 
                                 // Separator
-                                Rectangle { height: 1px; background: #141e2e; }
+                                Rectangle { height: 1px; background: Theme.surface-control; }
                                 Rectangle { height: 4px; }
 
                                 // Stats rows
                                 HorizontalLayout {
                                     height: 18px;
-                                    Text { text: "Notes"; color: #3d5068; font-size: 9px; vertical-alignment: center; min-width: 70px; }
-                                    Text { text: root.note-count-text; color: #6b7d94; font-family: "monospace"; font-size: 9px; vertical-alignment: center; }
+                                    Text { text: "Notes"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; min-width: 70px; }
+                                    Text { text: root.note-count-text; color: Theme.text-secondary; font-family: Theme.font-family-mono; font-size: Theme.font-size-xs; vertical-alignment: center; }
                                 }
                                 HorizontalLayout {
                                     height: 18px;
-                                    Text { text: "Visible"; color: #3d5068; font-size: 9px; vertical-alignment: center; min-width: 70px; }
-                                    Text { text: root.visible-note-count-text; color: #6b7d94; font-family: "monospace"; font-size: 9px; vertical-alignment: center; }
+                                    Text { text: "Visible"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; min-width: 70px; }
+                                    Text { text: root.visible-note-count-text; color: Theme.text-secondary; font-family: Theme.font-family-mono; font-size: Theme.font-size-xs; vertical-alignment: center; }
                                 }
                                 HorizontalLayout {
                                     height: 18px;
-                                    Text { text: "Active Keys"; color: #3d5068; font-size: 9px; vertical-alignment: center; min-width: 70px; }
-                                    Text { text: root.active-keys-text; color: #6b7d94; font-family: "monospace"; font-size: 9px; vertical-alignment: center; }
+                                    Text { text: "Active Keys"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; min-width: 70px; }
+                                    Text { text: root.active-keys-text; color: Theme.text-secondary; font-family: Theme.font-family-mono; font-size: Theme.font-size-xs; vertical-alignment: center; }
                                 }
                                 HorizontalLayout {
                                     height: 18px;
-                                    Text { text: "Voices"; color: #3d5068; font-size: 9px; vertical-alignment: center; min-width: 70px; }
-                                    Text { text: root.audio-voice-count-text; color: #6b7d94; font-family: "monospace"; font-size: 9px; vertical-alignment: center; }
+                                    Text { text: "Voices"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; min-width: 70px; }
+                                    Text { text: root.audio-voice-count-text; color: Theme.text-secondary; font-family: Theme.font-family-mono; font-size: Theme.font-size-xs; vertical-alignment: center; }
                                 }
                                 HorizontalLayout {
                                     height: 18px;
-                                    Text { text: "Stream"; color: #3d5068; font-size: 9px; vertical-alignment: center; min-width: 70px; }
-                                    Text { text: root.audio-output-stream-text; color: #6b7d94; font-family: "monospace"; font-size: 9px; vertical-alignment: center; }
+                                    Text { text: "Stream"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; min-width: 70px; }
+                                    Text { text: root.audio-output-stream-text; color: Theme.text-secondary; font-family: Theme.font-family-mono; font-size: Theme.font-size-xs; vertical-alignment: center; }
                                 }
                             }
                         }
@@ -1020,7 +1021,7 @@ export component App inherits Window {
                     max-height: root.compact-viewport ? 100000px : 0px;
                     background: #080d16;
 
-                    Rectangle { y: 0; height: 1px; width: parent.width; background: #141e2e; }
+                    Rectangle { y: 0; height: 1px; width: parent.width; background: Theme.surface-control; }
 
                     VerticalLayout {
                         padding: 16px;
@@ -1036,7 +1037,7 @@ export component App inherits Window {
                         FieldRow { label: "Viewport";    value: root.viewport-text; }
                         FieldRow { label: "FPS";         value: root.fps-text; }
                         Rectangle { height: 8px; }
-                        Text { text: root.scene-summary-text; color: #2d3d52; font-size: 10px; overflow: elide; }
+                        Text { text: root.scene-summary-text; color: Theme.text-brand-muted; font-size: Theme.font-size-sm; overflow: elide; }
                     }
                 }
             }
@@ -1051,7 +1052,7 @@ export component App inherits Window {
                 horizontal-stretch: root.panel-only ? 1 : 0;
                 min-width: root.panel-only ? 100px : 0px;
                 max-width: root.panel-only ? 100000px : 0px;
-                background: #0a1018;
+                background: Theme.surface-canvas;
 
                 RenderPanel {
                     visible: root.active-profile == 2;

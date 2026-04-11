@@ -11,6 +11,7 @@
 
 import { MidiLoadState } from "structs.slint";
 import { SectionHeader, Separator, FieldRow, PrimaryButton, ProgressBar } from "primitives.slint";
+import { Theme } from "theme.slint";
 
 
 // ── MidiFileBar ────────────────────────────────────────────
@@ -31,7 +32,7 @@ export component MidiFileBar inherits Rectangle {
 
     height: 40px;
     border-radius: 8px;
-    background: #0f1822;
+    background: Theme.surface-panel-alt;
 
     VerticalLayout {
         alignment: center;
@@ -44,16 +45,16 @@ export component MidiFileBar inherits Rectangle {
             // File icon
             Text {
                 text: "♪";
-                color: root.has-file ? rgb(37, 99, 235) : #2d3d52;
-                font-size: 14px;
+                color: root.has-file ? Theme.accent-fill : Theme.text-brand-muted;
+                font-size: Theme.font-size-2xl;
                 vertical-alignment: center;
             }
 
             // File name / placeholder
             Text {
                 text: root.file-name;
-                color: root.has-file ? #b0c0d4 : #3d5068;
-                font-size: 12px;
+                color: root.has-file ? Theme.text-primary : Theme.text-faint;
+                font-size: Theme.font-size-lg;
                 font-weight: root.has-file ? 500 : 400;
                 vertical-alignment: center;
                 horizontal-stretch: 1;
@@ -65,15 +66,15 @@ export component MidiFileBar inherits Rectangle {
                 width: 64px;
                 height: 28px;
                 border-radius: 6px;
-                background: browse-touch.has-hover ? #1a2b40 : #141e2e;
+                background: browse-touch.has-hover ? Theme.surface-control-hover : Theme.surface-control;
 
                 VerticalLayout {
                     alignment: center;
 
                     Text {
                         text: root.has-file ? "Change" : "Browse";
-                        color: #8899b0;
-                        font-size: 11px;
+                        color: Theme.text-soft;
+                        font-size: Theme.font-size-md;
                         font-weight: 600;
                         horizontal-alignment: center;
                         vertical-alignment: center;
@@ -110,7 +111,7 @@ export component MidiLoadPrompt inherits Rectangle {
     callback load;
 
     border-radius: 8px;
-    background: #0c1420;
+    background: Theme.surface-panel;
 
     VerticalLayout {
         padding: 16px;
@@ -119,17 +120,17 @@ export component MidiLoadPrompt inherits Rectangle {
         // Title
         Text {
             text: "MIDI file selected";
-            color: #4d6580;
-            font-size: 10px;
+            color: Theme.text-muted;
+            font-size: Theme.font-size-sm;
             font-weight: 700;
-            letter-spacing: 0.8px;
+            letter-spacing: Theme.tracking-wide;
         }
 
         // File name
         Text {
             text: root.file-name;
-            color: #b0c0d4;
-            font-size: 13px;
+            color: Theme.text-primary;
+            font-size: Theme.font-size-xl;
             font-weight: 600;
             overflow: elide;
         }
@@ -137,8 +138,8 @@ export component MidiLoadPrompt inherits Rectangle {
         // Description
         Text {
             text: root.description;
-            color: #4d6580;
-            font-size: 11px;
+            color: Theme.text-muted;
+            font-size: Theme.font-size-md;
             wrap: word-wrap;
         }
 
@@ -148,15 +149,15 @@ export component MidiLoadPrompt inherits Rectangle {
         Rectangle {
             height: 36px;
             border-radius: 8px;
-            background: load-touch.has-hover ? rgb(45, 112, 255) : rgb(37, 99, 235);
+            background: load-touch.has-hover ? Theme.accent-fill-hover : Theme.accent-fill;
 
             VerticalLayout {
                 alignment: center;
 
                 Text {
                     text: root.load-label;
-                    color: #f0f4ff;
-                    font-size: 13px;
+                    color: Theme.text-on-accent;
+                    font-size: Theme.font-size-xl;
                     font-weight: 700;
                     horizontal-alignment: center;
                     vertical-alignment: center;
@@ -189,7 +190,7 @@ export component MidiLoadingBar inherits Rectangle {
     callback cancel;
 
     border-radius: 8px;
-    background: #0c1420;
+    background: Theme.surface-panel;
 
     VerticalLayout {
         padding: 14px;
@@ -201,8 +202,8 @@ export component MidiLoadingBar inherits Rectangle {
             // Status text
             Text {
                 text: root.status;
-                color: #8899b0;
-                font-size: 12px;
+                color: Theme.text-soft;
+                font-size: Theme.font-size-lg;
                 font-weight: 500;
                 vertical-alignment: center;
                 horizontal-stretch: 1;
@@ -222,7 +223,7 @@ export component MidiLoadingBar inherits Rectangle {
                     Text {
                         text: "Cancel";
                         color: #e05555;
-                        font-size: 11px;
+                        font-size: Theme.font-size-md;
                         font-weight: 600;
                         horizontal-alignment: center;
                         vertical-alignment: center;
@@ -274,7 +275,7 @@ export component MidiLoadedBar inherits Rectangle {
             Text {
                 text: "✓";
                 color: #38a169;
-                font-size: 13px;
+                font-size: Theme.font-size-xl;
                 font-weight: 700;
                 vertical-alignment: center;
             }
@@ -283,7 +284,7 @@ export component MidiLoadedBar inherits Rectangle {
             Text {
                 text: root.file-name;
                 color: #8cc8a0;
-                font-size: 12px;
+                font-size: Theme.font-size-lg;
                 font-weight: 500;
                 vertical-alignment: center;
                 horizontal-stretch: 1;
@@ -302,8 +303,8 @@ export component MidiLoadedBar inherits Rectangle {
 
                     Text {
                         text: "Unload";
-                        color: #4d6580;
-                        font-size: 10px;
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size-sm;
                         font-weight: 600;
                         horizontal-alignment: center;
                         vertical-alignment: center;
@@ -347,7 +348,7 @@ export component MidiErrorBar inherits Rectangle {
             Text {
                 text: "✕";
                 color: #e05555;
-                font-size: 13px;
+                font-size: Theme.font-size-xl;
                 font-weight: 700;
                 vertical-alignment: center;
             }
@@ -355,7 +356,7 @@ export component MidiErrorBar inherits Rectangle {
             Text {
                 text: "Load failed";
                 color: #e05555;
-                font-size: 12px;
+                font-size: Theme.font-size-lg;
                 font-weight: 600;
                 vertical-alignment: center;
                 horizontal-stretch: 1;
@@ -374,7 +375,7 @@ export component MidiErrorBar inherits Rectangle {
                     Text {
                         text: "Retry";
                         color: #e07070;
-                        font-size: 11px;
+                        font-size: Theme.font-size-md;
                         font-weight: 600;
                         horizontal-alignment: center;
                         vertical-alignment: center;
@@ -391,7 +392,7 @@ export component MidiErrorBar inherits Rectangle {
         Text {
             text: root.error-message;
             color: #7d4444;
-            font-size: 11px;
+            font-size: Theme.font-size-md;
             wrap: word-wrap;
         }
     }

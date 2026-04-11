@@ -19,6 +19,7 @@ import {
     InlineOptionRow, InlineCustomRow, FilePicker, SliderRow
 } from "../primitives.slint";
 import { MidiStateSection } from "../midi_loading.slint";
+import { Theme } from "../theme.slint";
 
 export component VideoPanel inherits Rectangle {
     in property <MidiLoadState> midi-state: no-midi;
@@ -334,7 +335,7 @@ export component VideoPanel inherits Rectangle {
                 }
                 if root.has-right-column : Rectangle {
                     width: 1px;
-                    background: #141e2e;
+                    background: Theme.surface-control;
                     horizontal-stretch: 0;
                 }
                 if root.has-right-column : Rectangle {

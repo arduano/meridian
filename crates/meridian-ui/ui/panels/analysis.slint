@@ -13,6 +13,7 @@
 import { MidiLoadState, BarValue, EventCount } from "../structs.slint";
 import { SectionHeader, Separator, FieldRow } from "../primitives.slint";
 import { MidiStateSection } from "../midi_loading.slint";
+import { Theme } from "../theme.slint";
 
 
 component SurfaceCard inherits Rectangle {
@@ -20,9 +21,9 @@ component SurfaceCard inherits Rectangle {
     in property <string> subtitle: "";
 
     border-radius: 10px;
-    background: #0c1420;
+    background: Theme.surface-panel;
     border-width: 1px;
-    border-color: #111a28;
+    border-color: Theme.border-subtle;
     clip: true;
     horizontal-stretch: 1;
 
@@ -32,16 +33,16 @@ component SurfaceCard inherits Rectangle {
 
         Text {
             text: root.title;
-            color: #7d8fa8;
-            font-size: 10px;
+            color: Theme.text-detail;
+            font-size: Theme.font-size-sm;
             font-weight: 800;
-            letter-spacing: 0.8px;
+            letter-spacing: Theme.tracking-wide;
         }
 
         if root.subtitle != "" : Text {
             text: root.subtitle;
-            color: #4d6580;
-            font-size: 10px;
+            color: Theme.text-muted;
+            font-size: Theme.font-size-sm;
             wrap: word-wrap;
         }
 
@@ -52,13 +53,13 @@ component SurfaceCard inherits Rectangle {
 component SummaryStat inherits Rectangle {
     in property <string> value;
     in property <string> label;
-    in property <color> accent: #60a5fa;
+    in property <color> accent: Theme.text-accent;
 
     min-width: 120px;
     height: 78px;
     horizontal-stretch: 1;
     border-radius: 8px;
-    background: #0a1220;
+    background: Theme.surface-card;
     border-width: 1px;
     border-color: #101a28;
 
@@ -70,8 +71,8 @@ component SummaryStat inherits Rectangle {
         Text {
             text: root.value;
             color: root.accent;
-            font-family: "monospace";
-            font-size: 16px;
+            font-family: Theme.font-family-mono;
+            font-size: Theme.font-size-display-sm;
             font-weight: 800;
             horizontal-alignment: center;
             overflow: elide;
@@ -79,8 +80,8 @@ component SummaryStat inherits Rectangle {
 
         Text {
             text: root.label;
-            color: #4d6580;
-            font-size: 9px;
+            color: Theme.text-muted;
+            font-size: Theme.font-size-xs;
             font-weight: 700;
             letter-spacing: 0.4px;
             horizontal-alignment: center;
@@ -106,8 +107,8 @@ component MiniStat inherits Rectangle {
         Text {
             text: root.value;
             color: #b9c8da;
-            font-family: "monospace";
-            font-size: 12px;
+            font-family: Theme.font-family-mono;
+            font-size: Theme.font-size-lg;
             font-weight: 700;
             horizontal-alignment: center;
             overflow: elide;
@@ -116,7 +117,7 @@ component MiniStat inherits Rectangle {
         Text {
             text: root.label;
             color: #445a75;
-            font-size: 8px;
+            font-size: Theme.font-size-2xs;
             font-weight: 700;
             horizontal-alignment: center;
         }
@@ -141,8 +142,8 @@ component HeroMetric inherits Rectangle {
         Text {
             text: root.value;
             color: #d7e3f2;
-            font-family: "monospace";
-            font-size: 13px;
+            font-family: Theme.font-family-mono;
+            font-size: Theme.font-size-xl;
             font-weight: 700;
             horizontal-alignment: center;
             overflow: elide;
@@ -150,8 +151,8 @@ component HeroMetric inherits Rectangle {
 
         Text {
             text: root.label;
-            color: #4d6580;
-            font-size: 8px;
+            color: Theme.text-muted;
+            font-size: Theme.font-size-2xs;
             font-weight: 700;
             horizontal-alignment: center;
         }
@@ -174,8 +175,8 @@ component FooterMetric inherits Rectangle {
         Text {
             text: root.value;
             color: #cbd8e8;
-            font-family: "monospace";
-            font-size: 11px;
+            font-family: Theme.font-family-mono;
+            font-size: Theme.font-size-md;
             font-weight: 600;
             horizontal-alignment: center;
             overflow: elide;
@@ -184,7 +185,7 @@ component FooterMetric inherits Rectangle {
         Text {
             text: root.label;
             color: #617691;
-            font-size: 9px;
+            font-size: Theme.font-size-xs;
             horizontal-alignment: center;
             overflow: elide;
         }
@@ -194,7 +195,7 @@ component FooterMetric inherits Rectangle {
 
 component BarChart inherits Rectangle {
     in property <[BarValue]> model: [];
-    in property <color> bar-color: #2563eb;
+    in property <color> bar-color: Theme.accent-border;
     in property <color> bar-color-hover: #3b82f6;
     in property <int> chart-height: 100;
     in property <bool> show-labels: false;
@@ -240,7 +241,7 @@ component BarChart inherits Rectangle {
                         y: parent.height - 1px;
                         width: parent.width;
                         height: 1px;
-                        background: #141e2e;
+                        background: Theme.surface-control;
                     }
                 }
 
@@ -254,9 +255,9 @@ component BarChart inherits Rectangle {
                         width: parent.width;
                         height: parent.height;
                         text: bar.label;
-                        color: #3d5068;
-                        font-family: "monospace";
-                        font-size: 8px;
+                        color: Theme.text-faint;
+                        font-family: Theme.font-family-mono;
+                        font-size: Theme.font-size-2xs;
                         horizontal-alignment: center;
                         vertical-alignment: center;
                         overflow: elide;
@@ -270,8 +271,8 @@ component BarChart inherits Rectangle {
 
 component DensityTimeline inherits Rectangle {
     in property <[BarValue]> model: [];
-    in property <color> fill-color: #2563eb40;
-    in property <color> peak-color: #60a5fa;
+    in property <color> fill-color: Theme.accent-border-soft;
+    in property <color> peak-color: Theme.text-accent;
     in property <int> chart-height: 80;
 
     height: root.chart-height * 1px;
@@ -311,7 +312,7 @@ component ShareRow inherits Rectangle {
     in property <int> count;
     in property <float> fraction;
     in property <string> share_text;
-    in property <color> accent: #2563eb;
+    in property <color> accent: Theme.accent-border;
 
     height: 28px;
     background: transparent;
@@ -329,7 +330,7 @@ component ShareRow inherits Rectangle {
                 height: parent.height;
                 text: root.name;
                 color: #8ea0b8;
-                font-size: 10px;
+                font-size: Theme.font-size-sm;
                 font-weight: 600;
                 vertical-alignment: center;
             }
@@ -345,7 +346,7 @@ component ShareRow inherits Rectangle {
                 width: parent.width;
                 height: 8px;
                 border-radius: 4px;
-                background: #111a28;
+                background: Theme.border-subtle;
 
                 Rectangle {
                     width: root.fraction > 0 ? max(3px, parent.width * max(0.0, min(1.0, root.fraction))) : 0px;
@@ -365,9 +366,9 @@ component ShareRow inherits Rectangle {
                 width: parent.width;
                 height: parent.height;
                 text: root.share_text;
-                color: #6b7d94;
-                font-family: "monospace";
-                font-size: 10px;
+                color: Theme.text-secondary;
+                font-family: Theme.font-family-mono;
+                font-size: Theme.font-size-sm;
                 font-weight: 700;
                 vertical-alignment: center;
                 horizontal-alignment: right;
@@ -383,9 +384,9 @@ component ShareRow inherits Rectangle {
                 width: parent.width;
                 height: parent.height;
                 text: root.count;
-                color: #b0c0d4;
-                font-family: "monospace";
-                font-size: 10px;
+                color: Theme.text-primary;
+                font-family: Theme.font-family-mono;
+                font-size: Theme.font-size-sm;
                 font-weight: 600;
                 vertical-alignment: center;
                 horizontal-alignment: right;
@@ -409,7 +410,7 @@ component DetailRow inherits Rectangle {
         Text {
             text: root.name;
             color: #6f829b;
-            font-size: 9px;
+            font-size: Theme.font-size-xs;
             vertical-alignment: center;
             min-width: 110px;
             horizontal-stretch: 1;
@@ -418,8 +419,8 @@ component DetailRow inherits Rectangle {
         Text {
             text: root.count;
             color: #a7b7ca;
-            font-family: "monospace";
-            font-size: 9px;
+            font-family: Theme.font-family-mono;
+            font-size: Theme.font-size-xs;
             font-weight: 600;
             vertical-alignment: center;
             min-width: 58px;
@@ -429,8 +430,8 @@ component DetailRow inherits Rectangle {
         Text {
             text: root.share_text;
             color: #516983;
-            font-family: "monospace";
-            font-size: 9px;
+            font-family: Theme.font-family-mono;
+            font-size: Theme.font-size-xs;
             vertical-alignment: center;
             min-width: 44px;
             horizontal-alignment: right;
@@ -556,15 +557,15 @@ export component AnalysisPanel inherits Rectangle {
                     Text {
                         text: root.selected-midi-name;
                         color: #dbe6f4;
-                        font-size: 18px;
+                        font-size: Theme.font-size-display-md;
                         font-weight: 700;
                         overflow: elide;
                     }
 
                     Text {
                         text: root.note-density-text + " / " + root.tempo-text;
-                        color: #7d8fa8;
-                        font-size: 12px;
+                        color: Theme.text-detail;
+                        font-size: Theme.font-size-lg;
                         wrap: word-wrap;
                     }
 
@@ -575,7 +576,7 @@ export component AnalysisPanel inherits Rectangle {
                         HeroMetric { value: root.peak-nps-text + "/s"; label: "PEAK RATE"; }
                     }
 
-                    Rectangle { height: 1px; background: #111a28; }
+                    Rectangle { height: 1px; background: Theme.border-subtle; }
 
                     HorizontalLayout {
                         spacing: 16px;
@@ -592,20 +593,20 @@ export component AnalysisPanel inherits Rectangle {
 
                     HorizontalLayout {
                         spacing: 12px;
-                        SummaryStat { value: root.note-count-text; label: "TOTAL NOTES"; accent: #60a5fa; }
+                        SummaryStat { value: root.note-count-text; label: "TOTAL NOTES"; accent: Theme.text-accent; }
                         SummaryStat { value: root.track-count-text; label: "TRACK COUNT"; accent: #a78bfa; }
                     }
 
                     HorizontalLayout {
                         spacing: 12px;
                         SummaryStat { value: root.max-polyphony-text; label: "PEAK POLYPHONY"; accent: #e879f9; }
-                        SummaryStat { value: root.avg-bpm-text; label: "AVG TEMPO"; accent: #f87171; }
+                        SummaryStat { value: root.avg-bpm-text; label: "AVG TEMPO"; accent: Theme.status-danger; }
                     }
 
                     HorizontalLayout {
                         spacing: 12px;
                         SummaryStat { value: root.total-events-text; label: "EVENT COUNT"; accent: #38bdf8; }
-                        SummaryStat { value: root.avg-velocity-text; label: "AVG VELOCITY"; accent: #34d399; }
+                        SummaryStat { value: root.avg-velocity-text; label: "AVG VELOCITY"; accent: Theme.status-success; }
                     }
                 }
             }
@@ -625,8 +626,8 @@ export component AnalysisPanel inherits Rectangle {
 
                         BarChart {
                             model: root.key-histogram;
-                            bar-color: #2563eb;
-                            bar-color-hover: #60a5fa;
+                            bar-color: Theme.accent-border;
+                            bar-color-hover: Theme.text-accent;
                             chart-height: 152;
                         }
 
@@ -678,8 +679,8 @@ export component AnalysisPanel inherits Rectangle {
 
                         DensityTimeline {
                             model: root.density-timeline;
-                            fill-color: #2563eb40;
-                            peak-color: #60a5fa;
+                            fill-color: Theme.accent-border-soft;
+                            peak-color: Theme.text-accent;
                             chart-height: 126;
                         }
 
@@ -705,8 +706,8 @@ export component AnalysisPanel inherits Rectangle {
                         Text {
                             text: root.tempo-text;
                             color: #e5eef9;
-                            font-family: "monospace";
-                            font-size: 18px;
+                            font-family: Theme.font-family-mono;
+                            font-size: Theme.font-size-display-md;
                             font-weight: 800;
                             overflow: elide;
                         }
@@ -740,7 +741,7 @@ export component AnalysisPanel inherits Rectangle {
                     BarChart {
                         model: root.velocity-histogram;
                         bar-color: #059669;
-                        bar-color-hover: #34d399;
+                        bar-color-hover: Theme.status-success;
                         chart-height: 128;
                         show-labels: true;
                     }
@@ -813,7 +814,7 @@ export component AnalysisPanel inherits Rectangle {
                 BarChart {
                     model: root.channel-histogram;
                     bar-color: #dc2626;
-                    bar-color-hover: #f87171;
+                    bar-color-hover: Theme.status-danger;
                     chart-height: 78;
                     show-labels: true;
                 }
@@ -933,8 +934,8 @@ export component AnalysisPanel inherits Rectangle {
                             : root.midi-state == MidiLoadState.error
                                 ? "Analysis failed to load. Retry from the loader above to regenerate the report."
                                 : "Choose a MIDI above to populate the analysis dashboard.";
-                    color: #7d8fa8;
-                    font-size: 11px;
+                    color: Theme.text-detail;
+                    font-size: Theme.font-size-md;
                     wrap: word-wrap;
                 }
             }
