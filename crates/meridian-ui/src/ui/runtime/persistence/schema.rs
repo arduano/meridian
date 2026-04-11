@@ -14,7 +14,6 @@ pub(in super::super) const CONFIG_VERSION: u32 = 1;
 pub(in super::super) struct UiConfigFile {
     pub version: u32,
     pub preferences: UiPreferences,
-    pub session: UiSessionRestore,
 }
 
 impl Default for UiConfigFile {
@@ -22,7 +21,6 @@ impl Default for UiConfigFile {
         Self {
             version: CONFIG_VERSION,
             preferences: UiPreferences::default(),
-            session: UiSessionRestore::default(),
         }
     }
 }
@@ -37,7 +35,6 @@ pub(in super::super) struct UiPreferences {
     pub first_key: u8,
     pub last_key: u8,
     pub active_profile: i32,
-    pub reopen_last_session: bool,
     pub export: ExportPreferences,
     pub modify: ModifyPreferences,
     pub merge: MergePreferences,
@@ -60,7 +57,6 @@ impl Default for UiPreferences {
             first_key: 0,
             last_key: 127,
             active_profile: 0,
-            reopen_last_session: true,
             export: ExportPreferences::default(),
             modify: ModifyPreferences::default(),
             merge: MergePreferences::default(),
@@ -152,17 +148,6 @@ impl Default for MergePreferences {
             ppq_override_text: String::new(),
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-#[serde(default)]
-pub(in super::super) struct UiSessionRestore {
-    pub midi_path: Option<PathBuf>,
-    pub current_time: f64,
-    pub render_output_path: Option<PathBuf>,
-    pub modify_output_path: Option<PathBuf>,
-    pub merge_output_path: Option<PathBuf>,
-    pub merge_sources: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]

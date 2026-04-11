@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use meridian_core::render::{DisplayTimeSpace, NoteProjectorConfig, RendererKind, SceneConfig};
+use meridian_core::render::{NoteProjectorConfig, RendererKind, SceneConfig};
 use tempfile::tempdir;
 
 use super::build_startup_options;
@@ -9,7 +9,7 @@ use super::store::{
 };
 use crate::ui::runtime::persistence::schema::{
     ExportPreferences, MergePreferences, ModifyPreferences, UiConfigFile, UiPreferences,
-    UiSessionRestore, WindowPreferences,
+    WindowPreferences,
 };
 use crate::ui::state::UiOptions;
 
@@ -45,18 +45,11 @@ fn load_falls_back_to_backup_when_primary_is_invalid() {
 }
 
 #[test]
-fn startup_options_merge_session_and_cli_overrides() {
-    let dir = tempdir().expect("tempdir");
-    let midi_path = dir.path().join("session.mid");
-    fs::write(&midi_path, []).expect("write midi placeholder");
-
+fn startup_options_merge_preferences_and_cli_overrides() {
     let mut config = sample_config();
     config.preferences.view_range = 9.0;
-    config.preferences.time_space = DisplayTimeSpace::Tick;
     config.preferences.first_key = 12;
     config.preferences.last_key = 90;
-    config.session.midi_path = Some(midi_path.clone());
-    config.session.current_time = 4.25;
 
     let launch = UiOptions {
         renderer: Some(RendererKind::Flat),
@@ -69,10 +62,8 @@ fn startup_options_merge_session_and_cli_overrides() {
 
     let startup = build_startup_options(&launch, Some(&config));
 
-    assert_eq!(startup.midi_path, Some(midi_path));
     assert_eq!(startup.start_time, 12.5);
     assert_eq!(startup.view_range, 2.5);
-    assert_eq!(startup.time_space, DisplayTimeSpace::Tick);
     assert_eq!(startup.first_key, 20);
     assert_eq!(startup.last_key, 80);
     assert!(matches!(
@@ -125,14 +116,6 @@ fn sample_config() -> UiConfigFile {
             last_background_png: Some("/tmp/background.png".into()),
             last_aura_png: Some("/tmp/aura.png".into()),
             ..UiPreferences::default()
-        },
-        session: UiSessionRestore {
-            midi_path: Some(PathBuf::from("/tmp/session.mid")),
-            current_time: 3.25,
-            render_output_path: Some(PathBuf::from("/tmp/render.mp4")),
-            modify_output_path: Some(PathBuf::from("/tmp/modify.mid")),
-            merge_output_path: Some(PathBuf::from("/tmp/merge.mid")),
-            merge_sources: vec![PathBuf::from("/tmp/a.mid"), PathBuf::from("/tmp/b.mid")],
         },
     }
 }

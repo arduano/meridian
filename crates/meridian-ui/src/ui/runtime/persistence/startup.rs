@@ -20,16 +20,6 @@ pub(in super::super) fn build_startup_options(
         startup.time_space = config.preferences.time_space;
         startup.first_key = config.preferences.first_key;
         startup.last_key = config.preferences.last_key;
-
-        if config.preferences.reopen_last_session {
-            startup.midi_path = config
-                .session
-                .midi_path
-                .as_ref()
-                .filter(|path| path.exists())
-                .cloned();
-            startup.start_time = config.session.current_time.max(0.0);
-        }
     }
 
     if let Some(renderer) = launch.renderer {

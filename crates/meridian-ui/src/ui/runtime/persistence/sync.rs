@@ -1,6 +1,5 @@
 use std::{
     cell::RefCell,
-    path::PathBuf,
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -8,15 +7,14 @@ use std::{
 use slint::ComponentHandle;
 
 use super::{
-    append_merge_source_paths, apply_events_to_app, apply_merge_sources_to_app,
     load_modify_pass_into_app, validate_modify_config, App, Arc, Mutex, UiCoreBridge, UiViewModel,
 };
 
 use super::{
     assets::{
         active_aura_path_from_scene, active_background_path_from_scene,
-        active_palette_path_from_scene, file_name_or_path, last_aura_png, last_background_png,
-        last_palette_png, restore_last_asset_paths,
+        active_palette_path_from_scene, last_aura_png, last_background_png, last_palette_png,
+        restore_last_asset_paths,
     },
     schema::{
         ExportPreferences, MergePreferences, ModifyPreferences, UiConfigFile, WindowPosition,
@@ -231,8 +229,8 @@ pub(in super::super) fn save_ui_config_now(
 
 pub(in super::super) fn restore_persisted_ui_state(
     app: &App,
-    bridge: &UiCoreBridge,
-    shared_state: &Arc<Mutex<UiViewModel>>,
+    _bridge: &UiCoreBridge,
+    _shared_state: &Arc<Mutex<UiViewModel>>,
     config: Option<&UiConfigFile>,
 ) {
     let Some(config) = config else {
@@ -244,16 +242,6 @@ pub(in super::super) fn restore_persisted_ui_state(
     restore_export_preferences(app, &config.preferences.export);
     restore_modify_preferences(app, &config.preferences.modify);
     restore_merge_preferences(app, &config.preferences.merge);
-
-    if config.preferences.reopen_last_session {
-        restore_merge_session(app, bridge, shared_state, &config.session);
-    }
-
-    if config.preferences.reopen_last_session
-        && session_matches_current_midi(shared_state, config.session.midi_path.as_ref())
-    {
-        restore_selected_midi_session(app, bridge, shared_state, config);
-    }
 }
 
 fn restore_export_preferences(app: &App, preferences: &ExportPreferences) {
@@ -285,86 +273,14 @@ fn restore_merge_preferences(app: &App, preferences: &MergePreferences) {
     merge_text_bindings!(restore_text_fields, app, preferences);
 }
 
-fn restore_merge_session(
-    app: &App,
-    bridge: &UiCoreBridge,
-    shared_state: &Arc<Mutex<UiViewModel>>,
-    session: &super::schema::UiSessionRestore,
-) {
-    let merge_sources = session
-        .merge_sources
-        .iter()
-        .filter(|path| path.exists())
-        .cloned()
-        .collect::<Vec<_>>();
-    if !merge_sources.is_empty() {
-        append_merge_source_paths(app, bridge, shared_state, merge_sources);
-        apply_merge_sources_to_app(app, shared_state);
-    }
-
-    if let Some(path) = &session.merge_output_path {
-        app.set_merge_output_path_text(path.display().to_string().into());
-        app.set_merge_result_output_text(file_name_or_path(path).into());
-    }
-}
-
-fn restore_selected_midi_session(
-    app: &App,
-    bridge: &UiCoreBridge,
-    shared_state: &Arc<Mutex<UiViewModel>>,
-    config: &UiConfigFile,
-) {
-    if let Some(path) = &config.session.render_output_path {
-        app.set_render_output_path_text(path.display().to_string().into());
-    }
-    if let Some(path) = &config.session.modify_output_path {
-        app.set_modify_output_path_text(path.display().to_string().into());
-        app.set_modify_result_output_text(file_name_or_path(path).into());
-    }
-
-    let restore_time = config.session.current_time.max(0.0);
-    if restore_time <= 0.0 {
-        return;
-    }
-
-    if let Ok(events) = bridge.seek_time(restore_time, shared_state) {
-        apply_events_to_app(app, shared_state, &events);
-    }
-}
-
-fn session_matches_current_midi(
-    shared_state: &Arc<Mutex<UiViewModel>>,
-    persisted_path: Option<&PathBuf>,
-) -> bool {
-    let Some(persisted_path) = persisted_path.filter(|path| path.exists()) else {
-        return false;
-    };
-
-    shared_state
-        .lock()
-        .expect("ui model mutex poisoned")
-        .scene
-        .midi_path
-        .as_ref()
-        .is_some_and(|current_path| current_path == persisted_path)
-}
-
 fn capture_ui_config(
     app: &App,
     shared_state: &Arc<Mutex<UiViewModel>>,
     seed_config: Option<&UiConfigFile>,
 ) -> UiConfigFile {
-    let (snapshot, merge_sources) = {
+    let snapshot = {
         let model = shared_state.lock().expect("ui model mutex poisoned");
-        (
-            model.snapshot.clone(),
-            model
-                .merge
-                .sources
-                .iter()
-                .map(|source| source.path.clone())
-                .collect::<Vec<_>>(),
-        )
+        model.snapshot.clone()
     };
 
     let mut config = seed_config.cloned().unwrap_or_default();
@@ -377,11 +293,6 @@ fn capture_ui_config(
         config.preferences.time_space = snapshot.time_space;
         config.preferences.first_key = snapshot.first_key;
         config.preferences.last_key = snapshot.last_key;
-        config.session.current_time = snapshot.current_time.max(0.0);
-        config.session.midi_path = snapshot.midi_path;
-    } else {
-        config.session.midi_path = non_empty_path(app.get_selected_midi_name().as_str());
-        config.session.current_time = 0.0;
     }
 
     config.preferences.active_profile = app.get_active_profile();
@@ -395,14 +306,6 @@ fn capture_ui_config(
         active_background_path_from_scene(&config.preferences.scene).or_else(last_background_png);
     config.preferences.last_aura_png =
         active_aura_path_from_scene(&config.preferences.scene).or_else(last_aura_png);
-
-    config.session.render_output_path = non_empty_path(app.get_render_output_path_text().as_str());
-    config.session.modify_output_path = non_empty_path(app.get_modify_output_path_text().as_str());
-    config.session.merge_output_path = non_empty_path(app.get_merge_output_path_text().as_str());
-    config.session.merge_sources = merge_sources
-        .into_iter()
-        .filter(|path| !path.as_os_str().is_empty())
-        .collect::<Vec<_>>();
 
     config
 }
@@ -453,8 +356,4 @@ fn non_empty_string(value: &str) -> Option<String> {
     } else {
         Some(trimmed.to_string())
     }
-}
-
-fn non_empty_path(value: &str) -> Option<PathBuf> {
-    non_empty_string(value).map(PathBuf::from)
 }
