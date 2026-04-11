@@ -232,6 +232,8 @@ export class AudioRenderJobHandle {
   #protocol: MeridianProtocolClient;
   #unsubscribe: (() => void) | null = null;
   #eventListeners = new Set<(event: AudioRenderEvent) => void>();
+  #eventHistory: AudioRenderEvent[] = [];
+  #settled = false;
   #done: Promise<Extract<AudioRenderEvent, { type: "render_finished" }>>;
   #resolve!: (
     value: Extract<AudioRenderEvent, { type: "render_finished" }>,
@@ -256,10 +258,19 @@ export class AudioRenderJobHandle {
       this.#reject = reject;
     });
     this.#unsubscribe = protocol.onEvent((event) => this.#handleEvent(event));
+    for (const event of protocol.recentEvents()) {
+      this.#handleEvent(event);
+      if (this.#settled) {
+        break;
+      }
+    }
   }
 
   onEvent(listener: (event: AudioRenderEvent) => void): () => void {
     this.#eventListeners.add(listener);
+    for (const event of this.#eventHistory) {
+      listener(event);
+    }
     return () => {
       this.#eventListeners.delete(listener);
     };
@@ -288,6 +299,9 @@ export class AudioRenderJobHandle {
   }
 
   #handleEvent(event: CoreEvent): void {
+    if (this.#settled) {
+      return;
+    }
     if (event.type === "audio_render_status") {
       this.#status = (event as AudioRenderStatusEventWrapper).status;
       return;
@@ -299,16 +313,19 @@ export class AudioRenderJobHandle {
     if ("job_id" in wrapped.event && wrapped.event.job_id !== this.jobId) {
       return;
     }
+    this.#eventHistory.push(wrapped.event);
     for (const listener of this.#eventListeners) {
       listener(wrapped.event);
     }
     switch (wrapped.event.type) {
       case "render_finished":
+        this.#settled = true;
         this.#unsubscribe?.();
         this.#unsubscribe = null;
         this.#resolve(wrapped.event);
         break;
       case "render_cancelled":
+        this.#settled = true;
         this.#unsubscribe?.();
         this.#unsubscribe = null;
         this.#reject(
@@ -316,6 +333,7 @@ export class AudioRenderJobHandle {
         );
         break;
       case "render_failed":
+        this.#settled = true;
         this.#unsubscribe?.();
         this.#unsubscribe = null;
         this.#reject(new MeridianSubprocessError(wrapped.event.message));
@@ -331,6 +349,8 @@ export class VideoRenderJobHandle {
   #protocol: MeridianProtocolClient;
   #unsubscribe: (() => void) | null = null;
   #eventListeners = new Set<(event: VideoRenderEvent) => void>();
+  #eventHistory: VideoRenderEvent[] = [];
+  #settled = false;
   #done: Promise<Extract<VideoRenderEvent, { type: "render_finished" }>>;
   #resolve!: (
     value: Extract<VideoRenderEvent, { type: "render_finished" }>,
@@ -355,10 +375,19 @@ export class VideoRenderJobHandle {
       this.#reject = reject;
     });
     this.#unsubscribe = protocol.onEvent((event) => this.#handleEvent(event));
+    for (const event of protocol.recentEvents()) {
+      this.#handleEvent(event);
+      if (this.#settled) {
+        break;
+      }
+    }
   }
 
   onEvent(listener: (event: VideoRenderEvent) => void): () => void {
     this.#eventListeners.add(listener);
+    for (const event of this.#eventHistory) {
+      listener(event);
+    }
     return () => {
       this.#eventListeners.delete(listener);
     };
@@ -387,6 +416,9 @@ export class VideoRenderJobHandle {
   }
 
   #handleEvent(event: CoreEvent): void {
+    if (this.#settled) {
+      return;
+    }
     if (event.type === "video_render_status") {
       this.#status = (event as VideoRenderStatusEventWrapper).status;
       return;
@@ -398,16 +430,19 @@ export class VideoRenderJobHandle {
     if ("job_id" in wrapped.event && wrapped.event.job_id !== this.jobId) {
       return;
     }
+    this.#eventHistory.push(wrapped.event);
     for (const listener of this.#eventListeners) {
       listener(wrapped.event);
     }
     switch (wrapped.event.type) {
       case "render_finished":
+        this.#settled = true;
         this.#unsubscribe?.();
         this.#unsubscribe = null;
         this.#resolve(wrapped.event);
         break;
       case "render_cancelled":
+        this.#settled = true;
         this.#unsubscribe?.();
         this.#unsubscribe = null;
         this.#reject(
@@ -415,6 +450,7 @@ export class VideoRenderJobHandle {
         );
         break;
       case "render_failed":
+        this.#settled = true;
         this.#unsubscribe?.();
         this.#unsubscribe = null;
         this.#reject(new MeridianSubprocessError(wrapped.event.message));

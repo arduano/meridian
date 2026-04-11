@@ -302,8 +302,8 @@ export class MeridianClient {
       sample_rate: options.sampleRate ?? null,
       channels: options.channels ?? null,
       use_limiter: options.useLimiter ?? null,
-      format: "wav",
-      ffmpeg_args: [],
+      format: options.format ?? "wav",
+      ffmpeg_args: options.ffmpegArgs ?? [],
       soundfonts: options.soundfonts ?? [],
     };
     const events = await this.protocol.request({

@@ -38,11 +38,26 @@ import type {
 } from "./options.ts";
 import { MeridianSubprocessError, requireEvent } from "./internal.ts";
 
+const DEFAULT_ANALYSIS_KINDS: MidiAnalysisKind[] = [
+  "file",
+  "summary",
+  "events",
+  "notes",
+  "tempo",
+];
+
 function analysisOptionsToSpec(
   midiPath: string,
   options: MidiAnalysisOptions = {},
 ): StartAnalysisForFileOptions {
-  const kinds: MidiAnalysisKind[] = [];
+  const hasExplicitKinds = options.file === true ||
+    options.summary === true ||
+    options.events === true ||
+    options.notes === true ||
+    options.tempo === true;
+  const kinds: MidiAnalysisKind[] = hasExplicitKinds
+    ? []
+    : [...DEFAULT_ANALYSIS_KINDS];
   if (options.file) kinds.push("file");
   if (options.summary) kinds.push("summary");
   if (options.events) kinds.push("events");
@@ -214,7 +229,9 @@ export class AudioRenderTask
       sampleRate: options.sampleRate ?? null,
       channels: options.channels ?? null,
       useLimiter: options.useLimiter ?? null,
+      ffmpegArgs: options.ffmpegArgs ? [...options.ffmpegArgs] : [],
       soundfonts: options.soundfonts ? [...options.soundfonts] : [],
+      ...(options.format !== undefined ? { format: options.format } : {}),
       ...(options.onEvent ? { onEvent: options.onEvent } : {}),
     };
   }
@@ -266,7 +283,11 @@ export class AudioRenderTask
       sampleRate: this.#options.sampleRate ?? null,
       channels: this.#options.channels ?? null,
       useLimiter: this.#options.useLimiter ?? null,
+      ffmpegArgs: [...(this.#options.ffmpegArgs ?? [])],
       soundfonts: [...(this.#options.soundfonts ?? [])],
+      ...(this.#options.format !== undefined
+        ? { format: this.#options.format }
+        : {}),
       ...(this.#options.onEvent ? { onEvent: this.#options.onEvent } : {}),
     };
   }

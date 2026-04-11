@@ -33,6 +33,8 @@ export interface AudioRenderOptions {
   sampleRate?: number | null;
   channels?: number | null;
   useLimiter?: boolean | null;
+  format?: SdkAudioRenderConfig["format"];
+  ffmpegArgs?: string[];
   soundfonts?: string[];
   onEvent?: (event: AudioRenderEvent) => void;
 }
