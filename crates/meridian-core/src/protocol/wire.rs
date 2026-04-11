@@ -7,11 +7,11 @@ use crate::{
     audio::AudioRenderEvent,
     midi::{MidiFileProcessingConfig, MidiFilesMergeConfig},
     protocol::{
-        AnalysisJobId, AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, DisplayCacheId,
-        ImageExportConfig, MidiAnalysisData, MidiAnalysisJobEvent, MidiAnalysisJobStatus,
-        MidiAnalysisKind, MidiFileInspection, MidiProcessEvent, MidiProcessJobId,
-        MidiProcessStatus, PROTOCOL_VERSION, ParsedMidiId, VideoAudioConfig, VideoExportConfig,
-        VideoRenderEvent, VideoRenderStatus,
+        AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, ImageExportConfig,
+        MidiAnalysisData, MidiAnalysisJobEvent, MidiAnalysisJobStatus, MidiAnalysisKind,
+        MidiFileInspection, MidiProcessEvent, MidiProcessJobId, MidiProcessStatus,
+        PROTOCOL_VERSION, ParsedMidiId, VideoAudioConfig, VideoExportConfig, VideoRenderEvent,
+        VideoRenderStatus,
     },
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
 };
@@ -88,14 +88,9 @@ pub enum ProtocolCommand {
     StartMidiAnalysisJob {
         parsed_midi_id: ParsedMidiId,
         #[serde(default)]
-        display_cache_id: Option<DisplayCacheId>,
-        #[serde(default)]
         kinds: Vec<MidiAnalysisKind>,
         #[serde(default)]
         bucket_count: Option<usize>,
-    },
-    GetMidiAnalysisJobStatus {
-        job_id: AnalysisJobId,
     },
     StartProcessMidiFile {
         input: PathBuf,

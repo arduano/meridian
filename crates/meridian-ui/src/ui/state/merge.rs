@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use meridian_core::protocol::{MidiProcessEvent, MidiProcessStatus};
-use slint::{ModelRc, SharedString, VecModel};
+use slint::{ModelRc, VecModel};
 
 use super::super::view::{App, MergeSourceRow};
 use super::super::view_model::{MergeSourceInspection, UiViewModel};

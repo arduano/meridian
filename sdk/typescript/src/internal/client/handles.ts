@@ -64,16 +64,6 @@ export class MidiAnalysisJobHandle {
     };
   }
 
-  async refreshStatus(): Promise<MidiAnalysisJobStatus> {
-    const events = await this.#protocol.request({
-      type: "get_midi_analysis_job_status",
-      job_id: this.jobId,
-    });
-    const wrapper = requireEvent(events, "midi_analysis_job_status");
-    this.#consumeStatus(wrapper.status);
-    return this.#status;
-  }
-
   wait(): Promise<MidiAnalysisData> {
     return this.#done;
   }

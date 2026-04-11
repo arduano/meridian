@@ -12,7 +12,6 @@ export type { ControllerMapEntry } from "../generated/ControllerMapEntry.ts";
 export type { ControllerScaleEntry } from "../generated/ControllerScaleEntry.ts";
 export type { CoreErrorCode } from "../generated/CoreErrorCode.ts";
 export type { DisplayTimeSpace } from "../generated/DisplayTimeSpace.ts";
-export type { DisplayCacheId } from "../generated/DisplayCacheId.ts";
 export type { FlatKeyboardProjectorConfig } from "../generated/FlatKeyboardProjectorConfig.ts";
 export type { FlatNoteProjectorConfig } from "../generated/FlatNoteProjectorConfig.ts";
 export type { FrameColorMode } from "../generated/FrameColorMode.ts";
@@ -194,8 +193,6 @@ export type ResponseFor<C extends ProtocolCommand> = C extends
   : C extends { type: "load_midi" } ? [MidiLoadedEvent] | [ErrorEvent]
   : C extends { type: "load_audio_midi" } ? [MidiLoadedEvent] | [ErrorEvent]
   : C extends { type: "start_midi_analysis_job" }
-    ? [MidiAnalysisJobStatusEventWrapper] | [ErrorEvent]
-  : C extends { type: "get_midi_analysis_job_status" }
     ? [MidiAnalysisJobStatusEventWrapper] | [ErrorEvent]
   : C extends { type: "start_process_midi_file" }
     ? [MidiProcessStatusEventWrapper] | [ErrorEvent]

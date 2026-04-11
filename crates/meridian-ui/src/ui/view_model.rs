@@ -4,8 +4,9 @@ use meridian_core::{
     audio::AudioStatus,
     midi::MidiFileInspection,
     protocol::{
-        AudioRenderStatus, CoreEvent, MidiAnalysisData, MidiProcessEvent, MidiProcessStatus,
-        ProcessedMidiId, StateSnapshot, VideoRenderStatus,
+        AnalysisJobId, AudioRenderStatus, CoreEvent, MidiAnalysisData, MidiAnalysisJobStatus,
+        MidiProcessEvent, MidiProcessStatus, ParsedMidiId, ProcessedMidiId, StateSnapshot,
+        VideoRenderStatus,
     },
     render::{DisplayTimeSpace, SceneConfig},
 };
@@ -68,6 +69,8 @@ pub struct AnalysisViewModel {
     pub processed_midi_id: Option<ProcessedMidiId>,
     pub data: Option<MidiAnalysisData>,
     pub track_count: Option<usize>,
+    pub pending_parsed_midi_id: Option<ParsedMidiId>,
+    pub pending_job_id: Option<AnalysisJobId>,
 }
 
 #[derive(Debug, Clone)]
@@ -113,6 +116,10 @@ impl MergeSourceViewModel {
 }
 
 impl UiViewModel {
+    pub fn clear_analysis(&mut self) {
+        self.analysis = AnalysisViewModel::default();
+    }
+
     pub fn reduce_events(&mut self, events: &[CoreEvent]) {
         for event in events {
             self.reduce_event(event);
@@ -158,14 +165,55 @@ impl UiViewModel {
                 self.analysis.processed_midi_id = Some(*processed_midi_id);
                 self.analysis.track_count = Some(*track_count);
             }
-            CoreEvent::MidiAnalysis {
-                processed_midi_id,
-                analysis,
-                ..
-            } => {
-                self.analysis.processed_midi_id = *processed_midi_id;
-                self.analysis.data = Some(analysis.clone());
-            }
+            CoreEvent::MidiAnalysisJobStatus { status } => match status {
+                MidiAnalysisJobStatus::Running {
+                    job_id,
+                    parsed_midi_id,
+                    ..
+                } => {
+                    self.analysis.pending_parsed_midi_id = Some(*parsed_midi_id);
+                    self.analysis.pending_job_id = Some(*job_id);
+                    self.analysis.processed_midi_id = None;
+                    self.analysis.data = None;
+                }
+                MidiAnalysisJobStatus::Finished {
+                    job_id,
+                    parsed_midi_id,
+                    result,
+                    ..
+                } => {
+                    if self
+                        .analysis
+                        .pending_job_id
+                        .map(|pending| pending == *job_id)
+                        .unwrap_or(true)
+                        || self.analysis.pending_parsed_midi_id == Some(*parsed_midi_id)
+                    {
+                        self.analysis.pending_parsed_midi_id = None;
+                        self.analysis.pending_job_id = None;
+                        self.analysis.processed_midi_id = None;
+                        self.analysis.data = Some(result.clone());
+                    }
+                }
+                MidiAnalysisJobStatus::Failed {
+                    job_id,
+                    parsed_midi_id,
+                    ..
+                } => {
+                    if self
+                        .analysis
+                        .pending_job_id
+                        .map(|pending| pending == *job_id)
+                        .unwrap_or(true)
+                        || self.analysis.pending_parsed_midi_id == Some(*parsed_midi_id)
+                    {
+                        self.analysis.pending_parsed_midi_id = None;
+                        self.analysis.pending_job_id = None;
+                        self.analysis.processed_midi_id = None;
+                        self.analysis.data = None;
+                    }
+                }
+            },
             CoreEvent::AudioStatus { status } => self.audio.status = status.clone(),
             CoreEvent::MidiProcess { event } => self.modify.latest_event = Some(event.clone()),
             CoreEvent::MidiProcessStatus { status } => self.modify.process_status = status.clone(),
@@ -181,7 +229,6 @@ impl UiViewModel {
             | CoreEvent::DisplaySessionCreated { .. }
             | CoreEvent::AudioSessionCreated { .. }
             | CoreEvent::MidiAnalysisJob { .. }
-            | CoreEvent::MidiAnalysisJobStatus { .. }
             | CoreEvent::MidiFileProcessed { .. }
             | CoreEvent::MidiFilesMerged { .. }
             | CoreEvent::Error { .. }

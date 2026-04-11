@@ -205,6 +205,10 @@ pub(super) fn load_analysis_midi_async(
     analysis_load_generation: &Arc<AtomicU64>,
     midi_path: &str,
 ) {
+    shared_state
+        .lock()
+        .expect("shared UI state mutex poisoned")
+        .clear_analysis();
     app.set_analysis_load_state(MidiLoadState::Loading);
     app.set_analysis_loading_status("Reading MIDI for analysis…".into());
     app.set_analysis_loading_progress(0.0);
@@ -251,11 +255,18 @@ pub(super) fn load_analysis_midi_async(
             match result {
                 Ok(Some(events)) => {
                     apply_events_to_app(&app, &shared_state, &events);
-                    app.set_analysis_load_state(MidiLoadState::Loaded);
-                    app.set_analysis_loading_progress(1.0);
-                    app.set_analysis_loading_status("Analysis ready".into());
+                    if app.get_analysis_load_state() == MidiLoadState::Loading {
+                        app.set_analysis_loading_progress(
+                            app.get_analysis_loading_progress().max(0.2),
+                        );
+                        app.set_analysis_loading_status("Building analysis model…".into());
+                    }
                 }
                 Err(e) => {
+                    shared_state
+                        .lock()
+                        .expect("shared UI state mutex poisoned")
+                        .clear_analysis();
                     app.set_analysis_load_state(MidiLoadState::Error);
                     app.set_analysis_load_error(e.to_string().into());
                     app.set_analysis_loading_status(Default::default());
@@ -285,16 +296,18 @@ fn load_analysis_resource_set(
     let parsed_events = bridge.load_parsed_midi(path.to_path_buf(), shared_state)?;
     let parsed_midi_id = parsed_midi_id_from_events(&parsed_events)?;
     all_events.extend(parsed_events);
+    shared_state
+        .lock()
+        .expect("shared UI state mutex poisoned")
+        .analysis
+        .pending_parsed_midi_id = Some(parsed_midi_id);
 
     progress(0.55, "Building analysis model…");
     if !is_current() {
         return Ok(None);
     }
-    progress(0.82, "Computing bucketed note statistics…");
-    if !is_current() {
-        return Ok(None);
-    }
-    let analysis_events = bridge.analyze_parsed_midi(parsed_midi_id, None, shared_state)?;
+    let analysis_events =
+        bridge.start_midi_analysis_job(parsed_midi_id, vec![], None, shared_state)?;
     all_events.extend(analysis_events);
     if !is_current() {
         return Ok(None);

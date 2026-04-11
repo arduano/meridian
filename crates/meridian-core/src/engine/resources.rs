@@ -1,4 +1,3 @@
-mod analysis;
 mod caches;
 mod gc;
 mod ids;

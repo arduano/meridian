@@ -238,10 +238,15 @@ pub(super) fn wire_midi_callbacks(
     {
         let app_weak = app.as_weak();
         let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
         let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_cancel_load_analysis(move || {
             if let Some(app) = app_weak.upgrade() {
                 bridge.cancel_midi_loads();
+                shared_state
+                    .lock()
+                    .expect("shared UI state mutex poisoned")
+                    .clear_analysis();
                 analysis_load_generation.fetch_add(1, Ordering::SeqCst);
                 if app.get_analysis_load_state() == MidiLoadState::Loading {
                     app.set_analysis_load_state(MidiLoadState::Selected);

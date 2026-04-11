@@ -38,6 +38,13 @@ pub(super) fn reset_midi_ui_state(app: &App, state: MidiLoadState) {
     reset_analysis_outputs(app);
 }
 
+fn clear_analysis_state(shared_state: &Arc<Mutex<UiViewModel>>) {
+    shared_state
+        .lock()
+        .expect("shared UI state mutex poisoned")
+        .clear_analysis();
+}
+
 pub(super) fn unload_selected_midi(
     app: &App,
     bridge: &UiCoreBridge,
@@ -48,6 +55,7 @@ pub(super) fn unload_selected_midi(
     analysis_load_generation: &Arc<AtomicU64>,
 ) {
     bridge.cancel_midi_loads();
+    clear_analysis_state(shared_state);
     cancel_pending_midi_loads(
         preview_load_generation,
         render_load_generation,
@@ -76,6 +84,7 @@ pub(super) fn replace_selected_midi(
     selected_midi_name: slint::SharedString,
 ) {
     bridge.cancel_midi_loads();
+    clear_analysis_state(shared_state);
     cancel_pending_midi_loads(
         preview_load_generation,
         render_load_generation,

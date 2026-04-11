@@ -9,10 +9,9 @@ use meridian_core::{
     display::MIN_VIEW_RANGE_SECONDS,
     midi::{
         MidiFileInspection, MidiFileProcessingConfig, MidiFilesMergeConfig, MidiProcessingConfig,
+        analysis::MidiAnalysisKind,
     },
-    protocol::{
-        CoreCommand, CoreEvent, MidiProcessStatus, ParsedMidiId, ProcessedMidiId, VideoRenderConfig,
-    },
+    protocol::{CoreCommand, CoreEvent, MidiProcessStatus, ParsedMidiId, VideoRenderConfig},
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
 };
 
@@ -171,30 +170,17 @@ impl UiCoreBridge {
         )
     }
 
-    pub fn analyze_processed_midi(
-        &self,
-        processed_midi_id: ProcessedMidiId,
-        bucket_count: Option<usize>,
-        model: &Arc<Mutex<UiViewModel>>,
-    ) -> Result<Vec<CoreEvent>, MeridianError> {
-        self.request(
-            CoreCommand::AnalyzeProcessedMidi {
-                processed_midi_id,
-                bucket_count,
-            },
-            model,
-        )
-    }
-
-    pub fn analyze_parsed_midi(
+    pub fn start_midi_analysis_job(
         &self,
         parsed_midi_id: ParsedMidiId,
+        kinds: Vec<MidiAnalysisKind>,
         bucket_count: Option<usize>,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
         self.request(
-            CoreCommand::AnalyzeParsedMidi {
+            CoreCommand::StartMidiAnalysisJob {
                 parsed_midi_id,
+                kinds,
                 bucket_count,
             },
             model,

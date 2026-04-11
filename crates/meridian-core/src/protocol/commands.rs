@@ -28,6 +28,7 @@ pub enum CoreCommand {
     LoadParsedMidi {
         path: PathBuf,
     },
+    /// Fast per-file inspection for merge/source selection.
     InspectMidiFiles {
         paths: Vec<PathBuf>,
     },
@@ -52,28 +53,16 @@ pub enum CoreCommand {
     },
     CancelMidiFileProcess,
     GetMidiFileProcessStatus,
-    AnalyzeActiveMidi {
-        bucket_count: Option<usize>,
-    },
-    AnalyzeParsedMidi {
-        parsed_midi_id: ParsedMidiId,
-        bucket_count: Option<usize>,
-    },
-    AnalyzeProcessedMidi {
-        processed_midi_id: ProcessedMidiId,
-        bucket_count: Option<usize>,
-    },
+    /// Starts full analysis for an already parsed MIDI resource.
+    ///
+    /// The direct response is a single `MidiAnalysisJobStatus::Running` event.
+    /// Progress and the final result are streamed asynchronously afterward.
     StartMidiAnalysisJob {
         parsed_midi_id: ParsedMidiId,
-        #[serde(default)]
-        display_cache_id: Option<DisplayCacheId>,
         #[serde(default)]
         kinds: Vec<MidiAnalysisKind>,
         #[serde(default)]
         bucket_count: Option<usize>,
-    },
-    GetMidiAnalysisJobStatus {
-        job_id: super::ids::AnalysisJobId,
     },
     BuildDisplayCache {
         parsed_midi_id: ParsedMidiId,

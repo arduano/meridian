@@ -253,6 +253,7 @@ fn json_protocol_defaults_version_and_render_response_is_lightweight() {
 fn midi_analysis_job_runs_without_building_display_cache() {
     let midi = support::write_test_midi();
     let core = spawn_core();
+    let event_rx = core.subscribe_events();
 
     let parsed_events = core
         .request(CoreCommand::LoadParsedMidi { path: midi })
@@ -268,7 +269,6 @@ fn midi_analysis_job_runs_without_building_display_cache() {
     let status_events = core
         .request(CoreCommand::StartMidiAnalysisJob {
             parsed_midi_id,
-            display_cache_id: None,
             kinds: vec![
                 MidiAnalysisKind::File,
                 MidiAnalysisKind::Summary,
@@ -281,21 +281,21 @@ fn midi_analysis_job_runs_without_building_display_cache() {
         })
         .expect("start midi analysis job");
 
-    let job_id = match status_events.as_slice() {
-        [CoreEvent::MidiAnalysisJobStatus { status }] => match status {
-            meridian_core::protocol::MidiAnalysisJobStatus::Running { job_id, .. } => *job_id,
-            other => panic!("unexpected initial status: {other:?}"),
-        },
-        other => panic!("unexpected status events: {other:?}"),
-    };
+    assert!(matches!(
+        status_events.as_slice(),
+        [CoreEvent::MidiAnalysisJobStatus {
+            status: meridian_core::protocol::MidiAnalysisJobStatus::Running { .. }
+        }]
+    ));
 
-    for _ in 0..20 {
-        let events = core
-            .request(CoreCommand::GetMidiAnalysisJobStatus { job_id })
-            .expect("analysis job status");
-        match events.as_slice() {
-            [CoreEvent::MidiAnalysisJobStatus { status }] => match status {
-                meridian_core::protocol::MidiAnalysisJobStatus::Finished { result, .. } => {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        let event = event_rx
+            .recv_timeout(Duration::from_millis(200))
+            .expect("receive analysis job event");
+        match event {
+            CoreEvent::MidiAnalysisJob { event } => match event {
+                meridian_core::protocol::MidiAnalysisJobEvent::Finished { result, .. } => {
                     assert_eq!(result.total_notes, 2);
                     assert_eq!(result.buckets.len(), 4);
                     assert_eq!(
@@ -312,62 +312,15 @@ fn midi_analysis_job_runs_without_building_display_cache() {
                     assert_eq!(result.file.declared_track_count, 1);
                     return;
                 }
-                meridian_core::protocol::MidiAnalysisJobStatus::Failed { message, .. } => {
+                meridian_core::protocol::MidiAnalysisJobEvent::Failed { message, .. } => {
                     panic!("analysis job failed: {message}")
                 }
-                meridian_core::protocol::MidiAnalysisJobStatus::Running { .. } => {
-                    std::thread::sleep(Duration::from_millis(10));
-                }
+                _ => {}
             },
-            other => panic!("unexpected analysis job status response: {other:?}"),
+            _ => {}
         }
     }
     panic!("analysis job did not finish");
-}
-
-#[test]
-fn analyze_parsed_midi_returns_analysis_without_building_processed_midi() {
-    let midi = support::write_test_midi();
-    let core = spawn_core();
-    let parsed_events = core
-        .request(CoreCommand::LoadParsedMidi { path: midi })
-        .expect("load parsed midi");
-    let parsed_midi_id = match parsed_events.as_slice() {
-        [CoreEvent::ParsedMidiLoaded { parsed_midi_id, .. }] => *parsed_midi_id,
-        other => panic!("unexpected parsed midi events: {other:?}"),
-    };
-
-    let events = core
-        .request(CoreCommand::AnalyzeParsedMidi {
-            parsed_midi_id,
-            bucket_count: None,
-        })
-        .expect("analyze parsed midi");
-
-    match events.as_slice() {
-        [
-            CoreEvent::MidiAnalysis {
-                processed_midi_id,
-                analysis,
-                ..
-            },
-        ] => {
-            assert!(processed_midi_id.is_none());
-            assert_eq!(analysis.total_notes, 2);
-            assert_eq!(analysis.events.note_on_events, 2);
-            assert_eq!(analysis.events.note_off_events, 2);
-            assert!(!analysis.buckets.is_empty());
-            assert_eq!(
-                analysis
-                    .buckets
-                    .iter()
-                    .map(|bucket| bucket.note_starts)
-                    .sum::<u64>(),
-                2
-            );
-        }
-        other => panic!("unexpected parsed analysis response: {other:?}"),
-    }
 }
 
 #[test]
@@ -620,6 +573,45 @@ fn inspect_midi_files_reports_basic_merge_metadata() {
             assert_eq!(inspection.track_name_event_count, 1);
             assert_eq!(inspection.total_notes, 1);
             assert_eq!(inspection.ticks_per_quarter, Some(96));
+            assert!(inspection.error.is_none());
+        }
+        other => panic!("unexpected inspect response: {other:?}"),
+    }
+}
+
+#[test]
+fn inspect_midi_files_merges_cross_track_tempo_for_length() {
+    let dir = support::temp_dir("meridian-core-inspect-tempo");
+    let midi = dir.join("inspect_tempo.mid");
+    support::write_toolkit_midi(
+        &midi,
+        96,
+        vec![
+            vec![
+                Delta::new(0, Event::new_note_on_event(0, 60, 100)),
+                Delta::new(192, Event::new_note_off_event(0, 60)),
+            ],
+            vec![Delta::new(96, Event::new_tempo_event(400_000))],
+        ],
+    );
+
+    let core = spawn_core();
+    let events = core
+        .request(CoreCommand::InspectMidiFiles {
+            paths: vec![midi.clone()],
+        })
+        .expect("inspect midi files");
+
+    match events.as_slice() {
+        [CoreEvent::MidiFilesInspected { inspections }] => {
+            assert_eq!(inspections.len(), 1);
+            let inspection = &inspections[0];
+            assert_eq!(inspection.path, midi);
+            assert_eq!(inspection.actual_track_count, 2);
+            assert_eq!(inspection.tempo_event_count, 1);
+            assert_eq!(inspection.total_notes, 1);
+            assert!((inspection.midi_length - 0.9).abs() < 1e-9);
+            assert!((inspection.initial_bpm - 120.0).abs() < 1e-9);
             assert!(inspection.error.is_none());
         }
         other => panic!("unexpected inspect response: {other:?}"),

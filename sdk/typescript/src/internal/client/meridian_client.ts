@@ -240,7 +240,6 @@ export class MeridianClient {
     const events = await this.protocol.request({
       type: "start_midi_analysis_job",
       parsed_midi_id: parsedMidiId,
-      display_cache_id: null,
       kinds: options.kinds ?? [],
       bucket_count: options.bucketCount ?? null,
     });

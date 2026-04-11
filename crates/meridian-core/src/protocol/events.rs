@@ -4,10 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::audio::{AudioRenderEvent, AudioStatus};
-use crate::midi::{
-    MidiBuildProgress,
-    analysis::{MidiAnalysisData, MidiFileInspection},
-};
+use crate::midi::{MidiBuildProgress, MidiFileInspection};
 use crate::render::SceneLayout;
 
 use super::{
@@ -55,17 +52,15 @@ pub enum CoreEvent {
         parsed_midi_id: ParsedMidiId,
         path: PathBuf,
     },
+    /// Result of `InspectMidiFiles`.
     MidiFilesInspected {
         inspections: Vec<MidiFileInspection>,
     },
-    MidiAnalysis {
-        processed_midi_id: Option<ProcessedMidiId>,
-        display_cache_id: Option<DisplayCacheId>,
-        analysis: MidiAnalysisData,
-    },
+    /// Streamed analysis job lifecycle events.
     MidiAnalysisJob {
         event: MidiAnalysisJobEvent,
     },
+    /// Latest materialized analysis job state after applying the lifecycle event.
     MidiAnalysisJobStatus {
         status: MidiAnalysisJobStatus,
     },

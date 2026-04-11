@@ -174,7 +174,7 @@ impl CoreState {
             }],
             CoreCommand::LoadParsedMidi { path } => self.load_parsed_midi_resource(path),
             CoreCommand::InspectMidiFiles { paths } => vec![CoreEvent::MidiFilesInspected {
-                inspections: crate::midi::analysis::inspect_midi_files(&paths),
+                inspections: crate::midi::inspect::inspect_midi_files(&paths),
             }],
             CoreCommand::BuildProcessedMidi {
                 parsed_midi_id,
@@ -220,28 +220,11 @@ impl CoreState {
             CoreCommand::GetMidiFileProcessStatus => vec![CoreEvent::MidiProcessStatus {
                 status: self.midi_process_status(),
             }],
-            CoreCommand::AnalyzeActiveMidi { bucket_count } => {
-                self.analyze_active_midi(bucket_count)
-            }
-            CoreCommand::AnalyzeParsedMidi {
-                parsed_midi_id,
-                bucket_count,
-            } => self.analyze_parsed_midi(parsed_midi_id, bucket_count),
-            CoreCommand::AnalyzeProcessedMidi {
-                processed_midi_id,
-                bucket_count,
-            } => self.analyze_processed_midi(processed_midi_id, bucket_count),
             CoreCommand::StartMidiAnalysisJob {
                 parsed_midi_id,
-                display_cache_id,
                 kinds,
                 bucket_count,
-            } => {
-                self.start_midi_analysis_job(parsed_midi_id, display_cache_id, kinds, bucket_count)
-            }
-            CoreCommand::GetMidiAnalysisJobStatus { job_id } => {
-                self.get_midi_analysis_job_status(job_id)
-            }
+            } => self.start_midi_analysis_job(parsed_midi_id, kinds, bucket_count),
             CoreCommand::BuildDisplayCache { parsed_midi_id } => {
                 self.build_display_cache_resource(parsed_midi_id)
             }

@@ -32,16 +32,8 @@ impl CoreState {
         }
 
         for status in self.analysis_jobs.values() {
-            if let MidiAnalysisJobStatus::Running {
-                parsed_midi_id,
-                display_cache_id,
-                ..
-            } = status
-            {
+            if let MidiAnalysisJobStatus::Running { parsed_midi_id, .. } = status {
                 keep_parsed.insert(*parsed_midi_id);
-                if let Some(display_cache_id) = display_cache_id {
-                    keep_display.insert(*display_cache_id);
-                }
             }
         }
 

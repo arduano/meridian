@@ -6,6 +6,7 @@ pub mod colors;
 pub mod display_cache;
 pub mod file_merge;
 pub mod file_processing;
+pub mod inspect;
 mod materialized;
 pub mod modifier_tools;
 pub mod parsed;
@@ -26,10 +27,10 @@ use ts_rs::TS;
 
 use crate::error::MeridianError;
 use crate::render::DisplayTimeSpace;
-pub use analysis::MidiFileInspection;
 pub use cache::MidiCacheStack;
 pub use colors::{MIDIColor, MIDIColorPair};
 pub use file_merge::{MidiFilesMergeConfig, MidiFilesMergeMode};
+pub use inspect::MidiFileInspection;
 pub use modifier_tools::{
     ChannelMapEntry, ChannelRemapTool, KeyMapEntry, KeyMapTool, KeyRange, MetaTextTool, TextKind,
 };

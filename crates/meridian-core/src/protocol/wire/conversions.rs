@@ -69,18 +69,13 @@ impl From<ProtocolCommand> for CoreCommand {
             ProtocolCommand::LoadAudioMidi { path } => Self::LoadAudioMidi { path },
             ProtocolCommand::StartMidiAnalysisJob {
                 parsed_midi_id,
-                display_cache_id,
                 kinds,
                 bucket_count,
             } => Self::StartMidiAnalysisJob {
                 parsed_midi_id,
-                display_cache_id,
                 kinds,
                 bucket_count,
             },
-            ProtocolCommand::GetMidiAnalysisJobStatus { job_id } => {
-                Self::GetMidiAnalysisJobStatus { job_id }
-            }
             ProtocolCommand::StartProcessMidiFile {
                 input,
                 output,

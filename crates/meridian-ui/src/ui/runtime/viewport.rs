@@ -102,6 +102,52 @@ pub(super) fn install_core_event_listener(
                         app.window().request_redraw();
                     });
                 }
+                CoreEvent::MidiAnalysisJob {
+                    event:
+                        meridian_core::protocol::MidiAnalysisJobEvent::Progress {
+                            job_id,
+                            progress,
+                            status,
+                        },
+                } => {
+                    let job_id = *job_id;
+                    let progress = *progress;
+                    let status_text: slint::SharedString = status.clone().into();
+                    let shared_state = Arc::clone(&shared_state);
+                    let _ = app_weak.upgrade_in_event_loop(move |app| {
+                        let model = shared_state.lock().expect("shared UI state mutex poisoned");
+                        if app.get_analysis_load_state() != MidiLoadState::Loading {
+                            return;
+                        }
+                        if model.analysis.pending_job_id != Some(job_id) {
+                            return;
+                        }
+                        app.set_analysis_loading_progress(
+                            app.get_analysis_loading_progress().max(progress),
+                        );
+                        app.set_analysis_loading_status(status_text);
+                        app.window().request_redraw();
+                    });
+                }
+                CoreEvent::MidiAnalysisJobStatus { status } => {
+                    let status = status.clone();
+                    let shared_state = Arc::clone(&shared_state);
+                    let _ = app_weak.upgrade_in_event_loop(move |app| {
+                        if !analysis_status_matches_pending(&app, &shared_state, &status) {
+                            return;
+                        }
+                        let event = CoreEvent::MidiAnalysisJobStatus {
+                            status: status.clone(),
+                        };
+                        shared_state
+                            .lock()
+                            .expect("shared UI state mutex poisoned")
+                            .reduce_events(std::slice::from_ref(&event));
+                        apply_events_to_app(&app, &shared_state, &[event]);
+                        update_analysis_status_ui(&app, &status);
+                        app.window().request_redraw();
+                    });
+                }
                 CoreEvent::AudioRender { .. }
                 | CoreEvent::AudioRenderStatus { .. }
                 | CoreEvent::VideoRender { .. }
@@ -122,6 +168,59 @@ pub(super) fn install_core_event_listener(
             }
         }
     });
+}
+
+fn analysis_status_matches_pending(
+    app: &App,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+    status: &meridian_core::protocol::MidiAnalysisJobStatus,
+) -> bool {
+    if app.get_analysis_load_state() != MidiLoadState::Loading {
+        return false;
+    }
+    let model = shared_state.lock().expect("shared UI state mutex poisoned");
+    let (job_id, parsed_midi_id) = match status {
+        meridian_core::protocol::MidiAnalysisJobStatus::Running {
+            job_id,
+            parsed_midi_id,
+            ..
+        }
+        | meridian_core::protocol::MidiAnalysisJobStatus::Finished {
+            job_id,
+            parsed_midi_id,
+            ..
+        }
+        | meridian_core::protocol::MidiAnalysisJobStatus::Failed {
+            job_id,
+            parsed_midi_id,
+            ..
+        } => (*job_id, *parsed_midi_id),
+    };
+    model.analysis.pending_job_id == Some(job_id)
+        || (model.analysis.pending_job_id.is_none()
+            && model.analysis.pending_parsed_midi_id == Some(parsed_midi_id))
+}
+
+fn update_analysis_status_ui(app: &App, status: &meridian_core::protocol::MidiAnalysisJobStatus) {
+    match status {
+        meridian_core::protocol::MidiAnalysisJobStatus::Running {
+            progress, status, ..
+        } => {
+            app.set_analysis_loading_progress(app.get_analysis_loading_progress().max(*progress));
+            app.set_analysis_loading_status(status.clone().into());
+        }
+        meridian_core::protocol::MidiAnalysisJobStatus::Finished { .. } => {
+            app.set_analysis_load_state(MidiLoadState::Loaded);
+            app.set_analysis_loading_progress(1.0);
+            app.set_analysis_loading_status("Analysis ready".into());
+            app.set_analysis_load_error(Default::default());
+        }
+        meridian_core::protocol::MidiAnalysisJobStatus::Failed { message, .. } => {
+            app.set_analysis_load_state(MidiLoadState::Error);
+            app.set_analysis_load_error(message.clone().into());
+            app.set_analysis_loading_status(Default::default());
+        }
+    }
 }
 
 fn update_export_state_from_event(

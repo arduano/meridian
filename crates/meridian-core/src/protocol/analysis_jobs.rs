@@ -3,15 +3,15 @@ use ts_rs::TS;
 
 use crate::midi::analysis::{MidiAnalysisData, MidiAnalysisKind};
 
-use super::ids::{AnalysisJobId, DisplayCacheId, ParsedMidiId};
+use super::ids::{AnalysisJobId, ParsedMidiId};
 
+/// Streamed events emitted by the full analysis pipeline.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MidiAnalysisJobEvent {
     Started {
         job_id: AnalysisJobId,
         parsed_midi_id: ParsedMidiId,
-        display_cache_id: Option<DisplayCacheId>,
         kinds: Vec<MidiAnalysisKind>,
     },
     Progress {
@@ -29,13 +29,13 @@ pub enum MidiAnalysisJobEvent {
     },
 }
 
+/// Materialized job state derived from `MidiAnalysisJobEvent`.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum MidiAnalysisJobStatus {
     Running {
         job_id: AnalysisJobId,
         parsed_midi_id: ParsedMidiId,
-        display_cache_id: Option<DisplayCacheId>,
         kinds: Vec<MidiAnalysisKind>,
         progress: f32,
         status: String,
@@ -43,14 +43,12 @@ pub enum MidiAnalysisJobStatus {
     Finished {
         job_id: AnalysisJobId,
         parsed_midi_id: ParsedMidiId,
-        display_cache_id: Option<DisplayCacheId>,
         kinds: Vec<MidiAnalysisKind>,
         result: MidiAnalysisData,
     },
     Failed {
         job_id: AnalysisJobId,
         parsed_midi_id: ParsedMidiId,
-        display_cache_id: Option<DisplayCacheId>,
         kinds: Vec<MidiAnalysisKind>,
         message: String,
     },

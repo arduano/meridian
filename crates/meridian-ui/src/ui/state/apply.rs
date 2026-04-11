@@ -1,17 +1,11 @@
 use std::sync::{Arc, Mutex};
 
-use meridian_core::{
-    protocol::{
-        AudioRenderStatus, CoreEvent, MidiAnalysisData, MidiProcessEvent, MidiProcessStatus,
-        StateSnapshot, VideoRenderStatus,
-    },
-    render::DisplayTimeSpace,
-};
-use slint::{ModelRc, SharedString, VecModel};
+use meridian_core::protocol::{CoreEvent, StateSnapshot};
+use slint::{ModelRc, VecModel};
 
 use super::super::inspector::rows_for_scene;
-use super::super::view::{App, BarValue, EventCount, MergeSourceRow, MidiLoadState};
-use super::super::view_model::{MergeSourceInspection, UiViewModel};
+use super::super::view::{App, MidiLoadState};
+use super::super::view_model::UiViewModel;
 use super::UiFrameUpdate;
 use super::analysis::apply_analysis_to_app;
 use super::audio::apply_audio_to_app;
@@ -85,8 +79,11 @@ pub(super) fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: 
             app.set_analysis_track_count_text(track_count.to_string().into());
             app.set_analysis_midi_length_text(format!("{:.3} s", midi_length).into());
         }
-        CoreEvent::MidiAnalysis { analysis, .. } => {
-            apply_analysis_to_app(app, analysis);
+        CoreEvent::MidiAnalysisJobStatus { status } => {
+            if let meridian_core::protocol::MidiAnalysisJobStatus::Finished { result, .. } = status
+            {
+                apply_analysis_to_app(app, result);
+            }
         }
         CoreEvent::FrameProjected { stats, .. } => {
             app.set_visible_note_count_text(stats.visible_notes.to_string().into());
@@ -119,7 +116,6 @@ pub(super) fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: 
         | CoreEvent::DisplaySessionCreated { .. }
         | CoreEvent::AudioSessionCreated { .. }
         | CoreEvent::MidiAnalysisJob { .. }
-        | CoreEvent::MidiAnalysisJobStatus { .. }
         | CoreEvent::MidiProcess { .. }
         | CoreEvent::MidiProcessStatus { .. } => {}
         CoreEvent::DisplaySessionAttached { .. } | CoreEvent::AudioSessionAttached { .. } => {

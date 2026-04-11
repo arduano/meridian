@@ -2,7 +2,7 @@ mod accumulator;
 mod file_metrics;
 mod types;
 
-use std::{collections::VecDeque, path::PathBuf};
+use std::collections::VecDeque;
 
 use midi_toolkit::events::{Event, MIDIEventEnum};
 use rustc_hash::FxHashMap;
@@ -15,7 +15,6 @@ pub use file_metrics::{analyze_file_metrics, gzip_size_for_path};
 pub use types::{
     CachedMidiAnalysis, MidiAnalysisBucket, MidiAnalysisData, MidiAnalysisEventMetrics,
     MidiAnalysisFileMetrics, MidiAnalysisKind, MidiAnalysisNoteMetrics, MidiAnalysisTempoMetrics,
-    MidiFileInspection,
 };
 
 pub fn build_cached_midi_analysis_with_progress(
@@ -282,54 +281,6 @@ pub fn analyze_parsed_midi_with_progress(
         progress,
     )?;
     Ok(analyze_cached_midi(parsed, cached, buckets))
-}
-
-pub fn inspect_midi_files(paths: &[PathBuf]) -> Vec<MidiFileInspection> {
-    paths.iter().cloned().map(inspect_midi_file).collect()
-}
-
-pub fn inspect_midi_file(path: PathBuf) -> MidiFileInspection {
-    let inspection = || -> Result<MidiFileInspection, crate::error::MeridianError> {
-        let parsed = ParsedMidiFile::load_from_file(path.clone())?;
-        let cached = build_cached_midi_analysis_with_progress(&parsed, |_| {})?;
-        let file = analyze_file_metrics(&parsed, cached.actual_track_count());
-        Ok(MidiFileInspection {
-            path: path.clone(),
-            file_bytes: file.source_bytes,
-            midi_length: cached.midi_length(),
-            total_notes: cached.total_notes(),
-            total_event_count: file.total_event_count,
-            declared_track_count: file.declared_track_count,
-            actual_track_count: file.actual_track_count,
-            ticks_per_quarter: file.ticks_per_quarter,
-            tempo_event_count: cached.events().tempo_events,
-            time_signature_event_count: cached.events().time_signature_events,
-            key_signature_event_count: cached.events().key_signature_events,
-            track_name_event_count: cached.events().track_name_events,
-            initial_bpm: cached.tempo().initial_bpm,
-            error: None,
-        })
-    };
-
-    match inspection() {
-        Ok(inspection) => inspection,
-        Err(error) => MidiFileInspection {
-            path,
-            file_bytes: 0,
-            midi_length: 0.0,
-            total_notes: 0,
-            total_event_count: 0,
-            declared_track_count: 0,
-            actual_track_count: 0,
-            ticks_per_quarter: None,
-            tempo_event_count: 0,
-            time_signature_event_count: 0,
-            key_signature_event_count: 0,
-            track_name_event_count: 0,
-            initial_bpm: 0.0,
-            error: Some(error.to_string()),
-        },
-    }
 }
 
 pub fn select_analysis_kinds(

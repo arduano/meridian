@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -23,24 +21,6 @@ pub struct MidiAnalysisData {
     pub events: MidiAnalysisEventMetrics,
     pub notes: MidiAnalysisNoteMetrics,
     pub tempo: MidiAnalysisTempoMetrics,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-pub struct MidiFileInspection {
-    pub path: PathBuf,
-    pub file_bytes: u64,
-    pub midi_length: f64,
-    pub total_notes: u64,
-    pub total_event_count: u64,
-    pub declared_track_count: u16,
-    pub actual_track_count: usize,
-    pub ticks_per_quarter: Option<u16>,
-    pub tempo_event_count: u64,
-    pub time_signature_event_count: u64,
-    pub key_signature_event_count: u64,
-    pub track_name_event_count: u64,
-    pub initial_bpm: f64,
-    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]

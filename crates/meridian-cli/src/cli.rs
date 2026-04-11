@@ -93,7 +93,6 @@ fn run_analyze(args: args::AnalyzeArgs) -> Result<(), MeridianError> {
 
     let status_events = client.request(ProtocolCommand::StartMidiAnalysisJob {
         parsed_midi_id,
-        display_cache_id: None,
         kinds,
         bucket_count,
     })?;
