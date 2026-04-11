@@ -143,31 +143,31 @@ component MergeSourceItem inherits Rectangle {
 
             HorizontalLayout {
                 spacing: 4px;
-                Text { text: "Tracks"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
+                Text { text: "Tracks"; color: Theme.text-muted; font-size: Theme.font-size-xs; vertical-alignment: center; }
                 Text { text: data.tracks_text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
             }
 
             HorizontalLayout {
                 spacing: 4px;
-                Text { text: "Notes"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
+                Text { text: "Notes"; color: Theme.text-muted; font-size: Theme.font-size-xs; vertical-alignment: center; }
                 Text { text: data.notes_text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
             }
 
             HorizontalLayout {
                 spacing: 4px;
-                Text { text: "PPQ"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
+                Text { text: "PPQ"; color: Theme.text-muted; font-size: Theme.font-size-xs; vertical-alignment: center; }
                 Text { text: data.ppq_text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
             }
 
             HorizontalLayout {
                 spacing: 4px;
-                Text { text: "Length"; color: Theme.text-faint; font-size: Theme.font-size-xs; vertical-alignment: center; }
+                Text { text: "Length"; color: Theme.text-muted; font-size: Theme.font-size-xs; vertical-alignment: center; }
                 Text { text: data.length_text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
             }
 
             Rectangle { horizontal-stretch: 1; }
 
-            Text { text: data.bpm_text; color: Theme.text-faint; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; vertical-alignment: center; }
+            Text { text: data.bpm_text; color: Theme.text-muted; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; vertical-alignment: center; }
         }
     }
 }
@@ -298,19 +298,19 @@ export component MergePanel inherits Rectangle {
                     alignment: center;
 
                     HorizontalLayout { spacing: 4px;
-                        Text { text: "Sources"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
+                        Text { text: "Sources"; color: Theme.text-muted; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
                         Text { text: root.merge-source-count-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
                     }
                     HorizontalLayout { spacing: 4px;
-                        Text { text: "Tracks"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
+                        Text { text: "Tracks"; color: Theme.text-muted; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
                         Text { text: root.merge-track-total-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
                     }
                     HorizontalLayout { spacing: 4px;
-                        Text { text: "Notes"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
+                        Text { text: "Notes"; color: Theme.text-muted; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
                         Text { text: root.merge-note-total-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
                     }
                     HorizontalLayout { spacing: 4px;
-                        Text { text: "Tempo Events"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
+                        Text { text: "Tempo Events"; color: Theme.text-muted; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
                         Text { text: root.merge-tempo-total-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
                     }
                 }
@@ -395,7 +395,7 @@ export component MergePanel inherits Rectangle {
                 Rectangle { height: 2px; }
                 Text {
                     text: "Append stacks tracks sequentially; By Index merges matching track numbers. Normalize consolidates shared metadata into track 0. PPQ Source keeps originals when they match.";
-                    color: Theme.text-faint;
+                    color: Theme.text-muted;
                     font-size: Theme.font-size-xs;
                     wrap: word-wrap;
                 }
@@ -421,7 +421,7 @@ export component MergePanel inherits Rectangle {
                         alignment: center;
                         Text {
                             text: "Output";
-                            color: Theme.text-faint;
+                            color: Theme.text-muted;
                             font-size: Theme.font-size-sm;
                             font-weight: 600;
                         }
@@ -520,10 +520,10 @@ export component MergePanel inherits Rectangle {
                     alignment: start;
 
                     Text { text: "Last result"; color: Theme.text-muted; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-tight; vertical-alignment: center; }
-                    HorizontalLayout { spacing: 4px; Text { text: "Inputs"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.merge-result-input-count-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
-                    HorizontalLayout { spacing: 4px; Text { text: "Tracks"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.merge-result-track-count-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
-                    HorizontalLayout { spacing: 4px; Text { text: "PPQ"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.merge-result-ppq-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
-                    HorizontalLayout { spacing: 4px; Text { text: "Events"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.merge-result-event-count-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
+                    HorizontalLayout { spacing: 4px; Text { text: "Inputs"; color: Theme.text-muted; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.merge-result-input-count-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
+                    HorizontalLayout { spacing: 4px; Text { text: "Tracks"; color: Theme.text-muted; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.merge-result-track-count-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
+                    HorizontalLayout { spacing: 4px; Text { text: "PPQ"; color: Theme.text-muted; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.merge-result-ppq-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
+                    HorizontalLayout { spacing: 4px; Text { text: "Events"; color: Theme.text-muted; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.merge-result-event-count-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
                 }
             }
 
