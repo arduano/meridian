@@ -288,6 +288,7 @@ export class VideoRenderTask
     this.#options = {
       midiPath: options.midiPath,
       output: options.output,
+      container: options.container ?? "mp4",
       fps: options.fps,
       width: options.width,
       height: options.height,
@@ -348,6 +349,7 @@ export class VideoRenderTask
     return {
       midiPath: this.#options.midiPath,
       output: this.#options.output,
+      container: this.#options.container ?? "mp4",
       fps: this.#options.fps,
       width: this.#options.width,
       height: this.#options.height,

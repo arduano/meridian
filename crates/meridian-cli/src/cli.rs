@@ -256,6 +256,7 @@ fn run_render_video(args: RenderVideoArgs) -> Result<(), MeridianError> {
         &args.midi,
         &args.output,
         args.fps,
+        args.container,
         args.width,
         args.height,
         args.view_range,

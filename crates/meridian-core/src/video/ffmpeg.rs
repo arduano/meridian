@@ -3,7 +3,7 @@ use std::{
     process::{Child, ChildStdin, Command, Stdio},
 };
 
-use crate::MeridianError;
+use crate::{MeridianError, protocol::VideoOutputContainer};
 
 pub struct VideoFfmpegAudioInput<'a> {
     pub pipe_path: &'a Path,
@@ -14,27 +14,41 @@ pub struct VideoFfmpegAudioInput<'a> {
 
 pub fn spawn_ffmpeg_rgba(
     output: &Path,
+    container: VideoOutputContainer,
     fps: f64,
     width: u32,
     height: u32,
     extra_args: &[String],
     audio_input: Option<VideoFfmpegAudioInput<'_>>,
 ) -> Result<(Child, ChildStdin, Vec<String>), MeridianError> {
-    spawn_ffmpeg(output, fps, width, height, "rgba", extra_args, audio_input)
+    spawn_ffmpeg(
+        output,
+        container,
+        fps,
+        width,
+        height,
+        "rgba",
+        extra_args,
+        audio_input,
+    )
 }
 
 pub fn spawn_ffmpeg_gray(
     output: &Path,
+    container: VideoOutputContainer,
     fps: f64,
     width: u32,
     height: u32,
     extra_args: &[String],
 ) -> Result<(Child, ChildStdin, Vec<String>), MeridianError> {
-    spawn_ffmpeg(output, fps, width, height, "gray", extra_args, None)
+    spawn_ffmpeg(
+        output, container, fps, width, height, "gray", extra_args, None,
+    )
 }
 
 fn spawn_ffmpeg(
     output: &Path,
+    container: VideoOutputContainer,
     fps: f64,
     width: u32,
     height: u32,
@@ -82,6 +96,7 @@ fn spawn_ffmpeg(
         "yuv420p".to_string(),
     ]);
     args.extend(extra_args.iter().cloned());
+    args.extend(["-f".to_string(), container.ffmpeg_format_name().to_string()]);
     args.push(output.display().to_string());
 
     let mut command = Command::new("ffmpeg");

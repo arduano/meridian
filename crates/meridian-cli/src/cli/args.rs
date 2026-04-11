@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use meridian_core::{
     midi::{QuantizeMode, RangeEdgeBehavior, analysis::MidiAnalysisKind},
-    protocol::{FrameColorMode, ImageOutputFormat},
+    protocol::{FrameColorMode, ImageOutputFormat, VideoOutputContainer},
     render::{DisplayTimeSpace, RendererKind},
 };
 
@@ -143,6 +143,8 @@ pub(super) struct RenderVideoArgs {
     pub(super) output: PathBuf,
     #[arg(long, default_value_t = 60.0)]
     pub(super) fps: f64,
+    #[arg(long, value_enum, default_value_t = VideoOutputContainer::Mp4)]
+    pub(super) container: VideoOutputContainer,
     #[arg(long, default_value_t = 1920)]
     pub(super) width: u32,
     #[arg(long, default_value_t = 1080)]

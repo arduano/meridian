@@ -80,6 +80,21 @@ pub(in super::super) fn wire_render_export_callbacks(
     }
     {
         let app_weak = app.as_weak();
+        app.on_select_render_video_container(move |container| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let container = match container.as_str() {
+                "mkv" => "mkv",
+                _ => "mp4",
+            };
+            app.set_render_video_container_text(container.into());
+            sync_render_output_path(&app);
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
         app.on_change_render_video_ffmpeg_args(move |args| {
             let Some(app) = app_weak.upgrade() else {
                 return;
@@ -264,11 +279,14 @@ pub(in super::super) fn wire_render_export_callbacks(
             let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
             let audio_format =
                 AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
+            let video_container =
+                video_output_container_from_text(app.get_render_video_container_text().as_str());
             let suggested_output = current_export_output_path(&app).unwrap_or_else(|_| {
                 PathBuf::from(default_render_output_path(
                     app.get_selected_midi_name().as_str(),
                     mode,
                     audio_format,
+                    video_container,
                 ))
             });
             std::thread::spawn(move || {
@@ -280,9 +298,14 @@ pub(in super::super) fn wire_render_export_callbacks(
                     dialog = dialog.set_file_name(name);
                 }
                 dialog = match mode {
-                    RenderExportMode::VideoAudio | RenderExportMode::VideoOnly => {
-                        dialog.add_filter("MP4", &["mp4"])
-                    }
+                    RenderExportMode::VideoAudio | RenderExportMode::VideoOnly => dialog
+                        .add_filter(
+                            match video_container {
+                                meridian_core::protocol::VideoOutputContainer::Mp4 => "MP4",
+                                meridian_core::protocol::VideoOutputContainer::Mkv => "MKV",
+                            },
+                            &[video_container.extension()],
+                        ),
                     RenderExportMode::AudioOnly => match audio_format {
                         AudioOnlyFormat::Wav => dialog.add_filter("WAV", &["wav"]),
                         AudioOnlyFormat::Flac => dialog.add_filter("FLAC", &["flac"]),
@@ -293,7 +316,8 @@ pub(in super::super) fn wire_render_export_callbacks(
                     return;
                 };
                 let _ = app_weak.upgrade_in_event_loop(move |app| {
-                    let normalized = normalize_output_path(&path, mode, audio_format);
+                    let normalized =
+                        normalize_output_path(&path, mode, audio_format, video_container);
                     app.set_render_output_path_text(normalized.display().to_string().into());
                     app.window().request_redraw();
                 });

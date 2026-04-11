@@ -241,7 +241,9 @@ pub(super) fn apply_video_render_status_to_app(app: &App, status: &VideoRenderSt
             app.set_video_render_progress(0.0);
             app.set_video_render_status("Idle".into());
             app.set_video_render_elapsed("—".into());
-            app.set_video_render_output_text("output.mp4".into());
+            app.set_video_render_output_text(
+                format!("output.{}", app.get_render_video_container_text()).into(),
+            );
         }
         VideoRenderStatus::Running {
             output,

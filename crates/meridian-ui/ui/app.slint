@@ -278,6 +278,7 @@ export component App inherits Window {
     in-out property <string> render-video-width-text: "1920";
     in-out property <string> render-video-height-text: "1080";
     in-out property <string> render-video-fps-text: "60";
+    in-out property <string> render-video-container-text: "mp4";
     in-out property <string> render-audio-format-text: "wav";
     in-out property <string> render-audio-sample-rate-text: "48000";
     in-out property <string> render-audio-channel-count-text: "stereo";
@@ -483,6 +484,7 @@ export component App inherits Window {
     callback select-render-resolution(string);
     callback submit-custom-render-resolution(string);
     callback select-render-fps(string);
+    callback select-render-video-container(string);
     callback submit-custom-render-fps(string);
     callback select-render-audio-format(string);
     callback select-render-audio-sample-rate(string);
@@ -1064,6 +1066,7 @@ export component App inherits Window {
                     render-output-path-text: root.render-output-path-text;
                     render-video-resolution-text: root.render-video-resolution-text;
                     render-video-fps-text: root.render-video-fps-text;
+                    render-video-container-text: root.render-video-container-text;
                     render-audio-format-text: root.render-audio-format-text;
                     render-audio-sample-rate-text: root.render-audio-sample-rate-text;
                     render-audio-channel-count-text: root.render-audio-channel-count-text;
@@ -1102,6 +1105,7 @@ export component App inherits Window {
                     select-resolution(preset) => { root.select-render-resolution(preset); }
                     submit-custom-resolution(val) => { root.submit-custom-render-resolution(val); }
                     select-fps(fps) => { root.select-render-fps(fps); }
+                    select-video-container(container) => { root.select-render-video-container(container); }
                     submit-custom-fps(val) => { root.submit-custom-render-fps(val); }
                     select-audio-format(format) => { root.select-render-audio-format(format); }
                     select-audio-sample-rate(rate) => { root.select-render-audio-sample-rate(rate); }

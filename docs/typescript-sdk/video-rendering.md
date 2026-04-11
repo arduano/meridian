@@ -38,8 +38,14 @@ You need a readable MIDI file path.
 
 ### Output path
 
-You need a writable video output path. In practice, choose an extension that
-matches what you expect `ffmpeg` to write, such as `.mp4`.
+You need a writable video output path. `VideoRenderOptions.container` now makes
+the muxer explicit, so the output extension should match that choice:
+
+- `container: "mp4"` with an `.mp4` path
+- `container: "mkv"` with an `.mkv` path
+
+`mkv` is useful when you want to inspect or play the file while the render is
+still in progress.
 
 ### `ffmpeg`
 
@@ -79,7 +85,8 @@ const client = await createDenoMeridianClient("./target/debug/meridian-cli");
 try {
   const result = await client.video.render({
     midiPath: "./song.mid",
-    output: "./song.mp4",
+    output: "./song.mkv",
+    container: "mkv",
     fps: 24,
     width: 1280,
     height: 720,
@@ -98,6 +105,7 @@ The resolved value is the final `render_finished` event, which includes:
 - `elapsed_seconds`
 - `average_fps`
 - `output`
+- `container`
 
 ## Common Options
 
@@ -107,6 +115,7 @@ The resolved value is the final `render_finished` event, which includes:
 | --- | --- | --- |
 | `midiPath` | Yes | Source MIDI file |
 | `output` | Yes | Output video file path |
+| `container` | No | Output container: `"mp4"` or `"mkv"` |
 | `fps` | Yes | Output frame rate |
 | `width` | Yes | Output width in pixels |
 | `height` | Yes | Output height in pixels |
@@ -124,7 +133,8 @@ More explicit example:
 ```ts
 const result = await client.video.render({
   midiPath: "./song.mid",
-  output: "./song.mp4",
+  output: "./song.mkv",
+  container: "mkv",
   fps: 30,
   width: 1920,
   height: 1080,
@@ -136,6 +146,16 @@ const result = await client.video.render({
   ffmpegArgs: ["-pix_fmt", "yuv420p"],
 });
 ```
+
+## Container Choice
+
+Meridian supports two video output containers:
+
+- `mp4`: conventional final-delivery default
+- `mkv`: easier to inspect while the render is still writing
+
+The container is separate from codec selection. For example, both `mp4` and
+`mkv` can still use `libx264`; the container controls the wrapper format.
 
 ## Renderer Choice
 
@@ -207,6 +227,7 @@ const scene: SceneConfig = {
 const result = await client.video.render({
   midiPath: "./song.mid",
   output: "./song.mp4",
+  container: "mp4",
   fps: 24,
   width: 1280,
   height: 720,
@@ -254,7 +275,8 @@ Example:
 ```ts
 const result = await client.video.render({
   midiPath: "./song.mid",
-  output: "./song.mp4",
+  output: "./song.mkv",
+  container: "mkv",
   fps: 24,
   width: 1280,
   height: 720,
@@ -290,7 +312,8 @@ Example:
 ```ts
 const result = await client.video.render({
   midiPath: "./song.mid",
-  output: "./song.mp4",
+  output: "./song.mkv",
+  container: "mkv",
   fps: 24,
   width: 1280,
   height: 720,
@@ -327,7 +350,8 @@ Use the task directly when you only care about completion:
 ```ts
 const finished = await client.video.render({
   midiPath: "./song.mid",
-  output: "./song.mp4",
+  output: "./song.mkv",
+  container: "mkv",
   fps: 24,
   width: 1280,
   height: 720,
@@ -340,7 +364,8 @@ Use the handle when you need status polling or cancellation:
 ```ts
 const task = client.video.render({
   midiPath: "./song.mid",
-  output: "./song.mp4",
+  output: "./song.mkv",
+  container: "mkv",
   fps: 24,
   width: 1280,
   height: 720,
@@ -369,7 +394,8 @@ Video render handles support cancellation:
 ```ts
 const task = client.video.render({
   midiPath: "./song.mid",
-  output: "./song.mp4",
+  output: "./song.mkv",
+  container: "mkv",
   fps: 24,
   width: 1280,
   height: 720,
@@ -403,6 +429,7 @@ this in `try`/`catch` if cancellation is expected.
 Running and cancelling states include:
 
 - `output`
+- `container`
 - `fps`
 - `width`
 - `height`
@@ -445,7 +472,7 @@ For most applications:
 1. detect `ffmpeg` availability before exposing video export
 2. choose a renderer explicitly, or pass a full `scene` when you need
    renderer-specific styling
-3. choose a conservative output format such as `.mp4`
+3. choose `mp4` for default delivery, or `mkv` when you want mid-render playback
 4. log `render_started.ffmpeg_command` for debugging
 5. use `onEvent` for progress reporting
 6. always close the client

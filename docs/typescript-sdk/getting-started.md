@@ -84,7 +84,7 @@ Why these matter:
 
 - `--allow-run`: required to launch `meridian-cli`
 - `--allow-read`: required for MIDI inputs, soundfonts, and other source assets
-- `--allow-write`: required for processed MIDI, WAV, MP4, and temp output
+- `--allow-write`: required for processed MIDI, WAV, MP4/MKV, and temp output
 - `--allow-env`: useful when your app reads `MERIDIAN_CLI_BIN` or other
   environment-based configuration
 

@@ -335,6 +335,7 @@ export class MeridianClient {
     const config: ProtocolVideoRenderConfig = {
       midi_path: options.midiPath,
       output: options.output,
+      container: options.container ?? "mp4",
       fps: options.fps,
       width: options.width,
       height: options.height,

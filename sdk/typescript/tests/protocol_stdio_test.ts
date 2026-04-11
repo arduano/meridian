@@ -174,7 +174,7 @@ Deno.test("stdio protocol smoke tests video render", async () => {
     TWO_NOTE_MIDI,
   );
   const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-video-" });
-  const output = `${tempDir}/video.mp4`;
+  const output = `${tempDir}/video.mkv`;
 
   const client = await createDenoProtocolClient(executablePath);
   try {
@@ -183,6 +183,7 @@ Deno.test("stdio protocol smoke tests video render", async () => {
       config: {
         midi_path: midiPath,
         output,
+        container: "mkv",
         fps: 4,
         width: 160,
         height: 90,
@@ -254,6 +255,7 @@ Deno.test("stdio protocol accepts explicit scene config for video render", async
       config: {
         midi_path: midiPath,
         output,
+        container: "mp4",
         fps: 4,
         width: 160,
         height: 90,

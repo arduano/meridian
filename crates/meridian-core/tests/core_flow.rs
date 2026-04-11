@@ -823,8 +823,7 @@ fn tick_space_render_shows_staircase_notes_at_distinct_positions() {
     }
 }
 
-#[test]
-fn video_render_smokes_when_ffmpeg_is_available() {
+fn assert_video_render_smoke(container: meridian_core::protocol::VideoOutputContainer) {
     if !support::ffmpeg_available() {
         eprintln!("skipping video smoke test because ffmpeg is unavailable");
         return;
@@ -832,7 +831,7 @@ fn video_render_smokes_when_ffmpeg_is_available() {
 
     let midi = support::write_test_midi();
     let dir = support::temp_dir("meridian-core-video-test");
-    let output = dir.join("video.mp4");
+    let output = dir.join(format!("video.{}", container.extension()));
     let core = spawn_core();
     let event_rx = core.subscribe_events();
 
@@ -841,6 +840,7 @@ fn video_render_smokes_when_ffmpeg_is_available() {
             config: meridian_core::protocol::VideoRenderConfig {
                 midi_path: Some(midi),
                 output: output.clone(),
+                container,
                 fps: 4.0,
                 width: 160,
                 height: 90,
@@ -890,4 +890,14 @@ fn video_render_smokes_when_ffmpeg_is_available() {
     assert!(saw_finished, "video render did not finish");
     assert!(output.exists(), "expected video output to exist");
     assert!(fs::metadata(&output).expect("video output metadata").len() > 0);
+}
+
+#[test]
+fn video_render_smokes_for_mp4_when_ffmpeg_is_available() {
+    assert_video_render_smoke(meridian_core::protocol::VideoOutputContainer::Mp4);
+}
+
+#[test]
+fn video_render_smokes_for_mkv_when_ffmpeg_is_available() {
+    assert_video_render_smoke(meridian_core::protocol::VideoOutputContainer::Mkv);
 }

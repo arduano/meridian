@@ -40,6 +40,7 @@ export interface AudioRenderOptions {
 export interface VideoRenderOptions {
   midiPath: string;
   output: string;
+  container?: ProtocolVideoRenderConfig["container"];
   fps: number;
   width: number;
   height: number;

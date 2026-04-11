@@ -4,5 +4,6 @@ import type { RendererKind } from "./RendererKind.ts";
 import type { SceneConfig } from "./SceneConfig.ts";
 import type { VideoAudioConfig } from "./VideoAudioConfig.ts";
 import type { VideoExportConfig } from "./VideoExportConfig.ts";
+import type { VideoOutputContainer } from "./VideoOutputContainer.ts";
 
-export type ProtocolVideoRenderConfig = { midi_path: string, output: string, fps: number, width: number, height: number, renderer: RendererKind | null, scene: SceneConfig | null, view_range: number | null, time_space: DisplayTimeSpace | null, first_key: number | null, last_key: number | null, ffmpeg_args: Array<string>, export: VideoExportConfig, audio: VideoAudioConfig | null, };
+export type ProtocolVideoRenderConfig = { midi_path: string, output: string, container: VideoOutputContainer, fps: number, width: number, height: number, renderer: RendererKind | null, scene: SceneConfig | null, view_range: number | null, time_space: DisplayTimeSpace | null, first_key: number | null, last_key: number | null, ffmpeg_args: Array<string>, export: VideoExportConfig, audio: VideoAudioConfig | null, };

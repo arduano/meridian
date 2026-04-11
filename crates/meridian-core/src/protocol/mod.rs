@@ -23,7 +23,8 @@ pub use process::{MidiProcessEvent, MidiProcessStatus};
 pub use render::{
     AudioOutputFormat, AudioRenderStatus, FrameColorMode, FrameStats, ImageExportArtifacts,
     ImageExportConfig, RenderedFrame, VideoAudioConfig, VideoAudioProgress, VideoExportArtifacts,
-    VideoExportConfig, VideoRenderConfig, VideoRenderEvent, VideoRenderStatus,
+    VideoExportConfig, VideoOutputContainer, VideoRenderConfig, VideoRenderEvent,
+    VideoRenderStatus,
 };
 pub use server::{run_one_protocol_json, serve_protocol_json};
 pub use state::StateSnapshot;

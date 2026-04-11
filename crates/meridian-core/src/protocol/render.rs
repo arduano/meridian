@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
@@ -105,6 +105,36 @@ pub enum AudioOutputFormat {
     Mp3,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, TS, ValueEnum, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum VideoOutputContainer {
+    #[default]
+    Mp4,
+    Mkv,
+}
+
+impl VideoOutputContainer {
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Mp4 => "mp4",
+            Self::Mkv => "mkv",
+        }
+    }
+
+    pub fn ffmpeg_format_name(self) -> &'static str {
+        match self {
+            Self::Mp4 => "mp4",
+            Self::Mkv => "matroska",
+        }
+    }
+
+    pub fn matches_path(self, path: &Path) -> bool {
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case(self.extension()))
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 pub struct VideoAudioConfig {
     pub sample_rate: Option<u32>,
@@ -120,6 +150,7 @@ pub struct VideoAudioConfig {
 pub struct VideoRenderConfig {
     pub midi_path: Option<PathBuf>,
     pub output: PathBuf,
+    pub container: VideoOutputContainer,
     pub fps: f64,
     pub width: u32,
     pub height: u32,
@@ -168,6 +199,7 @@ pub enum VideoRenderEvent {
         job_id: VideoRenderJobId,
         midi: Option<PathBuf>,
         output: PathBuf,
+        container: VideoOutputContainer,
         exports: VideoExportArtifacts,
         fps: f64,
         width: u32,
@@ -202,6 +234,7 @@ pub enum VideoRenderEvent {
         elapsed_seconds: f64,
         average_fps: f64,
         output: PathBuf,
+        container: VideoOutputContainer,
         exports: VideoExportArtifacts,
     },
     RenderFailed {
@@ -216,6 +249,7 @@ pub enum VideoRenderStatus {
     Running {
         job_id: VideoRenderJobId,
         output: PathBuf,
+        container: VideoOutputContainer,
         fps: f64,
         width: u32,
         height: u32,
@@ -229,6 +263,7 @@ pub enum VideoRenderStatus {
     Cancelling {
         job_id: VideoRenderJobId,
         output: PathBuf,
+        container: VideoOutputContainer,
         fps: f64,
         width: u32,
         height: u32,
