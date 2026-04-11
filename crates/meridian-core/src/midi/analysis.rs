@@ -5,8 +5,8 @@ mod types;
 use std::{
     collections::VecDeque,
     sync::{
-        Mutex,
         atomic::{AtomicUsize, Ordering},
+        Mutex,
     },
 };
 
@@ -15,8 +15,8 @@ use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 
 use crate::midi::{
-    MIDIAnalysisSummary, display_cache::DisplayMidiCache, parsed::ParsedMidiFile,
-    parsed::ToolkitMidiFile,
+    display_cache::DisplayMidiCache, parsed::ParsedMidiFile, parsed::ToolkitMidiFile,
+    MIDIAnalysisSummary,
 };
 
 pub(crate) use accumulator::MidiAnalysisAccumulator;
@@ -158,7 +158,10 @@ pub fn build_buckets_from_parsed_with_progress(
 ) -> Result<Vec<MidiAnalysisBucket>, crate::error::MeridianError> {
     progress(0.0);
     let cached = build_cached_midi_analysis_with_progress(parsed, |value| progress(value * 0.9))?;
-    let buckets = cached.build_buckets_from_note_spans(bucket_count.clamp(1, 8192));
+    let buckets = match normalized_bucket_count(bucket_count) {
+        Some(bucket_count) => cached.build_buckets_from_note_spans(bucket_count),
+        None => Vec::new(),
+    };
     progress(1.0);
     Ok(buckets)
 }
@@ -201,12 +204,10 @@ pub fn analyze_midi(
     cached: &CachedMidiAnalysis,
     bucket_count: usize,
 ) -> MidiAnalysisData {
-    let bucket_count = bucket_count.clamp(1, 8192);
-    analyze_cached_midi(
-        parsed,
-        cached,
-        cached.build_buckets(cache, bucket_count, cached.midi_length()),
-    )
+    let buckets = normalized_bucket_count(bucket_count)
+        .map(|bucket_count| cached.build_buckets(cache, bucket_count, cached.midi_length()))
+        .unwrap_or_default();
+    analyze_cached_midi(parsed, cached, buckets)
 }
 
 pub fn analyze_parsed_midi_with_progress(
@@ -216,7 +217,9 @@ pub fn analyze_parsed_midi_with_progress(
     mut progress: impl FnMut(f32),
 ) -> Result<MidiAnalysisData, crate::error::MeridianError> {
     progress(0.0);
-    let buckets = cached.build_buckets_from_note_spans(bucket_count.clamp(1, 8192));
+    let buckets = normalized_bucket_count(bucket_count)
+        .map(|bucket_count| cached.build_buckets_from_note_spans(bucket_count))
+        .unwrap_or_default();
     progress(1.0);
     Ok(analyze_cached_midi(parsed, cached, buckets))
 }
@@ -1120,7 +1123,9 @@ pub(crate) fn build_buckets_from_sparse_data(
     bucket_count: usize,
     midi_length: f64,
 ) -> Vec<MidiAnalysisBucket> {
-    let bucket_count = bucket_count.clamp(1, 8192);
+    let Some(bucket_count) = normalized_bucket_count(bucket_count) else {
+        return Vec::new();
+    };
     if midi_length <= 0.0 {
         let note_starts = bucket_starts.iter().map(|start| start.count).sum::<u64>();
         let mut active = 0_i64;
@@ -1169,6 +1174,9 @@ pub fn build_buckets_from_display_cache(
     bucket_count: usize,
     midi_length: f64,
 ) -> Vec<MidiAnalysisBucket> {
+    let Some(bucket_count) = normalized_bucket_count(bucket_count) else {
+        return Vec::new();
+    };
     if midi_length <= 0.0 {
         let note_count = cache.note_count();
         return vec![MidiAnalysisBucket {
@@ -1217,6 +1225,14 @@ fn end_bucket_index(time: f64, width: f64, bucket_count: usize) -> usize {
     ((time / width).ceil() as usize).min(bucket_count)
 }
 
+fn normalized_bucket_count(bucket_count: usize) -> Option<usize> {
+    if bucket_count == 0 {
+        None
+    } else {
+        Some(bucket_count.min(8192))
+    }
+}
+
 struct RollingNpsPeak {
     bins: [u64; 1000],
     cursor_ms: i64,
@@ -1262,5 +1278,38 @@ impl RollingNpsPeak {
 
     fn peak(&self) -> u64 {
         self.peak
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        build_buckets_from_sparse_data, normalized_bucket_count, CachedBucketDelta,
+        CachedBucketStart,
+    };
+
+    #[test]
+    fn zero_bucket_count_returns_empty_sparse_buckets() {
+        let buckets = build_buckets_from_sparse_data(
+            &[CachedBucketStart {
+                time_seconds: 0.25,
+                count: 2,
+            }],
+            &[CachedBucketDelta {
+                time_seconds: 0.5,
+                delta: 1,
+            }],
+            0,
+            1.0,
+        );
+
+        assert!(buckets.is_empty());
+    }
+
+    #[test]
+    fn normalized_bucket_count_preserves_zero_as_none() {
+        assert_eq!(normalized_bucket_count(0), None);
+        assert_eq!(normalized_bucket_count(1), Some(1));
+        assert_eq!(normalized_bucket_count(10_000), Some(8192));
     }
 }

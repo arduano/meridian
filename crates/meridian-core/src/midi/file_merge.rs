@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use midi_toolkit::{
     events::Event,
     io::MIDIWriter,
-    sequence::event::{Delta, filter_events, merge_events_array, scale_event_ppq},
+    sequence::event::{filter_events, merge_events_array, scale_event_ppq, Delta},
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -79,7 +79,7 @@ impl ParsedMergeInputs {
 
         for (index, input) in inputs.iter().enumerate() {
             let parsed = ParsedMidiFile::load_from_file(input.clone())?;
-            let parsed_ppq = parsed.midi().ppq().max(1);
+            let parsed_ppq = merge_source_ppq(&parsed)?;
             match input_ppq {
                 Some(expected_ppq)
                     if config.ppq_override.is_none() && expected_ppq != parsed_ppq =>
@@ -262,7 +262,7 @@ pub fn merge_midi_files_to_file_with_progress_cancelable(
         Ok(state.finish())
     })();
 
-    if matches!(result, Err(MeridianError::Cancelled(_))) {
+    if result.is_err() {
         let _ = std::fs::remove_file(output);
     }
 
@@ -427,12 +427,22 @@ fn write_track_from_iterator(
     Ok(total_events)
 }
 
+fn merge_source_ppq(parsed: &ParsedMidiFile) -> Result<u16, MeridianError> {
+    if (parsed.header().time_division & 0x8000) != 0 {
+        return Err(MeridianError::InvalidMidi(
+            "timecode MIDI files are not supported yet".into(),
+        ));
+    }
+
+    Ok(parsed.midi().ppq().max(1))
+}
+
 fn all_track_events(
     parsed: &ParsedMidiFile,
     track_index: u32,
     output_ppq: u16,
 ) -> Option<impl Iterator<Item = Result<Delta<u64, Event>, MeridianError>> + '_> {
-    let source_ppq = parsed.midi().ppq().max(1);
+    let source_ppq = merge_source_ppq(parsed).ok()?;
     let track = parsed.midi().iter_track(track_index)?;
     let events = track.map(map_track_event_result);
 
@@ -466,7 +476,7 @@ fn filtered_track_events(
     output_ppq: u16,
     metadata_filter: MetadataFilter,
 ) -> Option<impl Iterator<Item = Result<Delta<u64, Event>, MeridianError>> + '_> {
-    let source_ppq = parsed.midi().ppq().max(1);
+    let source_ppq = merge_source_ppq(parsed).ok()?;
     let track = parsed.midi().iter_track(track_index)?;
     let events = track.map(map_track_event_result);
     // `filter_events` preserves delta timing across removed events; `filter_map` would not.
@@ -516,16 +526,42 @@ fn map_track_event_result(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::{
-        MidiFilesMergeConfig, MidiFilesMergeMode, merge_midi_files_to_file,
-        merge_midi_files_to_file_with_progress,
+        merge_midi_files_to_file, merge_midi_files_to_file_with_progress, MidiFilesMergeConfig,
+        MidiFilesMergeMode,
     };
     use crate::error::MeridianError;
     use crate::midi::parsed::ParsedMidiFile;
     use crate::midi::test_support::{
-        TestDir, key_signature, note_off, note_on, read_track_events, tempo, text, time_signature,
-        write_toolkit_midi,
+        key_signature, note_off, note_on, read_track_events, tempo, text, time_signature,
+        write_toolkit_midi, TestDir,
     };
+
+    fn write_raw_midi(path: &std::path::Path, bytes: &[u8]) {
+        fs::write(path, bytes).expect("write raw midi bytes");
+    }
+
+    fn write_timecode_midi(path: &std::path::Path) {
+        write_raw_midi(
+            path,
+            &[
+                0x4d, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0xe7, 0x28,
+                0x4d, 0x54, 0x72, 0x6b, 0x00, 0x00, 0x00, 0x04, 0x00, 0xff, 0x2f, 0x00,
+            ],
+        );
+    }
+
+    fn write_invalid_track_midi(path: &std::path::Path) {
+        write_raw_midi(
+            path,
+            &[
+                0x4d, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x60,
+                0x4d, 0x54, 0x72, 0x6b, 0x00, 0x00, 0x00, 0x01, 0x00,
+            ],
+        );
+    }
 
     #[test]
     fn append_tracks_concatenates_source_tracks() {
@@ -707,6 +743,38 @@ mod tests {
         .expect_err("mismatched ppq should fail without override");
 
         assert!(matches!(error, MeridianError::InvalidMidi(_)));
+    }
+
+    #[test]
+    fn merge_rejects_timecode_divisions() {
+        let dir = TestDir::new("timecode_division");
+        let input = dir.path("input.mid");
+        let output = dir.path("output.mid");
+
+        write_timecode_midi(&input);
+
+        let error = merge_midi_files_to_file(&[input], &output, &MidiFilesMergeConfig::default())
+            .expect_err("timecode divisions should be rejected");
+
+        assert!(
+            matches!(error, MeridianError::InvalidMidi(message) if message.contains("timecode MIDI files are not supported yet"))
+        );
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn merge_cleans_up_output_on_non_cancel_error() {
+        let dir = TestDir::new("cleanup_on_error");
+        let input = dir.path("broken.mid");
+        let output = dir.path("output.mid");
+
+        write_invalid_track_midi(&input);
+
+        let error = merge_midi_files_to_file(&[input], &output, &MidiFilesMergeConfig::default())
+            .expect_err("invalid track data should fail during merge");
+
+        assert!(matches!(error, MeridianError::MidiLoad(_)));
+        assert!(!output.exists(), "failed merge output should be removed");
     }
 
     #[test]
