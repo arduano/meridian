@@ -41,6 +41,11 @@ impl PlaybackClock {
         current_time(&state)
     }
 
+    pub fn snapshot_base_time(&self) -> f64 {
+        let state = self.state.lock().unwrap();
+        state.base_time
+    }
+
     pub fn set_time(&self, time: f64) {
         let mut state = self.state.lock().unwrap();
         state.base_time = time.max(0.0);

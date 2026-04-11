@@ -123,9 +123,7 @@ pub(super) fn format_decimal(value: f64) -> String {
         }
     } else {
         let s = format!("{:.8}", value);
-        s.trim_end_matches('0')
-            .trim_end_matches('.')
-            .to_string()
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
     }
 }
 
@@ -148,7 +146,11 @@ pub(super) fn parse_notes(raw: &str, ppq: u32, label: &str) -> Result<u64, Strin
 }
 
 /// Parse an optional full-notes string (empty → None).
-pub(super) fn parse_optional_notes(raw: &str, ppq: u32, label: &str) -> Result<Option<u64>, String> {
+pub(super) fn parse_optional_notes(
+    raw: &str,
+    ppq: u32,
+    label: &str,
+) -> Result<Option<u64>, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         Ok(None)
@@ -197,7 +199,10 @@ pub(super) fn format_time_warp_points_notes(points: &[TimeWarpPoint], ppq: u32) 
 }
 
 /// Parse time-warp points where both positions are given as full notes.
-pub(super) fn parse_time_warp_points_notes(raw: &str, ppq: u32) -> Result<Vec<TimeWarpPoint>, String> {
+pub(super) fn parse_time_warp_points_notes(
+    raw: &str,
+    ppq: u32,
+) -> Result<Vec<TimeWarpPoint>, String> {
     let mut points = Vec::new();
     for entry in csv_parts(raw) {
         let Some((from, to)) = entry.split_once("->") else {
