@@ -8,7 +8,7 @@
 //   4. Set output path → Write modified MIDI
 //
 //  Layout:  single-column scroll, progressive disclosure.
-//   • Pass library — categorised 3-column grid
+//   • Pass library — compact categorised list
 //   • Pass settings — full-width card with structured controls
 //   • Output & Run — unified action area
 //   • Advanced JSON — collapsed escape hatch at the bottom
@@ -30,39 +30,50 @@ import { TextEdit } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 
 
-// ── ModifyPassButton ───────────────────────────────────────
-// Grid tile for the pass library. Stretches to fill its column.
+// ── ModifyPassItem ─────────────────────────────────────────
+// Compact list item for the pass library with label + description.
 
-component ModifyPassButton inherits Rectangle {
-    in property <string> title;
-    in property <string> subtitle;
+component ModifyPassItem inherits Rectangle {
+    in property <string> label;
+    in property <string> subtitle: "";
     in property <bool> active: false;
     callback pressed;
 
+    height: 38px;
     horizontal-stretch: 1;
-    height: 62px;
-    border-radius: 8px;
-    border-width: 1px;
-    border-color: root.active ? #1f4b86 : #132031;
-    background: root.active ? #11243f : touch.has-hover ? #0e1724 : Theme.surface-canvas;
+    border-radius: 6px;
+    background: root.active ? #11243f : touch.has-hover ? #0e1724 : transparent;
 
-    VerticalLayout {
-        padding: 10px;
-        spacing: 2px;
+    HorizontalLayout {
+        padding-top: 5px;
+        padding-bottom: 5px;
+        padding-left: 8px;
+        padding-right: 10px;
         alignment: start;
+        spacing: 8px;
 
-        Text {
-            text: root.title;
-            color: root.active ? #8cc2ff : Theme.text-primary;
-            font-size: Theme.font-size-md;
-            font-weight: 700;
-            overflow: elide;
+        Rectangle {
+            width: 3px;
+            height: parent.height - 10px;
+            border-radius: 2px;
+            background: root.active ? #3b8eea : transparent;
         }
-        Text {
-            text: root.subtitle;
-            color: root.active ? #6d97c8 : Theme.text-muted;
-            font-size: Theme.font-size-xs;
-            wrap: word-wrap;
+
+        VerticalLayout {
+            spacing: 1px;
+            alignment: center;
+
+            Text {
+                text: root.label;
+                color: root.active ? #8cc2ff : Theme.text-primary;
+                font-size: Theme.font-size-sm;
+                font-weight: root.active ? 600 : 400;
+            }
+            if root.subtitle != "" : Text {
+                text: root.subtitle;
+                color: root.active ? #4a7baa : Theme.text-faint;
+                font-size: Theme.font-size-xs;
+            }
         }
     }
 
@@ -324,63 +335,66 @@ export component ModifyPanel inherits Rectangle {
             width: parent.width;
             padding: 20px;
             padding-right: 24px;
-            spacing: 0px;
             alignment: start;
 
-            // ══════════════════════════════════════
-            //  1 · MIDI FILE LOADING
-            // ══════════════════════════════════════
+            VerticalLayout {
+                spacing: 8px;
 
-            MidiStateSection {
-                midi-state: root.midi-state;
-                file-name: root.selected-midi-name;
-                load-description: "Parses MIDI data for the modify workflow. Processing writes a separate file — the source is never touched.";
-                load-label: "Load for Modify";
-                mode-label: "modify";
-                show-unload: true;
-                loading-status: root.loading-status;
-                loading-progress: root.loading-progress;
-                error-message: root.load-error;
-                select-file => { root.select-file(); }
-                load => { root.load-midi(); }
-                cancel-load => { root.cancel-load(); }
-                unload => { root.unload-midi(); }
-                retry-load => { root.retry-load(); }
-            }
+                // ══════════════════════════════════════
+                //  1 · MIDI FILE LOADING
+                // ══════════════════════════════════════
 
-            // ── Source file quick-reference strip ──
-            if root.has-midi && root.analysis-note-count-text != "—" : Rectangle {
-                height: 28px;
-                border-radius: 6px;
-                background: Theme.surface-card;
-                border-width: 1px;
-                border-color: Theme.border-subtle;
+                MidiStateSection {
+                    midi-state: root.midi-state;
+                    file-name: root.selected-midi-name;
+                    load-description: "Parses MIDI data for the modify workflow. Processing writes a separate file — the source is never touched.";
+                    load-label: "Load for Modify";
+                    mode-label: "modify";
+                    show-unload: true;
+                    loading-status: root.loading-status;
+                    loading-progress: root.loading-progress;
+                    error-message: root.load-error;
+                    select-file => { root.select-file(); }
+                    load => { root.load-midi(); }
+                    cancel-load => { root.cancel-load(); }
+                    unload => { root.unload-midi(); }
+                    retry-load => { root.retry-load(); }
+                }
 
-                HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
-                    spacing: 16px;
-                    alignment: center;
+                // ── Source file quick-reference strip ──
+                if root.has-midi && root.analysis-note-count-text != "—" : Rectangle {
+                    height: 28px;
+                    border-radius: 6px;
+                    background: Theme.surface-card;
+                    border-width: 1px;
+                    border-color: Theme.border-subtle;
 
                     HorizontalLayout {
-                        spacing: 4px;
-                        Text { text: "Notes"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
-                        Text { text: root.analysis-note-count-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
-                    }
-                    HorizontalLayout {
-                        spacing: 4px;
-                        Text { text: "Tracks"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
-                        Text { text: root.analysis-track-count-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
-                    }
-                    HorizontalLayout {
-                        spacing: 4px;
-                        Text { text: "PPQ"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
-                        Text { text: root.analysis-ticks-per-quarter-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
-                    }
-                    HorizontalLayout {
-                        spacing: 4px;
-                        Text { text: "Length"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
-                        Text { text: root.analysis-midi-length-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        spacing: 16px;
+                        alignment: center;
+
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Text { text: "Notes"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
+                            Text { text: root.analysis-note-count-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+                        }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Text { text: "Tracks"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
+                            Text { text: root.analysis-track-count-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+                        }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Text { text: "PPQ"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
+                            Text { text: root.analysis-ticks-per-quarter-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+                        }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Text { text: "Length"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
+                            Text { text: root.analysis-midi-length-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+                        }
                     }
                 }
             }
@@ -403,61 +417,44 @@ export component ModifyPanel inherits Rectangle {
             }
             Rectangle { height: 10px; }
 
-            // ── Timing + Grid ──
-            VerticalLayout {
-                spacing: 6px;
-                Text { text: "TIMING + GRID"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-wide; }
-                HorizontalLayout {
-                    spacing: 6px;
-                    ModifyPassButton { title: "Range Select"; subtitle: "Extract a time range from the MIDI."; active: root.modify-pass-key-text == "range_select"; pressed => { root.select-pass("range_select"); } }
-                    ModifyPassButton { title: "Tempo Map"; subtitle: "Flatten, scale, or replace tempo events."; active: root.modify-pass-key-text == "tempo_map"; pressed => { root.select-pass("tempo_map"); } }
-                    ModifyPassButton { title: "Time Warp"; subtitle: "Remap ticks through a piecewise curve."; active: root.modify-pass-key-text == "time_warp"; pressed => { root.select-pass("time_warp"); } }
-                }
-                HorizontalLayout {
-                    spacing: 6px;
-                    ModifyPassButton { title: "Quantize"; subtitle: "Snap note timing to a rhythmic grid."; active: root.modify-pass-key-text == "quantize"; pressed => { root.select-pass("quantize"); } }
-                    ModifyPassButton { title: "Humanize"; subtitle: "Add deterministic jitter to timing and velocity."; active: root.modify-pass-key-text == "humanize"; pressed => { root.select-pass("humanize"); } }
-                    ModifyPassButton { title: "Note Length"; subtitle: "Scale, clamp, or fix note durations."; active: root.modify-pass-key-text == "note_length"; pressed => { root.select-pass("note_length"); } }
-                }
-            }
+            ModifyCard {
+                GridLayout {
+                    spacing: 4px;
 
-            Rectangle { height: 10px; }
+                    // ── Timing + Grid ──
+                    Row { Text { colspan: 2; text: "TIMING + GRID"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-wide; } }
+                    Row { ModifyPassItem { label: "Range Select"; subtitle: "Extract a time range.";              active: root.modify-pass-key-text == "range_select"; pressed => { root.select-pass("range_select"); } }
+                          ModifyPassItem { label: "Tempo Map";    subtitle: "Flatten, scale, or replace tempo.";  active: root.modify-pass-key-text == "tempo_map";    pressed => { root.select-pass("tempo_map"); } } }
+                    Row { ModifyPassItem { label: "Time Warp";    subtitle: "Remap ticks via a piecewise curve."; active: root.modify-pass-key-text == "time_warp";    pressed => { root.select-pass("time_warp"); } }
+                          ModifyPassItem { label: "Quantize";     subtitle: "Snap timing to a rhythmic grid.";    active: root.modify-pass-key-text == "quantize";     pressed => { root.select-pass("quantize"); } } }
+                    Row { ModifyPassItem { label: "Humanize";     subtitle: "Add deterministic jitter.";           active: root.modify-pass-key-text == "humanize";     pressed => { root.select-pass("humanize"); } }
+                          ModifyPassItem { label: "Note Length";  subtitle: "Scale, clamp, or fix durations.";    active: root.modify-pass-key-text == "note_length";  pressed => { root.select-pass("note_length"); } } }
 
-            // ── Routing + Dynamics ──
-            VerticalLayout {
-                spacing: 6px;
-                Text { text: "ROUTING + DYNAMICS"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-wide; }
-                HorizontalLayout {
-                    spacing: 6px;
-                    ModifyPassButton { title: "Channel Remap"; subtitle: "Rewrite channel numbers via a mapping table."; active: root.modify-pass-key-text == "channel_remap"; pressed => { root.select-pass("channel_remap"); } }
-                    ModifyPassButton { title: "Track Route"; subtitle: "Collapse, split by channel, or map tracks."; active: root.modify-pass-key-text == "track_route"; pressed => { root.select-pass("track_route"); } }
-                    ModifyPassButton { title: "Key Map"; subtitle: "Remap pitches, fold range, or drop unmapped."; active: root.modify-pass-key-text == "key_map"; pressed => { root.select-pass("key_map"); } }
-                }
-                HorizontalLayout {
-                    spacing: 6px;
-                    ModifyPassButton { title: "Velocity Map"; subtitle: "Scale, gamma-shape, or redraw velocity."; active: root.modify-pass-key-text == "velocity_map"; pressed => { root.select-pass("velocity_map"); } }
-                    ModifyPassButton { title: "Pitch Bend"; subtitle: "Scale, offset, clamp, or strip bends."; active: root.modify-pass-key-text == "pitch_bend"; pressed => { root.select-pass("pitch_bend"); } }
-                    ModifyPassButton { title: "Program"; subtitle: "Strip, force, or inject program changes."; active: root.modify-pass-key-text == "program"; pressed => { root.select-pass("program"); } }
-                }
-            }
+                    Row { Rectangle { colspan: 2; height: 4px; } }
+                    Row { Separator  { colspan: 2; } }
+                    Row { Rectangle { colspan: 2; height: 4px; } }
 
-            Rectangle { height: 10px; }
+                    // ── Routing + Dynamics ──
+                    Row { Text { colspan: 2; text: "ROUTING + DYNAMICS"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-wide; } }
+                    Row { ModifyPassItem { label: "Channel Remap"; subtitle: "Rewrite channel numbers.";        active: root.modify-pass-key-text == "channel_remap"; pressed => { root.select-pass("channel_remap"); } }
+                          ModifyPassItem { label: "Track Route";   subtitle: "Collapse, split, or map tracks.";  active: root.modify-pass-key-text == "track_route";   pressed => { root.select-pass("track_route"); } } }
+                    Row { ModifyPassItem { label: "Key Map";       subtitle: "Remap pitches, fold, or drop.";    active: root.modify-pass-key-text == "key_map";       pressed => { root.select-pass("key_map"); } }
+                          ModifyPassItem { label: "Velocity Map";  subtitle: "Scale, gamma-shape, or redraw.";   active: root.modify-pass-key-text == "velocity_map";  pressed => { root.select-pass("velocity_map"); } } }
+                    Row { ModifyPassItem { label: "Pitch Bend";    subtitle: "Scale, offset, clamp, or strip.";  active: root.modify-pass-key-text == "pitch_bend";    pressed => { root.select-pass("pitch_bend"); } }
+                          ModifyPassItem { label: "Program";       subtitle: "Strip, force, or inject changes."; active: root.modify-pass-key-text == "program";       pressed => { root.select-pass("program"); } } }
 
-            // ── Structure + Cleanup ──
-            VerticalLayout {
-                spacing: 6px;
-                Text { text: "STRUCTURE + CLEANUP"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-wide; }
-                HorizontalLayout {
-                    spacing: 6px;
-                    ModifyPassButton { title: "Control Change"; subtitle: "Strip, remap, scale, or inject CC events."; active: root.modify-pass-key-text == "control_change"; pressed => { root.select-pass("control_change"); } }
-                    ModifyPassButton { title: "Extract Track"; subtitle: "Write one source track into a new file."; active: root.modify-pass-key-text == "extract_track"; pressed => { root.select-pass("extract_track"); } }
-                    ModifyPassButton { title: "Change PPQ"; subtitle: "Resample ticks to a new PPQ value."; active: root.modify-pass-key-text == "change_ppq"; pressed => { root.select-pass("change_ppq"); } }
-                }
-                HorizontalLayout {
-                    spacing: 6px;
-                    ModifyPassButton { title: "Meta Text"; subtitle: "Keep only the text event kinds you want."; active: root.modify-pass-key-text == "meta_text"; pressed => { root.select-pass("meta_text"); } }
-                    ModifyPassButton { title: "Sysex"; subtitle: "Strip SysEx or prepend device messages."; active: root.modify-pass-key-text == "sysex"; pressed => { root.select-pass("sysex"); } }
-                    ModifyPassButton { title: "Shared Metadata"; subtitle: "Centralise metadata into one track."; active: root.modify-pass-key-text == "shared_metadata_track"; pressed => { root.select-pass("shared_metadata_track"); } }
+                    Row { Rectangle { colspan: 2; height: 4px; } }
+                    Row { Separator  { colspan: 2; } }
+                    Row { Rectangle { colspan: 2; height: 4px; } }
+
+                    // ── Structure + Cleanup ──
+                    Row { Text { colspan: 2; text: "STRUCTURE + CLEANUP"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-wide; } }
+                    Row { ModifyPassItem { label: "Control Change";  subtitle: "Strip, remap, scale, or inject CC.";  active: root.modify-pass-key-text == "control_change";        pressed => { root.select-pass("control_change"); } }
+                          ModifyPassItem { label: "Extract Track";   subtitle: "Write one track to a new file.";       active: root.modify-pass-key-text == "extract_track";         pressed => { root.select-pass("extract_track"); } } }
+                    Row { ModifyPassItem { label: "Change PPQ";      subtitle: "Resample ticks to a new PPQ.";         active: root.modify-pass-key-text == "change_ppq";            pressed => { root.select-pass("change_ppq"); } }
+                          ModifyPassItem { label: "Meta Text";       subtitle: "Keep only chosen text event kinds.";   active: root.modify-pass-key-text == "meta_text";             pressed => { root.select-pass("meta_text"); } } }
+                    Row { ModifyPassItem { label: "Sysex";           subtitle: "Strip SysEx or prepend device msgs."; active: root.modify-pass-key-text == "sysex";                 pressed => { root.select-pass("sysex"); } }
+                          ModifyPassItem { label: "Shared Metadata"; subtitle: "Centralise metadata into one track."; active: root.modify-pass-key-text == "shared_metadata_track"; pressed => { root.select-pass("shared_metadata_track"); } } }
                 }
             }
 
@@ -1316,61 +1313,57 @@ export component ModifyPanel inherits Rectangle {
 
             ModifyCard {
                 // ── Output path ──
-                Rectangle {
-                    height: 48px;
-                    border-radius: 8px;
-                    background: #08111b;
+                HorizontalLayout {
+                    spacing: 10px;
 
-                    HorizontalLayout {
-                        padding-left: 12px;
-                        padding-right: 10px;
-                        spacing: 10px;
+                    VerticalLayout {
                         alignment: center;
-
-                        VerticalLayout {
-                            spacing: 2px;
-                            horizontal-stretch: 1;
-                            alignment: center;
-
-                            Text {
-                                text: root.has-output ? root.modify-output-path-text : "(choose output path)";
-                                color: root.has-output ? Theme.text-primary : Theme.text-muted;
-                                font-size: Theme.font-size-md;
-                                font-weight: 600;
-                                overflow: elide;
-                            }
-                            Text {
-                                text: "MIDI file (.mid)";
-                                color: Theme.text-faint;
-                                font-size: Theme.font-size-xs;
-                            }
-                        }
-
-                        VerticalLayout {
-                            alignment: center;
-                            Rectangle {
-                                width: 56px;
-                                height: 26px;
-                                border-radius: 5px;
-                                background: browse-touch.has-hover ? Theme.surface-control-hover : Theme.surface-control;
-
-                                Text {
-                                    text: "Browse";
-                                    color: Theme.text-soft;
-                                    font-size: Theme.font-size-sm;
-                                    font-weight: 600;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-
-                                browse-touch := TouchArea {
-                                    mouse-cursor: pointer;
-                                    clicked => { root.browse-output(); }
-                                }
-                            }
+                        Text {
+                            text: "Output";
+                            color: Theme.text-faint;
+                            font-size: Theme.font-size-sm;
+                            font-weight: 600;
                         }
                     }
+
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: root.has-output ? root.modify-output-path-text : "(choose output path)";
+                            color: root.has-output ? Theme.text-primary : Theme.text-muted;
+                            font-size: Theme.font-size-md;
+                            font-weight: 600;
+                            overflow: elide;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 56px;
+                            height: 26px;
+                            border-radius: 5px;
+                            background: browse-touch.has-hover ? Theme.surface-control-hover : Theme.surface-control;
+
+                        Text {
+                            text: "Browse";
+                            color: Theme.text-soft;
+                            font-size: Theme.font-size-sm;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+
+                        browse-touch := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.browse-output(); }
+                        }
+                    }
+                    }
                 }
+
+                Separator { }
 
                 // ── Buttons + progress ──
                 HorizontalLayout {
@@ -1410,7 +1403,7 @@ export component ModifyPanel inherits Rectangle {
                     }
                 }
 
-                ProgressBar { progress: root.modify-progress; }
+                if root.modify-progress > 0 : ProgressBar { progress: root.modify-progress; }
 
                 if root.modify-detail-text != "" : Text {
                     text: root.modify-detail-text;
@@ -1420,19 +1413,15 @@ export component ModifyPanel inherits Rectangle {
                 }
 
                 // ── Compact last-result ──
-                if root.modify-result-track-count-text != "—" : Rectangle {
-                    height: 1px;
-                    background: Theme.border-subtle;
-                }
-                if root.modify-result-track-count-text != "—" : VerticalLayout {
-                    spacing: 2px;
-                    Text { text: "Last result"; color: Theme.text-muted; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-tight; }
-                    HorizontalLayout {
-                        spacing: 16px;
-                        HorizontalLayout { spacing: 4px; Text { text: "Tracks"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.modify-result-track-count-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
-                        HorizontalLayout { spacing: 4px; Text { text: "PPQ"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.modify-result-ppq-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
-                        HorizontalLayout { spacing: 4px; Text { text: "Events"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.modify-result-event-count-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
-                    }
+                if root.modify-result-track-count-text != "—" : Separator { }
+                if root.modify-result-track-count-text != "—" : HorizontalLayout {
+                    spacing: 16px;
+                    alignment: start;
+
+                    Text { text: "Last result"; color: Theme.text-muted; font-size: Theme.font-size-xs; font-weight: 700; letter-spacing: Theme.tracking-tight; vertical-alignment: center; }
+                    HorizontalLayout { spacing: 4px; Text { text: "Tracks"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.modify-result-track-count-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
+                    HorizontalLayout { spacing: 4px; Text { text: "PPQ"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.modify-result-ppq-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
+                    HorizontalLayout { spacing: 4px; Text { text: "Events"; color: Theme.text-faint; font-size: Theme.font-size-sm; vertical-alignment: center; } Text { text: root.modify-result-event-count-text; color: Theme.text-secondary; font-size: Theme.font-size-sm; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; } }
                 }
             }
 
