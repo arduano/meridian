@@ -10,8 +10,8 @@ use crate::{
         AudioRenderStatus, CoreCommand, CoreErrorCode, CoreEvent, ImageExportConfig,
         MidiAnalysisData, MidiAnalysisJobEvent, MidiAnalysisJobStatus, MidiAnalysisKind,
         MidiFileInspection, MidiProcessEvent, MidiProcessJobId, MidiProcessStatus,
-        PROTOCOL_VERSION, ParsedMidiId, VideoAudioConfig, VideoExportConfig, VideoRenderEvent,
-        VideoRenderStatus,
+        PROTOCOL_VERSION, ParsedMidiId, VideoAudioConfig, VideoExportConfig, VideoOutputContainer,
+        VideoRenderEvent, VideoRenderStatus,
     },
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
 };
@@ -50,6 +50,8 @@ pub struct ProtocolStateSnapshot {
 pub struct ProtocolVideoRenderConfig {
     pub midi_path: PathBuf,
     pub output: PathBuf,
+    #[serde(default)]
+    pub container: VideoOutputContainer,
     pub fps: f64,
     pub width: u32,
     pub height: u32,

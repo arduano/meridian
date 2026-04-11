@@ -256,7 +256,7 @@ Deno.test("video render runs through the declarative SDK API", async () => {
     "piano/burgmuller-op100-no4-the-little-party.mid",
     TWO_NOTE_MIDI,
   );
-  const output = `${tempDir}/out.mp4`;
+  const output = `${tempDir}/out.mkv`;
 
   const client = await createDenoMeridianClient(executablePath);
   try {
@@ -264,6 +264,7 @@ Deno.test("video render runs through the declarative SDK API", async () => {
     const result = await client.video.render({
       midiPath,
       output,
+      container: "mkv",
       fps: 4,
       width: 160,
       height: 90,

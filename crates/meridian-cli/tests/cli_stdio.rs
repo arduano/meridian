@@ -236,6 +236,7 @@ fn stdio_transport_renders_video_with_alpha_mask() {
                 config: meridian_core::protocol::ProtocolVideoRenderConfig {
                     midi_path: midi,
                     output: output.clone(),
+                    container: meridian_core::protocol::VideoOutputContainer::Mp4,
                     fps: 4.0,
                     width: 160,
                     height: 90,
@@ -354,6 +355,7 @@ fn stdio_transport_renders_muxed_video_audio_with_alpha_mask() {
                 config: meridian_core::protocol::ProtocolVideoRenderConfig {
                     midi_path: midi,
                     output: output.clone(),
+                    container: meridian_core::protocol::VideoOutputContainer::Mp4,
                     fps: 4.0,
                     width: 160,
                     height: 90,

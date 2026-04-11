@@ -64,6 +64,7 @@ impl CoreState {
             status: VideoRenderStatus::Running {
                 job_id,
                 output: config.output.clone(),
+                container: config.container,
                 fps: config.fps,
                 width: config.width,
                 height: config.height,
@@ -101,6 +102,7 @@ impl CoreState {
                 if let VideoRenderStatus::Running {
                     job_id,
                     output,
+                    container,
                     fps,
                     width,
                     height,
@@ -114,6 +116,7 @@ impl CoreState {
                     job.status = VideoRenderStatus::Cancelling {
                         job_id: *job_id,
                         output: output.clone(),
+                        container: *container,
                         fps: *fps,
                         width: *width,
                         height: *height,
@@ -140,6 +143,7 @@ impl CoreState {
             VideoRenderEvent::RenderStarted {
                 job_id,
                 output,
+                container,
                 fps,
                 width,
                 height,
@@ -152,6 +156,7 @@ impl CoreState {
                     status: VideoRenderStatus::Running {
                         job_id: *job_id,
                         output: output.clone(),
+                        container: *container,
                         fps: *fps,
                         width: *width,
                         height: *height,
@@ -173,9 +178,10 @@ impl CoreState {
                 ..
             } => {
                 if let Some(job) = &mut self.render_job {
-                    let (output, fps, width, height) = match &job.status {
+                    let (output, container, fps, width, height) = match &job.status {
                         VideoRenderStatus::Running {
                             output,
+                            container,
                             fps,
                             width,
                             height,
@@ -183,17 +189,19 @@ impl CoreState {
                         }
                         | VideoRenderStatus::Cancelling {
                             output,
+                            container,
                             fps,
                             width,
                             height,
                             ..
-                        } => (output.clone(), *fps, *width, *height),
+                        } => (output.clone(), *container, *fps, *width, *height),
                         VideoRenderStatus::Idle => return,
                     };
                     job.status = match &job.status {
                         VideoRenderStatus::Running { .. } => VideoRenderStatus::Running {
                             job_id: *job_id,
                             output,
+                            container,
                             fps,
                             width,
                             height,
@@ -206,6 +214,7 @@ impl CoreState {
                         VideoRenderStatus::Cancelling { .. } => VideoRenderStatus::Cancelling {
                             job_id: *job_id,
                             output,
+                            container,
                             fps,
                             width,
                             height,

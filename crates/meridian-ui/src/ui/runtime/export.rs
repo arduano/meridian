@@ -1,7 +1,10 @@
 use super::*;
 use meridian_core::{
     audio::AudioRenderConfig,
-    protocol::{AudioOutputFormat, FrameColorMode, VideoAudioConfig, VideoExportConfig},
+    protocol::{
+        AudioOutputFormat, FrameColorMode, VideoAudioConfig, VideoExportConfig,
+        VideoOutputContainer,
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +50,13 @@ impl AudioOnlyFormat {
             Self::Flac => "flac",
             Self::Mp3 => "mp3",
         }
+    }
+}
+
+pub(super) fn video_output_container_from_text(value: &str) -> VideoOutputContainer {
+    match value {
+        "mkv" => VideoOutputContainer::Mkv,
+        _ => VideoOutputContainer::Mp4,
     }
 }
 
@@ -173,9 +183,16 @@ fn wire_callbacks(
 pub(super) fn set_default_render_output_path(app: &App) {
     let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
     let audio_format = AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
+    let video_container =
+        video_output_container_from_text(app.get_render_video_container_text().as_str());
     app.set_render_output_path_text(
-        default_render_output_path(app.get_selected_midi_name().as_str(), mode, audio_format)
-            .into(),
+        default_render_output_path(
+            app.get_selected_midi_name().as_str(),
+            mode,
+            audio_format,
+            video_container,
+        )
+        .into(),
     );
 }
 
@@ -183,6 +200,7 @@ pub(super) fn default_render_output_path(
     selected_midi_name: &str,
     mode: RenderExportMode,
     audio_format: AudioOnlyFormat,
+    video_container: VideoOutputContainer,
 ) -> String {
     if selected_midi_name.is_empty() {
         return String::new();
@@ -197,7 +215,7 @@ pub(super) fn default_render_output_path(
     let file_name = if mode == RenderExportMode::AudioOnly {
         format!("{stem}.rendered.{}", audio_format.extension())
     } else {
-        format!("{stem}.rendered.mp4")
+        format!("{stem}.rendered.{}", video_container.extension())
     };
     selected
         .parent()
@@ -212,11 +230,12 @@ pub(super) fn normalize_output_path(
     path: &Path,
     mode: RenderExportMode,
     audio_format: AudioOnlyFormat,
+    video_container: VideoOutputContainer,
 ) -> PathBuf {
     let extension = if mode == RenderExportMode::AudioOnly {
         audio_format.extension()
     } else {
-        "mp4"
+        video_container.extension()
     };
     let mut normalized = path.to_path_buf();
     normalized.set_extension(extension);
@@ -226,13 +245,25 @@ pub(super) fn normalize_output_path(
 pub(super) fn sync_render_output_path(app: &App) {
     let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
     let audio_format = AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
+    let video_container =
+        video_output_container_from_text(app.get_render_video_container_text().as_str());
     let current = app.get_render_output_path_text();
     let next = if current.is_empty() {
-        default_render_output_path(app.get_selected_midi_name().as_str(), mode, audio_format)
+        default_render_output_path(
+            app.get_selected_midi_name().as_str(),
+            mode,
+            audio_format,
+            video_container,
+        )
     } else {
-        normalize_output_path(Path::new(current.as_str()), mode, audio_format)
-            .display()
-            .to_string()
+        normalize_output_path(
+            Path::new(current.as_str()),
+            mode,
+            audio_format,
+            video_container,
+        )
+        .display()
+        .to_string()
     };
     app.set_render_output_path_text(next.into());
 }
@@ -302,15 +333,27 @@ pub(super) fn parse_render_channels(text: &str) -> Result<u16, String> {
 pub(super) fn current_export_output_path(app: &App) -> Result<PathBuf, String> {
     let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
     let audio_format = AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
+    let video_container =
+        video_output_container_from_text(app.get_render_video_container_text().as_str());
     let raw = if app.get_render_output_path_text().is_empty() {
-        default_render_output_path(app.get_selected_midi_name().as_str(), mode, audio_format)
+        default_render_output_path(
+            app.get_selected_midi_name().as_str(),
+            mode,
+            audio_format,
+            video_container,
+        )
     } else {
         app.get_render_output_path_text().to_string()
     };
     if raw.is_empty() {
         return Err("select a MIDI before exporting".into());
     }
-    Ok(normalize_output_path(Path::new(&raw), mode, audio_format))
+    Ok(normalize_output_path(
+        Path::new(&raw),
+        mode,
+        audio_format,
+        video_container,
+    ))
 }
 
 #[cfg(test)]
@@ -323,9 +366,22 @@ mod tests {
             "/tmp/example/song.mid",
             RenderExportMode::VideoAudio,
             AudioOnlyFormat::Wav,
+            VideoOutputContainer::Mp4,
         );
 
         assert_eq!(path, "/tmp/example/song.rendered.mp4");
+    }
+
+    #[test]
+    fn default_mkv_output_path_uses_selected_container_extension() {
+        let path = default_render_output_path(
+            "/tmp/example/song.mid",
+            RenderExportMode::VideoOnly,
+            AudioOnlyFormat::Wav,
+            VideoOutputContainer::Mkv,
+        );
+
+        assert_eq!(path, "/tmp/example/song.rendered.mkv");
     }
 
     #[test]
@@ -334,6 +390,7 @@ mod tests {
             "/tmp/example/song.mid",
             RenderExportMode::AudioOnly,
             AudioOnlyFormat::Flac,
+            VideoOutputContainer::Mp4,
         );
 
         assert_eq!(path, "/tmp/example/song.rendered.flac");
@@ -396,6 +453,7 @@ pub(super) fn build_video_render_config(
     Ok(VideoRenderConfig {
         midi_path: snapshot.midi_path.clone(),
         output,
+        container: video_output_container_from_text(app.get_render_video_container_text().as_str()),
         fps,
         width,
         height,

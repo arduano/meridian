@@ -10,7 +10,7 @@ fn render_video_writes_output_file_when_ffmpeg_is_available() {
     }
 
     let midi = support::write_test_midi("piano/burgmuller-op100-no4-the-little-party.mid");
-    let out = support::temp_path("render.mp4");
+    let out = support::temp_path("render.mkv");
 
     let output = Command::new(support::cli_path())
         .args([
@@ -21,6 +21,8 @@ fn render_video_writes_output_file_when_ffmpeg_is_available() {
             out.to_string_lossy().as_ref(),
             "--fps",
             "4",
+            "--container",
+            "mkv",
             "--width",
             "160",
             "--height",

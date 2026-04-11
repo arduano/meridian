@@ -28,6 +28,7 @@ impl From<ProtocolVideoRenderConfig> for crate::protocol::VideoRenderConfig {
         Self {
             midi_path: Some(value.midi_path),
             output: value.output,
+            container: value.container,
             fps: value.fps,
             width: value.width,
             height: value.height,

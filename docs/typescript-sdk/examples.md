@@ -16,7 +16,7 @@ reference while reading the SDK source.
 - [`audio_render.ts`](../../sdk/typescript/examples/audio_render.ts): audio
   rendering flow
 - [`video_render.ts`](../../sdk/typescript/examples/video_render.ts): video
-  rendering flow
+  rendering flow with explicit `mkv` container selection
 - [`video_render_scene.ts`](../../sdk/typescript/examples/video_render_scene.ts):
   video rendering with full scene-config passthrough
 - [`raw_protocol.ts`](../../sdk/typescript/examples/raw_protocol.ts): direct

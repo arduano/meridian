@@ -11,7 +11,7 @@ use meridian_core::{
     MeridianError,
     protocol::{
         FrameColorMode, ProtocolClient, ProtocolCommand, ProtocolEvent, ProtocolVideoRenderConfig,
-        VideoExportConfig,
+        VideoExportConfig, VideoOutputContainer,
     },
     render::{DisplayTimeSpace, RendererKind},
 };
@@ -20,6 +20,7 @@ pub fn run(
     midi: &Path,
     output: &Path,
     fps: f64,
+    container: VideoOutputContainer,
     width: u32,
     height: u32,
     view_range: f64,
@@ -48,6 +49,7 @@ pub fn run(
         config: ProtocolVideoRenderConfig {
             midi_path: midi.to_path_buf(),
             output: output.to_path_buf(),
+            container,
             fps,
             width,
             height,

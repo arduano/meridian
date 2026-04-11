@@ -74,6 +74,7 @@ export type { VelocityPoint } from "../generated/VelocityPoint.ts";
 export type { VideoAudioConfig } from "../generated/VideoAudioConfig.ts";
 export type { VideoExportArtifacts } from "../generated/VideoExportArtifacts.ts";
 export type { VideoExportConfig } from "../generated/VideoExportConfig.ts";
+export type { VideoOutputContainer } from "../generated/VideoOutputContainer.ts";
 export type { VideoRenderEvent } from "../generated/VideoRenderEvent.ts";
 export type { VideoRenderJobId } from "../generated/VideoRenderJobId.ts";
 export type { VideoRenderStatus } from "../generated/VideoRenderStatus.ts";

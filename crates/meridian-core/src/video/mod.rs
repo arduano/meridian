@@ -44,6 +44,12 @@ impl VideoRenderConfig {
                 "video width and height must be > 0".into(),
             ));
         }
+        if !self.container.matches_path(&self.output) {
+            return Err(MeridianError::InvalidMidi(format!(
+                "video output path must use .{} for the selected container",
+                self.container.extension()
+            )));
+        }
         Ok(())
     }
 }
@@ -167,6 +173,7 @@ fn render_video_with_core(
     };
     let (mut ffmpeg_child, mut ffmpeg_stdin, ffmpeg_command) = spawn_ffmpeg_rgba(
         &config.output,
+        config.container,
         config.fps,
         config.width,
         config.height,
@@ -212,6 +219,7 @@ fn render_video_with_core(
         job_id,
         midi: config.midi_path.clone(),
         output: config.output.clone(),
+        container: config.container,
         exports: VideoExportArtifacts {
             alpha_mask: alpha_output.clone(),
         },
@@ -321,6 +329,7 @@ fn render_video_with_core(
         elapsed_seconds,
         average_fps,
         output: config.output.clone(),
+        container: config.container,
         exports: VideoExportArtifacts {
             alpha_mask: alpha_output,
         },
@@ -498,6 +507,7 @@ fn spawn_alpha_ffmpeg(
 
     let (child, stdin, command) = spawn_ffmpeg_gray(
         &alpha_output,
+        config.container,
         config.fps,
         config.width,
         config.height,

@@ -117,6 +117,7 @@ This is the main place to look for:
 - event unions
 - modifier tool types
 - analysis, audio, and video protocol types
+- video container enums such as `VideoOutputContainer`
 - scene config types for renderer-specific video customization
 
 Schema/type reference docs: TBD.

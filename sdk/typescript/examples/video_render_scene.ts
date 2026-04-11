@@ -52,6 +52,7 @@ try {
   const result = await client.video.render({
     midiPath,
     output,
+    container: "mp4",
     fps: 24,
     width: 640,
     height: 360,

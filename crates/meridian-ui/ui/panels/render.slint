@@ -28,6 +28,7 @@ export component RenderPanel inherits Rectangle {
     in property <string> render-output-path-text: "";
     in property <string> render-video-resolution-text: "1920x1080";
     in property <string> render-video-fps-text: "60";
+    in property <string> render-video-container-text: "mp4";
     in property <string> render-audio-format-text: "wav";
     in property <string> render-audio-sample-rate-text: "48000";
     in property <string> render-audio-channel-count-text: "stereo";
@@ -71,6 +72,7 @@ export component RenderPanel inherits Rectangle {
     callback select-resolution(string);
     callback submit-custom-resolution(string);
     callback select-fps(string);
+    callback select-video-container(string);
     callback submit-custom-fps(string);
     callback select-audio-format(string);
     callback select-audio-sample-rate(string);
@@ -140,11 +142,15 @@ export component RenderPanel inherits Rectangle {
         root.render-audio-format-text == "flac" ? ".flac"
         : root.render-audio-format-text == "mp3" ? ".mp3"
         : ".wav";
+    private property <string> video-container-ext:
+        root.render-video-container-text == "mkv" ? ".mkv" : ".mp4";
+    private property <string> video-container-label:
+        root.render-video-container-text == "mkv" ? "MKV" : "MP4";
     private property <string> mode-summary:
         root.render-mode-text == "video_audio"
-            ? "Renders video and audio into a single .mp4 file."
+            ? "Renders video and audio into a single " + root.video-container-ext + " file."
             : root.render-mode-text == "video_only"
-                ? "Renders a silent video as .mp4 — no audio track."
+                ? "Renders a silent video as " + root.video-container-ext + " — no audio track."
                 : "Exports audio as a " + root.audio-format-ext + " file — no video.";
     private property <string> start-label:
         root.render-mode-text == "video_audio"
@@ -243,7 +249,7 @@ export component RenderPanel inherits Rectangle {
                         Text {
                             text: root.audio-only
                                 ? "Audio file (" + root.audio-format-ext + ")"
-                                : "MP4 container";
+                                : root.video-container-label + " container";
                             color: #3d5068;
                             font-size: 9px;
                             overflow: elide;
@@ -359,6 +365,22 @@ export component RenderPanel inherits Rectangle {
             if root.wants-video : Rectangle { height: 4px; }
 
             if root.wants-video : InlineOptionRow {
+                label: "Container";
+                OptionChip {
+                    label: "MP4";
+                    active: root.render-video-container-text == "mp4";
+                    pressed => { root.select-video-container("mp4"); }
+                }
+                OptionChip {
+                    label: "MKV";
+                    active: root.render-video-container-text == "mkv";
+                    pressed => { root.select-video-container("mkv"); }
+                }
+            }
+
+            if root.wants-video : Rectangle { height: 4px; }
+
+            if root.wants-video : InlineOptionRow {
                 label: "RGB";
                 OptionChip {
                     label: "Premultiplied";
@@ -392,8 +414,8 @@ export component RenderPanel inherits Rectangle {
 
             if root.wants-video : Text {
                 text: root.render-export-alpha-mask
-                    ? "Writes an additional grayscale sidecar video next to the main MP4 as *.alpha.mp4."
-                    : "Alpha mask export is off. Main MP4 uses the selected RGB interpretation.";
+                    ? "Writes an additional grayscale sidecar video next to the main " + root.video-container-label + " as *.alpha" + root.video-container-ext + "."
+                    : "Alpha mask export is off. Main " + root.video-container-label + " uses the selected RGB interpretation.";
                 color: #6b7d94;
                 font-size: 10px;
                 wrap: word-wrap;
@@ -575,7 +597,7 @@ export component RenderPanel inherits Rectangle {
 
             if root.is-combined-mode : FieldRow {
                 label: "Codec";
-                value: "AAC (muxed into MP4)";
+                value: "AAC (muxed into " + root.video-container-label + ")";
             }
 
             if root.wants-audio : Rectangle { height: 4px; }
@@ -797,7 +819,9 @@ export component RenderPanel inherits Rectangle {
 
                 Text {
                     text: root.is-combined-mode
-                        ? "Extra flags for the mux/encode step. e.g. -movflags +faststart"
+                        ? (root.render-video-container-text == "mp4"
+                            ? "Extra flags for the mux/encode step. e.g. -movflags +faststart"
+                            : "Extra flags for the mux/encode step. e.g. -metadata title=\"Song\"")
                         : "Extra flags for the audio encode step. e.g. -compression_level 8";
                     color: #3d5068;
                     font-size: 9px;
