@@ -52,10 +52,34 @@ Analyze a MIDI file:
 nix-shell --run 'cargo run -p meridian-cli -- analyze song.mid --pretty --buckets 64'
 ```
 
+Inspect one or more MIDI files:
+
+```bash
+nix-shell --run 'cargo run -p meridian-cli -- inspect song.mid other.mid --pretty'
+```
+
+Merge MIDI files:
+
+```bash
+nix-shell --run 'cargo run -p meridian-cli -- merge left.mid right.mid --output merged.mid --pretty'
+```
+
 Process a MIDI file:
 
 ```bash
-nix-shell --run "cargo run -p meridian-cli -- process select song.mid --output right-hand.mid --key-min 60 --event-kind note --pretty"
+nix-shell --run 'cargo run -p meridian-cli -- process select song.mid --output excerpt.mid --start-ticks 0 --end-ticks 1920 --pretty'
+```
+
+Render audio:
+
+```bash
+nix-shell --run 'cargo run -p meridian-cli -- render audio song.mid --output out.flac --format flac'
+```
+
+Render video with a custom time range:
+
+```bash
+nix-shell --run 'cargo run -p meridian-cli -- render video song.mid --output clip.mp4 --start-time 12.5 --end-time 18.0 --fps 30'
 ```
 
 Run the desktop UI:
