@@ -233,6 +233,90 @@ Deno.test("stdio protocol smoke tests video render", async () => {
   }
 });
 
+Deno.test("stdio protocol smoke tests muxed video render", async () => {
+  if (!(await hasCommand("ffmpeg"))) {
+    console.warn("skipping muxed video stdio smoke because ffmpeg is unavailable");
+    return;
+  }
+
+  const soundfont = await defaultSoundfontPath();
+  if (!soundfont) {
+    console.warn("skipping muxed video stdio smoke because no soundfont is available");
+    return;
+  }
+
+  const executablePath = defaultExecutablePath();
+  await ensureExecutable(executablePath);
+  const midiPath = await resolveMidiFixture(
+    "piano/burgmuller-op100-no4-the-little-party.mid",
+    TWO_NOTE_MIDI,
+  );
+  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-video-muxed-" });
+  const output = `${tempDir}/video-muxed.mkv`;
+
+  const client = await createDenoProtocolClient(executablePath);
+  try {
+    const events = await client.request({
+      type: "start_render_video",
+      config: {
+        midi_path: midiPath,
+        output,
+        container: "mkv",
+        fps: 4,
+        width: 160,
+        height: 90,
+        renderer: "piano_trail_classic",
+        scene: null,
+        view_range: 2,
+        time_space: null,
+        first_key: null,
+        last_key: null,
+        export: {
+          color_mode: "premultiplied",
+          export_alpha_mask: false,
+        },
+        ffmpeg_args: ["-y"],
+        audio: {
+          sample_rate: 22_050,
+          channels: 2,
+          use_limiter: true,
+          soundfonts: [soundfont],
+          ffmpeg_args: ["-b:a", "96k"],
+        },
+      },
+    });
+    const status = events[0];
+    if (
+      events.length !== 1 ||
+      !status ||
+      status.type !== "video_render_status" ||
+      status.status.state !== "running"
+    ) {
+      throw new Error(`Unexpected muxed video start response: ${JSON.stringify(events)}`);
+    }
+
+    const finished = await waitForEvent(
+      client,
+      "video_render",
+      (event) => event.event.type === "render_finished",
+    );
+    if (finished.event.type !== "render_finished") {
+      throw new Error(`Unexpected muxed video render event: ${JSON.stringify(finished)}`);
+    }
+    if (finished.event.output !== output) {
+      throw new Error(
+        `Expected muxed video output ${output}, got ${finished.event.output}`,
+      );
+    }
+    const stat = await Deno.stat(output);
+    if (!stat.isFile || stat.size === 0) {
+      throw new Error(`Expected non-empty muxed video output at ${output}`);
+    }
+  } finally {
+    await client.close();
+  }
+});
+
 Deno.test("stdio protocol accepts explicit scene config for video render", async () => {
   if (!(await hasCommand("ffmpeg"))) {
     console.warn("skipping scene-config video stdio smoke because ffmpeg is unavailable");

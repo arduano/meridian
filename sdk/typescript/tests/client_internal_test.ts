@@ -201,6 +201,134 @@ Deno.test("video render task rejects mismatched renderer and scene", () => {
   }
 });
 
+Deno.test("video render task preserves muxed audio options", () => {
+  const soundfonts = ["piano.sf2"];
+  const ffmpegArgs = ["-b:a", "96k"];
+  const task = new VideoRenderTask(
+    {} as unknown as MeridianClient,
+    {
+      midiPath: "song.mid",
+      output: "out.mkv",
+      fps: 30,
+      width: 160,
+      height: 90,
+      audio: {
+        sampleRate: 22_050,
+        channels: 2,
+        useLimiter: true,
+        soundfonts,
+        ffmpegArgs,
+      },
+    },
+  );
+
+  soundfonts[0] = "mutated.sf2";
+  ffmpegArgs[0] = "-c:a";
+
+  const spec = task.toJSON();
+  if (spec.audio?.sampleRate !== 22_050) {
+    throw new Error(`Expected sampleRate 22050, got ${String(spec.audio?.sampleRate)}`);
+  }
+  if (spec.audio?.channels !== 2) {
+    throw new Error(`Expected channels 2, got ${String(spec.audio?.channels)}`);
+  }
+  if (spec.audio?.useLimiter !== true) {
+    throw new Error(`Expected useLimiter true, got ${String(spec.audio?.useLimiter)}`);
+  }
+  if (JSON.stringify(spec.audio?.soundfonts) !== JSON.stringify(["piano.sf2"])) {
+    throw new Error(`Unexpected soundfonts snapshot: ${JSON.stringify(spec.audio?.soundfonts)}`);
+  }
+  if (JSON.stringify(spec.audio?.ffmpegArgs) !== JSON.stringify(["-b:a", "96k"])) {
+    throw new Error(`Unexpected ffmpeg args snapshot: ${JSON.stringify(spec.audio?.ffmpegArgs)}`);
+  }
+});
+
+Deno.test("video render request forwards muxed audio options", async () => {
+  const protocol = new FakeProtocolClient({
+    requestHandler: (command) => {
+      const typed = command as { type: string };
+      if (typed.type !== "start_render_video") {
+        throw new Error(`Unexpected command: ${typed.type}`);
+      }
+      return [
+        {
+          type: "video_render_status",
+          status: {
+            state: "running",
+            job_id: 29,
+            output: "out.mkv",
+            container: "mkv",
+            fps: 30,
+            width: 160,
+            height: 90,
+            total_frames: 1,
+            frame_index: 0,
+            current_time: 0,
+            elapsed_seconds: 0,
+          },
+        } as CoreEvent,
+      ];
+    },
+  });
+  const client = new MeridianClient(
+    protocol as unknown as MeridianProtocolClient,
+  );
+
+  const soundfonts = ["piano.sf2"];
+  const ffmpegArgs = ["-b:a", "96k"];
+  await client.startVideoRender({
+    midiPath: "song.mid",
+    output: "out.mkv",
+    fps: 30,
+    width: 160,
+    height: 90,
+    audio: {
+      sampleRate: 22_050,
+      channels: 2,
+      useLimiter: true,
+      soundfonts,
+      ffmpegArgs,
+    },
+  });
+
+  if (protocol.requests.length !== 1) {
+    throw new Error(`Expected 1 request, got ${protocol.requests.length}`);
+  }
+  const start = protocol.requests[0] as {
+    type: string;
+    config: {
+      audio: {
+        sample_rate: number | null;
+        channels: number | null;
+        use_limiter: boolean | null;
+        soundfonts: string[];
+        ffmpeg_args: string[];
+      } | null;
+    };
+  };
+  if (start.type !== "start_render_video") {
+    throw new Error(`Unexpected start command: ${start.type}`);
+  }
+  if (start.config.audio === null) {
+    throw new Error("Expected muxed audio config to be serialized");
+  }
+  if (start.config.audio.sample_rate !== 22_050) {
+    throw new Error(`Expected sample_rate 22050, got ${String(start.config.audio.sample_rate)}`);
+  }
+  if (start.config.audio.channels !== 2) {
+    throw new Error(`Expected channels 2, got ${String(start.config.audio.channels)}`);
+  }
+  if (start.config.audio.use_limiter !== true) {
+    throw new Error(`Expected use_limiter true, got ${String(start.config.audio.use_limiter)}`);
+  }
+  if (JSON.stringify(start.config.audio.soundfonts) !== JSON.stringify(["piano.sf2"])) {
+    throw new Error(`Unexpected soundfonts: ${JSON.stringify(start.config.audio.soundfonts)}`);
+  }
+  if (JSON.stringify(start.config.audio.ffmpeg_args) !== JSON.stringify(["-b:a", "96k"])) {
+    throw new Error(`Unexpected ffmpeg args: ${JSON.stringify(start.config.audio.ffmpeg_args)}`);
+  }
+});
+
 Deno.test("audio render handle replays a recent finished event", async () => {
   const finishedEvent: CoreEvent = {
     type: "audio_render",

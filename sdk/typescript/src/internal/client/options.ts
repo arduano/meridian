@@ -55,7 +55,16 @@ export interface VideoRenderOptions {
   rgbMode?: ProtocolVideoRenderConfig["export"]["color_mode"];
   exportAlphaMask?: boolean | null;
   ffmpegArgs?: string[];
+  audio?: VideoRenderAudioOptions | null;
   onEvent?: (event: VideoRenderEvent) => void;
+}
+
+export interface VideoRenderAudioOptions {
+  sampleRate?: number | null;
+  channels?: number | null;
+  useLimiter?: boolean | null;
+  soundfonts?: string[];
+  ffmpegArgs?: string[];
 }
 
 export interface MidiToolTaskOptions {

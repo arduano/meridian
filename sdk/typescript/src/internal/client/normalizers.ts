@@ -4,6 +4,7 @@ import type {
   MidiAnalysisOptions,
   MidiToolTaskOptions,
   StartAnalysisForFileOptions,
+  VideoRenderAudioOptions,
   VideoRenderOptions,
 } from "./options.ts";
 import type {
@@ -104,6 +105,7 @@ export function normalizeVideoRenderOptions(
     rgbMode: options.rgbMode ?? "premultiplied",
     exportAlphaMask: options.exportAlphaMask ?? false,
     ffmpegArgs: options.ffmpegArgs ? [...options.ffmpegArgs] : [],
+    audio: options.audio ? normalizeVideoRenderAudioOptions(options.audio) : null,
     ...(options.onEvent ? { onEvent: options.onEvent } : {}),
   };
 }
@@ -155,7 +157,31 @@ export function toProtocolVideoRenderConfig(
       export_alpha_mask: options.exportAlphaMask ?? false,
     },
     ffmpeg_args: options.ffmpegArgs ?? [],
-    audio: null,
+    audio: options.audio ? toProtocolVideoRenderAudioConfig(options.audio) : null,
+  };
+}
+
+export function normalizeVideoRenderAudioOptions(
+  audio: VideoRenderAudioOptions,
+): VideoRenderAudioOptions {
+  return {
+    sampleRate: audio.sampleRate ?? null,
+    channels: audio.channels ?? null,
+    useLimiter: audio.useLimiter ?? null,
+    soundfonts: audio.soundfonts ? [...audio.soundfonts] : [],
+    ffmpegArgs: audio.ffmpegArgs ? [...audio.ffmpegArgs] : [],
+  };
+}
+
+export function toProtocolVideoRenderAudioConfig(
+  audio: VideoRenderAudioOptions,
+): ProtocolVideoRenderConfig["audio"] {
+  return {
+    sample_rate: audio.sampleRate ?? null,
+    channels: audio.channels ?? null,
+    use_limiter: audio.useLimiter ?? null,
+    soundfonts: audio.soundfonts ? [...audio.soundfonts] : [],
+    ffmpeg_args: audio.ffmpegArgs ? [...audio.ffmpegArgs] : [],
   };
 }
 

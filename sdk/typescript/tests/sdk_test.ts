@@ -291,6 +291,61 @@ Deno.test("video render runs through the declarative SDK API", async () => {
   }
 });
 
+Deno.test("video render runs through the declarative SDK API with muxed audio", async () => {
+  if (!(await hasCommand("ffmpeg"))) {
+    console.warn("skipping muxed video render smoke because ffmpeg is unavailable");
+    return;
+  }
+
+  const soundfont = await defaultSoundfontPath();
+  if (!soundfont) {
+    console.warn("skipping muxed video render smoke because no soundfont is available");
+    return;
+  }
+
+  const executablePath = defaultExecutablePath();
+  await ensureExecutable(executablePath);
+
+  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-video-muxed-" });
+  const midiPath = await resolveMidiFixture(
+    "piano/burgmuller-op100-no4-the-little-party.mid",
+    TWO_NOTE_MIDI,
+  );
+  const output = `${tempDir}/out-muxed.mkv`;
+
+  const client = await createDenoMeridianClient(executablePath);
+  try {
+    const result = await client.video.render({
+      midiPath,
+      output,
+      container: "mkv",
+      fps: 4,
+      width: 160,
+      height: 90,
+      renderer: "piano_trail_classic",
+      viewRange: 2,
+      ffmpegArgs: ["-y"],
+      audio: {
+        sampleRate: 22_050,
+        channels: 2,
+        useLimiter: true,
+        soundfonts: [soundfont],
+        ffmpegArgs: ["-b:a", "96k"],
+      },
+    });
+
+    if (result.output !== output) {
+      throw new Error(`Expected muxed output ${output}, got ${result.output}`);
+    }
+    const stat = await Deno.stat(output);
+    if (!stat.isFile || stat.size === 0) {
+      throw new Error(`Expected non-empty muxed video output at ${output}`);
+    }
+  } finally {
+    await client.close();
+  }
+});
+
 Deno.test("video render accepts full scene config through the SDK API", async () => {
   if (!(await hasCommand("ffmpeg"))) {
     console.warn("skipping scene-config video render smoke because ffmpeg is unavailable");

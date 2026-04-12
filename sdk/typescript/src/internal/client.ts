@@ -12,6 +12,7 @@ export type {
   MidiModificationOptions,
   MidiToolTaskOptions,
   StartAnalysisForFileOptions,
+  VideoRenderAudioOptions,
   VideoRenderOptions,
 } from "./client/options.ts";
 export type { AnalysisProgress } from "./client/handles.ts";

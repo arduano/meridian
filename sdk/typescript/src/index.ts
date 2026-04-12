@@ -17,6 +17,7 @@ export {
   MidiProcessTask,
   type MidiToolTaskOptions,
   type StartAnalysisForFileOptions,
+  type VideoRenderAudioOptions,
   VideoRenderJobHandle,
   type VideoRenderOptions,
   VideoRenderTask,
