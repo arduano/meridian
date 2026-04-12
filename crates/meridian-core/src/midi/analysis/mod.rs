@@ -1,3 +1,15 @@
+//! MIDI analysis pipeline.
+//!
+//! The pipeline is deliberately two-stage:
+//! - `extract` walks the parsed MIDI and records raw facts
+//! - `reduce` turns those extracted facts into the public cached analysis shape
+//!
+//! The remaining modules are support layers for the public analysis surface:
+//! - `types` defines the serialized output types
+//! - `buckets` builds bucketed summaries from cached analysis
+//! - `file_metrics` computes file-oriented metadata
+//! - `accumulator` stores the intermediate state used by extraction
+
 pub struct AnalysisProgressUpdate {
     pub progress: f32,
     pub status: String,

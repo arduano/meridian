@@ -1,3 +1,18 @@
+//! Video render orchestration boundary.
+//!
+//! This module is intentionally the orchestration hub rather than the place
+//! where the heavy rendering logic lives.
+//!
+//! The direct siblings split the work by concern:
+//! - `config`: render configuration validation and time-range resolution
+//! - `core_session`: read/restore the core state around a render
+//! - `audio_mux`: muxed audio worker lifecycle and FIFO handling
+//! - `ffmpeg`: process spawning helpers
+//! - `pipeline`: frame/worker coordination
+//!
+//! Start here if you want to understand the overall render flow, then follow
+//! the sibling that matches the specific step you are tracing.
+
 mod audio_mux;
 mod config;
 mod core_session;
@@ -151,6 +166,8 @@ fn render_video_with_core(
 
     let state = read_core_state(core)?;
 
+    // Apply render-local overrides before frame generation. The core is
+    // restored back to `state` when the render finishes or aborts.
     if let Some(scene) = &config.scene {
         core.request(CoreCommand::SetSceneConfig {
             scene: scene.clone(),

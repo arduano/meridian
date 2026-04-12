@@ -1,3 +1,15 @@
+//! Resource-ownership helpers for the core engine.
+//!
+//! The `engine` boundary keeps the actual state machine in `core_state.rs`,
+//! while this module splits the lifecycle work that would otherwise make that
+//! file too large:
+//! - `loading`: attach and replace active MIDI-backed resources
+//! - `processed`: derived analysis/processing artifacts
+//! - `caches`: cache build/drop helpers
+//! - `sessions`: display/audio session ownership
+//! - `gc`: inactive resource cleanup
+//! - `support`: shared helpers for the resource layer
+
 mod caches;
 mod gc;
 pub(super) mod ids;

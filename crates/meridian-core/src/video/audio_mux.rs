@@ -1,3 +1,8 @@
+//! Muxed audio worker lifecycle.
+//!
+//! This module owns the "render audio on the side while ffmpeg consumes the
+//! video pipe" path for video exports with audio.
+
 use std::{
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, Mutex},
@@ -40,6 +45,8 @@ impl VideoAudioMux {
     ) -> Result<Self, MeridianError> {
         #[cfg(unix)]
         {
+            // The audio mux only exists for the video render path, but it is
+            // still split out so the main video orchestration stays readable.
             let inputs = audio_inputs.ok_or_else(|| {
                 MeridianError::Platform("missing cached audio data for muxed video render".into())
             })?;

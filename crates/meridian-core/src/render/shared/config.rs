@@ -1,3 +1,18 @@
+//! Shared render schema.
+//!
+//! This file holds the render configuration types that are shared across the
+//! CLI, UI, SDK, and core renderer.
+//!
+//! The main sections are:
+//! - renderer kind and background selection
+//! - 2D/3D/text scene configs
+//! - projector/text overlay configs
+//! - scene layout and display-time helpers
+//!
+//! The file is intentionally broad because these config types are serialized
+//! together, but the sectioning below should make it easier to find a specific
+//! knob without learning the entire render taxonomy first.
+
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -102,6 +117,9 @@ pub struct TwoDSceneConfig {
     pub keyboard: KeyboardProjectorConfig,
 }
 
+// 3D scene configuration stays grouped with the `SceneConfig` enum because the
+// enum is the public entry point while the concrete config remains a single
+// implementation today.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 pub struct PianoTrailClassicSceneConfig {
     #[serde(default)]
@@ -158,6 +176,9 @@ pub struct PianoTrailClassicSceneConfig {
     pub aura_image: ProjectorImageConfig,
 }
 
+// Text scenes share the same serialized boundary as the other scene configs,
+// but the internal structure is intentionally kept separate from the 2D/3D
+// projector settings above.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 pub struct TextSceneConfig {
     #[serde(default)]

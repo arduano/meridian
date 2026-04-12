@@ -1,3 +1,17 @@
+//! MIDI domain boundary.
+//!
+//! This module is the public entry point for MIDI data, derived views, and
+//! file-oriented helpers in `meridian-core`.
+//!
+//! The shape is intentionally split by responsibility:
+//! - domain/data types and traits live here
+//! - `parsed`, `processed`, `materialized`, and `display_cache` own concrete data paths
+//! - `file_processing`, `file_merge`, and `inspect` cover file-oriented workflows
+//! - `analysis` and `modifier_tools` hold the heavier derived-data logic
+//!
+//! If you are looking for a specific behavior, start by deciding whether it is
+//! a domain type, a file workflow, or a derived-data pipeline.
+
 #[path = "analysis/mod.rs"]
 pub mod analysis;
 pub mod audio_cache;
@@ -237,6 +251,11 @@ pub trait MIDINoteColumnView: Send {
 }
 
 #[enum_dispatch(MIDIFileBase)]
+/// Compatibility wrapper for the single concrete MIDI backing implementation.
+///
+/// The union exists so public APIs can stay stable if additional backing
+/// storage types are introduced later, but today there is only one real
+/// implementation.
 pub enum MIDIFileUnion {
     InRam(ram::InRamMIDIFile),
 }

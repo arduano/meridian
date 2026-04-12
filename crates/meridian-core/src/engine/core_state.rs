@@ -35,10 +35,14 @@ use super::{
 };
 
 pub(super) struct CoreState {
+    // Core wiring.
     pub(super) core_handle: CoreHandle,
     pub(super) subscribers: Arc<Mutex<Vec<Sender<CoreEvent>>>>,
     pub(super) midi_cache: Option<MidiCacheStack>,
     pub(super) processed_midi: Option<Arc<ProcessedMidi>>,
+
+    // Owned resource registries. These are the canonical stores for each
+    // loaded MIDI-derived artifact type.
     pub(super) parsed_midis: ParsedMidiRegistry,
     pub(super) processed_midis: ProcessedMidiRegistry,
     pub(super) display_caches: DisplayCacheRegistry,
@@ -46,6 +50,8 @@ pub(super) struct CoreState {
     pub(super) display_sessions: DisplaySessionRegistry,
     pub(super) audio_sessions: AudioSessionRegistry,
     pub(super) resource_ids: ResourceIds,
+
+    // Current active resource selection.
     pub(super) active_parsed_midi_id: Option<ParsedMidiId>,
     pub(super) active_processed_midi_id: Option<ProcessedMidiId>,
     pub(super) active_display_cache_id: Option<DisplayCacheId>,
@@ -53,6 +59,8 @@ pub(super) struct CoreState {
     pub(super) active_display_session_id: Option<DisplaySessionId>,
     pub(super) active_audio_session_id: Option<AudioSessionId>,
     pub(super) current_audio_cache: Option<Arc<InRamAudioCache>>,
+
+    // Long-lived runtime state.
     pub(super) analysis_jobs: HashMap<AnalysisJobId, MidiAnalysisJobStatus>,
     pub(super) display: LiveDisplaySession,
     pub(super) audio_config: AudioConfig,
@@ -61,6 +69,8 @@ pub(super) struct CoreState {
     pub(super) audio_session: Option<LiveAudioSession>,
     pub(super) midi_path: Option<PathBuf>,
     pub(super) transport: TransportState,
+
+    // Active async jobs.
     pub(super) render_job: Option<RenderJobState>,
     pub(super) audio_render_job: Option<AudioRenderJobState>,
     pub(super) midi_process_job: Option<MidiProcessJobState>,

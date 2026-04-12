@@ -1,3 +1,9 @@
+//! Video render configuration and time-range resolution.
+//!
+//! This module owns the validation boundary for render requests. The actual
+//! render orchestration lives in `video/mod.rs`, but the rules about which
+//! values are accepted belong here.
+
 use std::sync::Arc;
 
 use crate::{
@@ -25,6 +31,8 @@ pub(crate) fn should_use_isolated_core(config: &VideoRenderConfig) -> bool {
 }
 
 impl VideoRenderConfig {
+    // Validation stays with the config type so callers can reject bad requests
+    // before any render state is mutated.
     pub fn validate(&self) -> Result<(), MeridianError> {
         if self.fps <= 0.0 {
             return Err(MeridianError::InvalidMidi("fps must be > 0".into()));

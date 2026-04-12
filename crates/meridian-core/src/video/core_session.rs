@@ -1,3 +1,8 @@
+//! Core snapshot/restore helpers for video rendering.
+//!
+//! This module keeps the render orchestration code from having to know how to
+//! read the active core state or how to replay it after a render exits.
+
 use crate::{
     CoreHandle, MeridianError,
     protocol::{CoreCommand, CoreEvent, StateSnapshot},

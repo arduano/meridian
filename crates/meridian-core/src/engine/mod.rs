@@ -1,3 +1,18 @@
+//! Core engine boundary.
+//!
+//! This module owns the serialized core request loop and is the main entry
+//! point for stateful behavior in `meridian-core`.
+//!
+//! Start here when tracing a command:
+//! - `core_state.rs`: the state machine, command dispatch, and snapshot logic
+//! - `resources.rs`: ownership/cleanup for parsed, processed, display, and audio resources
+//! - `*_job.rs`: async wrappers around analysis, processing, and render work
+//! - `state_ops.rs` / `support.rs`: small helpers shared by the state machine
+//!
+//! The names are intentionally explicit about ownership rather than feature
+//! names. If you are trying to understand who mutates state, begin in
+//! `core_state.rs` and then follow the specific resource/job module.
+
 mod analysis_job;
 mod audio_render_job;
 mod core_state;
