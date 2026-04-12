@@ -7,15 +7,17 @@ use cosmic_text::{
 use crate::{
     midi::{MIDIFileBase, MIDIFileUnion},
     render::{
-        SceneLayout,
         shared::{
-            ProjectedScene, SceneLayer, TextAlignment, TextAnchor, TextOverlayConfig, TextRowConfig, TextSceneConfig,
-            TextStyleConfig, TextValueFormat, TextValueSource, solid_quad,
+            solid_quad, ProjectedScene, SceneLayer, TextAlignment, TextAnchor, TextOverlayConfig,
+            TextRowConfig, TextSceneConfig, TextStyleConfig, TextValueFormat, TextValueSource,
         },
+        SceneLayout,
     },
 };
 
 static TEXT_RASTERIZER: OnceLock<Mutex<TextRasterizer>> = OnceLock::new();
+const TEXT_REFERENCE_WIDTH: f32 = 1920.0;
+const TEXT_REFERENCE_HEIGHT: f32 = 1080.0;
 
 #[derive(Clone, Debug, Default)]
 pub struct TextRenderMetrics {
@@ -68,16 +70,24 @@ impl TextRasterizer {
         let viewport_height = layout.viewport_height.max(1);
         let viewport_width_f = viewport_width as f32;
         let viewport_height_f = viewport_height as f32;
+        let text_scale = text_reference_scale(viewport_width_f, viewport_height_f);
 
         for overlay in &config.overlays {
             let inner_width_px = (overlay.resolved_width() * viewport_width_f).max(1.0);
+            let row_gap_px = overlay.row_gap.max(0.0) * text_scale;
             let plans = overlay
                 .rows
                 .iter()
                 .filter_map(|row| {
                     let text = format_row(row, metrics)?;
                     let style = resolve_style(config, overlay, row);
-                    let height_px = self.measure_text_height(&text, &style, inner_width_px, overlay.alignment);
+                    let height_px = self.measure_text_height(
+                        &text,
+                        &style,
+                        inner_width_px,
+                        overlay.alignment,
+                        text_scale,
+                    );
                     Some(RowRenderPlan {
                         text,
                         style,
@@ -90,8 +100,8 @@ impl TextRasterizer {
             }
 
             let content_height = plans.iter().map(|plan| plan.height_px).sum::<f32>()
-                + overlay.row_gap.max(0.0) * plans.len().saturating_sub(1) as f32;
-            let padding = overlay.padding.max(0.0);
+                + row_gap_px * plans.len().saturating_sub(1) as f32;
+            let padding = overlay.padding.max(0.0) * text_scale;
             let box_width = inner_width_px + padding * 2.0;
             let box_height = content_height + padding * 2.0;
             let (box_left, box_top) = anchor_top_left(
@@ -129,8 +139,9 @@ impl TextRasterizer {
                     overlay.alignment,
                     &plan.text,
                     &plan.style,
+                    text_scale,
                 );
-                cursor_y += plan.height_px + overlay.row_gap.max(0.0);
+                cursor_y += plan.height_px + row_gap_px;
             }
         }
     }
@@ -146,6 +157,7 @@ impl TextRasterizer {
         alignment: TextAlignment,
         text: &str,
         style: &TextStyleConfig,
+        text_scale: f32,
     ) {
         let buffer = build_buffer(
             &mut self.font_system,
@@ -153,6 +165,7 @@ impl TextRasterizer {
             style,
             width_px,
             alignment,
+            text_scale,
         );
         buffer.draw(
             &mut self.font_system,
@@ -191,6 +204,7 @@ impl TextRasterizer {
         style: &TextStyleConfig,
         width_px: f32,
         alignment: TextAlignment,
+        text_scale: f32,
     ) -> f32 {
         let buffer = build_buffer(
             &mut self.font_system,
@@ -198,12 +212,13 @@ impl TextRasterizer {
             style,
             width_px,
             alignment,
+            text_scale,
         );
         buffer
             .layout_runs()
             .map(|run| run.line_top + run.line_height)
             .fold(0.0_f32, f32::max)
-            .max(style.resolved_font_size() as f32 + style.resolved_line_spacing())
+            .max(scaled_font_size(style, text_scale) + scaled_line_spacing(style, text_scale))
     }
 }
 
@@ -245,10 +260,10 @@ pub fn build_text_render_metrics(
     metrics.current_tick = tempo_map.tick_at_seconds(current_time);
     metrics.midi_length_tick = tempo_map.tick_at_seconds(metrics.midi_length_seconds);
     metrics.current_polyphony = display_cache.active_notes_at(current_time);
-    metrics.current_nps_1s = display_cache.note_starts_between((current_time - 1.0).max(0.0), current_time) as f64;
+    metrics.current_nps_1s =
+        display_cache.note_starts_between((current_time - 1.0).max(0.0), current_time) as f64;
     metrics.current_nps_2s =
-        display_cache.note_starts_between((current_time - 2.0).max(0.0), current_time) as f64
-            / 2.0;
+        display_cache.note_starts_between((current_time - 2.0).max(0.0), current_time) as f64 / 2.0;
     metrics.current_bpm =
         tempo_map.ticks_per_second_at_seconds(current_time) * 60.0 / tempo_map.ppq().max(1) as f64;
     metrics
@@ -439,14 +454,22 @@ fn format_value(
     match source {
         TextValueSource::MidiName => metrics.midi_name.clone(),
         TextValueSource::RendererName => Some(metrics.renderer_name.clone()),
-        TextValueSource::ViewportWidth => Some(format_numeric(metrics.viewport_width as f64, format)),
-        TextValueSource::ViewportHeight => Some(format_numeric(metrics.viewport_height as f64, format)),
-        TextValueSource::CurrentTimeSeconds => Some(format_seconds(metrics.current_time_seconds, format)),
+        TextValueSource::ViewportWidth => {
+            Some(format_numeric(metrics.viewport_width as f64, format))
+        }
+        TextValueSource::ViewportHeight => {
+            Some(format_numeric(metrics.viewport_height as f64, format))
+        }
+        TextValueSource::CurrentTimeSeconds => {
+            Some(format_seconds(metrics.current_time_seconds, format))
+        }
         TextValueSource::RemainingTimeSeconds => Some(format_seconds(
             (metrics.midi_length_seconds - metrics.current_time_seconds).max(0.0),
             format,
         )),
-        TextValueSource::MidiLengthSeconds => Some(format_seconds(metrics.midi_length_seconds, format)),
+        TextValueSource::MidiLengthSeconds => {
+            Some(format_seconds(metrics.midi_length_seconds, format))
+        }
         TextValueSource::CurrentTick => Some(format_numeric(metrics.current_tick, format)),
         TextValueSource::RemainingTick => Some(format_numeric(
             (metrics.midi_length_tick - metrics.current_tick).max(0.0),
@@ -511,7 +534,12 @@ fn format_clock(value: f64) -> String {
 }
 
 fn join_nonempty(parts: &[Option<String>]) -> String {
-    parts.iter().flatten().cloned().collect::<Vec<_>>().join(" ")
+    parts
+        .iter()
+        .flatten()
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn build_buffer(
@@ -520,14 +548,11 @@ fn build_buffer(
     style: &TextStyleConfig,
     width_px: f32,
     alignment: TextAlignment,
+    text_scale: f32,
 ) -> Buffer {
-    let mut buffer = Buffer::new(
-        font_system,
-        Metrics::new(
-            style.resolved_font_size() as f32,
-            style.resolved_font_size() as f32 + style.resolved_line_spacing(),
-        ),
-    );
+    let font_size = scaled_font_size(style, text_scale);
+    let line_height = font_size + scaled_line_spacing(style, text_scale);
+    let mut buffer = Buffer::new(font_system, Metrics::new(font_size, line_height));
     let family = parse_font_family(style.normalized_font_family());
     let attrs = Attrs::new().family(family.as_family());
     buffer.set_wrap(font_system, Wrap::WordOrGlyph);
@@ -546,6 +571,20 @@ fn build_buffer(
     buffer
 }
 
+fn text_reference_scale(viewport_width: f32, viewport_height: f32) -> f32 {
+    let width_scale = viewport_width.max(1.0) / TEXT_REFERENCE_WIDTH;
+    let height_scale = viewport_height.max(1.0) / TEXT_REFERENCE_HEIGHT;
+    width_scale.min(height_scale).max(f32::EPSILON)
+}
+
+fn scaled_font_size(style: &TextStyleConfig, text_scale: f32) -> f32 {
+    (style.resolved_font_size() as f32 * text_scale).max(1.0)
+}
+
+fn scaled_line_spacing(style: &TextStyleConfig, text_scale: f32) -> f32 {
+    style.resolved_line_spacing() * text_scale
+}
+
 fn anchor_top_left(
     anchor: TextAnchor,
     x: f32,
@@ -560,9 +599,7 @@ fn anchor_top_left(
     match anchor {
         TextAnchor::TopLeft => (offset_x, offset_y),
         TextAnchor::TopRight => (viewport_width - box_width - offset_x, offset_y),
-        TextAnchor::BottomLeft => {
-            (offset_x, viewport_height - box_height - offset_y)
-        }
+        TextAnchor::BottomLeft => (offset_x, viewport_height - box_height - offset_y),
         TextAnchor::BottomRight => (
             viewport_width - box_width - offset_x,
             viewport_height - box_height - offset_y,
@@ -690,5 +727,13 @@ mod tests {
         assert!(rendered.contains("1234"));
         assert!(rendered.contains("174.2 BPM"));
         assert!(rendered.contains("demo.mid"));
+    }
+
+    #[test]
+    fn text_scale_uses_1080p_reference_frame() {
+        assert!((text_reference_scale(1920.0, 1080.0) - 1.0).abs() < f32::EPSILON);
+        assert!((text_reference_scale(1280.0, 720.0) - (2.0 / 3.0)).abs() < 0.0001);
+        assert!((text_reference_scale(3840.0, 2160.0) - 2.0).abs() < 0.0001);
+        assert!((text_reference_scale(1024.0, 1024.0) - (1024.0 / 1920.0)).abs() < 0.0001);
     }
 }
