@@ -7,9 +7,8 @@ use meridian_core::{
     audio::AudioStatus,
     midi::MidiFileInspection,
     protocol::{
-        AnalysisJobId, AudioRenderStatus, CoreEvent, MidiAnalysisData, MidiAnalysisJobStatus,
-        MidiProcessEvent, MidiProcessStatus, ParsedMidiId, ProcessedMidiId, StateSnapshot,
-        VideoRenderStatus,
+        AnalysisJobId, AudioRenderStatus, MidiAnalysisData, MidiProcessEvent, MidiProcessStatus,
+        ParsedMidiId, ProcessedMidiId, StateSnapshot, VideoRenderStatus,
     },
     render::{DisplayTimeSpace, SceneConfig},
 };
@@ -124,12 +123,6 @@ impl UiViewModel {
         self.analysis = AnalysisViewModel::default();
     }
 
-    pub fn reduce_events(&mut self, events: &[CoreEvent]) {
-        for event in events {
-            self.reduce_event(event);
-        }
-    }
-
     pub fn apply_snapshot(&mut self, state: &StateSnapshot) {
         self.snapshot = Some(state.clone());
         self.transport.current_time = state.current_time;
@@ -148,95 +141,5 @@ impl UiViewModel {
         self.scene.viewport_height = state.viewport_height;
 
         self.audio.status = state.audio_status.clone();
-    }
-
-    fn reduce_event(&mut self, event: &CoreEvent) {
-        match event {
-            CoreEvent::StateSnapshot { state }
-            | CoreEvent::MidiLoaded { state, .. }
-            | CoreEvent::ProcessedMidiAttached { state, .. }
-            | CoreEvent::DisplayCacheAttached { state, .. }
-            | CoreEvent::AudioCacheAttached { state, .. }
-            | CoreEvent::DisplaySessionAttached { state, .. }
-            | CoreEvent::AudioSessionAttached { state, .. }
-            | CoreEvent::FrameProjected { state, .. }
-            | CoreEvent::FrameSaved { state, .. } => self.apply_snapshot(state),
-            CoreEvent::ProcessedMidiBuilt {
-                processed_midi_id,
-                track_count,
-                ..
-            } => {
-                self.analysis.processed_midi_id = Some(*processed_midi_id);
-                self.analysis.track_count = Some(*track_count);
-            }
-            CoreEvent::MidiAnalysisJobStatus { status } => match status {
-                MidiAnalysisJobStatus::Running {
-                    job_id,
-                    parsed_midi_id,
-                    ..
-                } => {
-                    self.analysis.pending_parsed_midi_id = Some(*parsed_midi_id);
-                    self.analysis.pending_job_id = Some(*job_id);
-                    self.analysis.processed_midi_id = None;
-                    self.analysis.data = None;
-                }
-                MidiAnalysisJobStatus::Finished {
-                    job_id,
-                    parsed_midi_id,
-                    result,
-                    ..
-                } => {
-                    if self
-                        .analysis
-                        .pending_job_id
-                        .map(|pending| pending == *job_id)
-                        .unwrap_or(true)
-                        || self.analysis.pending_parsed_midi_id == Some(*parsed_midi_id)
-                    {
-                        self.analysis.pending_parsed_midi_id = None;
-                        self.analysis.pending_job_id = None;
-                        self.analysis.processed_midi_id = None;
-                        self.analysis.data = Some(result.clone());
-                    }
-                }
-                MidiAnalysisJobStatus::Failed {
-                    job_id,
-                    parsed_midi_id,
-                    ..
-                } => {
-                    if self
-                        .analysis
-                        .pending_job_id
-                        .map(|pending| pending == *job_id)
-                        .unwrap_or(true)
-                        || self.analysis.pending_parsed_midi_id == Some(*parsed_midi_id)
-                    {
-                        self.analysis.pending_parsed_midi_id = None;
-                        self.analysis.pending_job_id = None;
-                        self.analysis.processed_midi_id = None;
-                        self.analysis.data = None;
-                    }
-                }
-            },
-            CoreEvent::AudioStatus { status } => self.audio.status = status.clone(),
-            CoreEvent::MidiProcess { event } => self.modify.latest_event = Some(event.clone()),
-            CoreEvent::MidiProcessStatus { status } => self.modify.process_status = status.clone(),
-            CoreEvent::VideoRenderStatus { status } => self.render_jobs.video = status.clone(),
-            CoreEvent::AudioRenderStatus { status } => self.render_jobs.audio = status.clone(),
-            CoreEvent::VideoRender { .. }
-            | CoreEvent::AudioRender { .. }
-            | CoreEvent::MidiLoadProgress { .. }
-            | CoreEvent::ParsedMidiLoaded { .. }
-            | CoreEvent::MidiFilesInspected { .. }
-            | CoreEvent::DisplayCacheBuilt { .. }
-            | CoreEvent::AudioCacheBuilt { .. }
-            | CoreEvent::DisplaySessionCreated { .. }
-            | CoreEvent::AudioSessionCreated { .. }
-            | CoreEvent::MidiAnalysisJob { .. }
-            | CoreEvent::MidiFileProcessed { .. }
-            | CoreEvent::MidiFilesMerged { .. }
-            | CoreEvent::Error { .. }
-            | CoreEvent::ShutdownComplete => {}
-        }
     }
 }

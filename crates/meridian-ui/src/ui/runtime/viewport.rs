@@ -140,10 +140,7 @@ pub(super) fn install_core_event_listener(
                         let event = CoreEvent::MidiAnalysisJobStatus {
                             status: status.clone(),
                         };
-                        shared_state
-                            .lock()
-                            .expect("shared UI state mutex poisoned")
-                            .reduce_events(std::slice::from_ref(&event));
+                        reduce_core_events(&shared_state, std::slice::from_ref(&event));
                         apply_events_to_app(&app, &shared_state, &[event]);
                         update_analysis_status_ui(&app, &status);
                         app.window().request_redraw();
@@ -157,10 +154,7 @@ pub(super) fn install_core_event_listener(
                     let event = event.clone();
                     let shared_state = Arc::clone(&shared_state);
                     let _ = app_weak.upgrade_in_event_loop(move |app| {
-                        shared_state
-                            .lock()
-                            .expect("shared UI state mutex poisoned")
-                            .reduce_events(std::slice::from_ref(&event));
+                        reduce_core_events(&shared_state, std::slice::from_ref(&event));
                         apply_events_to_app(&app, &shared_state, &[event]);
                         app.window().request_redraw();
                     });
@@ -583,11 +577,13 @@ mod tests {
                 },
             },
         );
-        assert!(export_state
-            .lock()
-            .expect("render export coordinator mutex poisoned")
-            .outcome
-            .is_none());
+        assert!(
+            export_state
+                .lock()
+                .expect("render export coordinator mutex poisoned")
+                .outcome
+                .is_none()
+        );
 
         update_export_state_from_event(
             &export_state,
@@ -686,11 +682,13 @@ mod tests {
                 },
             },
         );
-        assert!(export_state
-            .lock()
-            .expect("render export coordinator mutex poisoned")
-            .outcome
-            .is_none());
+        assert!(
+            export_state
+                .lock()
+                .expect("render export coordinator mutex poisoned")
+                .outcome
+                .is_none()
+        );
 
         update_export_state_from_event(
             &export_state,

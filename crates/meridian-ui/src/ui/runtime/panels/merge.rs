@@ -1,7 +1,7 @@
 use super::*;
 use std::sync::{
-    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc,
+    atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
 static MERGE_SOURCE_INSPECTION_GENERATION: AtomicU64 = AtomicU64::new(0);

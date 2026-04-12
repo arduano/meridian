@@ -225,10 +225,7 @@ pub(super) fn install_midi_process_listener(
                 continue;
             }
 
-            shared_state
-                .lock()
-                .expect("shared UI state mutex poisoned")
-                .reduce_events(std::slice::from_ref(&event));
+            reduce_core_events(&shared_state, std::slice::from_ref(&event));
 
             let event_for_ui = event.clone();
             let shared_state = Arc::clone(&shared_state);

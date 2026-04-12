@@ -15,7 +15,10 @@ use meridian_core::{
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
 };
 
-use super::{state::UiStartupOptions, view_model::UiViewModel};
+use super::{
+    state::{UiStartupOptions, reduce_core_events},
+    view_model::{TransportViewModel, UiViewModel},
+};
 
 #[derive(Clone)]
 pub struct UiCoreBridge {
@@ -40,51 +43,44 @@ impl UiCoreBridge {
         options: &UiStartupOptions,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<(), MeridianError> {
-        for events in [
-            self.request(
-                CoreCommand::SetAudioConfig {
-                    config: options.audio.clone(),
-                },
-                model,
-            )?,
-            self.request(
-                CoreCommand::SetSceneConfig {
-                    scene: options.scene.clone(),
-                },
-                model,
-            )?,
-            self.request(
-                CoreCommand::SetViewRange {
-                    seconds: options.view_range,
-                    time_space: Some(options.time_space),
-                },
-                model,
-            )?,
-            self.request(
-                CoreCommand::SetKeyRange {
-                    first_key: options.first_key,
-                    last_key: options.last_key,
-                },
-                model,
-            )?,
-            self.request(
-                CoreCommand::SetViewport {
-                    width: 1280,
-                    height: 720,
-                },
-                model,
-            )?,
-            self.request(
-                CoreCommand::SetTime {
-                    time: options.start_time.max(0.0),
-                },
-                model,
-            )?,
-        ] {
-            let _ = events;
-        }
+        self.request(
+            CoreCommand::SetAudioConfig {
+                config: options.audio.clone(),
+            },
+            model,
+        )?;
+        self.request(
+            CoreCommand::SetSceneConfig {
+                scene: options.scene.clone(),
+            },
+            model,
+        )?;
+        self.request(
+            Self::view_range_command(options.view_range, options.time_space),
+            model,
+        )?;
+        self.request(
+            CoreCommand::SetKeyRange {
+                first_key: options.first_key,
+                last_key: options.last_key,
+            },
+            model,
+        )?;
+        self.request(
+            CoreCommand::SetViewport {
+                width: 1280,
+                height: 720,
+            },
+            model,
+        )?;
+        self.request(
+            CoreCommand::SetTime {
+                time: options.start_time.max(0.0),
+            },
+            model,
+        )?;
         if let Some(path) = &options.midi_path {
-            let _ = self.load_midi(path.clone(), model)?;
+            self.load_midi(path.clone(), model)?;
         }
         Ok(())
     }
@@ -140,14 +136,14 @@ impl UiCoreBridge {
         paths: Vec<PathBuf>,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<MidiFileInspection>, MeridianError> {
-        let events = self.request(CoreCommand::InspectMidiFiles { paths }, model)?;
-        events
-            .into_iter()
-            .find_map(|event| match event {
+        Self::find_event(
+            self.request(CoreCommand::InspectMidiFiles { paths }, model)?,
+            |event| match event {
                 CoreEvent::MidiFilesInspected { inspections } => Some(inspections),
                 _ => None,
-            })
-            .ok_or_else(|| MeridianError::Protocol("missing midi inspection result".into()))
+            },
+            "missing midi inspection result",
+        )
     }
 
     pub fn build_processed_midi(
@@ -249,17 +245,13 @@ impl UiCoreBridge {
         delta: f64,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
-        let transport = model
-            .lock()
-            .expect("ui model mutex poisoned")
-            .transport
-            .clone();
+        let transport = self.current_transport(model);
         let zoom_factor = std::f64::consts::SQRT_2.powf(delta);
         self.request(
-            CoreCommand::SetViewRange {
-                seconds: (transport.view_range * zoom_factor).max(MIN_VIEW_RANGE_SECONDS),
-                time_space: Some(transport.time_space),
-            },
+            Self::view_range_command(
+                (transport.view_range * zoom_factor).max(MIN_VIEW_RANGE_SECONDS),
+                transport.time_space,
+            ),
             model,
         )
     }
@@ -300,16 +292,9 @@ impl UiCoreBridge {
         time_space: DisplayTimeSpace,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
-        let current = model
-            .lock()
-            .expect("ui model mutex poisoned")
-            .transport
-            .clone();
+        let current = self.current_transport(model);
         self.request(
-            CoreCommand::SetViewRange {
-                seconds: current.view_range.max(MIN_VIEW_RANGE_SECONDS),
-                time_space: Some(time_space),
-            },
+            Self::view_range_command(current.view_range.max(MIN_VIEW_RANGE_SECONDS), time_space),
             model,
         )
     }
@@ -319,21 +304,10 @@ impl UiCoreBridge {
         renderer: RendererKind,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
-        let scene = model
-            .lock()
-            .expect("ui model mutex poisoned")
-            .snapshot
-            .as_ref()
-            .map(|snapshot| snapshot.scene.clone())
-            .unwrap_or_default();
-        let mut layout = SceneLayout {
-            scene,
-            ..SceneLayout::default()
-        };
-        layout.set_renderer_kind(renderer);
+        let scene = self.current_scene(model).unwrap_or_default();
         self.request(
             CoreCommand::SetSceneConfig {
-                scene: layout.scene,
+                scene: Self::scene_with_renderer(scene, renderer),
             },
             model,
         )
@@ -344,18 +318,8 @@ impl UiCoreBridge {
         seconds: f64,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
-        let current = model
-            .lock()
-            .expect("ui model mutex poisoned")
-            .transport
-            .clone();
-        self.request(
-            CoreCommand::SetViewRange {
-                seconds,
-                time_space: Some(current.time_space),
-            },
-            model,
-        )
+        let current = self.current_transport(model);
+        self.request(Self::view_range_command(seconds, current.time_space), model)
     }
 
     pub fn set_key_range(
@@ -378,13 +342,7 @@ impl UiCoreBridge {
         model: &Arc<Mutex<UiViewModel>>,
         mutate: impl FnOnce(&mut SceneConfig),
     ) -> Result<Vec<CoreEvent>, MeridianError> {
-        let Some(mut scene) = model
-            .lock()
-            .expect("ui model mutex poisoned")
-            .snapshot
-            .as_ref()
-            .map(|snapshot| snapshot.scene.clone())
-        else {
+        let Some(mut scene) = self.current_scene(model) else {
             return Ok(Vec::new());
         };
         mutate(&mut scene);
@@ -434,10 +392,51 @@ impl UiCoreBridge {
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
         let events = self.core.request(command)?;
+        reduce_core_events(model, &events);
+        Ok(events)
+    }
+
+    fn current_transport(&self, model: &Arc<Mutex<UiViewModel>>) -> TransportViewModel {
         model
             .lock()
             .expect("ui model mutex poisoned")
-            .reduce_events(&events);
-        Ok(events)
+            .transport
+            .clone()
+    }
+
+    fn current_scene(&self, model: &Arc<Mutex<UiViewModel>>) -> Option<SceneConfig> {
+        model
+            .lock()
+            .expect("ui model mutex poisoned")
+            .snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.scene.clone())
+    }
+
+    fn view_range_command(seconds: f64, time_space: DisplayTimeSpace) -> CoreCommand {
+        CoreCommand::SetViewRange {
+            seconds,
+            time_space: Some(time_space),
+        }
+    }
+
+    fn scene_with_renderer(scene: SceneConfig, renderer: RendererKind) -> SceneConfig {
+        let mut layout = SceneLayout {
+            scene,
+            ..SceneLayout::default()
+        };
+        layout.set_renderer_kind(renderer);
+        layout.scene
+    }
+
+    fn find_event<T>(
+        events: Vec<CoreEvent>,
+        mut find: impl FnMut(CoreEvent) -> Option<T>,
+        missing_message: &'static str,
+    ) -> Result<T, MeridianError> {
+        events
+            .into_iter()
+            .find_map(&mut find)
+            .ok_or_else(|| MeridianError::Protocol(missing_message.into()))
     }
 }

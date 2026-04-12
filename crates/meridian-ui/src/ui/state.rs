@@ -6,7 +6,7 @@ use std::{
 
 use meridian_core::{
     audio::{AudioBackend, AudioConfig},
-    protocol::StateSnapshot,
+    protocol::{CoreEvent, StateSnapshot},
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
 };
 
@@ -18,6 +18,7 @@ mod audio;
 mod formatting;
 mod merge;
 mod modify;
+mod reduce;
 mod video;
 
 #[derive(Debug, Clone)]
@@ -101,6 +102,10 @@ pub fn apply_events_to_app(
     events: &[meridian_core::protocol::CoreEvent],
 ) {
     apply::apply_events_to_app(app, shared_state, events);
+}
+
+pub fn reduce_core_events(shared_state: &Arc<Mutex<UiViewModel>>, events: &[CoreEvent]) {
+    reduce::reduce_core_events(shared_state, events);
 }
 
 pub fn apply_frame_update_to_app(

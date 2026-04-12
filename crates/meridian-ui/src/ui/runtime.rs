@@ -45,7 +45,7 @@ use super::{
     core_bridge::UiCoreBridge,
     state::{
         UiOptions, UiStartupOptions, app_has_active_midi_load, apply_events_to_app,
-        apply_merge_sources_to_app,
+        apply_merge_sources_to_app, reduce_core_events,
     },
     view::{App, MidiLoadState},
     view_model::{MergeSourceInspection, MergeSourceViewModel, UiViewModel},
