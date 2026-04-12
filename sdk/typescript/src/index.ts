@@ -1,5 +1,26 @@
+// Public SDK surface:
+// - protocol.ts: generated schema re-exports plus handwritten SDK aliases
+// - helpers.ts: builder utilities
+// - runtime/*-client.ts: runtime-specific entrypoints for the package root
 export * from "./protocol.ts";
 export * from "./helpers.ts";
+export {
+  createMeridianClient,
+  createProtocolClient,
+  type CreateClientOptions,
+} from "./runtime/factories.ts";
+export {
+  createDenoMeridianClient,
+  createDenoProtocolClient,
+} from "./runtime/deno_client.ts";
+export {
+  createNodeMeridianClient,
+  createNodeProtocolClient,
+} from "./runtime/node_client.ts";
+export {
+  createBunMeridianClient,
+  createBunProtocolClient,
+} from "./runtime/bun_client.ts";
 export {
   AudioRenderJobHandle,
   type AudioRenderOptions,
@@ -23,25 +44,3 @@ export {
   type VideoRenderOptions,
   VideoRenderTask,
 } from "./internal/client.ts";
-
-import { MeridianClient, MeridianProtocolClient } from "./internal/client.ts";
-import type { MeridianRuntimeAdapter } from "./internal/runtime.ts";
-
-export interface CreateClientOptions {
-  executablePath: string;
-  runtime: MeridianRuntimeAdapter;
-  args?: string[];
-}
-
-export async function createProtocolClient(
-  options: CreateClientOptions,
-): Promise<MeridianProtocolClient> {
-  return MeridianProtocolClient.spawn(options);
-}
-
-export async function createMeridianClient(
-  options: CreateClientOptions,
-): Promise<MeridianClient> {
-  const protocol = await createProtocolClient(options);
-  return new MeridianClient(protocol);
-}

@@ -1,4 +1,7 @@
-import { createMeridianClient, createProtocolClient } from "../index.ts";
+import {
+  createMeridianClient,
+  createProtocolClient,
+} from "./factories.ts";
 import type {
   MeridianClient,
   MeridianProtocolClient,

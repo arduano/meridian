@@ -99,13 +99,13 @@ is currently easier to treat as a local workspace package during development.
 Readable target shape:
 
 ```ts
-import { createDenoMeridianClient } from "@meridian/cli-sdk/runtime/deno-client";
+import { createDenoMeridianClient } from "@meridian/cli-sdk";
 ```
 
 Practical repo-local shape today:
 
 ```ts
-import { createDenoMeridianClient } from "../sdk/typescript/src/runtime/deno_client.ts";
+import { createDenoMeridianClient } from "../sdk/typescript/src/index.ts";
 ```
 
 Use whichever import style matches how your app is actually consuming the SDK.
@@ -125,7 +125,7 @@ Initialization comes down to three decisions:
 This is the default starting point for most apps:
 
 ```ts
-import { createDenoMeridianClient } from "../sdk/typescript/src/runtime/deno_client.ts";
+import { createDenoMeridianClient } from "../sdk/typescript/src/index.ts";
 
 const executablePath = Deno.env.get("MERIDIAN_CLI_BIN") ??
   "./target/debug/meridian-cli";
@@ -176,7 +176,7 @@ If you want raw protocol commands and events instead of the higher-level
 workflow helpers, initialize the protocol client directly:
 
 ```ts
-import { createDenoProtocolClient } from "../sdk/typescript/src/runtime/deno_client.ts";
+import { createDenoProtocolClient } from "../sdk/typescript/src/index.ts";
 
 const client = await createDenoProtocolClient("./target/debug/meridian-cli");
 
@@ -209,7 +209,7 @@ For application code, keep setup centralized:
 A small wrapper module is usually enough:
 
 ```ts
-import { createDenoMeridianClient } from "../sdk/typescript/src/runtime/deno_client.ts";
+import { createDenoMeridianClient } from "../sdk/typescript/src/index.ts";
 
 export async function openMeridianClient() {
   const executablePath = Deno.env.get("MERIDIAN_CLI_BIN") ??

@@ -75,6 +75,9 @@ pub fn run() -> Result<(), MeridianError> {
     }
 }
 
+// The hidden variants above are compatibility shims for older command names.
+// Keep them out of help output so the canonical command tree stays obvious.
+
 fn run_analyze(args: args::AnalyzeArgs) -> Result<(), MeridianError> {
     let kinds = analysis_kinds(&args);
     let bucket_count = args.buckets;

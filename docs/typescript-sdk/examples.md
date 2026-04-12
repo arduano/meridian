@@ -3,7 +3,8 @@
 The examples live in
 [`sdk/typescript/examples`](../../sdk/typescript/examples). They are small,
 runnable Deno scripts intended to be copied into local experiments or used as a
-reference while reading the SDK source.
+reference while reading the SDK source. Where possible they import through the
+public SDK entrypoint rather than internal runtime files.
 
 ## Core Workflow Examples
 

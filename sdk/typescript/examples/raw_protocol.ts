@@ -1,4 +1,4 @@
-import { createDenoProtocolClient } from "../src/runtime/deno_client.ts";
+import { createDenoProtocolClient } from "../src/index.ts";
 import { defaultExecutablePath, resolveMidiFixture } from "./_shared.ts";
 
 const client = await createDenoProtocolClient(defaultExecutablePath());

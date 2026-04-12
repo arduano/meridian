@@ -1,5 +1,8 @@
 export const PROTOCOL_VERSION = 1 as const;
 
+// Generated protocol schema re-exports.
+// The public SDK keeps these available, but the handwritten aliases below are
+// the stable names that most callers should reach for first.
 export type { AnalysisJobId } from "../generated/AnalysisJobId.ts";
 export type { AudioOutputFormat } from "../generated/AudioOutputFormat.ts";
 export type { AudioRenderEvent } from "../generated/AudioRenderEvent.ts";
@@ -81,6 +84,7 @@ export type { VideoRenderJobId } from "../generated/VideoRenderJobId.ts";
 export type { VideoRenderStatus } from "../generated/VideoRenderStatus.ts";
 export type { ZenithPaletteSpec } from "../generated/ZenithPaletteSpec.ts";
 
+// Handwritten SDK-facing aliases layered on top of generated schema types.
 import type { ProtocolEvent } from "../generated/ProtocolEvent.ts";
 import type { ProtocolCommand } from "../generated/ProtocolCommand.ts";
 import type { ProtocolRequest } from "../generated/ProtocolRequest.ts";

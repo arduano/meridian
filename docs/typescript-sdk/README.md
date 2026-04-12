@@ -3,6 +3,10 @@
 This section documents the Meridian TypeScript SDK in
 [`sdk/typescript`](../../sdk/typescript).
 
+The canonical local entrypoint is [`sdk/typescript/src/index.ts`](../../sdk/typescript/src/index.ts).
+When consumed as `@meridian/cli-sdk`, the package root exposes the same public
+surface.
+
 The SDK is currently documented as **Deno-first** because the existing examples,
 checks, and tests are centered on Deno. The package surface is intentionally
 runtime-aware, though, and the repository already includes runtime adapters for
@@ -41,6 +45,15 @@ runtime can:
 - [`sdk/typescript/tests`](../../sdk/typescript/tests): runtime and protocol
   regression tests
 - [`README.md`](../../README.md): repo-wide setup and validation commands
+
+## Public Surface Shape
+
+- `src/index.ts` is the package entrypoint and re-exports the stable client
+  factories, helpers, and protocol facade.
+- `src/protocol.ts` is the handwritten SDK facade over the generated protocol
+  schema in `sdk/typescript/generated`.
+- `src/runtime/*_client.ts` contains the runtime-specific convenience helpers
+  for Deno, Node, and Bun.
 
 ## Current Status
 

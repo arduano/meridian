@@ -20,11 +20,15 @@ fn top_level_help_exposes_stdio_and_render_commands() {
     assert!(stdout.contains("process"));
     assert!(stdout.contains("render"));
     assert!(stdout.contains("bench"));
+    assert!(stdout.contains("serve-json"));
     assert!(!stdout.contains("frame-stdout"));
+    assert!(!stdout.contains("render-video"));
+    assert!(!stdout.contains("render-audio"));
+    assert!(!stdout.contains("benchmark"));
 }
 
 #[test]
-fn stdio_alias_serve_json_remains_available() {
+fn legacy_stdio_alias_remains_available() {
     let output = Command::new(cli_path())
         .args(["serve-json", "--help"])
         .output()

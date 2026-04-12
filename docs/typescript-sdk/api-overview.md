@@ -5,9 +5,19 @@ turning into per-function reference docs yet.
 
 ## Main Entry Points
 
+### Package entrypoint
+
+The package root is the primary SDK entrypoint:
+
+- locally: [`sdk/typescript/src/index.ts`](../../sdk/typescript/src/index.ts)
+- when published: `@meridian/cli-sdk`
+
+It re-exports the stable client factories, helpers, protocol facade, and the
+runtime-specific convenience entrypoints.
+
 ### Client creation
 
-Core exports in [`sdk/typescript/src/index.ts`](../../sdk/typescript/src/index.ts):
+Core exports in the package entrypoint:
 
 - `createMeridianClient(...)`
 - `createProtocolClient(...)`
@@ -108,8 +118,8 @@ Detailed helper docs: TBD.
 
 ## Protocol Types
 
-Protocol types live in [`sdk/typescript/src/protocol.ts`](../../sdk/typescript/src/protocol.ts)
-and re-export generated schema types.
+Protocol types live in [`sdk/typescript/src/protocol.ts`](../../sdk/typescript/src/protocol.ts).
+That file is the handwritten facade over `sdk/typescript/generated/*`.
 
 This is the main place to look for:
 
@@ -119,6 +129,10 @@ This is the main place to look for:
 - analysis, audio, and video protocol types
 - video container enums such as `VideoOutputContainer`
 - scene config types for renderer-specific video customization
+
+If you need the raw generated schema names, inspect
+[`sdk/typescript/generated`](../../sdk/typescript/generated). If you want the
+SDK-facing names callers should actually use, start in `protocol.ts`.
 
 Schema/type reference docs: TBD.
 

@@ -1,4 +1,4 @@
-import { createDenoProtocolClient } from "../src/runtime/deno_client.ts";
+import { createDenoProtocolClient } from "../src/index.ts";
 import type { CoreEvent } from "../src/protocol.ts";
 import {
   defaultExecutablePath,
