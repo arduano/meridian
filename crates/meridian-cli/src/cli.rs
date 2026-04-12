@@ -12,8 +12,9 @@ use meridian_core::{
 
 use self::{
     args::{
-        Cli, Command, DebugCommand, DebugPianoTrailClassicGeometryArgs, FrameStdoutArgs, JsonArgs,
-        ProcessCommand, ProcessCommonArgs, RenderAudioArgs, RenderCommand, RenderVideoArgs,
+        Cli, Command, DebugCommand, DebugPianoTrailClassicGeometryArgs, FrameStdoutArgs,
+        InspectArgs, JsonArgs, MergeArgs, ProcessCommand, ProcessCommonArgs, RenderAudioArgs,
+        RenderCommand, RenderVideoArgs,
     },
     output::print_json_to_stdout,
     process_tools::{
@@ -28,6 +29,8 @@ pub fn run() -> Result<(), MeridianError> {
         Command::Stdio => crate::json_mode::serve_json(),
         Command::Json(JsonArgs { raw }) => crate::json_mode::run_one_json(raw.join(" ").trim()),
         Command::Analyze(args) => run_analyze(args),
+        Command::Merge(args) => run_merge(args),
+        Command::Inspect(args) => run_inspect(args),
         Command::Process {
             command: ProcessCommand::Select(args),
         } => run_process(
@@ -227,6 +230,26 @@ fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), Merid
     print_json_to_stdout(&result?, common.pretty)
 }
 
+fn run_merge(args: MergeArgs) -> Result<(), MeridianError> {
+    let client = ProtocolClient::spawn();
+    let response = client.request(ProtocolCommand::MergeMidiFiles {
+        inputs: args.inputs,
+        output: args.output,
+        config: meridian_core::midi::MidiFilesMergeConfig::default(),
+    })?;
+    assert_no_protocol_error(&response.events)?;
+    let _ = client.shutdown();
+    print_json_to_stdout(&response.events, args.pretty)
+}
+
+fn run_inspect(args: InspectArgs) -> Result<(), MeridianError> {
+    let client = ProtocolClient::spawn();
+    let response = client.request(ProtocolCommand::InspectMidiFiles { paths: args.paths })?;
+    assert_no_protocol_error(&response.events)?;
+    let _ = client.shutdown();
+    print_json_to_stdout(&response.events, args.pretty)
+}
+
 fn run_frame_stdout(args: FrameStdoutArgs) -> Result<(), MeridianError> {
     crate::frame_stdout::run(
         &args.midi,
@@ -297,4 +320,14 @@ fn run_debug_geometry(args: DebugPianoTrailClassicGeometryArgs) -> Result<(), Me
         args.height,
         args.scene_json.as_deref(),
     )
+}
+
+fn assert_no_protocol_error(events: &[ProtocolEvent]) -> Result<(), MeridianError> {
+    if let Some(ProtocolEvent::Error { code, message }) = events
+        .iter()
+        .find(|event| matches!(event, ProtocolEvent::Error { .. }))
+    {
+        return Err(MeridianError::Protocol(format!("{code:?}: {message}")));
+    }
+    Ok(())
 }

@@ -21,6 +21,8 @@ pub(super) enum Command {
     Stdio,
     Json(JsonArgs),
     Analyze(AnalyzeArgs),
+    Merge(MergeArgs),
+    Inspect(InspectArgs),
     Process {
         #[command(subcommand)]
         command: ProcessCommand,
@@ -60,6 +62,24 @@ pub(super) struct AnalyzeArgs {
     pub(super) include: Vec<AnalysisKindArg>,
     #[arg(long)]
     pub(super) buckets: Option<usize>,
+    #[arg(long)]
+    pub(super) pretty: bool,
+}
+
+#[derive(Debug, Clone, Args)]
+pub(super) struct MergeArgs {
+    #[arg(value_name = "INPUT", num_args = 1..)]
+    pub(super) inputs: Vec<PathBuf>,
+    #[arg(long)]
+    pub(super) output: PathBuf,
+    #[arg(long)]
+    pub(super) pretty: bool,
+}
+
+#[derive(Debug, Clone, Args)]
+pub(super) struct InspectArgs {
+    #[arg(value_name = "MIDI", num_args = 1..)]
+    pub(super) paths: Vec<PathBuf>,
     #[arg(long)]
     pub(super) pretty: bool,
 }
