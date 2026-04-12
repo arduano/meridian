@@ -657,7 +657,7 @@ export component RenderPanel inherits Rectangle {
 
             if root.is-combined-mode : Rectangle { height: 4px; }
 
-            if root.is-combined-mode : InlineCustomRow {
+            if root.is-combined-mode || (root.audio-only && root.render-audio-format-text == "mp3") : InlineCustomRow {
                 label: "Bitrate";
                 value: root.render-audio-bitrate-text;
                 is-preset: root.bitrate-is-preset;

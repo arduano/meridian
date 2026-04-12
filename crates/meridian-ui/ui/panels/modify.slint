@@ -150,6 +150,7 @@ export component ModifyPanel inherits Rectangle {
     in property <string> modify-tempo-flatten-tempo-text: "500000";
     in property <string> modify-tempo-scale-factor-text: "1.0";
     in property <string> modify-tempo-replace-points-text: "";
+    in property <string> modify-tempo-replace-destination-text: "inject_into_first_track";
 
     // ── Pass: time warp, channel remap ──
     in property <string> modify-time-warp-points-text: "";
@@ -603,6 +604,19 @@ export component ModifyPanel inherits Rectangle {
                         value: root.modify-tempo-replace-points-text;
                         is-preset: false;
                         custom-submitted(v) => { root.update-control("tempo.replace_points", v); }
+                    }
+                    if root.modify-tempo-mode-text == "replace" : InlineOptionRow {
+                        label: "Destination";
+                        OptionChip {
+                            label: "First Track";
+                            active: root.modify-tempo-replace-destination-text == "inject_into_first_track";
+                            pressed => { root.update-control("tempo.destination", "inject_into_first_track"); }
+                        }
+                        OptionChip {
+                            label: "New Tempo Track";
+                            active: root.modify-tempo-replace-destination-text == "create_new_tempo_track";
+                            pressed => { root.update-control("tempo.destination", "create_new_tempo_track"); }
+                        }
                     }
                     if root.modify-tempo-mode-text == "replace" : Text {
                         text: "Comma-separated position:tempo pairs in full notes, e.g. 0:500000, 0.5:600000. Positions must be ascending.";

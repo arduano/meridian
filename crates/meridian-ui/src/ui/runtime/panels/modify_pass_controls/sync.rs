@@ -11,6 +11,7 @@ pub(in super::super) fn reset_modify_pass_control_fields(app: &App) {
     app.set_modify_tempo_flatten_tempo_text("500000".into());
     app.set_modify_tempo_scale_factor_text("1.0".into());
     app.set_modify_tempo_replace_points_text("".into());
+    app.set_modify_tempo_replace_destination_text("inject_into_first_track".into());
     app.set_modify_time_warp_points_text("".into());
     app.set_modify_channel_remap_mappings_text("".into());
     app.set_modify_track_route_mode_text("collapse_all".into());

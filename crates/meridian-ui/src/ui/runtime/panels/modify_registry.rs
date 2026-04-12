@@ -408,7 +408,9 @@ pub(super) fn sync_tempo_map_controls(app: &App, config: &MidiFileProcessingConf
                 app.set_modify_tempo_replace_points_text(
                     format_tempo_points_notes(points, ppq).into(),
                 );
-                app.set_modify_tempo_scale_factor_text(format_serde_enum(destination).into());
+                app.set_modify_tempo_replace_destination_text(
+                    format_serde_enum(destination).into(),
+                );
             }
         }
     }
@@ -1168,6 +1170,31 @@ pub(super) fn update_shared_metadata_track_control(
         other => return Err(format!("unknown shared metadata control: {other}")),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tempo_map_destination_serde_labels_match_structured_ui_values() {
+        assert_eq!(
+            format_serde_enum(&TempoMapDestination::InjectIntoFirstTrack),
+            "inject_into_first_track"
+        );
+        assert_eq!(
+            format_serde_enum(&TempoMapDestination::CreateNewTempoTrack),
+            "create_new_tempo_track"
+        );
+        assert_eq!(
+            parse_serde_enum::<TempoMapDestination>(
+                "create_new_tempo_track",
+                "tempo destination",
+            )
+            .unwrap(),
+            TempoMapDestination::CreateNewTempoTrack
+        );
+    }
 }
 
 pub(super) fn sync_change_ppq_controls(app: &App, config: &MidiFileProcessingConfig) {
