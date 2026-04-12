@@ -1,3 +1,4 @@
+#[path = "analysis/mod.rs"]
 pub mod analysis;
 pub mod audio_cache;
 pub mod backend;
