@@ -71,8 +71,8 @@ export class MidiAnalysisTask implements PromiseLike<MidiAnalysisData> {
   #snapshot(): StartAnalysisForFileOptions {
     return {
       midiPath: this.#spec.midiPath,
-      kinds: [...(this.#spec.kinds ?? [])],
-      bucketCount: this.#spec.bucketCount ?? null,
+      kinds: [...this.#spec.kinds],
+      bucketCount: this.#spec.bucketCount,
       ...(this.#spec.onProgress ? { onProgress: this.#spec.onProgress } : {}),
     };
   }

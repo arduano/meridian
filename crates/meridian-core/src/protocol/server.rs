@@ -116,7 +116,25 @@ pub fn execute_protocol_request(
         ));
     }
 
-    let response = core.request(request.command.into())?;
+    let response = match request.command {
+        ProtocolCommand::StartRenderVideo { config } => {
+            if let (Some(scene), Some(renderer)) = (&config.scene, config.renderer) {
+                let expected_renderer = scene.renderer_kind();
+                if renderer != expected_renderer {
+                    return Ok(protocol_error_response(
+                        request.id,
+                        CoreErrorCode::ValidationFailed,
+                        format!(
+                            "video render scene config requires renderer {:?}, got {:?}",
+                            expected_renderer, renderer
+                        ),
+                    ));
+                }
+            }
+            core.request(ProtocolCommand::StartRenderVideo { config }.into())?
+        }
+        command => core.request(command.into())?,
+    };
     let events = response
         .into_iter()
         .map(ProtocolEvent::try_from)

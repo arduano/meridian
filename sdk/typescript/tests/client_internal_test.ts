@@ -2,10 +2,11 @@ import {
   AudioRenderJobHandle,
   MeridianClient,
   MidiAnalysisTask,
+  VideoRenderTask,
   VideoRenderJobHandle,
 } from "../src/internal/client.ts";
 import type { MeridianProtocolClient } from "../src/internal/client.ts";
-import type { CoreEvent } from "../src/protocol.ts";
+import type { CoreEvent, SceneConfig } from "../src/protocol.ts";
 
 class FakeProtocolClient {
   readonly requests: unknown[] = [];
@@ -59,6 +60,31 @@ const DEFAULT_ANALYSIS_KINDS = [
   "tempo",
 ];
 
+const DEFAULT_TWO_D_SCENE: SceneConfig = {
+  scene_type: "two_d",
+  background: {
+    source: "none",
+  },
+  keyboard_height: {
+    mode: "screen_percent",
+    height: 0.15,
+  },
+  notes: {
+    projector: "pfa",
+    same_width_notes: false,
+    border_width: 0.04,
+    palette: {
+      source: "default_track_colors",
+    },
+  },
+  keyboard: {
+    projector: "pfa",
+    same_width_notes: false,
+    middle_c: false,
+    top_bar_color: "#000000",
+  },
+};
+
 Deno.test("analysis task defaults match CLI defaults without buckets", () => {
   const task = new MidiAnalysisTask(
     {} as unknown as MeridianClient,
@@ -102,6 +128,76 @@ Deno.test("analysis task still supports explicit subset selection", () => {
   const expectedKinds = ["summary", "notes"];
   if (JSON.stringify(spec.kinds) !== JSON.stringify(expectedKinds)) {
     throw new Error(`Unexpected explicit kinds: ${JSON.stringify(spec.kinds)}`);
+  }
+});
+
+Deno.test("video render task defaults renderer to pfa without a scene", () => {
+  const task = new VideoRenderTask(
+    {} as unknown as MeridianClient,
+    {
+      midiPath: "song.mid",
+      output: "out.mp4",
+      fps: 30,
+      width: 160,
+      height: 90,
+    },
+  );
+
+  const spec = task.toJSON();
+  if (spec.renderer !== "pfa") {
+    throw new Error(`Expected default renderer pfa, got ${String(spec.renderer)}`);
+  }
+  if (spec.scene !== null) {
+    throw new Error(`Expected null scene, got ${JSON.stringify(spec.scene)}`);
+  }
+});
+
+Deno.test("video render task infers renderer from the scene", () => {
+  const task = new VideoRenderTask(
+    {} as unknown as MeridianClient,
+    {
+      midiPath: "song.mid",
+      output: "out.mp4",
+      fps: 30,
+      width: 160,
+      height: 90,
+      scene: DEFAULT_TWO_D_SCENE,
+    },
+  );
+
+  const spec = task.toJSON();
+  if (spec.renderer !== "pfa") {
+    throw new Error(`Expected inferred renderer pfa, got ${String(spec.renderer)}`);
+  }
+  if (JSON.stringify(spec.scene) !== JSON.stringify(DEFAULT_TWO_D_SCENE)) {
+    throw new Error(`Unexpected scene snapshot: ${JSON.stringify(spec.scene)}`);
+  }
+});
+
+Deno.test("video render task rejects mismatched renderer and scene", () => {
+  let error: unknown = null;
+  try {
+    new VideoRenderTask(
+      {} as unknown as MeridianClient,
+      {
+        midiPath: "song.mid",
+        output: "out.mp4",
+        fps: 30,
+        width: 160,
+        height: 90,
+        renderer: "flat",
+        scene: DEFAULT_TWO_D_SCENE,
+      },
+    );
+  } catch (thrown) {
+    error = thrown;
+  }
+
+  if (!(error instanceof Error)) {
+    throw new Error("Expected mismatched video render options to throw");
+  }
+  if (!error.message.includes("renderer")) {
+    throw new Error(`Unexpected error message: ${error.message}`);
   }
 });
 

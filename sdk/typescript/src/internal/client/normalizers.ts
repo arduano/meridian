@@ -87,7 +87,7 @@ export function normalizeAudioRenderOptions(
 export function normalizeVideoRenderOptions(
   options: VideoRenderOptions,
 ): VideoRenderOptions {
-  const renderer = options.renderer ?? inferRendererFromScene(options.scene);
+  const renderer = resolveVideoRenderer(options);
   return {
     midiPath: options.midiPath,
     output: options.output,
@@ -136,12 +136,7 @@ export function toSdkAudioRenderConfig(
 export function toProtocolVideoRenderConfig(
   options: VideoRenderOptions,
 ): ProtocolVideoRenderConfig {
-  const renderer = options.renderer ?? inferRendererFromScene(options.scene);
-  if (!renderer && !options.scene) {
-    throw new MeridianSubprocessError(
-      "Video render requires either a renderer or a scene config",
-    );
-  }
+  const renderer = resolveVideoRenderer(options);
   return {
     midi_path: options.midiPath,
     output: options.output,
@@ -162,4 +157,20 @@ export function toProtocolVideoRenderConfig(
     ffmpeg_args: options.ffmpegArgs ?? [],
     audio: null,
   };
+}
+
+function resolveVideoRenderer(
+  options: Pick<VideoRenderOptions, "renderer" | "scene">,
+): ProtocolVideoRenderConfig["renderer"] {
+  if (!options.scene) {
+    return options.renderer ?? "pfa";
+  }
+
+  const inferred = inferRendererFromScene(options.scene);
+  if (options.renderer && options.renderer !== inferred) {
+    throw new MeridianSubprocessError(
+      `Video render scene config requires renderer ${inferred}, got ${options.renderer}`,
+    );
+  }
+  return inferred;
 }

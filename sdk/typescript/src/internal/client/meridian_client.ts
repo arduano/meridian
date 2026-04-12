@@ -241,8 +241,8 @@ export class MeridianClient {
     const events = await this.protocol.request({
       type: "start_midi_analysis_job",
       parsed_midi_id: parsedMidiId,
-      kinds: options.kinds ?? [],
-      bucket_count: options.bucketCount ?? null,
+      kinds: options.kinds,
+      bucket_count: options.bucketCount,
     });
     const wrapper = requireEvent(events, "midi_analysis_job_status");
     const handle = new MidiAnalysisJobHandle(this.protocol, wrapper.status);

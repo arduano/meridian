@@ -450,6 +450,18 @@ impl SceneConfig {
             Self::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => &mut config.background,
         }
     }
+
+    pub fn renderer_kind(&self) -> RendererKind {
+        match self {
+            Self::TwoD(scene) => match &scene.notes {
+                NoteProjectorConfig::Flat(_) => RendererKind::Flat,
+                NoteProjectorConfig::Pfa(_) => RendererKind::Pfa,
+            },
+            Self::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => {
+                RendererKind::PianoTrailClassic
+            }
+        }
+    }
 }
 
 impl ThreeDSceneConfig {

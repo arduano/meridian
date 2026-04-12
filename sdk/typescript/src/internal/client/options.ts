@@ -12,8 +12,8 @@ import type {
 
 export interface StartAnalysisForFileOptions {
   midiPath: string;
-  kinds?: MidiAnalysisKind[];
-  bucketCount?: number | null;
+  kinds: MidiAnalysisKind[];
+  bucketCount: number | null;
   onProgress?: (progress: { progress: number; status: string }) => void;
 }
 

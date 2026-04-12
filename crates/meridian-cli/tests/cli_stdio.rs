@@ -13,7 +13,7 @@ use meridian_core::{
     },
     render::{
         FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardProjectorConfig,
-        NoteProjectorConfig, SceneConfig, TwoDSceneConfig,
+        NoteProjectorConfig, RendererKind, SceneConfig, TwoDSceneConfig,
     },
 };
 
@@ -314,6 +314,71 @@ fn stdio_transport_renders_video_with_alpha_mask() {
             .len()
             > 0
     );
+
+    let _ = child.wait().expect("wait for cli exit");
+}
+
+#[test]
+fn stdio_transport_rejects_mismatched_video_renderer_and_scene() {
+    let midi = support::write_test_midi("smoke-two-notes.mid");
+
+    let mut child = Command::new(support::cli_path())
+        .arg("stdio")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn meridian cli");
+
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    let mut stdout = BufReader::new(stdout);
+
+    send_request(
+        &mut stdin,
+        &ProtocolRequest {
+            protocol_version: PROTOCOL_VERSION,
+            id: Some(1),
+            command: ProtocolCommand::StartRenderVideo {
+                config: meridian_core::protocol::ProtocolVideoRenderConfig {
+                    midi_path: midi,
+                    output: support::temp_path("render-invalid.mp4"),
+                    container: meridian_core::protocol::VideoOutputContainer::Mp4,
+                    fps: 4.0,
+                    width: 160,
+                    height: 90,
+                    renderer: Some(RendererKind::Flat),
+                    scene: Some(SceneConfig::TwoD(TwoDSceneConfig::default())),
+                    view_range: Some(2.0),
+                    time_space: None,
+                    first_key: None,
+                    last_key: None,
+                    ffmpeg_args: vec![],
+                    export: meridian_core::protocol::VideoExportConfig::default(),
+                    audio: None,
+                },
+            },
+        },
+    )
+    .expect("send invalid start_render_video request");
+
+    let response = read_response_for_id(&mut stdout, 1);
+    assert!(matches!(
+        response.events.as_slice(),
+        [ProtocolEvent::Error { code: meridian_core::protocol::CoreErrorCode::ValidationFailed, message }]
+            if message.contains("renderer")
+    ));
+
+    send_request(
+        &mut stdin,
+        &ProtocolRequest {
+            protocol_version: PROTOCOL_VERSION,
+            id: Some(2),
+            command: ProtocolCommand::Shutdown,
+        },
+    )
+    .expect("send shutdown");
+    let _ = read_response_for_id(&mut stdout, 2);
 
     let _ = child.wait().expect("wait for cli exit");
 }
