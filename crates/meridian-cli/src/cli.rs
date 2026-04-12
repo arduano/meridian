@@ -57,26 +57,19 @@ pub fn run() -> Result<(), MeridianError> {
         ),
         Command::Render {
             command: RenderCommand::Frame(args),
-        }
-        | Command::FrameStdout(args) => run_frame_stdout(args),
+        } => run_frame_stdout(args),
         Command::Render {
             command: RenderCommand::Video(args),
-        }
-        | Command::RenderVideo(args) => run_render_video(args),
+        } => run_render_video(args),
         Command::Render {
             command: RenderCommand::Audio(args),
-        }
-        | Command::RenderAudio(args) => run_render_audio(args),
-        Command::Bench(args) | Command::Benchmark(args) => run_benchmark(args),
+        } => run_render_audio(args),
+        Command::Bench(args) => run_benchmark(args),
         Command::Debug {
             command: DebugCommand::PianoTrailClassicGeometry(args),
-        }
-        | Command::DebugPianoTrailClassicGeometry(args) => run_debug_geometry(args),
+        } => run_debug_geometry(args),
     }
 }
-
-// The hidden variants above are compatibility shims for older command names.
-// Keep them out of help output so the canonical command tree stays obvious.
 
 fn run_analyze(args: args::AnalyzeArgs) -> Result<(), MeridianError> {
     let kinds = analysis_kinds(&args);

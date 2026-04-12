@@ -17,7 +17,6 @@ pub(super) struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub(super) enum Command {
-    #[command(visible_alias = "serve-json")]
     Stdio,
     Json(JsonArgs),
     Analyze(AnalyzeArgs),
@@ -36,16 +35,6 @@ pub(super) enum Command {
         #[command(subcommand)]
         command: DebugCommand,
     },
-    #[command(hide = true)]
-    FrameStdout(FrameStdoutArgs),
-    #[command(hide = true)]
-    Benchmark(BenchmarkArgs),
-    #[command(hide = true)]
-    RenderVideo(RenderVideoArgs),
-    #[command(hide = true)]
-    RenderAudio(RenderAudioArgs),
-    #[command(hide = true)]
-    DebugPianoTrailClassicGeometry(DebugPianoTrailClassicGeometryArgs),
 }
 
 #[derive(Debug, Args)]
