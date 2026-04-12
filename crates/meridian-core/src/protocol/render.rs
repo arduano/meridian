@@ -158,6 +158,10 @@ pub struct VideoRenderConfig {
     pub view_range: Option<f64>,
     #[serde(default)]
     pub time_space: Option<DisplayTimeSpace>,
+    #[serde(default)]
+    pub start_time: Option<f64>,
+    #[serde(default)]
+    pub end_time: Option<f64>,
     pub first_key: Option<u8>,
     pub last_key: Option<u8>,
     #[serde(default)]

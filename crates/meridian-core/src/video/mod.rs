@@ -191,10 +191,17 @@ fn render_video_with_core(
     }
 
     let frame0 = core.render_frame(Some(config.width), Some(config.height))?;
-    let duration_seconds = frame0.state.midi_length.max(0.0);
+    let time_range = config.resolve_time_range(frame0.state.midi_length.max(0.0))?;
+    let duration_seconds = time_range.duration_seconds;
     let total_frames = (duration_seconds * config.fps).ceil().max(1.0) as u64;
     let audio_mux = match config.audio.as_ref() {
-        Some(audio) => Some(VideoAudioMux::spawn(config, audio, audio_inputs, cancel)?),
+        Some(audio) => Some(VideoAudioMux::spawn(
+            config,
+            audio,
+            audio_inputs,
+            time_range,
+            cancel,
+        )?),
         None => None,
     };
     let (ffmpeg_child, ffmpeg_stdin, ffmpeg_command) = spawn_ffmpeg_rgba(
@@ -256,7 +263,7 @@ fn render_video_with_core(
             });
         }
 
-        let current_time = frame_index as f64 / config.fps;
+        let current_time = time_range.start_time + frame_index as f64 / config.fps;
         core.request(CoreCommand::SetTime { time: current_time })?;
         core.request(CoreCommand::TickProjectorPhysics {
             delta_seconds: 1.0 / config.fps,

@@ -26,6 +26,9 @@ export component RenderPanel inherits Rectangle {
     in property <MidiLoadState> audio-load-state: no-midi;
 
     in property <string> render-mode-text: "video_audio";
+    in property <string> render-range-mode-text: "full_song";
+    in property <string> render-start-time-text: "0.0";
+    in property <string> render-end-time-text: "";
     in property <string> render-output-path-text: "";
     in property <string> render-video-resolution-text: "1920x1080";
     in property <string> render-video-fps-text: "60";
@@ -69,7 +72,10 @@ export component RenderPanel inherits Rectangle {
     in property <string> export-detail-text: "Choose a mode and output path.";
 
     callback select-mode(string);
+    callback select-range-mode(string);
     callback browse-output;
+    callback submit-custom-start-time(string);
+    callback submit-custom-end-time(string);
     callback select-resolution(string);
     callback submit-custom-resolution(string);
     callback select-fps(string);
@@ -115,6 +121,7 @@ export component RenderPanel inherits Rectangle {
         || root.render-audio-bitrate-text == "256k"
         || root.render-audio-bitrate-text == "320k";
     private property <bool> advanced-open: false;
+    private property <bool> custom-range-enabled: root.render-range-mode-text == "custom";
 
     private property <bool> wants-video:
         root.render-mode-text == "video_audio" || root.render-mode-text == "video_only";
@@ -284,10 +291,34 @@ export component RenderPanel inherits Rectangle {
                 }
             }
 
-            Rectangle { height: 8px; }
-            FieldRow {
+            if root.wants-video : Rectangle { height: 8px; }
+            if root.wants-video : InlineOptionRow {
                 label: "Range";
-                value: "Full song (custom ranges coming soon)";
+                OptionChip {
+                    label: "Full song";
+                    active: !root.custom-range-enabled;
+                    pressed => { root.select-range-mode("full_song"); }
+                }
+                OptionChip {
+                    label: "Custom";
+                    active: root.custom-range-enabled;
+                    pressed => { root.select-range-mode("custom"); }
+                }
+            }
+
+            if root.wants-video && root.custom-range-enabled : Rectangle { height: 4px; }
+            if root.wants-video && root.custom-range-enabled : InlineCustomRow {
+                label: "Start (s)";
+                value: root.render-start-time-text;
+                is-preset: false;
+                custom-submitted(val) => { root.submit-custom-start-time(val); }
+            }
+            if root.wants-video && root.custom-range-enabled : Rectangle { height: 4px; }
+            if root.wants-video && root.custom-range-enabled : InlineCustomRow {
+                label: "End (s)";
+                value: root.render-end-time-text != "" ? root.render-end-time-text : root.midi-length-text;
+                is-preset: false;
+                custom-submitted(val) => { root.submit-custom-end-time(val); }
             }
 
             Rectangle { height: 4px; }

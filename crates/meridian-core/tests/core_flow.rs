@@ -921,6 +921,8 @@ fn assert_video_render_smoke(container: meridian_core::protocol::VideoOutputCont
                 scene: Some(SceneLayout::default().scene),
                 view_range: Some(2.0),
                 time_space: Some(DisplayTimeSpace::Tick),
+                start_time: None,
+                end_time: None,
                 first_key: None,
                 last_key: None,
                 ffmpeg_args: vec!["-y".to_string()],
@@ -974,4 +976,79 @@ fn video_render_smokes_for_mp4_when_ffmpeg_is_available() {
 #[test]
 fn video_render_smokes_for_mkv_when_ffmpeg_is_available() {
     assert_video_render_smoke(meridian_core::protocol::VideoOutputContainer::Mkv);
+}
+
+#[test]
+fn video_render_custom_time_range_limits_duration_when_ffmpeg_is_available() {
+    if !support::ffmpeg_available() {
+        eprintln!("skipping video range smoke test because ffmpeg is unavailable");
+        return;
+    }
+
+    let midi = support::write_test_midi();
+    let dir = support::temp_dir("meridian-core-video-range-test");
+    let output = dir.join("video-range.mp4");
+    let core = spawn_core();
+    let event_rx = core.subscribe_events();
+
+    core.request(CoreCommand::StartRenderVideo {
+        config: meridian_core::protocol::VideoRenderConfig {
+            midi_path: Some(midi),
+            output: output.clone(),
+            container: meridian_core::protocol::VideoOutputContainer::Mp4,
+            fps: 4.0,
+            width: 160,
+            height: 90,
+            scene: Some(SceneLayout::default().scene),
+            view_range: Some(2.0),
+            time_space: Some(DisplayTimeSpace::Tick),
+            start_time: Some(0.25),
+            end_time: Some(0.75),
+            first_key: None,
+            last_key: None,
+            ffmpeg_args: vec!["-y".to_string()],
+            export: Default::default(),
+            audio: None,
+        },
+    })
+    .expect("start ranged video render");
+
+    let mut saw_started = false;
+    let mut saw_finished = false;
+    for _ in 0..60 {
+        match event_rx.recv_timeout(Duration::from_secs(2)) {
+            Ok(CoreEvent::VideoRender {
+                event:
+                    meridian_core::protocol::VideoRenderEvent::RenderStarted {
+                        duration_seconds,
+                        total_frames,
+                        ..
+                    },
+            }) => {
+                assert!((duration_seconds - 0.5).abs() < 0.001);
+                assert_eq!(total_frames, 2);
+                saw_started = true;
+            }
+            Ok(CoreEvent::VideoRender {
+                event:
+                    meridian_core::protocol::VideoRenderEvent::RenderFinished {
+                        output: finished_output,
+                        ..
+                    },
+            }) => {
+                assert_eq!(finished_output, output);
+                saw_finished = true;
+                break;
+            }
+            Ok(CoreEvent::VideoRender {
+                event: meridian_core::protocol::VideoRenderEvent::RenderFailed { message },
+            }) => panic!("video render failed: {message}"),
+            Ok(_) => {}
+            Err(error) => panic!("timed out waiting for ranged video render: {error}"),
+        }
+    }
+
+    assert!(saw_started, "video render did not emit a started event");
+    assert!(saw_finished, "video render did not finish");
+    assert!(output.exists(), "expected ranged video output to exist");
 }

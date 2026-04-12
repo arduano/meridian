@@ -29,6 +29,21 @@ impl RenderExportMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RenderRangeMode {
+    FullSong,
+    Custom,
+}
+
+impl RenderRangeMode {
+    pub(super) fn from_text(value: &str) -> Self {
+        match value {
+            "custom" => Self::Custom,
+            _ => Self::FullSong,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum AudioOnlyFormat {
     Wav,
     Flac,
@@ -323,6 +338,17 @@ pub(super) fn parse_render_fps(text: &str) -> Result<f64, String> {
     Ok(fps)
 }
 
+pub(super) fn parse_render_time_seconds(text: &str, label: &str) -> Result<f64, String> {
+    let seconds = text
+        .trim()
+        .parse::<f64>()
+        .map_err(|_| format!("invalid {label} `{text}`"))?;
+    if !seconds.is_finite() || seconds < 0.0 {
+        return Err(format!("{label} must be a finite value >= 0"));
+    }
+    Ok(seconds)
+}
+
 pub(super) fn parse_render_channels(text: &str) -> Result<u16, String> {
     match text {
         "mono" => Ok(1),
@@ -333,6 +359,38 @@ pub(super) fn parse_render_channels(text: &str) -> Result<u16, String> {
 
 pub(super) fn current_export_output_path(app: &App) -> Result<PathBuf, String> {
     RenderExportDraft::from_app(app).map(|draft| draft.final_output)
+}
+
+pub(super) fn current_custom_video_time_range(
+    app: &App,
+    snapshot: &StateSnapshot,
+) -> Result<(Option<f64>, Option<f64>), String> {
+    if RenderRangeMode::from_text(app.get_render_range_mode_text().as_str())
+        != RenderRangeMode::Custom
+    {
+        return Ok((None, None));
+    }
+
+    let start_time = parse_render_time_seconds(
+        app.get_render_start_time_text().as_str(),
+        "render start time",
+    )?;
+    let end_time = if app.get_render_end_time_text().trim().is_empty() {
+        snapshot.midi_length
+    } else {
+        parse_render_time_seconds(app.get_render_end_time_text().as_str(), "render end time")?
+    };
+    if end_time <= start_time {
+        return Err("render end time must be greater than start time".into());
+    }
+    if end_time > snapshot.midi_length {
+        return Err(format!(
+            "render end time {:.3} exceeds midi length {:.3}",
+            end_time, snapshot.midi_length
+        ));
+    }
+
+    Ok((Some(start_time), Some(end_time)))
 }
 
 #[cfg(test)]
@@ -374,6 +432,11 @@ mod tests {
 
         assert_eq!(path, "/tmp/example/song.rendered.flac");
     }
+
+    #[test]
+    fn parse_render_time_seconds_rejects_negative_values() {
+        assert!(parse_render_time_seconds("-1", "render start time").is_err());
+    }
 }
 
 pub(super) fn build_video_render_config(
@@ -385,6 +448,7 @@ pub(super) fn build_video_render_config(
 ) -> Result<VideoRenderConfig, String> {
     let (width, height) = parse_render_resolution(app.get_render_video_resolution_text().as_str())?;
     let fps = parse_render_fps(app.get_render_video_fps_text().as_str())?;
+    let (start_time, end_time) = current_custom_video_time_range(app, snapshot)?;
 
     // Build ffmpeg args from the structured encoding controls
     let mut ffmpeg_args: Vec<String> = vec!["-y".into()];
@@ -440,6 +504,8 @@ pub(super) fn build_video_render_config(
         scene: Some(snapshot.scene.clone()),
         view_range: Some(snapshot.view_range),
         time_space: Some(snapshot.time_space),
+        start_time,
+        end_time,
         first_key: Some(snapshot.first_key),
         last_key: Some(snapshot.last_key),
         ffmpeg_args,

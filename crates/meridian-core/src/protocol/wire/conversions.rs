@@ -35,6 +35,8 @@ impl From<ProtocolVideoRenderConfig> for crate::protocol::VideoRenderConfig {
             scene: Some(scene),
             view_range: value.view_range,
             time_space: value.time_space,
+            start_time: value.start_time,
+            end_time: value.end_time,
             first_key: value.first_key,
             last_key: value.last_key,
             ffmpeg_args: value.ffmpeg_args,

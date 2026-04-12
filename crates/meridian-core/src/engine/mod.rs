@@ -372,6 +372,8 @@ mod tests {
                     scene: Some(crate::render::SceneLayout::default().scene),
                     view_range: Some(2.0),
                     time_space: Some(DisplayTimeSpace::Tick),
+                    start_time: None,
+                    end_time: None,
                     first_key: None,
                     last_key: None,
                     ffmpeg_args: vec!["-y".to_string()],

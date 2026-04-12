@@ -274,6 +274,9 @@ export component App inherits Window {
     in-out property <string> audio-render-elapsed: "—";
     in-out property <string> audio-render-output-text: "output.wav";
     in-out property <string> render-mode-text: "video_audio";
+    in-out property <string> render-range-mode-text: "full_song";
+    in-out property <string> render-start-time-text: "0.0";
+    in-out property <string> render-end-time-text: "";
     in-out property <string> render-output-path-text: "";
     in-out property <string> render-video-resolution-text: "1920x1080";
     in-out property <string> render-video-width-text: "1920";
@@ -482,7 +485,10 @@ export component App inherits Window {
     callback select-audio-decay-curve(string);
     callback select-audio-release-curve(string);
     callback select-render-mode(string);
+    callback select-render-range-mode(string);
     callback browse-render-output;
+    callback submit-custom-render-start-time(string);
+    callback submit-custom-render-end-time(string);
     callback select-render-resolution(string);
     callback submit-custom-render-resolution(string);
     callback select-render-fps(string);
@@ -1065,6 +1071,9 @@ export component App inherits Window {
                     render-load-state: root.render-load-state;
                     audio-load-state: root.audio-load-state;
                     render-mode-text: root.render-mode-text;
+                    render-range-mode-text: root.render-range-mode-text;
+                    render-start-time-text: root.render-start-time-text;
+                    render-end-time-text: root.render-end-time-text;
                     render-output-path-text: root.render-output-path-text;
                     render-video-resolution-text: root.render-video-resolution-text;
                     render-video-fps-text: root.render-video-fps-text;
@@ -1103,7 +1112,10 @@ export component App inherits Window {
                     export-status: root.render-export-status;
                     export-detail-text: root.render-export-detail-text;
                     select-mode(mode) => { root.select-render-mode(mode); }
+                    select-range-mode(mode) => { root.select-render-range-mode(mode); }
                     browse-output => { root.browse-render-output(); }
+                    submit-custom-start-time(val) => { root.submit-custom-render-start-time(val); }
+                    submit-custom-end-time(val) => { root.submit-custom-render-end-time(val); }
                     select-resolution(preset) => { root.select-render-resolution(preset); }
                     submit-custom-resolution(val) => { root.submit-custom-render-resolution(val); }
                     select-fps(fps) => { root.select-render-fps(fps); }

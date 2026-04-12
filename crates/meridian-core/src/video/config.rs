@@ -12,6 +12,13 @@ pub struct VideoRenderAudioInputs {
     pub audio_config: AudioConfig,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct ResolvedVideoTimeRange {
+    pub start_time: f64,
+    pub end_time: f64,
+    pub duration_seconds: f64,
+}
+
 pub(crate) fn should_use_isolated_core(config: &VideoRenderConfig) -> bool {
     config.midi_path.is_some()
 }
@@ -32,15 +39,67 @@ impl VideoRenderConfig {
                 self.container.extension()
             )));
         }
+        validate_time_bound(self.start_time, "video start time")?;
+        validate_time_bound(self.end_time, "video end time")?;
+        if let (Some(start_time), Some(end_time)) = (self.start_time, self.end_time) {
+            if end_time <= start_time {
+                return Err(MeridianError::InvalidMidi(
+                    "video end time must be greater than start time".into(),
+                ));
+            }
+        }
         Ok(())
     }
+
+    pub(crate) fn resolve_time_range(
+        &self,
+        midi_length: f64,
+    ) -> Result<ResolvedVideoTimeRange, MeridianError> {
+        let song_end = midi_length.max(0.0);
+        let start_time = self.start_time.unwrap_or(0.0);
+        let end_time = self.end_time.unwrap_or(song_end);
+
+        if start_time > song_end {
+            return Err(MeridianError::InvalidMidi(format!(
+                "video start time {start_time:.3} exceeds midi length {song_end:.3}"
+            )));
+        }
+        if end_time > song_end {
+            return Err(MeridianError::InvalidMidi(format!(
+                "video end time {end_time:.3} exceeds midi length {song_end:.3}"
+            )));
+        }
+        if end_time < start_time {
+            return Err(MeridianError::InvalidMidi(
+                "video end time must be greater than or equal to start time".into(),
+            ));
+        }
+
+        Ok(ResolvedVideoTimeRange {
+            start_time,
+            end_time,
+            duration_seconds: (end_time - start_time).max(0.0),
+        })
+    }
+}
+
+fn validate_time_bound(value: Option<f64>, label: &str) -> Result<(), MeridianError> {
+    let Some(value) = value else {
+        return Ok(());
+    };
+    if !value.is_finite() || value < 0.0 {
+        return Err(MeridianError::InvalidMidi(format!(
+            "{label} must be a finite value >= 0"
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
-    use super::should_use_isolated_core;
+    use super::{ResolvedVideoTimeRange, should_use_isolated_core};
     use crate::protocol::{VideoOutputContainer, VideoRenderConfig};
 
     fn config(midi_path: Option<PathBuf>) -> VideoRenderConfig {
@@ -54,6 +113,8 @@ mod tests {
             scene: None,
             view_range: None,
             time_space: None,
+            start_time: None,
+            end_time: None,
             first_key: None,
             last_key: None,
             ffmpeg_args: Vec::new(),
@@ -70,5 +131,49 @@ mod tests {
     #[test]
     fn live_context_video_renders_stay_on_the_active_core() {
         assert!(!should_use_isolated_core(&config(None)));
+    }
+
+    #[test]
+    fn validate_rejects_negative_start_time() {
+        let mut config = config(None);
+        config.start_time = Some(-0.5);
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_end_time_before_start_time() {
+        let mut config = config(None);
+        config.start_time = Some(2.0);
+        config.end_time = Some(1.5);
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn resolve_time_range_defaults_to_full_song() {
+        let resolved = config(None).resolve_time_range(12.0).expect("resolve range");
+        assert_eq!(
+            resolved,
+            ResolvedVideoTimeRange {
+                start_time: 0.0,
+                end_time: 12.0,
+                duration_seconds: 12.0,
+            }
+        );
+    }
+
+    #[test]
+    fn resolve_time_range_uses_custom_bounds() {
+        let mut config = config(None);
+        config.start_time = Some(1.25);
+        config.end_time = Some(3.5);
+        let resolved = config.resolve_time_range(5.0).expect("resolve range");
+        assert_eq!(
+            resolved,
+            ResolvedVideoTimeRange {
+                start_time: 1.25,
+                end_time: 3.5,
+                duration_seconds: 2.25,
+            }
+        );
     }
 }

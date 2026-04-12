@@ -63,6 +63,9 @@ macro_rules! export_text_bindings {
             $app,
             $prefs,
             mode_text => (get_render_mode_text, set_render_mode_text),
+            range_mode_text => (get_render_range_mode_text, set_render_range_mode_text),
+            start_time_text => (get_render_start_time_text, set_render_start_time_text),
+            end_time_text => (get_render_end_time_text, set_render_end_time_text),
             video_resolution_text => (
                 get_render_video_resolution_text,
                 set_render_video_resolution_text

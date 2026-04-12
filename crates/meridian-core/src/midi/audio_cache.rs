@@ -13,6 +13,7 @@ pub struct CompressedAudio {
     control_only_data: Option<Vec<u8>>,
 }
 
+#[derive(Clone)]
 pub struct InRamAudioCache {
     events: Vec<CompressedAudio>,
 }
@@ -57,6 +58,43 @@ impl InRamAudioCache {
 
     pub fn length(&self) -> f64 {
         self.events.last().map(|event| event.time).unwrap_or(0.0)
+    }
+
+    pub(crate) fn clip_time_range(&self, start_time: f64, end_time: f64) -> Self {
+        let mut prelude_control_events = Vec::new();
+        let mut clipped_events = Vec::new();
+
+        for event in &self.events {
+            if event.time < start_time {
+                if let Some(control_only_data) = &event.control_only_data {
+                    prelude_control_events.extend(control_only_data.iter().copied());
+                }
+                continue;
+            }
+
+            if event.time > end_time {
+                break;
+            }
+
+            clipped_events.push(CompressedAudio::from_parts(
+                (event.time - start_time).max(0.0),
+                event.data.clone(),
+                event.control_only_data.clone(),
+            ));
+        }
+
+        if !prelude_control_events.is_empty() {
+            clipped_events.insert(
+                0,
+                CompressedAudio::from_parts(
+                    0.0,
+                    prelude_control_events.clone(),
+                    Some(prelude_control_events),
+                ),
+            );
+        }
+
+        Self::new(clipped_events)
     }
 }
 

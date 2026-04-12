@@ -7,10 +7,14 @@ use std::{
 use crate::{
     MeridianError,
     audio::{SoundfontCache, render_audio_pipe_from_cache, resolve_video_audio_settings},
+    midi::audio_cache::InRamAudioCache,
     protocol::{VideoAudioConfig, VideoAudioProgress, VideoRenderConfig},
 };
 
-use super::{config::VideoRenderAudioInputs, ffmpeg::VideoFfmpegAudioInput};
+use super::{
+    config::{ResolvedVideoTimeRange, VideoRenderAudioInputs},
+    ffmpeg::VideoFfmpegAudioInput,
+};
 
 pub(crate) enum VideoAudioMux {
     #[cfg(unix)]
@@ -31,6 +35,7 @@ impl VideoAudioMux {
         config: &VideoRenderConfig,
         audio: &VideoAudioConfig,
         audio_inputs: Option<VideoRenderAudioInputs>,
+        time_range: ResolvedVideoTimeRange,
         cancel: &Arc<AtomicBool>,
     ) -> Result<Self, MeridianError> {
         #[cfg(unix)]
@@ -40,7 +45,8 @@ impl VideoAudioMux {
             })?;
             let (sample_rate, channels, _) =
                 resolve_video_audio_settings(&inputs.audio_config, audio)?;
-            let total_events = inputs.audio_cache.events().len();
+            let clipped_audio_cache = clip_audio_cache(&inputs.audio_cache, time_range);
+            let total_events = clipped_audio_cache.events().len();
             let fifo = crate::ffmpeg::FifoGuard::create(&config.output, "audio")?;
             let _ = cancel;
             return Ok(Self::Pipe {
@@ -54,14 +60,17 @@ impl VideoAudioMux {
                     rendered_seconds: 0.0,
                 })),
                 worker: None,
-                inputs: Some(inputs),
+                inputs: Some(VideoRenderAudioInputs {
+                    audio_cache: Arc::new(clipped_audio_cache),
+                    audio_config: inputs.audio_config,
+                }),
                 audio: audio.clone(),
             });
         }
 
         #[cfg(not(unix))]
         {
-            let _ = (config, audio, audio_inputs, cancel);
+            let _ = (config, audio, audio_inputs, time_range, cancel);
             Err(MeridianError::Unsupported(
                 "muxed audio video export currently requires unix named pipes".into(),
             ))
@@ -165,4 +174,15 @@ fn join_audio_worker(
     worker
         .join()
         .map_err(|_| MeridianError::Platform("audio mux worker panicked".into()))?
+}
+
+fn clip_audio_cache(
+    audio_cache: &Arc<InRamAudioCache>,
+    time_range: ResolvedVideoTimeRange,
+) -> InRamAudioCache {
+    let full_length = audio_cache.length();
+    if time_range.start_time <= 0.0 && (full_length - time_range.end_time).abs() < f64::EPSILON {
+        return audio_cache.as_ref().clone();
+    }
+    audio_cache.clip_time_range(time_range.start_time, time_range.end_time)
 }

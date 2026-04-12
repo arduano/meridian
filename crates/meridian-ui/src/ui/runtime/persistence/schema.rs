@@ -72,6 +72,9 @@ impl Default for UiPreferences {
 #[serde(default)]
 pub(in super::super) struct ExportPreferences {
     pub mode_text: String,
+    pub range_mode_text: String,
+    pub start_time_text: String,
+    pub end_time_text: String,
     pub video_resolution_text: String,
     pub video_fps_text: String,
     pub audio_format_text: String,
@@ -94,6 +97,9 @@ impl Default for ExportPreferences {
     fn default() -> Self {
         Self {
             mode_text: "video_audio".into(),
+            range_mode_text: "full_song".into(),
+            start_time_text: "0.0".into(),
+            end_time_text: String::new(),
             video_resolution_text: "1920x1080".into(),
             video_fps_text: "60".into(),
             audio_format_text: "wav".into(),

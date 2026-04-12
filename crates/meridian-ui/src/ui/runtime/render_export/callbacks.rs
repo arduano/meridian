@@ -24,6 +24,54 @@ pub(in super::super) fn wire_render_export_callbacks(
     }
     {
         let app_weak = app.as_weak();
+        app.on_select_render_range_mode(move |mode| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            let mode = match mode.as_str() {
+                "custom" => "custom",
+                _ => "full_song",
+            };
+            app.set_render_range_mode_text(mode.into());
+            if mode == "custom" {
+                if app.get_render_start_time_text().is_empty() {
+                    app.set_render_start_time_text("0.0".into());
+                }
+                if app.get_render_end_time_text().is_empty() {
+                    if let Some(end_time) = default_render_end_time_text(&app) {
+                        app.set_render_end_time_text(end_time.into());
+                    }
+                }
+            }
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_submit_custom_render_start_time(move |val| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            if parse_render_time_seconds(val.as_str(), "render start time").is_ok() {
+                app.set_render_start_time_text(val.trim().into());
+            }
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
+        app.on_submit_custom_render_end_time(move |val| {
+            let Some(app) = app_weak.upgrade() else {
+                return;
+            };
+            if parse_render_time_seconds(val.as_str(), "render end time").is_ok() {
+                app.set_render_end_time_text(val.trim().into());
+            }
+            app.window().request_redraw();
+        });
+    }
+    {
+        let app_weak = app.as_weak();
         app.on_select_render_resolution(move |preset| {
             let Some(app) = app_weak.upgrade() else {
                 return;
@@ -425,4 +473,13 @@ pub(in super::super) fn wire_render_export_callbacks(
             app.window().request_redraw();
         });
     }
+}
+
+fn default_render_end_time_text(app: &App) -> Option<String> {
+    let raw = app.get_length_text();
+    let seconds = raw
+        .split_whitespace()
+        .next()
+        .and_then(|value| value.parse::<f64>().ok())?;
+    Some(seconds.to_string())
 }

@@ -82,6 +82,9 @@ fn sample_config() -> UiConfigFile {
             active_profile: 4,
             export: ExportPreferences {
                 mode_text: "audio_only".into(),
+                range_mode_text: "custom".into(),
+                start_time_text: "12.5".into(),
+                end_time_text: "47.25".into(),
                 video_resolution_text: "3840x2160".into(),
                 video_fps_text: "120".into(),
                 audio_format_text: "flac".into(),
