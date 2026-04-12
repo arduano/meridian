@@ -1,3 +1,10 @@
+//! Active render-export job state and callbacks.
+//!
+//! `controller.rs` owns the in-flight export draft and terminal state,
+//! `callbacks.rs` wires the Slint event handlers, and `jobs.rs` starts the core
+//! work. Keeping those responsibilities separate makes export control easier
+//! to trace than one monolithic runtime file.
+
 use super::*;
 
 mod controller;

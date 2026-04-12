@@ -1,3 +1,9 @@
+//! Modify-panel initialization and wiring entrypoint.
+//!
+//! `modify_registry.rs` owns the pass table, `modify_controls.rs` owns the
+//! shared validation helpers, and `modify_pass_controls.rs` handles the
+//! per-pass Slint bindings.
+
 use super::*;
 
 mod wiring;

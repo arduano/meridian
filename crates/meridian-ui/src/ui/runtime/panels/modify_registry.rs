@@ -1,3 +1,9 @@
+//! Modify-panel policy table and per-pass control wiring.
+//!
+//! This file is the map from pass key to default tool, labels, and control
+//! handlers. The actual parsing and field-level helpers live in
+//! `modify_parsers.rs`, `modify_controls.rs`, and `modify_pass_controls/*`.
+
 use super::*;
 
 pub(super) struct ModifyPassPolicy {

@@ -1,3 +1,5 @@
+//! Launches the core-side work for a render export.
+
 use super::*;
 
 pub(in super::super) fn start_render_export_jobs(

@@ -1,3 +1,10 @@
+//! In-memory UI state model.
+//!
+//! This file groups the shared state that the reducer mutates and the Slint
+//! projection layer reads. Transport, scene, audio, render, analysis, modify,
+//! merge, and remembered asset state stay in separate structs even though they
+//! share one model.
+
 use std::{
     path::PathBuf,
     sync::{Arc, atomic::AtomicBool},

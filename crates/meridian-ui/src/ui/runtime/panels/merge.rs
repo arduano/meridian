@@ -1,3 +1,9 @@
+//! Merge panel queue management and source inspection.
+//!
+//! The merge panel owns the visible source queue, the inspection status for
+//! each path, and the async refresh lifecycle that keeps the queue readable in
+//! the UI.
+
 use super::*;
 use std::sync::{
     Arc,
@@ -6,7 +12,7 @@ use std::sync::{
 
 static MERGE_SOURCE_INSPECTION_GENERATION: AtomicU64 = AtomicU64::new(0);
 
-fn invalidate_merge_source_inspection() {
+fn bump_merge_source_inspection_generation() {
     MERGE_SOURCE_INSPECTION_GENERATION.fetch_add(1, Ordering::SeqCst);
 }
 
@@ -16,7 +22,7 @@ fn next_merge_source_inspection_generation() -> u64 {
         .wrapping_add(1)
 }
 
-fn merge_source_inspection_is_current(generation: u64) -> bool {
+fn is_merge_source_inspection_generation_current(generation: u64) -> bool {
     MERGE_SOURCE_INSPECTION_GENERATION.load(Ordering::SeqCst) == generation
 }
 
@@ -32,7 +38,7 @@ fn loading_merge_sources_from_model(shared_state: &Arc<Mutex<UiViewModel>>) -> V
         .collect()
 }
 
-fn refresh_merge_source_inspection(
+fn refresh_pending_merge_source_inspection(
     app: &App,
     shared_state: &Arc<Mutex<UiViewModel>>,
     pending: Vec<PathBuf>,
@@ -70,7 +76,7 @@ fn refresh_merge_source_inspection(
                 if total == 1 { "" } else { "s" }
             );
             let _ = app_weak.upgrade_in_event_loop(move |app| {
-                if !merge_source_inspection_is_current(generation) {
+                if !is_merge_source_inspection_generation_current(generation) {
                     return;
                 }
 
@@ -160,7 +166,7 @@ pub(in super::super) fn wire_merge_callbacks(
             if app.get_merge_job_active() {
                 return;
             }
-            invalidate_merge_source_inspection();
+            bump_merge_source_inspection_generation();
             {
                 let mut model = shared_state.lock().expect("ui model mutex poisoned");
                 model.merge.sources.clear();
@@ -196,7 +202,7 @@ pub(in super::super) fn wire_merge_callbacks(
             if !removed {
                 return;
             }
-            invalidate_merge_source_inspection();
+            bump_merge_source_inspection_generation();
             apply_merge_sources_to_app(&app, &shared_state);
             if app.get_merge_output_path_text().is_empty() {
                 if let Some(path) = merge_default_output_from_model(&shared_state) {
@@ -215,7 +221,7 @@ pub(in super::super) fn wire_merge_callbacks(
                         .into()
                 });
             } else {
-                refresh_merge_source_inspection(&app, &shared_state, pending);
+                refresh_pending_merge_source_inspection(&app, &shared_state, pending);
             }
             app.window().request_redraw();
         });
@@ -457,7 +463,7 @@ pub(in super::super) fn append_merge_source_paths(
             app.set_merge_result_output_text(file_name_or_path(&path).into());
         }
     }
-    refresh_merge_source_inspection(
+    refresh_pending_merge_source_inspection(
         app,
         shared_state,
         loading_merge_sources_from_model(shared_state),

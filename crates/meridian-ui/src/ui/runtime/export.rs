@@ -1,3 +1,9 @@
+//! Render/export wiring for the UI.
+//!
+//! This file owns export defaults, draft construction, and top-level runtime
+//! wiring. The active export lifecycle is split under `render_export/*` so the
+//! UI has one place for configuration and another for in-flight job handling.
+
 use super::*;
 use meridian_core::{
     audio::AudioRenderConfig,

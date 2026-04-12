@@ -1,3 +1,8 @@
+//! Per-pass modify control synchronization.
+//!
+//! This module bridges the modify registry's policy table and the generated
+//! Slint controls for each pass.
+
 use super::*;
 
 mod sync;

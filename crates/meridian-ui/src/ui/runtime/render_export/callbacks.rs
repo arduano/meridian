@@ -1,3 +1,5 @@
+//! Slint callbacks for render/export controls.
+
 use super::*;
 
 pub(in super::super) fn wire_render_export_callbacks(

@@ -1,3 +1,9 @@
+//! Shared modify-panel helpers.
+//!
+//! This file holds output-path validation, config parsing, and generic control
+//! wiring used by multiple modify passes. Pass-specific defaults and field
+//! handling live in `modify_registry.rs` and `modify_pass_controls/*`.
+
 use super::*;
 
 pub(super) fn update_merge_control(app: &App, key: &str, value: &str) {

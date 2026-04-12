@@ -1,3 +1,10 @@
+//! Core command bridge for the UI.
+//!
+//! This layer is deliberately narrow: it sends commands to `meridian-core`,
+//! requests fresh snapshots, and feeds resulting events back through the shared
+//! UI reducer. Feature-specific UI behavior should live in the runtime modules,
+//! not here.
+
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -20,6 +27,7 @@ use super::{
     view_model::{TransportViewModel, UiViewModel},
 };
 
+/// Thin adapter between Slint callbacks and `meridian-core`.
 #[derive(Clone)]
 pub struct UiCoreBridge {
     core: CoreHandle,

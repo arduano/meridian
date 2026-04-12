@@ -1,3 +1,9 @@
+//! Shared UI state boundary.
+//!
+//! `view_model.rs` owns the data model, `reduce.rs` mutates it from core
+//! events, and `apply.rs` projects it into Slint controls. This module stays as
+//! the public entrypoint so callers do not need to know that split.
+
 use std::{
     env,
     path::PathBuf,

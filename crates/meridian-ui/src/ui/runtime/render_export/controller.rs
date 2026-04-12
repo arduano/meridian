@@ -1,6 +1,7 @@
 use super::*;
 use meridian_core::protocol::VideoOutputContainer;
 
+/// Tracks one active render export from draft to terminal state.
 #[derive(Debug, Clone)]
 pub(crate) struct RenderExportDraft {
     pub mode: RenderExportMode,
@@ -22,6 +23,7 @@ pub(crate) enum RenderExportUiTerminal {
     Cancelled,
 }
 
+/// Snapshot of the export UI that is ready to project into Slint.
 #[derive(Debug, Clone)]
 pub(crate) struct RenderExportUiSnapshot {
     pub status: &'static str,
