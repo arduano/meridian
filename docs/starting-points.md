@@ -25,7 +25,7 @@ find the right file quickly.
 ## CLI
 
 - Canonical command dispatcher: [`crates/meridian-cli/src/cli.rs`](../crates/meridian-cli/src/cli.rs)
-- Binary entrypoint and legacy aliases: [`crates/meridian-cli/src/main.rs`](../crates/meridian-cli/src/main.rs)
+- Binary entrypoint: [`crates/meridian-cli/src/main.rs`](../crates/meridian-cli/src/main.rs)
 - Help and surface tests: [`crates/meridian-cli/tests/cli_help.rs`](../crates/meridian-cli/tests/cli_help.rs)
 - Stdio protocol smoke tests: [`crates/meridian-cli/tests/cli_stdio.rs`](../crates/meridian-cli/tests/cli_stdio.rs)
 - Render and merge command tests: [`crates/meridian-cli/tests/cli_render.rs`](../crates/meridian-cli/tests/cli_render.rs), [`crates/meridian-cli/tests/cli_merge_inspect.rs`](../crates/meridian-cli/tests/cli_merge_inspect.rs)
@@ -60,7 +60,7 @@ These are the first commands I would run when changing the repo:
 nix-shell --run 'cargo test -p meridian-core --lib'
 nix-shell --run 'cargo test -p meridian-cli --tests'
 nix-shell --run 'cargo test -p meridian-ui persistence::tests -- --nocapture'
-cd sdk/typescript && deno test --allow-env --allow-read --allow-write --allow-run tests
+nix-shell --run 'cd sdk/typescript && deno test --no-check --allow-env --allow-read --allow-write --allow-run tests'
 ```
 
 If you are changing render-heavy code, add the relevant focused smoke test from
