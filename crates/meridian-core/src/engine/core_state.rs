@@ -5,6 +5,7 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64},
     },
+    thread::JoinHandle,
     time::Instant,
 };
 
@@ -35,11 +36,13 @@ use super::{
 
 pub(super) struct RenderJobState {
     pub(super) cancel: Arc<AtomicBool>,
+    pub(super) worker: Option<JoinHandle<()>>,
     pub(super) status: VideoRenderStatus,
 }
 
 pub(super) struct AudioRenderJobState {
     pub(super) cancel: Arc<AtomicBool>,
+    pub(super) worker: Option<JoinHandle<()>>,
     pub(super) status: AudioRenderStatus,
 }
 
@@ -130,14 +133,66 @@ impl CoreState {
     }
 
     pub(super) fn run(&mut self, receiver: Receiver<RequestMessage>) {
+        let mut shutdown_reply: Option<Sender<CoreResponse>> = None;
+
         for request in receiver {
+            if shutdown_reply.is_some() {
+                match request {
+                    RequestMessage::VideoRenderUpdate { event } => {
+                        self.handle_video_render_update(event);
+                    }
+                    RequestMessage::AudioRenderUpdate { event } => {
+                        self.handle_audio_render_update(event);
+                    }
+                    RequestMessage::MidiProcessUpdate { event } => {
+                        self.handle_midi_process_update(event);
+                    }
+                    RequestMessage::AnalysisJobUpdate { event } => {
+                        self.handle_midi_analysis_job_update(event);
+                    }
+                    RequestMessage::Command { command, reply } => {
+                        if matches!(command, CoreCommand::Shutdown) {
+                            let _ = reply.send(vec![error_event(
+                                CoreErrorCode::InvalidCommand,
+                                "shutdown in progress",
+                            )]);
+                        } else {
+                            let response = self.handle(command);
+                            let _ = reply.send(response);
+                        }
+                    }
+                    RequestMessage::RenderFrame {
+                        viewport_width,
+                        viewport_height,
+                        reply,
+                    } => {
+                        let _ = reply.send(self.render_frame(viewport_width, viewport_height));
+                    }
+                }
+
+                if !self.has_active_render_workers() {
+                    let response = self.finish_shutdown();
+                    if let Some(reply) = shutdown_reply.take() {
+                        let _ = reply.send(response);
+                    }
+                    break;
+                }
+                continue;
+            }
+
             match request {
                 RequestMessage::Command { command, reply } => {
-                    let should_shutdown = matches!(command, CoreCommand::Shutdown);
-                    let response = self.handle(command);
-                    let _ = reply.send(response);
-                    if should_shutdown {
-                        break;
+                    if matches!(command, CoreCommand::Shutdown) {
+                        self.begin_shutdown();
+                        if self.has_active_render_workers() {
+                            shutdown_reply = Some(reply);
+                        } else {
+                            let _ = reply.send(self.finish_shutdown());
+                            break;
+                        }
+                    } else {
+                        let response = self.handle(command);
+                        let _ = reply.send(response);
                     }
                 }
                 RequestMessage::RenderFrame {
@@ -149,9 +204,23 @@ impl CoreState {
                 }
                 RequestMessage::VideoRenderUpdate { event } => {
                     self.handle_video_render_update(event);
+                    if shutdown_reply.is_some() && !self.has_active_render_workers() {
+                        let response = self.finish_shutdown();
+                        if let Some(reply) = shutdown_reply.take() {
+                            let _ = reply.send(response);
+                        }
+                        break;
+                    }
                 }
                 RequestMessage::AudioRenderUpdate { event } => {
                     self.handle_audio_render_update(event);
+                    if shutdown_reply.is_some() && !self.has_active_render_workers() {
+                        let response = self.finish_shutdown();
+                        if let Some(reply) = shutdown_reply.take() {
+                            let _ = reply.send(response);
+                        }
+                        break;
+                    }
                 }
                 RequestMessage::MidiProcessUpdate { event } => {
                     self.handle_midi_process_update(event);
@@ -254,9 +323,27 @@ impl CoreState {
             }
             CoreCommand::LoadDisplayMidi { path } => self.load_display_midi(path),
             CoreCommand::LoadAudioMidi { path } => self.load_audio_midi(path),
-            CoreCommand::UnloadDisplayContext => self.unload_display_context(),
-            CoreCommand::UnloadAudioContext => self.unload_audio_context(),
-            CoreCommand::UnloadRenderContext => self.unload_render_context(),
+            CoreCommand::UnloadDisplayContext => {
+                let cancel_events = self.cancel_active_render_jobs(true, false);
+                self.broadcast_internal(cancel_events);
+                self.active_video_render_job_id = self.active_video_render_job_id_from_state();
+                self.unload_display_context()
+            }
+            CoreCommand::UnloadAudioContext => {
+                let cancel_events = self.cancel_active_render_jobs(false, true);
+                self.broadcast_internal(cancel_events);
+                let events = self.unload_audio_context();
+                self.active_audio_render_job_id = self.active_audio_render_job_id_from_state();
+                events
+            }
+            CoreCommand::UnloadRenderContext => {
+                let cancel_events = self.cancel_active_render_jobs(true, true);
+                self.broadcast_internal(cancel_events);
+                let events = self.unload_render_context();
+                self.active_video_render_job_id = self.active_video_render_job_id_from_state();
+                self.active_audio_render_job_id = self.active_audio_render_job_id_from_state();
+                events
+            }
             CoreCommand::DropInactiveMidiResources => self.drop_inactive_midi_resources(),
             CoreCommand::LoadMidi { path } => self.load_midi_legacy(path),
             CoreCommand::SetAudioConfig { config } => {
@@ -398,12 +485,7 @@ impl CoreState {
             CoreCommand::GetRenderVideoStatus => vec![CoreEvent::VideoRenderStatus {
                 status: self.video_render_status(),
             }],
-            CoreCommand::Shutdown => {
-                self.audio_session = None;
-                self.midi_process_job = None;
-                self.active_midi_process_job_id = None;
-                vec![CoreEvent::ShutdownComplete]
-            }
+            CoreCommand::Shutdown => self.finish_shutdown(),
         }
     }
 
@@ -424,5 +506,29 @@ impl CoreState {
         self.audio_clock.set_time(self.transport.current_time());
         self.audio_clock.set_playing(self.transport.playing());
         self.start_audio_session();
+    }
+
+    fn broadcast_internal(&self, events: Vec<CoreEvent>) {
+        for event in events {
+            self.broadcast(event);
+        }
+    }
+
+    fn begin_shutdown(&mut self) {
+        let cancel_events = self.cancel_active_render_jobs(true, true);
+        self.broadcast_internal(cancel_events);
+        self.active_video_render_job_id = self.active_video_render_job_id_from_state();
+        self.active_audio_render_job_id = self.active_audio_render_job_id_from_state();
+    }
+
+    fn finish_shutdown(&mut self) -> Vec<CoreEvent> {
+        self.audio_session = None;
+        self.midi_process_job = None;
+        self.active_midi_process_job_id = None;
+        vec![CoreEvent::ShutdownComplete]
+    }
+
+    fn has_active_render_workers(&self) -> bool {
+        self.render_job.is_some() || self.audio_render_job.is_some()
     }
 }

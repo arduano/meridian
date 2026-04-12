@@ -160,12 +160,13 @@ impl CoreHandle {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, thread};
+    use std::{path::PathBuf, thread, time::Duration};
 
     use crate::{
         audio::{AudioBackend, AudioConfig},
         midi::test_support::{note_off, note_on, write_toolkit_midi},
         protocol::{CoreCommand, CoreErrorCode, CoreEvent, StateSnapshot},
+        render::DisplayTimeSpace,
     };
 
     use super::{CoreHandle, spawn_core};
@@ -342,5 +343,88 @@ mod tests {
 
         let _ = std::fs::remove_file(midi);
         shutdown(&core);
+    }
+
+    #[test]
+    fn shutdown_waits_for_active_video_render_cancellation() {
+        let core = test_core();
+        let receiver = core.subscribe_events();
+        let midi = large_test_midi();
+        let output = std::env::temp_dir().join(format!(
+            "meridian-shutdown-render-{}-{}.mp4",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after unix epoch")
+                .as_nanos()
+        ));
+
+        let start_events = core
+            .request(CoreCommand::StartRenderVideo {
+                config: crate::protocol::VideoRenderConfig {
+                    midi_path: Some(midi.clone()),
+                    output: output.clone(),
+                    container: crate::protocol::VideoOutputContainer::Mp4,
+                    fps: 4.0,
+                    width: 160,
+                    height: 90,
+                    scene: Some(crate::render::SceneLayout::default().scene),
+                    view_range: Some(2.0),
+                    time_space: Some(DisplayTimeSpace::Tick),
+                    first_key: None,
+                    last_key: None,
+                    ffmpeg_args: vec!["-y".to_string()],
+                    export: Default::default(),
+                    audio: None,
+                },
+            })
+            .expect("start video render before shutdown");
+        assert!(matches!(
+            start_events.as_slice(),
+            [CoreEvent::VideoRenderStatus {
+                status: crate::protocol::VideoRenderStatus::Running { .. }
+            }]
+        ));
+
+        let shutdown_core = core.clone();
+        let shutdown_thread = thread::spawn(move || {
+            shutdown_core
+                .request(CoreCommand::Shutdown)
+                .expect("shutdown request should succeed")
+        });
+
+        let mut saw_cancelled = false;
+        for _ in 0..120 {
+            match receiver.recv_timeout(Duration::from_secs(1)) {
+                Ok(CoreEvent::VideoRender {
+                    event: crate::protocol::VideoRenderEvent::RenderCancelled { .. },
+                }) => {
+                    saw_cancelled = true;
+                    break;
+                }
+                Ok(CoreEvent::VideoRender {
+                    event: crate::protocol::VideoRenderEvent::RenderFailed { message },
+                }) => panic!("render should cancel during shutdown, got failure: {message}"),
+                Ok(_) => {}
+                Err(error) => panic!("timed out waiting for shutdown render cancellation: {error}"),
+            }
+        }
+
+        assert!(saw_cancelled, "video render did not cancel before shutdown completed");
+
+        let shutdown_response = shutdown_thread
+            .join()
+            .expect("shutdown thread should join");
+        assert!(matches!(
+            shutdown_response.as_slice(),
+            [CoreEvent::ShutdownComplete]
+        ));
+        assert!(
+            core.request(CoreCommand::GetState).is_err(),
+            "core should stop receiving requests after shutdown completes"
+        );
+
+        let _ = std::fs::remove_file(midi);
+        let _ = std::fs::remove_file(output);
     }
 }

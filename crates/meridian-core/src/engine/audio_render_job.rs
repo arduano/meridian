@@ -20,6 +20,44 @@ use super::{
 };
 
 impl CoreState {
+    pub(super) fn request_cancel_render_audio(&mut self) -> bool {
+        let Some(job) = &mut self.audio_render_job else {
+            return false;
+        };
+
+        job.cancel.store(true, Ordering::SeqCst);
+        if let AudioRenderStatus::Running {
+            job_id,
+            output,
+            total_events,
+            event_index,
+            time_seconds,
+            rendered_seconds,
+            frames_written,
+        } = &job.status
+        {
+            job.status = AudioRenderStatus::Cancelling {
+                job_id: *job_id,
+                output: output.clone(),
+                total_events: *total_events,
+                event_index: *event_index,
+                time_seconds: *time_seconds,
+                rendered_seconds: *rendered_seconds,
+                frames_written: *frames_written,
+            };
+        }
+
+        true
+    }
+
+    pub(super) fn active_audio_render_job_id_from_state(&self) -> Option<AudioRenderJobId> {
+        self.audio_render_job.as_ref().and_then(|job| match &job.status {
+            AudioRenderStatus::Running { job_id, .. }
+            | AudioRenderStatus::Cancelling { job_id, .. } => Some(*job_id),
+            AudioRenderStatus::Idle => None,
+        })
+    }
+
     pub(super) fn start_render_audio(&mut self, config: AudioRenderConfig) -> Vec<CoreEvent> {
         if self.audio_render_job.is_some() {
             return vec![error_event(
@@ -69,32 +107,35 @@ impl CoreState {
         let job_id = AudioRenderJobId(self.next_resource_id);
         self.next_resource_id += 1;
         self.active_audio_render_job_id = Some(job_id);
-        self.audio_render_job = Some(AudioRenderJobState {
-            cancel: Arc::clone(&cancel),
-            status: AudioRenderStatus::Running {
-                job_id,
-                output: config.output.clone(),
-                total_events: 0,
-                event_index: 0,
-                time_seconds: 0.0,
-                rendered_seconds: 0.0,
-                frames_written: 0,
-            },
-        });
+        let initial_status = AudioRenderStatus::Running {
+            job_id,
+            output: config.output.clone(),
+            total_events: 0,
+            event_index: 0,
+            time_seconds: 0.0,
+            rendered_seconds: 0.0,
+            frames_written: 0,
+        };
 
         let core_handle = self.core_handle.clone();
-        thread::spawn(move || {
+        let worker_cancel = Arc::clone(&cancel);
+        let worker = thread::spawn(move || {
             let _ = render_audio_from_cache(
                 audio_cache.as_ref(),
                 &audio_config,
                 &soundfont_cache,
                 &config,
                 job_id,
-                &cancel,
+                &worker_cancel,
                 |event| {
                     let _ = core_handle.publish_audio_event(event);
                 },
             );
+        });
+        self.audio_render_job = Some(AudioRenderJobState {
+            cancel: Arc::clone(&cancel),
+            worker: Some(worker),
+            status: initial_status,
         });
 
         vec![CoreEvent::AudioRenderStatus {
@@ -103,37 +144,15 @@ impl CoreState {
     }
 
     pub(super) fn cancel_render_audio(&mut self) -> Vec<CoreEvent> {
-        match &mut self.audio_render_job {
-            Some(job) => {
-                job.cancel.store(true, Ordering::SeqCst);
-                if let AudioRenderStatus::Running {
-                    job_id,
-                    output,
-                    total_events,
-                    event_index,
-                    time_seconds,
-                    rendered_seconds,
-                    frames_written,
-                } = &job.status
-                {
-                    job.status = AudioRenderStatus::Cancelling {
-                        job_id: *job_id,
-                        output: output.clone(),
-                        total_events: *total_events,
-                        event_index: *event_index,
-                        time_seconds: *time_seconds,
-                        rendered_seconds: *rendered_seconds,
-                        frames_written: *frames_written,
-                    };
-                }
-                vec![CoreEvent::AudioRenderStatus {
-                    status: self.audio_render_status(),
-                }]
-            }
-            None => vec![error_event(
+        if self.request_cancel_render_audio() {
+            vec![CoreEvent::AudioRenderStatus {
+                status: self.audio_render_status(),
+            }]
+        } else {
+            vec![error_event(
                 CoreErrorCode::InvalidCommand,
                 "no active audio render",
-            )],
+            )]
         }
     }
 
@@ -148,6 +167,7 @@ impl CoreState {
                 self.audio_render_job =
                     self.audio_render_job.take().map(|job| AudioRenderJobState {
                         cancel: job.cancel,
+                        worker: job.worker,
                         status: AudioRenderStatus::Running {
                             job_id: *job_id,
                             output: output.clone(),
@@ -200,7 +220,11 @@ impl CoreState {
             AudioRenderEvent::RenderFinished { .. }
             | AudioRenderEvent::RenderCancelled { .. }
             | AudioRenderEvent::RenderFailed { .. } => {
-                self.audio_render_job = None;
+                if let Some(mut job) = self.audio_render_job.take() {
+                    if let Some(worker) = job.worker.take() {
+                        let _ = worker.join();
+                    }
+                }
                 self.active_audio_render_job_id = None;
             }
         }

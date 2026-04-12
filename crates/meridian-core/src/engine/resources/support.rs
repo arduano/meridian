@@ -46,7 +46,32 @@ impl CoreState {
             .is_some_and(|active_parsed_midi_id| active_parsed_midi_id != parsed_midi_id)
     }
 
+    pub(in crate::engine) fn cancel_active_render_jobs(
+        &mut self,
+        cancel_video: bool,
+        cancel_audio: bool,
+    ) -> Vec<CoreEvent> {
+        let mut events = Vec::new();
+
+        if cancel_video && self.request_cancel_render_video() {
+            self.active_video_render_job_id = self.active_video_render_job_id_from_state();
+            events.push(CoreEvent::VideoRenderStatus {
+                status: self.video_render_status(),
+            });
+        }
+
+        if cancel_audio && self.request_cancel_render_audio() {
+            self.active_audio_render_job_id = self.active_audio_render_job_id_from_state();
+            events.push(CoreEvent::AudioRenderStatus {
+                status: self.audio_render_status(),
+            });
+        }
+
+        events
+    }
+
     pub(super) fn clear_active_midi_context(&mut self, now: Instant) {
+        let _ = self.cancel_active_render_jobs(true, true);
         self.audio_session = None;
         self.processed_midi = None;
         self.midi_cache = None;
@@ -57,8 +82,6 @@ impl CoreState {
         self.active_audio_cache_id = None;
         self.active_display_session_id = None;
         self.active_audio_session_id = None;
-        self.active_video_render_job_id = None;
-        self.active_audio_render_job_id = None;
         self.midi_path = None;
         self.transport.reset(now);
         self.audio_clock.set_time(0.0);
