@@ -700,20 +700,41 @@ fn normalize_top_bar_color(value: &str) -> Option<String> {
 }
 
 fn parse_hex_color(value: &str) -> Option<[f32; 3]> {
-    let normalized = normalize_top_bar_color(value)?;
-    let hex = &normalized[1..];
-    Some([
-        u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0,
-        u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0,
-        u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0,
-    ])
+    let [r, g, b, _a] = parse_rgba_color(value)?;
+    Some([r, g, b])
+}
+
+fn parse_rgba_color(value: &str) -> Option<[f32; 4]> {
+    let trimmed = value.trim();
+    if trimmed.eq_ignore_ascii_case("transparent") {
+        return Some([0.0, 0.0, 0.0, 0.0]);
+    }
+
+    let hex = trimmed.strip_prefix('#').unwrap_or(trimmed);
+    if !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+
+    match hex.len() {
+        6 => Some([
+            u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0,
+            u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0,
+            u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0,
+            1.0,
+        ]),
+        8 => Some([
+            u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0,
+            u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0,
+            u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0,
+            u8::from_str_radix(&hex[6..8], 16).ok()? as f32 / 255.0,
+        ]),
+        _ => None,
+    }
 }
 
 impl TextSceneConfig {
     pub fn background_rgba(&self) -> [f32; 4] {
-        parse_hex_color(self.background_color.as_str())
-            .map(|rgb| [rgb[0], rgb[1], rgb[2], 1.0])
-            .unwrap_or([0.05, 0.08, 0.12, 1.0])
+        parse_rgba_color(self.background_color.as_str()).unwrap_or([0.05, 0.08, 0.12, 1.0])
     }
 
     pub fn style_named(&self, name: &str) -> Option<&TextStyleConfig> {
@@ -732,18 +753,24 @@ impl TextSceneConfig {
 impl TextStyleConfig {
     pub fn normalized_name(&self) -> &str {
         let trimmed = self.name.trim();
-        if trimmed.is_empty() { "body" } else { trimmed }
+        if trimmed.is_empty() {
+            "body"
+        } else {
+            trimmed
+        }
     }
 
     pub fn normalized_font_family(&self) -> &str {
         let trimmed = self.font_family.trim();
-        if trimmed.is_empty() { "sans-serif" } else { trimmed }
+        if trimmed.is_empty() {
+            "sans-serif"
+        } else {
+            trimmed
+        }
     }
 
     pub fn rgba(&self) -> [f32; 4] {
-        parse_hex_color(self.color.as_str())
-            .map(|rgb| [rgb[0], rgb[1], rgb[2], 1.0])
-            .unwrap_or([0.9, 0.94, 0.98, 1.0])
+        parse_rgba_color(self.color.as_str()).unwrap_or([0.9, 0.94, 0.98, 1.0])
     }
 
     pub fn resolved_line_spacing(&self) -> f32 {
@@ -762,14 +789,17 @@ impl TextOverlayConfig {
 
     pub fn resolved_style_name(&self) -> &str {
         let trimmed = self.style.trim();
-        if trimmed.is_empty() { "body" } else { trimmed }
+        if trimmed.is_empty() {
+            "body"
+        } else {
+            trimmed
+        }
     }
 
     pub fn background_rgba(&self) -> Option<[f32; 4]> {
         self.background_color
             .as_ref()
-            .and_then(|value| parse_hex_color(value.as_str()))
-            .map(|rgb| [rgb[0], rgb[1], rgb[2], 1.0])
+            .and_then(|value| parse_rgba_color(value.as_str()))
     }
 }
 

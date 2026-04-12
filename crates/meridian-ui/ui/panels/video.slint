@@ -363,11 +363,14 @@ export component VideoPanel inherits Rectangle {
                         label: "Base Color";
                         value: root.video-text-background-color-text;
                         is-preset:
-                            root.video-text-background-color-text == "#102B1E"
+                            root.video-text-background-color-text == "transparent"
+                            || root.video-text-background-color-text == "#00000000"
+                            || root.video-text-background-color-text == "#102B1E"
                             || root.video-text-background-color-text == "#132031"
                             || root.video-text-background-color-text == "#000000";
                         custom-submitted(val) => { root.update-video-text-overlay("scene_background_color", val); }
 
+                        OptionChip { label: "Transparent"; active: root.video-text-background-color-text == "transparent" || root.video-text-background-color-text == "#00000000"; pressed => { root.update-video-text-overlay("scene_background_color", "transparent"); } }
                         OptionChip { label: "Forest"; active: root.video-text-background-color-text == "#102B1E"; pressed => { root.update-video-text-overlay("scene_background_color", "#102B1E"); } }
                         OptionChip { label: "Slate"; active: root.video-text-background-color-text == "#132031"; pressed => { root.update-video-text-overlay("scene_background_color", "#132031"); } }
                         OptionChip { label: "Black"; active: root.video-text-background-color-text == "#000000"; pressed => { root.update-video-text-overlay("scene_background_color", "#000000"); } }

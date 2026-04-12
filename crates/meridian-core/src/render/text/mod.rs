@@ -275,10 +275,13 @@ pub(crate) fn project_text_scene(
     metrics: &TextRenderMetrics,
     scene: &mut ProjectedScene,
 ) {
-    scene.push_quad(
-        SceneLayer::Background,
-        solid_quad(0.0, 0.0, 1.0, 1.0, config.background_rgba()),
-    );
+    let background = config.background_rgba();
+    if background[3] > 0.0 {
+        scene.push_quad(
+            SceneLayer::Background,
+            solid_quad(0.0, 0.0, 1.0, 1.0, background),
+        );
+    }
 
     let rasterizer = TEXT_RASTERIZER.get_or_init(|| Mutex::new(TextRasterizer::new()));
     let mut rasterizer = rasterizer.lock().expect("text rasterizer mutex poisoned");
@@ -735,5 +738,23 @@ mod tests {
         assert!((text_reference_scale(1280.0, 720.0) - (2.0 / 3.0)).abs() < 0.0001);
         assert!((text_reference_scale(3840.0, 2160.0) - 2.0).abs() < 0.0001);
         assert!((text_reference_scale(1024.0, 1024.0) - (1024.0 / 1920.0)).abs() < 0.0001);
+    }
+
+    #[test]
+    fn transparent_scene_background_skips_background_quad() {
+        let mut config = TextSceneConfig::default();
+        config.background_color = "transparent".into();
+        let layout = SceneLayout {
+            scene: SceneConfig::Text(config.clone()),
+            viewport_width: 320,
+            viewport_height: 180,
+            ..SceneLayout::default()
+        };
+        let mut scene = ProjectedScene::default();
+
+        project_text_scene(&config, &layout, &TextRenderMetrics::default(), &mut scene);
+
+        assert_eq!(scene.layer(SceneLayer::Background).len(), 0);
+        assert!(!scene.layer(SceneLayer::Overlay).is_empty());
     }
 }
