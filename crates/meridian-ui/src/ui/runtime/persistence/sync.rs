@@ -13,8 +13,7 @@ use super::{
 use super::{
     assets::{
         active_aura_path_from_scene, active_background_path_from_scene,
-        active_palette_path_from_scene, last_aura_png, last_background_png, last_palette_png,
-        restore_last_asset_paths,
+        active_palette_path_from_scene, restore_last_asset_paths,
     },
     schema::{
         ExportPreferences, MergePreferences, ModifyPreferences, UiConfigFile, WindowPosition,
@@ -230,7 +229,7 @@ pub(in super::super) fn save_ui_config_now(
 pub(in super::super) fn restore_persisted_ui_state(
     app: &App,
     _bridge: &UiCoreBridge,
-    _shared_state: &Arc<Mutex<UiViewModel>>,
+    shared_state: &Arc<Mutex<UiViewModel>>,
     config: Option<&UiConfigFile>,
 ) {
     let Some(config) = config else {
@@ -238,7 +237,10 @@ pub(in super::super) fn restore_persisted_ui_state(
     };
 
     app.set_active_profile(config.preferences.active_profile);
-    restore_last_asset_paths(&config.preferences);
+    {
+        let mut state = shared_state.lock().expect("ui model mutex poisoned");
+        restore_last_asset_paths(&mut state, &config.preferences);
+    }
     restore_export_preferences(app, &config.preferences.export);
     restore_modify_preferences(app, &config.preferences.modify);
     restore_merge_preferences(app, &config.preferences.merge);
@@ -278,9 +280,9 @@ fn capture_ui_config(
     shared_state: &Arc<Mutex<UiViewModel>>,
     seed_config: Option<&UiConfigFile>,
 ) -> UiConfigFile {
-    let snapshot = {
+    let (snapshot, remembered_assets) = {
         let model = shared_state.lock().expect("ui model mutex poisoned");
-        model.snapshot.clone()
+        (model.snapshot.clone(), model.remembered_assets.clone())
     };
 
     let mut config = seed_config.cloned().unwrap_or_default();
@@ -301,11 +303,14 @@ fn capture_ui_config(
     config.preferences.merge = capture_merge_preferences(app);
     config.preferences.window = capture_window_preferences(app);
     config.preferences.last_palette_png =
-        active_palette_path_from_scene(&config.preferences.scene).or_else(last_palette_png);
+        active_palette_path_from_scene(&config.preferences.scene)
+            .or_else(|| remembered_assets.palette_png.clone());
     config.preferences.last_background_png =
-        active_background_path_from_scene(&config.preferences.scene).or_else(last_background_png);
+        active_background_path_from_scene(&config.preferences.scene)
+            .or_else(|| remembered_assets.background_png.clone());
     config.preferences.last_aura_png =
-        active_aura_path_from_scene(&config.preferences.scene).or_else(last_aura_png);
+        active_aura_path_from_scene(&config.preferences.scene)
+            .or_else(|| remembered_assets.aura_png.clone());
 
     config
 }

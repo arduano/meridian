@@ -7,7 +7,7 @@ use std::{
     rc::Rc,
     str::FromStr,
     sync::atomic::{AtomicU64, Ordering},
-    sync::{Arc, LazyLock, Mutex},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -51,10 +51,6 @@ use super::{
     view_model::{MergeSourceInspection, MergeSourceViewModel, UiViewModel},
     viewport::ViewportRenderer,
 };
-
-static LAST_PALETTE_PNG: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
-static LAST_AURA_PNG: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
-static LAST_BACKGROUND_PNG: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 
 mod audio;
 mod export;

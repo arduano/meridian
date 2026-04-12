@@ -39,6 +39,13 @@ pub struct AudioViewModel {
     pub status: AudioStatus,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct RememberedAssetPaths {
+    pub palette_png: Option<PathBuf>,
+    pub background_png: Option<String>,
+    pub aura_png: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct RenderJobsViewModel {
     pub video: VideoRenderStatus,
@@ -63,6 +70,7 @@ pub struct UiViewModel {
     pub analysis: AnalysisViewModel,
     pub modify: ModifyViewModel,
     pub merge: MergeViewModel,
+    pub remembered_assets: RememberedAssetPaths,
     pub snapshot: Option<StateSnapshot>,
 }
 

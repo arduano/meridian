@@ -155,6 +155,12 @@ pub(super) fn wire_video_control_callbacks(
                     });
                 }
                 "palette_kind" => {
+                    let palette_png = shared_state
+                        .lock()
+                        .expect("shared UI state mutex poisoned")
+                        .remembered_assets
+                        .palette_png
+                        .clone();
                     update_video_scene(&app, &bridge, &shared_state, move |scene| {
                         let Some(NotePaletteConfig::ZenithPalette { palette, .. }) =
                             palette_mut(scene)
@@ -163,11 +169,7 @@ pub(super) fn wire_video_control_callbacks(
                         };
                         *palette = match value.as_str() {
                             "random_gradients" => ZenithPaletteSpec::RandomGradients,
-                            "png_file" => match LAST_PALETTE_PNG
-                                .lock()
-                                .expect("palette png mutex poisoned")
-                                .clone()
-                            {
+                            "png_file" => match palette_png {
                                 Some(path) => ZenithPaletteSpec::PngFile { path },
                                 None => return,
                             },
@@ -186,13 +188,15 @@ pub(super) fn wire_video_control_callbacks(
                     });
                 }
                 "background_source" => {
+                    let background_png = shared_state
+                        .lock()
+                        .expect("shared UI state mutex poisoned")
+                        .remembered_assets
+                        .background_png
+                        .clone();
                     update_video_scene(&app, &bridge, &shared_state, move |scene| {
                         *background_mut(scene) = if value.as_str() == "png_file" {
-                            match LAST_BACKGROUND_PNG
-                                .lock()
-                                .expect("background png mutex poisoned")
-                                .clone()
-                            {
+                            match background_png {
                                 Some(path) => ProjectorBackgroundConfig::PngFile {
                                     path,
                                     scaling: ProjectorBackgroundScalingMode::Stretch,
@@ -335,6 +339,12 @@ pub(super) fn wire_video_control_callbacks(
                     })
                 }
                 "ptc_aura_image_source" => {
+                    let aura_png = shared_state
+                        .lock()
+                        .expect("shared UI state mutex poisoned")
+                        .remembered_assets
+                        .aura_png
+                        .clone();
                     update_video_scene(&app, &bridge, &shared_state, move |scene| {
                         let Some(config) = ptc_mut(scene) else {
                             return;
@@ -344,11 +354,7 @@ pub(super) fn wire_video_control_callbacks(
                                 name: "ring".into(),
                             }
                         } else {
-                            match LAST_AURA_PNG
-                                .lock()
-                                .expect("aura png mutex poisoned")
-                                .clone()
-                            {
+                            match aura_png {
                                 Some(path) => ProjectorImageConfig::PngFile { path },
                                 None => return,
                             }

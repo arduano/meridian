@@ -1,6 +1,6 @@
 use super::*;
 
-mod assets;
+pub(super) mod assets;
 mod schema;
 mod startup;
 mod store;

@@ -81,25 +81,7 @@ pub(super) fn save_ui_config_to_dir(
             .map_err(|error| format!("failed to flush {}: {error}", temp_path.display()))?;
     }
 
-    if primary_path.exists() {
-        fs::copy(&primary_path, &backup_path).map_err(|error| {
-            format!(
-                "failed to refresh backup {} from {}: {error}",
-                backup_path.display(),
-                primary_path.display()
-            )
-        })?;
-        fs::remove_file(&primary_path)
-            .map_err(|error| format!("failed to replace {}: {error}", primary_path.display()))?;
-    }
-
-    fs::rename(&temp_path, &primary_path).map_err(|error| {
-        format!(
-            "failed to move {} into place as {}: {error}",
-            temp_path.display(),
-            primary_path.display()
-        )
-    })?;
+    replace_config_file(&primary_path, &backup_path, &temp_path)?;
 
     Ok(())
 }
@@ -114,6 +96,37 @@ fn load_ui_config_file(path: &Path) -> Result<Option<UiConfigFile>, String> {
     let config = serde_json::from_slice::<UiConfigFile>(&bytes)
         .map_err(|error| format!("failed to parse {}: {error}", path.display()))?;
     Ok(Some(config))
+}
+
+fn replace_config_file(primary: &Path, backup: &Path, temp: &Path) -> Result<(), String> {
+    let had_primary = primary.exists();
+
+    if had_primary {
+        if backup.exists() {
+            fs::remove_file(backup)
+                .map_err(|error| format!("failed to clear {}: {error}", backup.display()))?;
+        }
+        fs::rename(primary, backup).map_err(|error| {
+            format!(
+                "failed to move {} to {}: {error}",
+                primary.display(),
+                backup.display()
+            )
+        })?;
+    }
+
+    if let Err(error) = fs::rename(temp, primary) {
+        if had_primary && backup.exists() {
+            let _ = fs::rename(backup, primary);
+        }
+        return Err(format!(
+            "failed to move {} into place as {}: {error}",
+            temp.display(),
+            primary.display()
+        ));
+    }
+
+    Ok(())
 }
 
 fn resolve_config_dir(dir_override: Option<&Path>) -> Result<Option<PathBuf>, String> {
