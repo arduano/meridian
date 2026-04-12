@@ -10,7 +10,10 @@ use std::sync::Arc;
 
 use crate::render::DisplayTimeSpace;
 
-use super::{MIDIAnalysisSummary, MIDIFile, MIDIFileBase, MIDIFileStats, MIDIFileUniqueSignature};
+use super::{
+    MIDIAnalysisSummary, MIDIFile, MIDIFileBase, MIDIFileStats, MIDIFileUniqueSignature,
+    display_cache::DisplayMidiCache,
+};
 use view::{InRamCurrentNoteViews, InRamNoteViewData};
 
 pub struct InRamMIDIFile {
@@ -81,5 +84,9 @@ impl InRamMIDIFile {
 
     pub fn track_count(&self) -> usize {
         self.cache.track_count()
+    }
+
+    pub fn display_cache(&self) -> Arc<DisplayMidiCache> {
+        Arc::clone(&self.cache)
     }
 }

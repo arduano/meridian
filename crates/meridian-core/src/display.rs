@@ -6,7 +6,7 @@ use crate::{
     protocol::{CoreErrorCode, CoreEvent, FrameStats, ImageExportConfig, ImageOutputFormat},
     render::{
         ProjectedScene, SceneConfig, SceneLayout, ScenePhysicsState, headless::save_scene_headless,
-        project_scene, tick_scene_physics,
+        project_scene, text::{build_text_render_metrics, project_text_scene}, tick_scene_physics,
     },
     transport::TransportSnapshot,
 };
@@ -102,6 +102,7 @@ impl LiveDisplaySession {
                 .palette()
                 .build_color_table(midi.track_count())?,
             SceneConfig::ThreeD(scene) => scene.palette().build_color_table(midi.track_count())?,
+            SceneConfig::Text(_) => return Ok(()),
         };
         midi.apply_default_track_colors(colors);
         Ok(())
@@ -240,6 +241,20 @@ impl LiveDisplaySession {
         &mut self,
         current_time: f64,
     ) -> Result<ProjectedScene, MeridianError> {
+        if matches!(self.layout.scene, SceneConfig::Text(_)) {
+            let mut scene = ProjectedScene::default();
+            if let SceneConfig::Text(config) = &self.layout.scene {
+                let metrics = build_text_render_metrics(
+                    self.midi.as_mut(),
+                    &self.layout,
+                    current_time,
+                    scene.visible_notes,
+                    scene.active_keys,
+                );
+                project_text_scene(config, &self.layout, &metrics, &mut scene);
+            }
+            return Ok(scene);
+        }
         let midi = self
             .midi
             .as_mut()

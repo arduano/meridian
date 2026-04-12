@@ -1,7 +1,7 @@
 use meridian_core::render::{
     KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
     ProjectorBackgroundConfig, ProjectorBackgroundScalingMode, RendererKind, SceneConfig,
-    ThreeDSceneConfig, ZenithPaletteSpec,
+    TextSceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
 };
 
 use super::{
@@ -66,8 +66,23 @@ pub fn rows_for_scene(scene: &SceneConfig) -> Vec<InspectorRow> {
             rows.push(row("Scene", "Palette", palette_name(&config.palette)));
             rows.extend(metadata_rows(RendererKind::PianoTrailClassic));
         }
+        SceneConfig::Text(config) => {
+            rows.extend(text_rows(config));
+            rows.extend(metadata_rows(RendererKind::Text));
+        }
     }
     rows
+}
+
+fn text_rows(config: &TextSceneConfig) -> Vec<InspectorRow> {
+    vec![
+        row("Scene", "Scene Type", "Text"),
+        row("Scene", "Projector", "text"),
+        row("Text", "Default Style", config.default_style.clone()),
+        row("Text", "Background Color", config.background_color.clone()),
+        row("Text", "Overlays", config.overlays.len().to_string()),
+        row("Text", "Styles", config.styles.len().to_string()),
+    ]
 }
 
 fn note_rows(config: &NoteProjectorConfig) -> Vec<InspectorRow> {

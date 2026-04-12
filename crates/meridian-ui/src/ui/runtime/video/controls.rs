@@ -394,6 +394,7 @@ pub(super) fn palette_mut(scene: &mut SceneConfig) -> Option<&mut NotePaletteCon
         SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => {
             Some(&mut config.palette)
         }
+        SceneConfig::Text(_) => None,
     }
 }
 

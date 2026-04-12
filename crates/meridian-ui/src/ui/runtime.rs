@@ -66,6 +66,8 @@ mod viewport;
 
 use audio::wire_audio_config_callbacks;
 pub use export::run_ui;
+#[cfg(feature = "debug-snapshots")]
+pub(crate) use export::initialize_core;
 use export::*;
 use midi_callbacks::wire_midi_callbacks;
 use midi_load::*;

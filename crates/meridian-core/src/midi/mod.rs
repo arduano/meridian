@@ -29,6 +29,7 @@ use ts_rs::TS;
 
 use crate::error::MeridianError;
 use crate::render::DisplayTimeSpace;
+use std::sync::Arc;
 pub use cache::MidiCacheStack;
 pub use colors::{MIDIColor, MIDIColorPair};
 pub use file_merge::{MidiFilesMergeConfig, MidiFilesMergeMode};
@@ -279,6 +280,12 @@ impl MIDIFileUnion {
     pub fn key_note_counts(&self) -> [u64; MIDI_KEY_COUNT] {
         match self {
             Self::InRam(file) => file.key_note_counts(),
+        }
+    }
+
+    pub fn display_cache(&self) -> Arc<display_cache::DisplayMidiCache> {
+        match self {
+            Self::InRam(file) => file.display_cache(),
         }
     }
 }

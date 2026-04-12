@@ -4,6 +4,7 @@ pub mod headless;
 pub mod pfa;
 pub mod piano_trail_classic;
 pub mod shared;
+pub mod text;
 
 pub use shared::{
     DisplayTimeSpace, FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardHeightSpec,
@@ -11,8 +12,9 @@ pub use shared::{
     PFA_GREEN_TOP_BAR_COLOR, PFA_RED_TOP_BAR_COLOR, PfaKeyboardProjectorConfig,
     PfaNoteProjectorConfig, PianoTrailClassicSceneConfig, ProjectedScene,
     ProjectorBackgroundConfig, ProjectorBackgroundScalingMode, ProjectorImageConfig, RendererKind,
-    SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState, SceneQuad, ThreeDSceneConfig,
-    TwoDSceneConfig, ZenithPaletteSpec, tick_scene_physics,
+    SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState, SceneQuad, TextAlignment, TextAnchor,
+    TextOverlayConfig, TextRowConfig, TextSceneConfig, TextStyleConfig, TextValueFormat,
+    TextValueSource, ThreeDSceneConfig, TwoDSceneConfig, ZenithPaletteSpec, tick_scene_physics,
 };
 
 use crate::midi::{backend::MIDIFileUnion, views::MIDIFileViewsUnion};
@@ -22,6 +24,7 @@ use piano_trail_classic::project_piano_trail_classic_scene;
 use shared::{
     KeyboardProjectorConfig as KeyboardConfig, NoteProjectorConfig as NoteConfig, SceneConfig::*,
 };
+use text::project_text_scene;
 
 pub fn project_scene(
     midi: &mut MIDIFileUnion,
@@ -85,5 +88,16 @@ pub fn project_scene_views_into(
         ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => {
             project_piano_trail_classic_scene(config, physics, views, layout, scene)
         }
+        Text(config) => project_text_scene(
+            config,
+            layout,
+            &text::TextRenderMetrics {
+                renderer_name: "text".into(),
+                viewport_width: layout.viewport_width,
+                viewport_height: layout.viewport_height,
+                ..text::TextRenderMetrics::default()
+            },
+            scene,
+        ),
     }
 }

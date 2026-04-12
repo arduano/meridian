@@ -65,6 +65,7 @@ export type { SceneConfig } from "../generated/SceneConfig.ts";
 export type { SharedMetadataTrackDestination } from "../generated/SharedMetadataTrackDestination.ts";
 export type { TempoMapDestination } from "../generated/TempoMapDestination.ts";
 export type { TempoPoint } from "../generated/TempoPoint.ts";
+export type { TextSceneConfig } from "../generated/TextSceneConfig.ts";
 export type { TextKind } from "../generated/TextKind.ts";
 export type { TimeWarpPoint } from "../generated/TimeWarpPoint.ts";
 export type { ThreeDSceneConfig } from "../generated/ThreeDSceneConfig.ts";

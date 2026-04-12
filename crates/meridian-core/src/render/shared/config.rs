@@ -16,6 +16,7 @@ pub const PFA_GREEN_TOP_BAR_COLOR: &str = "#06950A";
 pub enum RendererKind {
     Flat,
     Pfa,
+    Text,
     #[serde(rename = "piano_trail_classic")]
     #[value(name = "piano-trail-classic")]
     PianoTrailClassic,
@@ -158,6 +159,154 @@ pub struct PianoTrailClassicSceneConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+pub struct TextSceneConfig {
+    #[serde(default)]
+    pub background: ProjectorBackgroundConfig,
+    #[serde(default = "default_text_background_color")]
+    pub background_color: String,
+    #[serde(default = "default_text_default_style_name")]
+    pub default_style: String,
+    #[serde(default = "default_text_styles")]
+    pub styles: Vec<TextStyleConfig>,
+    #[serde(default = "default_text_overlays")]
+    pub overlays: Vec<TextOverlayConfig>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TextAnchor {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    Center,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TextAlignment {
+    Left,
+    Center,
+    Right,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TextValueSource {
+    MidiName,
+    RendererName,
+    ViewportWidth,
+    ViewportHeight,
+    CurrentTimeSeconds,
+    RemainingTimeSeconds,
+    MidiLengthSeconds,
+    CurrentTick,
+    RemainingTick,
+    MidiLengthTick,
+    TotalNotes,
+    PassedNotes,
+    RemainingNotes,
+    VisibleNotes,
+    ActiveKeys,
+    CurrentPolyphony,
+    CurrentBpm,
+    CurrentNps1s,
+    CurrentNps2s,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TextValueFormat {
+    Raw,
+    Integer,
+    Decimal1,
+    Decimal2,
+    Decimal3,
+    Clock,
+    Seconds1,
+    Seconds2,
+    Bpm,
+    Ticks,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+pub struct TextStyleConfig {
+    #[serde(default = "default_text_style_name")]
+    pub name: String,
+    #[serde(default = "default_text_font_family")]
+    pub font_family: String,
+    #[serde(default = "default_text_pixel_scale")]
+    pub font_size: u32,
+    #[serde(default = "default_text_color")]
+    pub color: String,
+    #[serde(default = "default_text_line_spacing")]
+    pub line_spacing: f32,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+pub struct TextOverlayConfig {
+    #[serde(default = "default_text_overlay_name")]
+    pub name: String,
+    #[serde(default)]
+    pub anchor: TextAnchor,
+    #[serde(default = "default_text_x")]
+    pub x: f32,
+    #[serde(default = "default_text_y")]
+    pub y: f32,
+    #[serde(default = "default_text_overlay_width")]
+    pub width: f32,
+    #[serde(default = "default_text_overlay_padding")]
+    pub padding: f32,
+    #[serde(default = "default_text_overlay_row_gap")]
+    pub row_gap: f32,
+    #[serde(default)]
+    pub background_color: Option<String>,
+    #[serde(default)]
+    pub alignment: TextAlignment,
+    #[serde(default = "default_text_default_style_name")]
+    pub style: String,
+    #[serde(default = "default_text_rows")]
+    pub rows: Vec<TextRowConfig>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "row_type", rename_all = "snake_case")]
+pub enum TextRowConfig {
+    PlainText {
+        text: String,
+        #[serde(default)]
+        style: Option<String>,
+    },
+    Metric {
+        #[serde(default)]
+        label: String,
+        source: TextValueSource,
+        #[serde(default)]
+        format: TextValueFormat,
+        #[serde(default)]
+        prefix: String,
+        #[serde(default)]
+        suffix: String,
+        #[serde(default)]
+        style: Option<String>,
+    },
+    MetricPair {
+        #[serde(default)]
+        label: String,
+        primary_source: TextValueSource,
+        #[serde(default)]
+        primary_format: TextValueFormat,
+        secondary_source: TextValueSource,
+        #[serde(default)]
+        secondary_format: Option<TextValueFormat>,
+        #[serde(default = "default_text_pair_separator")]
+        separator: String,
+        #[serde(default)]
+        style: Option<String>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "projector", rename_all = "snake_case")]
 pub enum ThreeDSceneConfig {
     #[serde(rename = "piano_trail_classic")]
@@ -169,6 +318,7 @@ pub enum ThreeDSceneConfig {
 pub enum SceneConfig {
     TwoD(TwoDSceneConfig),
     ThreeD(ThreeDSceneConfig),
+    Text(TextSceneConfig),
 }
 
 #[repr(usize)]
@@ -347,6 +497,66 @@ impl Default for ThreeDSceneConfig {
     }
 }
 
+impl Default for TextSceneConfig {
+    fn default() -> Self {
+        Self {
+            background: ProjectorBackgroundConfig::default(),
+            background_color: default_text_background_color(),
+            default_style: default_text_default_style_name(),
+            styles: default_text_styles(),
+            overlays: default_text_overlays(),
+        }
+    }
+}
+
+impl Default for TextAnchor {
+    fn default() -> Self {
+        Self::TopLeft
+    }
+}
+
+impl Default for TextAlignment {
+    fn default() -> Self {
+        Self::Left
+    }
+}
+
+impl Default for TextValueFormat {
+    fn default() -> Self {
+        Self::Raw
+    }
+}
+
+impl Default for TextStyleConfig {
+    fn default() -> Self {
+        Self {
+            name: default_text_style_name(),
+            font_family: default_text_font_family(),
+            font_size: default_text_pixel_scale(),
+            color: default_text_color(),
+            line_spacing: default_text_line_spacing(),
+        }
+    }
+}
+
+impl Default for TextOverlayConfig {
+    fn default() -> Self {
+        Self {
+            name: default_text_overlay_name(),
+            anchor: TextAnchor::default(),
+            x: default_text_x(),
+            y: default_text_y(),
+            width: default_text_overlay_width(),
+            padding: default_text_overlay_padding(),
+            row_gap: default_text_overlay_row_gap(),
+            background_color: None,
+            alignment: TextAlignment::default(),
+            style: default_text_default_style_name(),
+            rows: default_text_rows(),
+        }
+    }
+}
+
 impl Default for ProjectorBackgroundScalingMode {
     fn default() -> Self {
         Self::Stretch
@@ -400,6 +610,7 @@ impl SceneLayout {
                 .keyboard_height
                 .resolve(self.viewport_width, self.viewport_height),
             SceneConfig::ThreeD(_) => 0.151,
+            SceneConfig::Text(_) => 0.0,
         }
     }
 
@@ -415,6 +626,10 @@ impl SceneLayout {
             RendererKind::Pfa => SceneConfig::TwoD(TwoDSceneConfig {
                 background,
                 ..TwoDSceneConfig::default()
+            }),
+            RendererKind::Text => SceneConfig::Text(TextSceneConfig {
+                background,
+                ..TextSceneConfig::default()
             }),
             RendererKind::PianoTrailClassic => SceneConfig::ThreeD(
                 ThreeDSceneConfig::PianoTrailClassic(PianoTrailClassicSceneConfig {
@@ -441,6 +656,7 @@ impl SceneConfig {
         match self {
             Self::TwoD(config) => &config.background,
             Self::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => &config.background,
+            Self::Text(config) => &config.background,
         }
     }
 
@@ -448,6 +664,7 @@ impl SceneConfig {
         match self {
             Self::TwoD(config) => &mut config.background,
             Self::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)) => &mut config.background,
+            Self::Text(config) => &mut config.background,
         }
     }
 
@@ -457,6 +674,7 @@ impl SceneConfig {
                 NoteProjectorConfig::Flat(_) => RendererKind::Flat,
                 NoteProjectorConfig::Pfa(_) => RendererKind::Pfa,
             },
+            Self::Text(_) => RendererKind::Text,
             Self::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => {
                 RendererKind::PianoTrailClassic
             }
@@ -489,4 +707,133 @@ fn parse_hex_color(value: &str) -> Option<[f32; 3]> {
         u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0,
         u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0,
     ])
+}
+
+impl TextSceneConfig {
+    pub fn background_rgba(&self) -> [f32; 4] {
+        parse_hex_color(self.background_color.as_str())
+            .map(|rgb| [rgb[0], rgb[1], rgb[2], 1.0])
+            .unwrap_or([0.05, 0.08, 0.12, 1.0])
+    }
+
+    pub fn style_named(&self, name: &str) -> Option<&TextStyleConfig> {
+        self.styles
+            .iter()
+            .find(|style| style.normalized_name() == name.trim())
+    }
+
+    pub fn default_style_config(&self) -> &TextStyleConfig {
+        self.style_named(self.default_style.as_str())
+            .or_else(|| self.styles.first())
+            .expect("text scene should always contain at least one style")
+    }
+}
+
+impl TextStyleConfig {
+    pub fn normalized_name(&self) -> &str {
+        let trimmed = self.name.trim();
+        if trimmed.is_empty() { "body" } else { trimmed }
+    }
+
+    pub fn normalized_font_family(&self) -> &str {
+        let trimmed = self.font_family.trim();
+        if trimmed.is_empty() { "sans-serif" } else { trimmed }
+    }
+
+    pub fn rgba(&self) -> [f32; 4] {
+        parse_hex_color(self.color.as_str())
+            .map(|rgb| [rgb[0], rgb[1], rgb[2], 1.0])
+            .unwrap_or([0.9, 0.94, 0.98, 1.0])
+    }
+
+    pub fn resolved_line_spacing(&self) -> f32 {
+        self.line_spacing.max(0.0)
+    }
+
+    pub fn resolved_font_size(&self) -> u32 {
+        self.font_size.max(1)
+    }
+}
+
+impl TextOverlayConfig {
+    pub fn resolved_width(&self) -> f32 {
+        self.width.clamp(0.05, 1.0)
+    }
+
+    pub fn resolved_style_name(&self) -> &str {
+        let trimmed = self.style.trim();
+        if trimmed.is_empty() { "body" } else { trimmed }
+    }
+
+    pub fn background_rgba(&self) -> Option<[f32; 4]> {
+        self.background_color
+            .as_ref()
+            .and_then(|value| parse_hex_color(value.as_str()))
+            .map(|rgb| [rgb[0], rgb[1], rgb[2], 1.0])
+    }
+}
+
+impl TextRowConfig {
+    pub fn style_name(&self) -> Option<&str> {
+        match self {
+            Self::PlainText { style, .. }
+            | Self::Metric { style, .. }
+            | Self::MetricPair { style, .. } => style.as_deref(),
+        }
+    }
+}
+
+fn default_text_styles() -> Vec<TextStyleConfig> {
+    vec![
+        TextStyleConfig {
+            name: "title".to_string(),
+            font_family: default_text_font_family(),
+            font_size: 64,
+            color: "#F6F1E7".to_string(),
+            line_spacing: 14.0,
+        },
+        TextStyleConfig {
+            name: "body".to_string(),
+            font_family: default_text_font_family(),
+            font_size: 42,
+            color: default_text_color(),
+            line_spacing: 10.0,
+        },
+        TextStyleConfig {
+            name: "mono".to_string(),
+            font_family: "monospace".to_string(),
+            font_size: 34,
+            color: "#BCE7D0".to_string(),
+            line_spacing: 8.0,
+        },
+    ]
+}
+
+fn default_text_rows() -> Vec<TextRowConfig> {
+    vec![
+        TextRowConfig::PlainText {
+            text: "MERIDIAN".to_string(),
+            style: Some("title".to_string()),
+        },
+        TextRowConfig::PlainText {
+            text: "Structured text scene".to_string(),
+            style: None,
+        },
+        TextRowConfig::PlainText {
+            text: "Time {{time.current|clock}}".to_string(),
+            style: Some("mono".to_string()),
+        },
+    ]
+}
+
+fn default_text_overlays() -> Vec<TextOverlayConfig> {
+    vec![TextOverlayConfig::default()]
+}
+
+fn default_text_overlay_name() -> String {
+    "Overlay 1".to_string()
+}
+
+fn default_text_pair_separator() -> String {
+    " / ".to_string()
 }

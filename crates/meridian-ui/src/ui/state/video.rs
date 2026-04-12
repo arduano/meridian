@@ -1,11 +1,15 @@
+use std::sync::{Arc, Mutex};
+
 use meridian_core::protocol::{StateSnapshot, VideoRenderStatus};
 use meridian_core::render::{
     KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
     PFA_RED_TOP_BAR_COLOR, ProjectorBackgroundConfig, ProjectorBackgroundScalingMode,
-    ProjectorImageConfig, SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
+    ProjectorImageConfig, SceneConfig, TextAlignment, TextAnchor, TextOverlayConfig,
+    TextRowConfig, TextSceneConfig, TextStyleConfig, TextValueFormat, TextValueSource,
+    ThreeDSceneConfig, ZenithPaletteSpec,
 };
-
 use super::super::view::App;
+use super::super::view_model::UiViewModel;
 use super::formatting::{file_name_or_full, format_view_range_numeric};
 
 pub(super) fn scene_summary(scene: &SceneConfig) -> String {
@@ -18,6 +22,13 @@ pub(super) fn scene_summary(scene: &SceneConfig) -> String {
         ),
         SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => {
             "3D / Piano Trail Classic".into()
+        }
+        SceneConfig::Text(config) => {
+            format!(
+                "Text / {} overlays / {} styles",
+                config.overlays.len(),
+                config.styles.len()
+            )
         }
     }
 }
@@ -51,10 +62,15 @@ pub(super) fn renderer_summary(scene: &SceneConfig) -> &'static str {
             _ => "mixed",
         },
         SceneConfig::ThreeD(_) => "3d",
+        SceneConfig::Text(_) => "text",
     }
 }
 
-pub(super) fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
+pub(super) fn apply_video_scene_to_app(
+    app: &App,
+    state: &StateSnapshot,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+) {
     app.set_video_view_range_value_text(format_view_range_numeric(state.view_range).into());
     app.set_video_view_range_value_float(state.view_range as f32);
     app.set_video_first_key_text(state.first_key.to_string().into());
@@ -173,6 +189,193 @@ pub(super) fn apply_video_scene_to_app(app: &App, state: &StateSnapshot) {
                 }
             }
         }
+        SceneConfig::Text(config) => {
+            app.set_video_keyboard_height_mode_text("aspect_ratio".into());
+            app.set_video_keyboard_height_value_text("0.08494".into());
+            app.set_video_keyboard_height_value_float(0.08494);
+            app.set_video_note_same_width_text("off".into());
+            app.set_video_border_width_text("1.0".into());
+            app.set_video_border_width_float(1.0);
+            app.set_video_keyboard_same_width_text("off".into());
+            app.set_video_middle_c_text("off".into());
+            app.set_video_top_color_text("red".into());
+            app.set_video_top_bar_color_text(PFA_RED_TOP_BAR_COLOR.into());
+            app.set_video_palette_source_text("default_track_colors".into());
+            app.set_video_palette_kind_text("random".into());
+            app.set_video_palette_randomize_text("off".into());
+            apply_ptc_defaults_to_app(app);
+            apply_text_scene_to_app(app, config, shared_state);
+        }
+    }
+}
+
+fn apply_text_scene_to_app(
+    app: &App,
+    config: &TextSceneConfig,
+    shared_state: &Arc<Mutex<UiViewModel>>,
+) {
+    let _ = shared_state;
+
+    let overlay = simple_text_overlay(config);
+    let style = simple_text_style(config, &overlay);
+    let template_text = simple_text_template(config);
+
+    app.set_video_text_background_color_text(config.background_color.clone().into());
+    app.set_video_text_overlay_anchor_text(text_anchor_key(overlay.anchor).into());
+    app.set_video_text_overlay_alignment_text(text_alignment_key(overlay.alignment).into());
+    app.set_video_text_overlay_background_color_text(
+        overlay.background_color.clone().unwrap_or_default().into(),
+    );
+    app.set_video_text_overlay_x_float(overlay.x);
+    app.set_video_text_overlay_y_float(overlay.y);
+    app.set_video_text_overlay_width_float(overlay.width);
+    app.set_video_text_row_text_text(template_text.into());
+    app.set_video_text_style_font_family_text(style.font_family.clone().into());
+    app.set_video_text_style_color_text(style.color.clone().into());
+    app.set_video_text_style_font_size_float(style.font_size as f32);
+    app.set_video_text_style_line_spacing_float(style.line_spacing);
+}
+
+fn simple_text_overlay(config: &TextSceneConfig) -> TextOverlayConfig {
+    config.overlays.first().cloned().unwrap_or_default()
+}
+
+fn simple_text_style(config: &TextSceneConfig, overlay: &TextOverlayConfig) -> TextStyleConfig {
+    config
+        .style_named(overlay.resolved_style_name())
+        .or_else(|| config.style_named(config.default_style.as_str()))
+        .or_else(|| config.style_named("body"))
+        .or_else(|| config.styles.first())
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn simple_text_template(config: &TextSceneConfig) -> String {
+    config
+        .overlays
+        .iter()
+        .map(|overlay| {
+            overlay
+                .rows
+                .iter()
+                .map(row_to_template_text)
+                .filter(|row| !row.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .filter(|overlay| !overlay.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+fn row_to_template_text(row: &TextRowConfig) -> String {
+    match row {
+        TextRowConfig::PlainText { text, .. } => text.clone(),
+        TextRowConfig::Metric {
+            label,
+            source,
+            format,
+            prefix,
+            suffix,
+            ..
+        } => {
+            let mut out = String::new();
+            if !label.trim().is_empty() {
+                out.push_str(label.trim());
+                out.push_str(": ");
+            }
+            if !prefix.is_empty() {
+                out.push_str(prefix);
+            }
+            out.push_str(&template_token(*source, Some(*format)));
+            if !suffix.is_empty() {
+                out.push_str(suffix);
+            }
+            out
+        }
+        TextRowConfig::MetricPair {
+            label,
+            primary_source,
+            primary_format,
+            secondary_source,
+            secondary_format,
+            separator,
+            ..
+        } => {
+            let mut out = String::new();
+            if !label.trim().is_empty() {
+                out.push_str(label.trim());
+                out.push_str(": ");
+            }
+            out.push_str(&template_token(*primary_source, Some(*primary_format)));
+            out.push_str(separator);
+            out.push_str(&template_token(
+                *secondary_source,
+                secondary_format.or(Some(*primary_format)),
+            ));
+            out
+        }
+    }
+}
+
+fn template_token(source: TextValueSource, format: Option<TextValueFormat>) -> String {
+    let source = match source {
+        TextValueSource::MidiName => "midi.name",
+        TextValueSource::RendererName => "renderer.name",
+        TextValueSource::ViewportWidth => "viewport.width",
+        TextValueSource::ViewportHeight => "viewport.height",
+        TextValueSource::CurrentTimeSeconds => "time.current",
+        TextValueSource::RemainingTimeSeconds => "time.remaining",
+        TextValueSource::MidiLengthSeconds => "time.length",
+        TextValueSource::CurrentTick => "tick.current",
+        TextValueSource::RemainingTick => "tick.remaining",
+        TextValueSource::MidiLengthTick => "tick.length",
+        TextValueSource::TotalNotes => "notes.total",
+        TextValueSource::PassedNotes => "notes.passed",
+        TextValueSource::RemainingNotes => "notes.remaining",
+        TextValueSource::VisibleNotes => "notes.visible",
+        TextValueSource::ActiveKeys => "keys.active",
+        TextValueSource::CurrentPolyphony => "polyphony.current",
+        TextValueSource::CurrentBpm => "tempo.bpm",
+        TextValueSource::CurrentNps1s => "density.nps1",
+        TextValueSource::CurrentNps2s => "density.nps2",
+    };
+    match format {
+        Some(format) => format!("{{{{{source}|{}}}}}", template_format_name(format)),
+        None => format!("{{{{{source}}}}}"),
+    }
+}
+
+fn template_format_name(format: TextValueFormat) -> &'static str {
+    match format {
+        TextValueFormat::Raw => "raw",
+        TextValueFormat::Integer => "int",
+        TextValueFormat::Decimal1 => "0.0",
+        TextValueFormat::Decimal2 => "0.00",
+        TextValueFormat::Decimal3 => "0.000",
+        TextValueFormat::Clock => "clock",
+        TextValueFormat::Seconds1 => "s1",
+        TextValueFormat::Seconds2 => "s2",
+        TextValueFormat::Bpm => "bpm",
+        TextValueFormat::Ticks => "ticks",
+    }
+}
+
+pub(super) fn text_anchor_key(anchor: TextAnchor) -> &'static str {
+    match anchor {
+        TextAnchor::TopLeft => "top_left",
+        TextAnchor::TopRight => "top_right",
+        TextAnchor::BottomLeft => "bottom_left",
+        TextAnchor::BottomRight => "bottom_right",
+        TextAnchor::Center => "center",
+    }
+}
+
+pub(super) fn text_alignment_key(alignment: TextAlignment) -> &'static str {
+    match alignment {
+        TextAlignment::Left => "left",
+        TextAlignment::Center => "center",
+        TextAlignment::Right => "right",
     }
 }
 

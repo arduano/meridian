@@ -124,6 +124,30 @@ const PIANO_TRAIL_CLASSIC_FIELDS: &[UiFieldMeta] = &[
     },
 ];
 
+const TEXT_FIELDS: &[UiFieldMeta] = &[
+    UiFieldMeta {
+        section: "Text",
+        key: "default_style",
+        label: "Default Style",
+        control: UiControlKind::Text,
+        default_hint: "body",
+    },
+    UiFieldMeta {
+        section: "Text",
+        key: "overlay_count",
+        label: "Overlay Count",
+        control: UiControlKind::Text,
+        default_hint: "1",
+    },
+    UiFieldMeta {
+        section: "Text",
+        key: "style_count",
+        label: "Style Count",
+        control: UiControlKind::Text,
+        default_hint: "3",
+    },
+];
+
 pub const PROJECTOR_EDITOR_META: &[ProjectorEditorMeta] = &[
     ProjectorEditorMeta {
         renderer: RendererKind::Pfa,
@@ -139,6 +163,11 @@ pub const PROJECTOR_EDITOR_META: &[ProjectorEditorMeta] = &[
         renderer: RendererKind::PianoTrailClassic,
         label: "Piano Trail Classic",
         fields: PIANO_TRAIL_CLASSIC_FIELDS,
+    },
+    ProjectorEditorMeta {
+        renderer: RendererKind::Text,
+        label: "Text",
+        fields: TEXT_FIELDS,
     },
 ];
 

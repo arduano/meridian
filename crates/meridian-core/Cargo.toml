@@ -8,6 +8,7 @@ license = "LGPL-3.0-or-later"
 bytemuck.workspace = true
 clap.workspace = true
 cpal.workspace = true
+cosmic-text.workspace = true
 enum_dispatch.workspace = true
 flate2.workspace = true
 flume.workspace = true

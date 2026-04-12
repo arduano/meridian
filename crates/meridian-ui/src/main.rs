@@ -38,6 +38,7 @@ fn parse_renderer(value: &str) -> Result<RendererKind, String> {
     match value {
         "flat" => Ok(RendererKind::Flat),
         "pfa" => Ok(RendererKind::Pfa),
+        "text" => Ok(RendererKind::Text),
         "piano_trail_classic" | "piano-trail-classic" => Ok(RendererKind::PianoTrailClassic),
         _ => Err(format!("unknown renderer `{value}`")),
     }

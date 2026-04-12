@@ -1,14 +1,12 @@
-use std::{
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 use meridian_core::render::{
     NotePaletteConfig, NoteProjectorConfig, ProjectorBackgroundConfig, ProjectorImageConfig,
     SceneConfig, ThreeDSceneConfig, ZenithPaletteSpec,
 };
 
-use super::schema::UiPreferences;
 use super::super::UiViewModel;
+use super::schema::UiPreferences;
 
 pub(crate) fn active_palette_path_from_scene(scene: &SceneConfig) -> Option<PathBuf> {
     match scene {
@@ -22,6 +20,7 @@ pub(crate) fn active_palette_path_from_scene(scene: &SceneConfig) -> Option<Path
                 _ => None,
             }
         }
+        SceneConfig::Text(_) => None,
     }
 }
 
@@ -42,10 +41,7 @@ pub(crate) fn active_aura_path_from_scene(scene: &SceneConfig) -> Option<String>
     }
 }
 
-pub(crate) fn restore_last_asset_paths(
-    state: &mut UiViewModel,
-    preferences: &UiPreferences,
-) {
+pub(crate) fn restore_last_asset_paths(state: &mut UiViewModel, preferences: &UiPreferences) {
     state.remembered_assets.palette_png = preferences.last_palette_png.clone();
     state.remembered_assets.background_png = preferences.last_background_png.clone();
     state.remembered_assets.aura_png = preferences.last_aura_png.clone();

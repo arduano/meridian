@@ -8,6 +8,7 @@ use crate::render::piano_trail_classic::{
 #[derive(Clone, Debug)]
 pub enum ScenePhysicsState {
     TwoD,
+    Text,
     PianoTrailClassic(PianoTrailClassicPhysicsState),
 }
 
@@ -15,6 +16,7 @@ impl ScenePhysicsState {
     pub fn new(scene: &SceneConfig) -> Self {
         match scene {
             SceneConfig::TwoD(_) => Self::TwoD,
+            SceneConfig::Text(_) => Self::Text,
             SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => {
                 Self::PianoTrailClassic(PianoTrailClassicPhysicsState::default())
             }
@@ -49,6 +51,7 @@ pub fn tick_scene_physics_views(
     }
     match (&layout.scene, physics) {
         (SceneConfig::TwoD(_), ScenePhysicsState::TwoD) => {}
+        (SceneConfig::Text(_), ScenePhysicsState::Text) => {}
         (
             SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config)),
             ScenePhysicsState::PianoTrailClassic(state),

@@ -30,7 +30,7 @@ struct ViewportTexture {
 }
 
 enum ViewportBackend {
-    TwoD(PrimitiveSceneRenderer),
+    Primitive(PrimitiveSceneRenderer),
     ThreeD {
         renderer: PianoTrailClassicRenderer,
         size: (u32, u32),
@@ -163,7 +163,7 @@ impl ViewportRenderer {
         }
         self.last_frame_at = Some(now);
         match renderer {
-            ViewportBackend::TwoD(renderer) => renderer.render(
+            ViewportBackend::Primitive(renderer) => renderer.render(
                 device,
                 queue,
                 &viewport.texture,
@@ -199,7 +199,9 @@ impl ViewportRenderer {
         scene: &SceneConfig,
     ) {
         let needs_rebuild = match (&self.renderer, scene) {
-            (Some(ViewportBackend::TwoD(_)), SceneConfig::TwoD(_)) => false,
+            (Some(ViewportBackend::Primitive(_)), SceneConfig::TwoD(_) | SceneConfig::Text(_)) => {
+                false
+            }
             (
                 Some(ViewportBackend::ThreeD { size, .. }),
                 SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)),
@@ -211,7 +213,9 @@ impl ViewportRenderer {
         }
 
         self.renderer = Some(match scene {
-            SceneConfig::TwoD(_) => ViewportBackend::TwoD(PrimitiveSceneRenderer::new(device)),
+            SceneConfig::TwoD(_) | SceneConfig::Text(_) => {
+                ViewportBackend::Primitive(PrimitiveSceneRenderer::new(device))
+            }
             SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => {
                 ViewportBackend::ThreeD {
                     renderer: PianoTrailClassicRenderer::new(device, width, height),
@@ -224,7 +228,7 @@ impl ViewportRenderer {
 
 fn viewport_format_for_scene(scene: &SceneConfig) -> wgpu::TextureFormat {
     match scene {
-        SceneConfig::TwoD(_) => PFA_VIEWPORT_FORMAT,
+        SceneConfig::TwoD(_) | SceneConfig::Text(_) => PFA_VIEWPORT_FORMAT,
         SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => TRAIL_VIEWPORT_FORMAT,
     }
 }

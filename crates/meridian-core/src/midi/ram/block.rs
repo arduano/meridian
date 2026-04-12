@@ -63,4 +63,18 @@ impl InRamNoteBlock {
             DisplayTimeSpace::Tick => self.start_ticks as f64 + self.max_length_ticks as f64,
         }
     }
+
+    pub fn note_count(&self) -> u64 {
+        self.notes.len() as u64
+    }
+
+    pub fn active_notes_at_seconds(&self, time_seconds: f64) -> u64 {
+        if time_seconds < self.start_seconds {
+            return 0;
+        }
+        self.notes
+            .iter()
+            .filter(|note| self.start_seconds + note.len_seconds as f64 > time_seconds)
+            .count() as u64
+    }
 }

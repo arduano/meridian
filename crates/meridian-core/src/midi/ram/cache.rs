@@ -77,4 +77,30 @@ impl InRamMidiCache {
     pub fn tempo_map(&self) -> &TempoMap {
         &self.tempo_map
     }
+
+    pub fn note_starts_between(&self, start_seconds: f64, end_seconds: f64) -> u64 {
+        let start = start_seconds.min(end_seconds);
+        let end = start_seconds.max(end_seconds);
+        if end <= start {
+            return 0;
+        }
+        self.columns
+            .iter()
+            .flat_map(|column| column.iter())
+            .filter(|block| block.start_seconds >= start && block.start_seconds < end)
+            .map(|block| block.note_count())
+            .sum()
+    }
+
+    pub fn active_notes_at(&self, time_seconds: f64) -> u64 {
+        self.columns
+            .iter()
+            .flat_map(|column| column.iter())
+            .filter(|block| {
+                block.start_seconds <= time_seconds
+                    && block.start_seconds + block.max_length_seconds as f64 > time_seconds
+            })
+            .map(|block| block.active_notes_at_seconds(time_seconds))
+            .sum()
+    }
 }

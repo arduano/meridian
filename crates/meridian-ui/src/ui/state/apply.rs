@@ -178,7 +178,7 @@ pub(super) fn apply_state_to_app(
     app.set_inspector_items(ModelRc::from(std::rc::Rc::new(VecModel::from(
         rows_for_scene(&state.scene),
     ))));
-    apply_video_scene_to_app(app, state);
+    apply_video_scene_to_app(app, state, shared_state);
     app.set_play_label(if state.playing {
         "Pause".into()
     } else {

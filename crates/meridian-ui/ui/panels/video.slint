@@ -19,7 +19,30 @@ import {
     InlineOptionRow, InlineCustomRow, FilePicker, SliderRow
 } from "../primitives.slint";
 import { MidiStateSection } from "../midi_loading.slint";
+import { TextEdit } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
+
+component TextSceneEditorCard inherits Rectangle {
+    in property <string> text;
+    callback edited(string);
+
+    height: 220px;
+    border-radius: 8px;
+    background: #08111b;
+    border-width: 1px;
+    border-color: #132031;
+    clip: true;
+
+    edit := TextEdit {
+        text: root.text;
+        placeholder-text: "MERIDIAN\nTime {{time.current|clock}}\nNotes {{notes.passed|int}} / {{notes.total|int}}";
+        x: 10px;
+        y: 10px;
+        width: parent.width - 20px;
+        height: parent.height - 20px;
+        edited => { root.edited(self.text); }
+    }
+}
 
 export component VideoPanel inherits Rectangle {
     in property <MidiLoadState> midi-state: no-midi;
@@ -83,6 +106,13 @@ export component VideoPanel inherits Rectangle {
     in property <string> video-ptc-aura-image-source-text;
     in property <string> video-ptc-aura-image-name-text;
     in property <string> video-ptc-aura-image-path-text;
+    in property <string> video-text-background-color-text;
+    in property <string> video-text-overlay-anchor-text;
+    in property <string> video-text-overlay-alignment-text;
+    in property <string> video-text-overlay-background-color-text;
+    in property <string> video-text-row-text-text;
+    in property <string> video-text-style-font-family-text;
+    in property <string> video-text-style-color-text;
 
     // ── Float properties (numeric values for sliders from Rust) ──
     in property <float> video-view-range-value-float: 0.5;
@@ -100,6 +130,11 @@ export component VideoPanel inherits Rectangle {
     in property <float> video-ptc-note-down-speed-float: 0.6;
     in property <float> video-ptc-note-up-speed-float: 0.2;
     in property <float> video-ptc-aura-strength-float: 2.0;
+    in property <float> video-text-overlay-x-float: 0.08;
+    in property <float> video-text-overlay-y-float: 0.10;
+    in property <float> video-text-overlay-width-float: 0.42;
+    in property <float> video-text-style-font-size-float: 42.0;
+    in property <float> video-text-style-line-spacing-float: 10.0;
 
     callback select-renderer(string);
     callback select-time-space(string);
@@ -107,11 +142,18 @@ export component VideoPanel inherits Rectangle {
     callback update-control-float(string, float);
     callback browse-asset(string);
     callback reset-asset(string);
+    callback update-video-text-overlay(string, string);
+    callback update-video-text-overlay-float(string, float);
+    callback update-video-text-row(string, string);
+    callback insert-video-text-token(string);
+    callback update-video-text-style(string, string);
+    callback update-video-text-style-float(string, float);
 
     private property <bool> is-3d: root.current-renderer-text == "3d";
     private property <bool> is-pfa: root.current-renderer-text == "pfa";
     private property <bool> is-flat: root.current-renderer-text == "flat";
-    private property <bool> uses-2d-layout: !root.is-3d;
+    private property <bool> is-text: root.current-renderer-text == "text";
+    private property <bool> uses-2d-layout: root.is-pfa || root.is-flat;
     private property <bool> uses-zenith-palette: root.video-palette-source-text == "zenith_palette";
     private property <bool> uses-palette-png: root.video-palette-kind-text == "png_file";
     private property <bool> uses-background-png: root.video-background-source-text == "png_file";
@@ -119,13 +161,14 @@ export component VideoPanel inherits Rectangle {
 
     // Whether there's a right column at all
     private property <bool> has-right-column:
-        root.is-3d || root.is-pfa || root.uses-2d-layout;
+        root.is-3d || root.uses-2d-layout || root.is-text;
 
     clip: true;
 
     Flickable {
         width: parent.width;
         height: parent.height;
+        interactive: !(root.is-text && TextInputInterface.text-input-focused);
 
         VerticalLayout {
             width: parent.width;
@@ -175,6 +218,7 @@ export component VideoPanel inherits Rectangle {
                         ToggleButton { label: "PFA";      active: root.is-pfa;  pressed => { root.select-renderer("pfa"); } }
                         ToggleButton { label: "Flat";     active: root.is-flat; pressed => { root.select-renderer("flat"); } }
                         ToggleButton { label: "3D Trail"; active: root.is-3d;   pressed => { root.select-renderer("3d"); } }
+                        ToggleButton { label: "Text";     active: root.is-text; pressed => { root.select-renderer("text"); } }
                     }
 
                     Rectangle { height: 4px; }
@@ -248,44 +292,44 @@ export component VideoPanel inherits Rectangle {
                     Separator { }
                     Rectangle { height: 12px; }
 
-                    SectionHeader { title: "PALETTE"; }
-                    Rectangle { height: 6px; }
+                    if !root.is-text : SectionHeader { title: "PALETTE"; }
+                    if !root.is-text : Rectangle { height: 6px; }
 
-                    InlineOptionRow {
+                    if !root.is-text : InlineOptionRow {
                         label: "Source";
                         OptionChip { label: "Default"; active: root.video-palette-source-text == "default_track_colors"; pressed => { root.update-control("palette_source", "default_track_colors"); } }
                         OptionChip { label: "Zenith";  active: root.video-palette-source-text == "zenith_palette";        pressed => { root.update-control("palette_source", "zenith_palette"); } }
                     }
 
-                    if root.uses-zenith-palette : Rectangle { height: 4px; }
+                    if !root.is-text && root.uses-zenith-palette : Rectangle { height: 4px; }
 
-                    if root.uses-zenith-palette : InlineOptionRow {
+                    if !root.is-text && root.uses-zenith-palette : InlineOptionRow {
                         label: "Kind";
                         OptionChip { label: "Random";      active: root.video-palette-kind-text == "random";           pressed => { root.update-control("palette_kind", "random"); } }
                         OptionChip { label: "Gradients";   active: root.video-palette-kind-text == "random_gradients"; pressed => { root.update-control("palette_kind", "random_gradients"); } }
                         OptionChip { label: "PNG";         active: root.video-palette-kind-text == "png_file";         pressed => { root.update-control("palette_kind", "png_file"); } }
                     }
 
-                    if root.uses-zenith-palette : Rectangle { height: 4px; }
+                    if !root.is-text && root.uses-zenith-palette : Rectangle { height: 4px; }
 
-                    if root.uses-zenith-palette : InlineOptionRow {
+                    if !root.is-text && root.uses-zenith-palette : InlineOptionRow {
                         label: "Shuffle";
                         OptionChip { label: "On";  active: root.video-palette-randomize-text == "on";  pressed => { root.update-control("palette_randomize", "on"); } }
                         OptionChip { label: "Off"; active: root.video-palette-randomize-text == "off"; pressed => { root.update-control("palette_randomize", "off"); } }
                     }
 
-                    if root.uses-zenith-palette && root.uses-palette-png : Rectangle { height: 6px; }
+                    if !root.is-text && root.uses-zenith-palette && root.uses-palette-png : Rectangle { height: 6px; }
 
-                    if root.uses-zenith-palette && root.uses-palette-png : FilePicker {
+                    if !root.is-text && root.uses-zenith-palette && root.uses-palette-png : FilePicker {
                         file-name: root.video-palette-path-text;
                         file-label: "16px/32px wide opaque RGB palette png";
                         browse => { root.browse-asset("palette_png"); }
                         reset => { root.reset-asset("palette_png"); }
                     }
 
-                    Rectangle { height: 12px; }
-                    Separator { }
-                    Rectangle { height: 12px; }
+                    if !root.is-text : Rectangle { height: 12px; }
+                    if !root.is-text : Separator { }
+                    if !root.is-text : Rectangle { height: 12px; }
 
                     SectionHeader { title: "BACKGROUND"; }
                     Rectangle { height: 6px; }
@@ -311,6 +355,22 @@ export component VideoPanel inherits Rectangle {
                         file-label: "Background PNG";
                         browse => { root.browse-asset("background_png"); }
                         reset => { root.reset-asset("background_png"); }
+                    }
+
+                    if root.is-text : Rectangle { height: 4px; }
+
+                    if root.is-text : InlineCustomRow {
+                        label: "Base Color";
+                        value: root.video-text-background-color-text;
+                        is-preset:
+                            root.video-text-background-color-text == "#102B1E"
+                            || root.video-text-background-color-text == "#132031"
+                            || root.video-text-background-color-text == "#000000";
+                        custom-submitted(val) => { root.update-video-text-overlay("scene_background_color", val); }
+
+                        OptionChip { label: "Forest"; active: root.video-text-background-color-text == "#102B1E"; pressed => { root.update-video-text-overlay("scene_background_color", "#102B1E"); } }
+                        OptionChip { label: "Slate"; active: root.video-text-background-color-text == "#132031"; pressed => { root.update-video-text-overlay("scene_background_color", "#132031"); } }
+                        OptionChip { label: "Black"; active: root.video-text-background-color-text == "#000000"; pressed => { root.update-video-text-overlay("scene_background_color", "#000000"); } }
                     }
 
                     Rectangle { height: 12px; }
@@ -350,6 +410,205 @@ export component VideoPanel inherits Rectangle {
                     horizontal-stretch: 1;
                     spacing: 0px;
                     alignment: start;
+
+                    if root.is-text : SectionHeader { title: "TEXT SCENE"; }
+                    if root.is-text : Rectangle { height: 6px; }
+
+                    if root.is-text : Text {
+                        text: "Single text block. Use {{token}} or {{token|format}} and the insert chips below.";
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size-sm;
+                        wrap: word-wrap;
+                    }
+
+                    if root.is-text : Rectangle { height: 8px; }
+
+                    if root.is-text : TextSceneEditorCard {
+                        text: root.video-text-row-text-text;
+                        edited(val) => { root.update-video-text-row("text", val); }
+                    }
+
+                    if root.is-text : Rectangle { height: 6px; }
+                    if root.is-text : InlineOptionRow {
+                        label: "Time";
+                        OptionChip { label: "Time"; pressed => { root.insert-video-text-token("{{time.current|clock}}"); } }
+                        OptionChip { label: "Remain"; pressed => { root.insert-video-text-token("{{time.remaining|clock}}"); } }
+                        OptionChip { label: "Length"; pressed => { root.insert-video-text-token("{{time.length|clock}}"); } }
+                        OptionChip { label: "BPM"; pressed => { root.insert-video-text-token("{{tempo.bpm|bpm}}"); } }
+                        OptionChip { label: "NPS1"; pressed => { root.insert-video-text-token("{{density.nps1|0.0}}"); } }
+                        OptionChip { label: "NPS2"; pressed => { root.insert-video-text-token("{{density.nps2|0.0}}"); } }
+                    }
+
+                    if root.is-text : Rectangle { height: 4px; }
+                    if root.is-text : InlineOptionRow {
+                        label: "Counts";
+                        OptionChip { label: "Total"; pressed => { root.insert-video-text-token("{{notes.total|int}}"); } }
+                        OptionChip { label: "Passed"; pressed => { root.insert-video-text-token("{{notes.passed|int}}"); } }
+                        OptionChip { label: "Remain"; pressed => { root.insert-video-text-token("{{notes.remaining|int}}"); } }
+                        OptionChip { label: "Visible"; pressed => { root.insert-video-text-token("{{notes.visible|int}}"); } }
+                        OptionChip { label: "Keys"; pressed => { root.insert-video-text-token("{{keys.active|int}}"); } }
+                        OptionChip { label: "Poly"; pressed => { root.insert-video-text-token("{{polyphony.current|int}}"); } }
+                    }
+
+                    if root.is-text : Rectangle { height: 4px; }
+                    if root.is-text : InlineOptionRow {
+                        label: "Other";
+                        OptionChip { label: "Tick"; pressed => { root.insert-video-text-token("{{tick.current|ticks}}"); } }
+                        OptionChip { label: "Tick Rem"; pressed => { root.insert-video-text-token("{{tick.remaining|ticks}}"); } }
+                        OptionChip { label: "Tick Len"; pressed => { root.insert-video-text-token("{{tick.length|ticks}}"); } }
+                        OptionChip { label: "MIDI"; pressed => { root.insert-video-text-token("{{midi.name}}"); } }
+                        OptionChip { label: "Renderer"; pressed => { root.insert-video-text-token("{{renderer.name}}"); } }
+                        OptionChip { label: "W"; pressed => { root.insert-video-text-token("{{viewport.width|int}}"); } }
+                        OptionChip { label: "H"; pressed => { root.insert-video-text-token("{{viewport.height|int}}"); } }
+                    }
+
+                    if root.is-text : Rectangle { height: 4px; }
+                    if root.is-text : InlineOptionRow {
+                        label: "Insert";
+                        OptionChip { label: "Space"; pressed => { root.insert-video-text-token(" "); } }
+                        OptionChip { label: "/"; pressed => { root.insert-video-text-token(" / "); } }
+                        OptionChip { label: ":"; pressed => { root.insert-video-text-token(": "); } }
+                        OptionChip { label: "Line"; pressed => { root.insert-video-text-token("\n"); } }
+                    }
+
+                    if root.is-text : Rectangle { height: 12px; }
+                    if root.is-text : Separator { }
+                    if root.is-text : Rectangle { height: 12px; }
+
+                    if root.is-text : SectionHeader { title: "LAYOUT"; }
+                    if root.is-text : Rectangle { height: 6px; }
+
+                    if root.is-text : InlineOptionRow {
+                        label: "Anchor";
+                        OptionChip { label: "TL"; active: root.video-text-overlay-anchor-text == "top_left"; pressed => { root.update-video-text-overlay("anchor", "top_left"); } }
+                        OptionChip { label: "TR"; active: root.video-text-overlay-anchor-text == "top_right"; pressed => { root.update-video-text-overlay("anchor", "top_right"); } }
+                        OptionChip { label: "BL"; active: root.video-text-overlay-anchor-text == "bottom_left"; pressed => { root.update-video-text-overlay("anchor", "bottom_left"); } }
+                        OptionChip { label: "BR"; active: root.video-text-overlay-anchor-text == "bottom_right"; pressed => { root.update-video-text-overlay("anchor", "bottom_right"); } }
+                        OptionChip { label: "Center"; active: root.video-text-overlay-anchor-text == "center"; pressed => { root.update-video-text-overlay("anchor", "center"); } }
+                    }
+
+                    if root.is-text : Rectangle { height: 4px; }
+                    if root.is-text : InlineOptionRow {
+                        label: "Align";
+                        OptionChip { label: "Left"; active: root.video-text-overlay-alignment-text == "left"; pressed => { root.update-video-text-overlay("alignment", "left"); } }
+                        OptionChip { label: "Center"; active: root.video-text-overlay-alignment-text == "center"; pressed => { root.update-video-text-overlay("alignment", "center"); } }
+                        OptionChip { label: "Right"; active: root.video-text-overlay-alignment-text == "right"; pressed => { root.update-video-text-overlay("alignment", "right"); } }
+                    }
+
+                    if root.is-text : Rectangle { height: 4px; }
+                    if root.is-text : InlineCustomRow {
+                        label: "Panel";
+                        value: root.video-text-overlay-background-color-text;
+                        is-preset:
+                            root.video-text-overlay-background-color-text == ""
+                            || root.video-text-overlay-background-color-text == "#00000080"
+                            || root.video-text-overlay-background-color-text == "#132031CC";
+                        custom-submitted(val) => { root.update-video-text-overlay("background_color", val); }
+
+                        OptionChip { label: "None"; active: root.video-text-overlay-background-color-text == ""; pressed => { root.update-video-text-overlay("background_color", ""); } }
+                        OptionChip { label: "Dark"; active: root.video-text-overlay-background-color-text == "#00000080"; pressed => { root.update-video-text-overlay("background_color", "#00000080"); } }
+                        OptionChip { label: "Slate"; active: root.video-text-overlay-background-color-text == "#132031CC"; pressed => { root.update-video-text-overlay("background_color", "#132031CC"); } }
+                    }
+
+                    if root.is-text : Rectangle { height: 4px; }
+                    if root.is-text : SliderRow {
+                        label: "X";
+                        value: root.video-text-overlay-x-float;
+                        display-text: root.video-text-overlay-x-float;
+                        minimum: 0.0;
+                        maximum: 1.0;
+                        curve: linear;
+                        changed(v) => { root.update-video-text-overlay-float("x", v); }
+                        custom-submitted(v) => { root.update-video-text-overlay("x", v); }
+                        reset-requested() => { root.update-video-text-overlay-float("x", 0.08); }
+                    }
+                    if root.is-text : Rectangle { height: 2px; }
+                    if root.is-text : SliderRow {
+                        label: "Y";
+                        value: root.video-text-overlay-y-float;
+                        display-text: root.video-text-overlay-y-float;
+                        minimum: 0.0;
+                        maximum: 1.0;
+                        curve: linear;
+                        changed(v) => { root.update-video-text-overlay-float("y", v); }
+                        custom-submitted(v) => { root.update-video-text-overlay("y", v); }
+                        reset-requested() => { root.update-video-text-overlay-float("y", 0.10); }
+                    }
+                    if root.is-text : Rectangle { height: 2px; }
+                    if root.is-text : SliderRow {
+                        label: "Width";
+                        value: root.video-text-overlay-width-float;
+                        display-text: root.video-text-overlay-width-float;
+                        minimum: 0.1;
+                        maximum: 1.0;
+                        curve: linear;
+                        changed(v) => { root.update-video-text-overlay-float("width", v); }
+                        custom-submitted(v) => { root.update-video-text-overlay("width", v); }
+                        reset-requested() => { root.update-video-text-overlay-float("width", 0.42); }
+                    }
+
+                    if root.is-text : Rectangle { height: 12px; }
+                    if root.is-text : Separator { }
+                    if root.is-text : Rectangle { height: 12px; }
+
+                    if root.is-text : SectionHeader { title: "TYPE"; }
+                    if root.is-text : Rectangle { height: 6px; }
+
+                    if root.is-text : InlineCustomRow {
+                        label: "Family";
+                        value: root.video-text-style-font-family-text;
+                        is-preset:
+                            root.video-text-style-font-family-text == "sans-serif"
+                            || root.video-text-style-font-family-text == "serif"
+                            || root.video-text-style-font-family-text == "monospace";
+                        custom-submitted(val) => { root.update-video-text-style("font_family", val); }
+
+                        OptionChip { label: "Sans"; active: root.video-text-style-font-family-text == "sans-serif"; pressed => { root.update-video-text-style("font_family", "sans-serif"); } }
+                        OptionChip { label: "Serif"; active: root.video-text-style-font-family-text == "serif"; pressed => { root.update-video-text-style("font_family", "serif"); } }
+                        OptionChip { label: "Mono"; active: root.video-text-style-font-family-text == "monospace"; pressed => { root.update-video-text-style("font_family", "monospace"); } }
+                    }
+
+                    if root.is-text : Rectangle { height: 4px; }
+                    if root.is-text : InlineCustomRow {
+                        label: "Color";
+                        value: root.video-text-style-color-text;
+                        is-preset:
+                            root.video-text-style-color-text == "#D7FBE8"
+                            || root.video-text-style-color-text == "#FFFFFF"
+                            || root.video-text-style-color-text == "#9FC7FF";
+                        custom-submitted(val) => { root.update-video-text-style("color", val); }
+
+                        OptionChip { label: "Mint"; active: root.video-text-style-color-text == "#D7FBE8"; pressed => { root.update-video-text-style("color", "#D7FBE8"); } }
+                        OptionChip { label: "White"; active: root.video-text-style-color-text == "#FFFFFF"; pressed => { root.update-video-text-style("color", "#FFFFFF"); } }
+                        OptionChip { label: "Blue"; active: root.video-text-style-color-text == "#9FC7FF"; pressed => { root.update-video-text-style("color", "#9FC7FF"); } }
+                    }
+
+                    if root.is-text : Rectangle { height: 4px; }
+                    if root.is-text : SliderRow {
+                        label: "Size";
+                        value: root.video-text-style-font-size-float;
+                        display-text: root.video-text-style-font-size-float;
+                        minimum: 8.0;
+                        maximum: 160.0;
+                        curve: quadratic;
+                        changed(v) => { root.update-video-text-style-float("font_size", v); }
+                        custom-submitted(v) => { root.update-video-text-style("font_size", v); }
+                        reset-requested() => { root.update-video-text-style-float("font_size", 42.0); }
+                    }
+                    if root.is-text : Rectangle { height: 2px; }
+                    if root.is-text : SliderRow {
+                        label: "Spacing";
+                        value: root.video-text-style-line-spacing-float;
+                        display-text: root.video-text-style-line-spacing-float;
+                        minimum: 0.0;
+                        maximum: 48.0;
+                        curve: linear;
+                        changed(v) => { root.update-video-text-style-float("line_spacing", v); }
+                        custom-submitted(v) => { root.update-video-text-style("line_spacing", v); }
+                        reset-requested() => { root.update-video-text-style-float("line_spacing", 10.0); }
+                    }
+
+                    if root.is-text : Rectangle { height: 20px; }
 
                     // ── 2D LAYOUT (shown for PFA & Flat) ──
                     if root.uses-2d-layout : SectionHeader { title: "2D LAYOUT"; }

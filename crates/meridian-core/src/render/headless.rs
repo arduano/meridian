@@ -15,7 +15,7 @@ pub enum HeadlessClearMode {
 }
 
 pub enum HeadlessRenderSession {
-    TwoD(crate::render::pfa::wgpu::HeadlessRenderSession),
+    Primitive(crate::render::pfa::wgpu::HeadlessRenderSession),
     ThreeD(crate::render::piano_trail_classic::wgpu::HeadlessRenderSession),
 }
 
@@ -31,7 +31,7 @@ impl HeadlessRenderSession {
         clear_mode: HeadlessClearMode,
     ) -> Result<Self, MeridianError> {
         match &layout.scene {
-            SceneConfig::TwoD(_) => Ok(Self::TwoD(
+            SceneConfig::TwoD(_) | SceneConfig::Text(_) => Ok(Self::Primitive(
                 crate::render::pfa::wgpu::HeadlessRenderSession::new_with_clear_mode(
                     width, height, clear_mode,
                 )?,
@@ -46,7 +46,7 @@ impl HeadlessRenderSession {
 
     pub fn render(&mut self, layout: &SceneLayout, scene: &ProjectedScene) {
         match self {
-            Self::TwoD(session) => session.render(layout, scene),
+            Self::Primitive(session) => session.render(layout, scene),
             Self::ThreeD(session) => {
                 if let Some(piano_trail_classic) = scene.piano_trail_classic() {
                     session.render(layout, piano_trail_classic);
@@ -57,7 +57,7 @@ impl HeadlessRenderSession {
 
     pub fn readback_rgba(&self) -> Result<Vec<u8>, MeridianError> {
         match self {
-            Self::TwoD(session) => session.readback_rgba(),
+            Self::Primitive(session) => session.readback_rgba(),
             Self::ThreeD(session) => session.readback_rgba(),
         }
     }
@@ -120,9 +120,11 @@ pub fn save_scene_headless_legacy(
     output: &Path,
 ) -> Result<u64, MeridianError> {
     match &layout.scene {
-        SceneConfig::TwoD(_) => crate::render::pfa::wgpu::save_scene_headless(
-            width, height, layout, scene, format, output,
-        ),
+        SceneConfig::TwoD(_) | SceneConfig::Text(_) => {
+            crate::render::pfa::wgpu::save_scene_headless(
+                width, height, layout, scene, format, output,
+            )
+        }
         SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(_)) => {
             let piano_trail_classic = scene.piano_trail_classic().ok_or_else(|| {
                 MeridianError::InvalidMidi("missing piano_trail_classic scene payload".into())

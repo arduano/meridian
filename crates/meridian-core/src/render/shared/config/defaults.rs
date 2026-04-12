@@ -73,3 +73,51 @@ pub(super) fn default_piano_trail_classic_aura_image() -> ProjectorImageConfig {
         name: "ring".to_string(),
     }
 }
+
+pub(super) fn default_text_background_color() -> String {
+    "#102B1E".to_string()
+}
+
+pub(super) fn default_text_default_style_name() -> String {
+    "body".to_string()
+}
+
+pub(super) fn default_text_color() -> String {
+    "#D7FBE8".to_string()
+}
+
+pub(super) fn default_text_font_family() -> String {
+    "sans-serif".to_string()
+}
+
+pub(super) fn default_text_style_name() -> String {
+    "body".to_string()
+}
+
+pub(super) const fn default_text_pixel_scale() -> u32 {
+    48
+}
+
+pub(super) const fn default_text_x() -> f32 {
+    0.08
+}
+
+pub(super) const fn default_text_y() -> f32 {
+    0.10
+}
+
+pub(super) const fn default_text_line_spacing() -> f32 {
+    10.0
+}
+
+pub(super) const fn default_text_overlay_width() -> f32 {
+    0.42
+}
+
+pub(super) const fn default_text_overlay_padding() -> f32 {
+    0.0
+}
+
+pub(super) const fn default_text_overlay_row_gap() -> f32 {
+    6.0
+}

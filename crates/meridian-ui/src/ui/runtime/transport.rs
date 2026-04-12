@@ -65,6 +65,7 @@ pub(super) fn wire_transport_callbacks(
             if let Some(app) = app_weak.upgrade() {
                 let renderer = match renderer.as_str() {
                     "flat" => RendererKind::Flat,
+                    "text" => RendererKind::Text,
                     "piano_trail_classic" | "3d" => RendererKind::PianoTrailClassic,
                     _ => RendererKind::Pfa,
                 };

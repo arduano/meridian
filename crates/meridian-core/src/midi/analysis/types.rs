@@ -208,6 +208,36 @@ impl CachedMidiAnalysis {
             self.midi_length,
         )
     }
+
+    pub fn note_starts_between(&self, start_seconds: f64, end_seconds: f64) -> u64 {
+        let start = start_seconds.min(end_seconds);
+        let end = start_seconds.max(end_seconds);
+        if end <= start {
+            return 0;
+        }
+        self.note_starts_before(end) - self.note_starts_before(start)
+    }
+
+    pub fn active_notes_at(&self, time_seconds: f64) -> u64 {
+        let index = self
+            .bucket_active_deltas
+            .partition_point(|delta| delta.time_seconds <= time_seconds);
+        let active = self.bucket_active_deltas[..index]
+            .iter()
+            .map(|delta| delta.delta)
+            .sum::<i64>();
+        active.max(0) as u64
+    }
+
+    fn note_starts_before(&self, time_seconds: f64) -> u64 {
+        let index = self
+            .bucket_starts
+            .partition_point(|bucket| bucket.time_seconds < time_seconds);
+        self.bucket_starts[..index]
+            .iter()
+            .map(|bucket| bucket.count)
+            .sum()
+    }
 }
 
 impl Default for MidiAnalysisFileMetrics {

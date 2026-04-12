@@ -6,6 +6,8 @@ mod float;
 use float::*;
 mod assets;
 use assets::*;
+mod text;
+use text::*;
 
 pub(super) fn wire_video_callbacks(
     app: &App,
@@ -15,4 +17,5 @@ pub(super) fn wire_video_callbacks(
     wire_video_control_callbacks(app, bridge, shared_state);
     wire_video_float_callbacks(app, bridge, shared_state);
     wire_video_asset_callbacks(app, bridge, shared_state);
+    wire_video_text_callbacks(app, bridge, shared_state);
 }

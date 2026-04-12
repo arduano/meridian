@@ -147,6 +147,13 @@ export component App inherits Window {
     in-out property <string> video-ptc-aura-image-source-text: "builtin";
     in-out property <string> video-ptc-aura-image-name-text: "ring";
     in-out property <string> video-ptc-aura-image-path-text: "(aura png)";
+    in-out property <string> video-text-background-color-text: "#102B1E";
+    in-out property <string> video-text-overlay-anchor-text: "top_left";
+    in-out property <string> video-text-overlay-alignment-text: "left";
+    in-out property <string> video-text-overlay-background-color-text: "";
+    in-out property <string> video-text-row-text-text: "";
+    in-out property <string> video-text-style-font-family-text: "sans-serif";
+    in-out property <string> video-text-style-color-text: "#D7FBE8";
 
     // ── Video panel float values (for slider components) ──
     in-out property <float> video-view-range-value-float: 0.5;
@@ -164,6 +171,11 @@ export component App inherits Window {
     in-out property <float> video-ptc-note-down-speed-float: 0.6;
     in-out property <float> video-ptc-note-up-speed-float: 0.2;
     in-out property <float> video-ptc-aura-strength-float: 2.0;
+    in-out property <float> video-text-overlay-x-float: 0.08;
+    in-out property <float> video-text-overlay-y-float: 0.10;
+    in-out property <float> video-text-overlay-width-float: 0.42;
+    in-out property <float> video-text-style-font-size-float: 42.0;
+    in-out property <float> video-text-style-line-spacing-float: 10.0;
 
     in-out property <float> preview-start-seconds: -1;
     in-out property <float> current-time-seconds: -1;
@@ -470,6 +482,12 @@ export component App inherits Window {
     callback update-video-control-float(string, float);
     callback browse-video-asset(string);
     callback reset-video-asset(string);
+    callback update-video-text-overlay(string, string);
+    callback update-video-text-overlay-float(string, float);
+    callback update-video-text-row(string, string);
+    callback insert-video-text-token(string);
+    callback update-video-text-style(string, string);
+    callback update-video-text-style-float(string, float);
     callback select-audio-sample-rate(string);
     callback select-audio-channel-count(string);
     callback select-audio-render-window(string);
@@ -798,6 +816,13 @@ export component App inherits Window {
                     video-ptc-aura-image-source-text: root.video-ptc-aura-image-source-text;
                     video-ptc-aura-image-name-text: root.video-ptc-aura-image-name-text;
                     video-ptc-aura-image-path-text: root.video-ptc-aura-image-path-text;
+                    video-text-background-color-text: root.video-text-background-color-text;
+                    video-text-overlay-anchor-text: root.video-text-overlay-anchor-text;
+                    video-text-overlay-alignment-text: root.video-text-overlay-alignment-text;
+                    video-text-overlay-background-color-text: root.video-text-overlay-background-color-text;
+                    video-text-row-text-text: root.video-text-row-text-text;
+                    video-text-style-font-family-text: root.video-text-style-font-family-text;
+                    video-text-style-color-text: root.video-text-style-color-text;
                     video-view-range-value-float: root.video-view-range-value-float;
                     video-border-width-float: root.video-border-width-float;
                     video-keyboard-height-value-float: root.video-keyboard-height-value-float;
@@ -813,12 +838,23 @@ export component App inherits Window {
                     video-ptc-note-down-speed-float: root.video-ptc-note-down-speed-float;
                     video-ptc-note-up-speed-float: root.video-ptc-note-up-speed-float;
                     video-ptc-aura-strength-float: root.video-ptc-aura-strength-float;
+                    video-text-overlay-x-float: root.video-text-overlay-x-float;
+                    video-text-overlay-y-float: root.video-text-overlay-y-float;
+                    video-text-overlay-width-float: root.video-text-overlay-width-float;
+                    video-text-style-font-size-float: root.video-text-style-font-size-float;
+                    video-text-style-line-spacing-float: root.video-text-style-line-spacing-float;
                     select-renderer(r)     => { root.select-renderer(r); }
                     select-time-space(ts)  => { root.select-time-space(ts); }
                     update-control(key, value) => { root.update-video-control(key, value); }
                     update-control-float(key, value) => { root.update-video-control-float(key, value); }
                     browse-asset(target)   => { root.browse-video-asset(target); }
                     reset-asset(target)    => { root.reset-video-asset(target); }
+                    update-video-text-overlay(key, value) => { root.update-video-text-overlay(key, value); }
+                    update-video-text-overlay-float(key, value) => { root.update-video-text-overlay-float(key, value); }
+                    update-video-text-row(key, value) => { root.update-video-text-row(key, value); }
+                    insert-video-text-token(token) => { root.insert-video-text-token(token); }
+                    update-video-text-style(key, value) => { root.update-video-text-style(key, value); }
+                    update-video-text-style-float(key, value) => { root.update-video-text-style-float(key, value); }
                 }
 
                 AudioPanel {
