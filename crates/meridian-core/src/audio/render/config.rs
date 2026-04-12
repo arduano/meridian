@@ -43,6 +43,18 @@ impl Default for AudioRenderConfig {
     }
 }
 
+impl AudioRenderConfig {
+    pub fn validate(&self) -> Result<(), MeridianError> {
+        if !self.format.matches_path(&self.output) {
+            return Err(MeridianError::InvalidMidi(format!(
+                "audio output path must use .{} for the selected format",
+                self.format.extension()
+            )));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ResolvedAudioRenderSettings {
     pub(crate) sample_rate: u32,
@@ -108,4 +120,35 @@ fn validate_channel_count(channels: u16) -> Result<(), MeridianError> {
         ))
     })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AudioRenderConfig;
+    use crate::protocol::AudioOutputFormat;
+
+    #[test]
+    fn validate_rejects_mismatched_audio_output_extension() {
+        let config = AudioRenderConfig {
+            output: "render.wav".into(),
+            format: AudioOutputFormat::Mp3,
+            ..AudioRenderConfig::default()
+        };
+
+        let error = config.validate().expect_err("validation should fail");
+
+        assert!(error.to_string().contains("audio output path"));
+        assert!(error.to_string().contains(".mp3"));
+    }
+
+    #[test]
+    fn validate_allows_matching_audio_output_extension() {
+        let config = AudioRenderConfig {
+            output: "render.flac".into(),
+            format: AudioOutputFormat::Flac,
+            ..AudioRenderConfig::default()
+        };
+
+        assert!(config.validate().is_ok());
+    }
 }

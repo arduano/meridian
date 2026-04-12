@@ -28,56 +28,77 @@ export interface AnalysisProgress {
   status: string;
 }
 
-export class MidiAnalysisJobHandle {
-  readonly jobId: AnalysisJobId;
+export class MidiAnalysisJobHandle extends ReplayableJobHandle<
+  MidiAnalysisJobStatus,
+  Extract<MidiAnalysisJobEventWrapper["event"], { job_id: AnalysisJobId }>,
+  Extract<MidiAnalysisJobEventWrapper["event"], { type: "finished" }>,
+  MidiAnalysisData
+> {
   readonly parsedMidiId: ParsedMidiId;
-  #protocol: MeridianProtocolClient;
-  #unsubscribe: (() => void) | null = null;
   #progressListeners = new Set<(progress: AnalysisProgress) => void>();
-  #done: Promise<MidiAnalysisData>;
-  #resolve!: (value: MidiAnalysisData) => void;
-  #reject!: (error: Error) => void;
-  #status: MidiAnalysisJobStatus;
+  #progressHistory: AnalysisProgress[] = [];
+  #lastProgressKey: string | null = null;
 
   constructor(
     protocol: MeridianProtocolClient,
     initialStatus: MidiAnalysisJobStatus,
   ) {
-    this.#protocol = protocol;
-    this.#status = initialStatus;
-    this.jobId = initialStatus.job_id;
+    super(protocol, initialStatus);
     this.parsedMidiId = initialStatus.parsed_midi_id;
-    this.#done = new Promise<MidiAnalysisData>((resolve, reject) => {
-      this.#resolve = resolve;
-      this.#reject = reject;
-    });
-    this.#unsubscribe = protocol.onEvent((event) => this.#handleEvent(event));
     this.#consumeStatus(initialStatus);
+    if (!this.isSettled()) {
+      this.startTracking();
+    }
   }
 
   onProgress(listener: (progress: AnalysisProgress) => void): () => void {
     this.#progressListeners.add(listener);
+    for (const progress of this.#progressHistory) {
+      listener(progress);
+    }
     return () => {
       this.#progressListeners.delete(listener);
     };
   }
 
-  wait(): Promise<MidiAnalysisData> {
-    return this.#done;
+  override wait(): Promise<MidiAnalysisData> {
+    return super.wait();
   }
 
-  #handleEvent(event: CoreEvent): void {
+  protected override resolveFinished(event: Extract<
+    MidiAnalysisJobEventWrapper["event"],
+    { type: "finished" }
+  >): MidiAnalysisData {
+    return event.result;
+  }
+
+  protected override handleCoreEvent(event: CoreEvent): void {
+    if (this.isSettled()) {
+      return;
+    }
     if (event.type === "midi_analysis_job") {
       const wrapped = event as MidiAnalysisJobEventWrapper;
-      if (
-        wrapped.event.job_id === this.jobId && wrapped.event.type === "progress"
-      ) {
-        for (const listener of this.#progressListeners) {
-          listener({
+      if (wrapped.event.job_id !== this.jobId) {
+        return;
+      }
+      switch (wrapped.event.type) {
+        case "started":
+          this.#emitProgress({ progress: 0, status: "Started" });
+          break;
+        case "progress":
+          this.#emitProgress({
             progress: wrapped.event.progress,
             status: wrapped.event.status,
           });
-        }
+          break;
+        case "finished":
+          this.finish(wrapped.event);
+          break;
+        case "failed":
+          this.fail(wrapped.event.message);
+          break;
+        default:
+          break;
       }
       return;
     }
@@ -91,20 +112,32 @@ export class MidiAnalysisJobHandle {
   }
 
   #consumeStatus(status: MidiAnalysisJobStatus): void {
-    this.#status = status;
+    this.updateStatus(status);
     if (status.state === "running") {
-      for (const listener of this.#progressListeners) {
-        listener({ progress: status.progress, status: status.status });
-      }
+      this.#emitProgress({ progress: status.progress, status: status.status });
       return;
     }
-    this.#unsubscribe?.();
-    this.#unsubscribe = null;
     if (status.state === "finished") {
-      this.#resolve(status.result);
+      this.finish({
+        type: "finished",
+        job_id: status.job_id,
+        result: status.result,
+      });
       return;
     }
-    this.#reject(new MeridianSubprocessError(status.message));
+    this.fail(status.message);
+  }
+
+  #emitProgress(progress: AnalysisProgress): void {
+    const key = `${progress.progress}\0${progress.status}`;
+    if (this.#lastProgressKey === key) {
+      return;
+    }
+    this.#lastProgressKey = key;
+    this.#progressHistory.push(progress);
+    for (const listener of this.#progressListeners) {
+      listener(progress);
+    }
   }
 }
 
@@ -124,6 +157,12 @@ export class MidiProcessJobHandle extends ReplayableJobHandle<
     }
     super(protocol, initialStatus);
     this.startTracking();
+  }
+
+  protected override resolveFinished(
+    event: Extract<MidiProcessEvent, { type: "process_finished" }>,
+  ): Extract<MidiProcessEvent, { type: "process_finished" }> {
+    return event;
   }
 
   async refreshStatus(): Promise<MidiProcessStatus> {
@@ -194,6 +233,12 @@ export class AudioRenderJobHandle extends ReplayableJobHandle<
     this.startTracking();
   }
 
+  protected override resolveFinished(
+    event: Extract<AudioRenderEvent, { type: "render_finished" }>,
+  ): Extract<AudioRenderEvent, { type: "render_finished" }> {
+    return event;
+  }
+
   async refreshStatus(): Promise<AudioRenderStatus> {
     const events = await this.protocol.request({
       type: "get_render_audio_status",
@@ -260,6 +305,12 @@ export class VideoRenderJobHandle extends ReplayableJobHandle<
     }
     super(protocol, initialStatus);
     this.startTracking();
+  }
+
+  protected override resolveFinished(
+    event: Extract<VideoRenderEvent, { type: "render_finished" }>,
+  ): Extract<VideoRenderEvent, { type: "render_finished" }> {
+    return event;
   }
 
   async refreshStatus(): Promise<VideoRenderStatus> {

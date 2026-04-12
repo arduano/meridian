@@ -327,8 +327,9 @@ pub(in super::super) fn wire_render_export_callbacks(
                 let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
                 let audio_format =
                     AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
-                let video_container =
-                    video_output_container_from_text(app.get_render_video_container_text().as_str());
+                let video_container = video_output_container_from_text(
+                    app.get_render_video_container_text().as_str(),
+                );
                 PathBuf::from(default_render_output_path(
                     app.get_selected_midi_name().as_str(),
                     mode,
@@ -337,7 +338,8 @@ pub(in super::super) fn wire_render_export_callbacks(
                 ))
             });
             let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
-            let audio_format = AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
+            let audio_format =
+                AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
             let video_container =
                 video_output_container_from_text(app.get_render_video_container_text().as_str());
             std::thread::spawn(move || {
@@ -367,9 +369,7 @@ pub(in super::super) fn wire_render_export_callbacks(
                     return;
                 };
                 let _ = app_weak.upgrade_in_event_loop(move |app| {
-                    let normalized =
-                        normalize_output_path(&path, mode, audio_format, video_container);
-                    app.set_render_output_path_text(normalized.display().to_string().into());
+                    app.set_render_output_path_text(path.display().to_string().into());
                     app.window().request_redraw();
                 });
             });
@@ -413,13 +413,9 @@ pub(in super::super) fn wire_render_export_callbacks(
                 draft.final_output.display().to_string(),
                 0.0,
             );
-            if let Err(message) = start_render_export_jobs(
-                &app,
-                &bridge,
-                &shared_state,
-                &export_state,
-                &draft,
-            ) {
+            if let Err(message) =
+                start_render_export_jobs(&app, &bridge, &shared_state, &export_state, &draft)
+            {
                 export_state
                     .lock()
                     .expect("render export coordinator mutex poisoned")

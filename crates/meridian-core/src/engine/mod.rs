@@ -453,6 +453,47 @@ mod tests {
     }
 
     #[test]
+    fn start_render_audio_rejects_mismatched_output_extension() {
+        let core = test_core();
+        let midi = midi_fixture("smoke-two-notes.mid");
+        let output = std::env::temp_dir().join(format!(
+            "meridian-audio-render-{}-{}.wav",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after unix epoch")
+                .as_nanos()
+        ));
+
+        let response = core
+            .request(CoreCommand::StartRenderAudio {
+                config: crate::audio::AudioRenderConfig {
+                    midi_path: Some(midi.clone()),
+                    audio: None,
+                    output: output.clone(),
+                    sample_rate: Some(22_050),
+                    channels: Some(2),
+                    use_limiter: Some(true),
+                    format: crate::protocol::AudioOutputFormat::Mp3,
+                    ffmpeg_args: vec![],
+                    soundfonts: vec![],
+                },
+            })
+            .expect("start audio render request");
+
+        assert!(matches!(
+            response.as_slice(),
+            [CoreEvent::Error {
+                code: CoreErrorCode::ValidationFailed,
+                message,
+            }] if message.contains("audio output path")
+        ));
+
+        let _ = std::fs::remove_file(midi);
+        let _ = std::fs::remove_file(output);
+        shutdown(&core);
+    }
+    #[test]
     fn cancelling_a_midi_load_aborts_the_core_request() {
         let core = test_core();
         let receiver = core.subscribe_events();
@@ -561,11 +602,12 @@ mod tests {
             }
         }
 
-        assert!(saw_cancelled, "video render did not cancel before shutdown completed");
+        assert!(
+            saw_cancelled,
+            "video render did not cancel before shutdown completed"
+        );
 
-        let shutdown_response = shutdown_thread
-            .join()
-            .expect("shutdown thread should join");
+        let shutdown_response = shutdown_thread.join().expect("shutdown thread should join");
         assert!(matches!(
             shutdown_response.as_slice(),
             [CoreEvent::ShutdownComplete]

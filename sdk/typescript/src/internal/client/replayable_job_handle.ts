@@ -6,6 +6,7 @@ export abstract class ReplayableJobHandle<
   TStatus extends { state: string },
   TEvent extends { type: string },
   TFinishedEvent extends TEvent,
+  TResolved = TFinishedEvent,
 > {
   readonly jobId: number;
   protected status: TStatus;
@@ -14,8 +15,8 @@ export abstract class ReplayableJobHandle<
   #eventListeners = new Set<(event: TEvent) => void>();
   #eventHistory: TEvent[] = [];
   #settled = false;
-  #done: Promise<TFinishedEvent>;
-  #resolve!: (value: TFinishedEvent) => void;
+  #done: Promise<TResolved>;
+  #resolve!: (value: TResolved) => void;
   #reject!: (error: Error) => void;
 
   protected constructor(
@@ -25,7 +26,7 @@ export abstract class ReplayableJobHandle<
     this.protocol = protocol;
     this.status = initialStatus;
     this.jobId = initialStatus.job_id;
-    this.#done = new Promise<TFinishedEvent>((resolve, reject) => {
+    this.#done = new Promise<TResolved>((resolve, reject) => {
       this.#resolve = resolve;
       this.#reject = reject;
     });
@@ -53,6 +54,8 @@ export abstract class ReplayableJobHandle<
     this.status = status;
   }
 
+  protected abstract resolveFinished(event: TFinishedEvent): TResolved;
+
   protected emitEvent(event: TEvent): void {
     this.#eventHistory.push(event);
     for (const listener of this.#eventListeners) {
@@ -64,7 +67,7 @@ export abstract class ReplayableJobHandle<
     this.#settled = true;
     this.#unsubscribe?.();
     this.#unsubscribe = null;
-    this.#resolve(event);
+    this.#resolve(this.resolveFinished(event));
   }
 
   protected fail(message: string): void {
@@ -84,7 +87,7 @@ export abstract class ReplayableJobHandle<
     };
   }
 
-  wait(): Promise<TFinishedEvent> {
+  wait(): Promise<TResolved> {
     return this.#done;
   }
 }

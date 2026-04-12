@@ -243,20 +243,18 @@ pub(super) fn default_render_output_path(
         .to_string()
 }
 
-pub(super) fn normalize_output_path(
-    path: &Path,
+pub(super) fn resolve_render_output_path_text(
+    current: &str,
+    selected_midi_name: &str,
     mode: RenderExportMode,
     audio_format: AudioOnlyFormat,
     video_container: VideoOutputContainer,
-) -> PathBuf {
-    let extension = if mode == RenderExportMode::AudioOnly {
-        audio_format.extension()
+) -> String {
+    if current.is_empty() {
+        default_render_output_path(selected_midi_name, mode, audio_format, video_container)
     } else {
-        video_container.extension()
-    };
-    let mut normalized = path.to_path_buf();
-    normalized.set_extension(extension);
-    normalized
+        current.to_string()
+    }
 }
 
 pub(super) fn sync_render_output_path(app: &App) {
@@ -265,24 +263,16 @@ pub(super) fn sync_render_output_path(app: &App) {
     let video_container =
         video_output_container_from_text(app.get_render_video_container_text().as_str());
     let current = app.get_render_output_path_text();
-    let next = if current.is_empty() {
-        default_render_output_path(
-            app.get_selected_midi_name().as_str(),
-            mode,
-            audio_format,
-            video_container,
-        )
-    } else {
-        normalize_output_path(
-            Path::new(current.as_str()),
-            mode,
-            audio_format,
-            video_container,
-        )
-        .display()
-        .to_string()
-    };
-    app.set_render_output_path_text(next.into());
+    let next = resolve_render_output_path_text(
+        current.as_str(),
+        app.get_selected_midi_name().as_str(),
+        mode,
+        audio_format,
+        video_container,
+    );
+    if next != current.as_str() {
+        app.set_render_output_path_text(next.into());
+    }
 }
 
 /// Split a string on whitespace into individual arguments.
@@ -372,7 +362,11 @@ pub(super) fn parse_render_channels(text: &str) -> Result<u16, String> {
 }
 
 pub(super) fn current_export_output_path(app: &App) -> Result<PathBuf, String> {
-    RenderExportDraft::from_app(app).map(|draft| draft.final_output)
+    let raw = app.get_render_output_path_text();
+    if raw.is_empty() {
+        return Err("choose an output path".into());
+    }
+    Ok(PathBuf::from(raw.as_str()))
 }
 
 pub(super) fn current_custom_video_time_range(
@@ -445,6 +439,32 @@ mod tests {
         );
 
         assert_eq!(path, "/tmp/example/song.rendered.flac");
+    }
+
+    #[test]
+    fn resolve_render_output_path_text_preserves_non_empty_paths() {
+        let path = resolve_render_output_path_text(
+            "/tmp/example/custom-name.txt",
+            "/tmp/example/song.mid",
+            RenderExportMode::AudioOnly,
+            AudioOnlyFormat::Flac,
+            VideoOutputContainer::Mp4,
+        );
+
+        assert_eq!(path, "/tmp/example/custom-name.txt");
+    }
+
+    #[test]
+    fn resolve_render_output_path_text_defaults_only_when_empty() {
+        let path = resolve_render_output_path_text(
+            "",
+            "/tmp/example/song.mid",
+            RenderExportMode::VideoAudio,
+            AudioOnlyFormat::Wav,
+            VideoOutputContainer::Mkv,
+        );
+
+        assert_eq!(path, "/tmp/example/song.rendered.mkv");
     }
 
     #[test]

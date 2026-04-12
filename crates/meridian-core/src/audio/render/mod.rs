@@ -8,10 +8,7 @@ mod writer;
 pub use config::AudioRenderConfig;
 pub use events::AudioRenderEvent;
 
-use std::{
-    path::Path,
-    sync::atomic::AtomicBool,
-};
+use std::{path::Path, sync::atomic::AtomicBool};
 
 use crate::{
     MeridianError,
@@ -189,6 +186,8 @@ fn render_audio_inner(
     cancel: &AtomicBool,
     mut callback: impl FnMut(AudioRenderEvent),
 ) -> Result<(), MeridianError> {
+    render_config.validate()?;
+
     if matches!(audio_config.backend, AudioBackend::None) {
         return Err(MeridianError::Platform(
             "audio backend 'none' cannot render audio".into(),
@@ -224,18 +223,16 @@ fn render_audio_inner(
                 &mut callback,
             )?
         }
-        AudioOutputFormat::Flac | AudioOutputFormat::Mp3 => {
-            render_encoded_audio(
-                events,
-                audio_config,
-                soundfont_cache,
-                render_config,
-                settings,
-                job_id,
-                cancel,
-                &mut callback,
-            )?
-        }
+        AudioOutputFormat::Flac | AudioOutputFormat::Mp3 => render_encoded_audio(
+            events,
+            audio_config,
+            soundfont_cache,
+            render_config,
+            settings,
+            job_id,
+            cancel,
+            &mut callback,
+        )?,
     };
 
     if let AudioRenderLoopResult::Finished {

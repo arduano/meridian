@@ -2,11 +2,19 @@ import {
   AudioRenderJobHandle,
   MeridianClient,
   MidiAnalysisTask,
+  MidiAnalysisJobHandle,
   VideoRenderTask,
   VideoRenderJobHandle,
 } from "../src/internal/client.ts";
 import type { MeridianProtocolClient } from "../src/internal/client.ts";
-import type { CoreEvent, SceneConfig } from "../src/protocol.ts";
+import type {
+  AnalysisJobId,
+  CoreEvent,
+  MidiAnalysisData,
+  MidiAnalysisJobStatus,
+  ParsedMidiId,
+  SceneConfig,
+} from "../src/protocol.ts";
 
 class FakeProtocolClient {
   readonly requests: unknown[] = [];
@@ -85,6 +93,108 @@ const DEFAULT_TWO_D_SCENE: SceneConfig = {
   },
 };
 
+const ANALYSIS_RESULT: MidiAnalysisData = {
+  midi_length: 12.5,
+  total_notes: 0,
+  key_note_counts: Array(128).fill(0),
+  summary: {
+    total_blocks: 0,
+    keys_with_notes: 0,
+    max_blocks_per_key: 0,
+    max_notes_in_block: 0,
+    densest_key: 0,
+    densest_key_notes: 0,
+  },
+  buckets: [],
+  file: {
+    source_bytes: 0,
+    gzip_bytes: 0,
+    gzip_ratio: 0,
+    format: 0,
+    declared_track_count: 0,
+    actual_track_count: 0,
+    ticks_per_quarter: null,
+    total_event_count: 0,
+  },
+  events: {
+    note_on_events: 0,
+    note_off_events: 0,
+    zero_velocity_note_on_events: 0,
+    program_change_events: 0,
+    control_change_events: 0,
+    pitch_bend_events: 0,
+    channel_pressure_events: 0,
+    polyphonic_pressure_events: 0,
+    sysex_events: 0,
+    text_events: 0,
+    lyric_events: 0,
+    marker_events: 0,
+    cue_point_events: 0,
+    track_name_events: 0,
+    instrument_name_events: 0,
+    tempo_events: 0,
+    time_signature_events: 0,
+    key_signature_events: 0,
+  },
+  notes: {
+    pitch_class_note_counts: Array(12).fill(0),
+    velocity_note_on_counts: Array(128).fill(0),
+    track_note_counts: [],
+    channel_note_counts: [],
+    track_channel_note_counts: [],
+    note_start_histogram: [],
+    total_note_duration_seconds: 0,
+    avg_note_length_seconds: 0,
+    min_note_length_seconds: 0,
+    max_note_length_seconds: 0,
+    max_simultaneous_notes: 0,
+    avg_simultaneous_notes: 0,
+    notes_per_second_peak: 0,
+    notes_per_second_avg: 0,
+    unique_onset_count: 0,
+    avg_notes_per_onset: 0,
+  },
+  tempo: {
+    initial_bpm: 120,
+    min_bpm: 120,
+    max_bpm: 120,
+    avg_bpm_weighted_by_time: 120,
+  },
+};
+
+function analysisStatus(
+  state: MidiAnalysisJobStatus["state"],
+  jobId: AnalysisJobId,
+  parsedMidiId: ParsedMidiId,
+): MidiAnalysisJobStatus {
+  if (state === "running") {
+    return {
+      state,
+      job_id: jobId,
+      parsed_midi_id: parsedMidiId,
+      kinds: ["file"],
+      progress: 0.25,
+      status: "Queued",
+    };
+  }
+  if (state === "finished") {
+    return {
+      state,
+      job_id: jobId,
+      parsed_midi_id: parsedMidiId,
+      kinds: ["file"],
+      result: ANALYSIS_RESULT,
+    };
+  }
+  return {
+    state,
+    job_id: jobId,
+    parsed_midi_id: parsedMidiId,
+    kinds: ["file"],
+    message: "failed",
+  };
+}
+
 Deno.test("analysis task defaults match CLI defaults without buckets", () => {
   const task = new MidiAnalysisTask(
     {} as unknown as MeridianClient,
@@ -128,6 +238,67 @@ Deno.test("analysis task still supports explicit subset selection", () => {
   const expectedKinds = ["summary", "notes"];
   if (JSON.stringify(spec.kinds) !== JSON.stringify(expectedKinds)) {
     throw new Error(`Unexpected explicit kinds: ${JSON.stringify(spec.kinds)}`);
+  }
+});
+
+Deno.test("analysis job handle replays recent progress and finish events", async () => {
+  const jobId = 7 as AnalysisJobId;
+  const parsedMidiId = 42 as ParsedMidiId;
+  const runningStatus = analysisStatus("running", jobId, parsedMidiId);
+  const protocol = new FakeProtocolClient({
+    recentEvents: [
+      {
+        type: "midi_analysis_job",
+        event: {
+          type: "progress",
+          job_id: jobId,
+          progress: 0.5,
+          status: "Halfway",
+        },
+      },
+      {
+        type: "midi_analysis_job",
+        event: {
+          type: "finished",
+          job_id: jobId,
+          result: ANALYSIS_RESULT,
+        },
+      },
+    ],
+  });
+
+  const handle = new MidiAnalysisJobHandle(
+    protocol as unknown as MeridianProtocolClient,
+    runningStatus,
+  );
+  const seen: { progress: number; status: string }[] = [];
+  handle.onProgress((progress) => seen.push(progress));
+
+  let timeoutId: number | undefined;
+  try {
+    const result = await Promise.race([
+      handle.wait(),
+      new Promise<MidiAnalysisData>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("analysis handle wait timed out")),
+          1000,
+        );
+      }),
+    ]);
+
+    if (JSON.stringify(result) !== JSON.stringify(ANALYSIS_RESULT)) {
+      throw new Error(`Unexpected analysis result: ${JSON.stringify(result)}`);
+    }
+    if (seen.length !== 2) {
+      throw new Error(`Expected 2 progress updates, got ${seen.length}`);
+    }
+    if (seen[0]?.status !== "Queued" || seen[1]?.status !== "Halfway") {
+      throw new Error(`Unexpected progress replay: ${JSON.stringify(seen)}`);
+    }
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
   }
 });
 

@@ -181,7 +181,9 @@ pub(super) fn primary_soundfont(config: &mut AudioConfig) -> &mut MeridianSoundf
 pub(super) fn set_selected_midi(app: &App, selected_midi_name: slint::SharedString) {
     app.set_selected_midi_name(selected_midi_name.clone());
     app.set_window_title(window_title_for_selected(selected_midi_name.as_str()));
-    set_default_render_output_path(app);
+    if app.get_render_output_path_text().is_empty() {
+        set_default_render_output_path(app);
+    }
     if selected_midi_name.is_empty() {
         app.set_modify_output_path_text(Default::default());
     } else {

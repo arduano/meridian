@@ -105,6 +105,22 @@ pub enum AudioOutputFormat {
     Mp3,
 }
 
+impl AudioOutputFormat {
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Wav => "wav",
+            Self::Flac => "flac",
+            Self::Mp3 => "mp3",
+        }
+    }
+
+    pub fn matches_path(self, path: &Path) -> bool {
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case(self.extension()))
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, TS, ValueEnum, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum VideoOutputContainer {

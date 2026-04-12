@@ -1,8 +1,5 @@
 use std::{
-    sync::{
-        Arc,
-        atomic::AtomicBool,
-    },
+    sync::{Arc, atomic::AtomicBool},
     thread,
 };
 
@@ -37,6 +34,13 @@ impl CoreState {
             return vec![error_event(
                 CoreErrorCode::InvalidCommand,
                 "an audio render is already active",
+            )];
+        }
+
+        if let Err(error) = config.validate() {
+            return vec![error_event(
+                super::support::error_code(&error),
+                error.to_string(),
             )];
         }
 

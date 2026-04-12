@@ -47,30 +47,21 @@ impl RenderExportDraft {
         let audio_format = AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
         let video_container =
             video_output_container_from_text(app.get_render_video_container_text().as_str());
-        let raw_output = if app.get_render_output_path_text().is_empty() {
-            default_render_output_path(
-                app.get_selected_midi_name().as_str(),
-                mode,
-                audio_format,
-                video_container,
-            )
-        } else {
-            app.get_render_output_path_text().to_string()
-        };
-        if raw_output.is_empty() {
-            return Err("select a MIDI before exporting".into());
-        }
-        let final_output = normalize_output_path(
-            Path::new(&raw_output),
+        let raw_output = resolve_render_output_path_text(
+            app.get_render_output_path_text().as_str(),
+            app.get_selected_midi_name().as_str(),
             mode,
             audio_format,
             video_container,
         );
+        if raw_output.is_empty() {
+            return Err("select a MIDI before exporting".into());
+        }
         Ok(Self {
             mode,
             audio_format,
             video_container,
-            final_output,
+            final_output: PathBuf::from(raw_output),
         })
     }
 
@@ -189,7 +180,10 @@ impl RenderExportController {
         }
     }
 
-    pub(crate) fn snapshot(&mut self, progress: RenderExportProgress) -> Option<RenderExportUiSnapshot> {
+    pub(crate) fn snapshot(
+        &mut self,
+        progress: RenderExportProgress,
+    ) -> Option<RenderExportUiSnapshot> {
         let draft = self.draft()?.clone();
         let outcome = self.job.as_ref()?.outcome.clone();
         match outcome {

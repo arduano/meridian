@@ -587,6 +587,55 @@ fn stdio_transport_renders_encoded_audio_output() {
 }
 
 #[test]
+fn stdio_transport_rejects_mismatched_audio_output_extension() {
+    let midi = support::write_test_midi("smoke-two-notes.mid");
+    let output = support::temp_path("render.wav");
+
+    let (mut child, mut stdin, mut stdout) = spawn_stdio_child();
+
+    send_request(
+        &mut stdin,
+        &ProtocolRequest {
+            protocol_version: PROTOCOL_VERSION,
+            id: Some(1),
+            command: ProtocolCommand::StartRenderAudio {
+                config: meridian_core::protocol::ProtocolAudioRenderConfig {
+                    midi_path: midi,
+                    output: output.clone(),
+                    sample_rate: Some(22_050),
+                    channels: Some(2),
+                    use_limiter: Some(true),
+                    format: meridian_core::protocol::AudioOutputFormat::Mp3,
+                    ffmpeg_args: vec![],
+                    soundfonts: vec![],
+                },
+            },
+        },
+    )
+    .expect("send mismatched audio render request");
+
+    let response = read_response_for_id(&mut stdout, 1);
+    assert!(matches!(
+        response.events.as_slice(),
+        [ProtocolEvent::Error { message, .. }] if message.contains("audio output path")
+    ));
+
+    send_request(
+        &mut stdin,
+        &ProtocolRequest {
+            protocol_version: PROTOCOL_VERSION,
+            id: Some(2),
+            command: ProtocolCommand::Shutdown,
+        },
+    )
+    .expect("send shutdown");
+    let _ = read_response_for_id(&mut stdout, 2);
+
+    let status = child.wait().expect("wait for cli exit");
+    assert!(status.success(), "stdio transport failed: {status:?}");
+}
+
+#[test]
 fn stdio_transport_reports_custom_video_range_duration() {
     if !support::ffmpeg_available() {
         eprintln!("skipping stdio ranged video smoke because ffmpeg is unavailable");
@@ -657,7 +706,11 @@ fn stdio_transport_reports_custom_video_range_duration() {
                     saw_started = true;
                 }
                 ProtocolEvent::VideoRender {
-                    event: VideoRenderEvent::RenderFinished { output: finished_output, .. },
+                    event:
+                        VideoRenderEvent::RenderFinished {
+                            output: finished_output,
+                            ..
+                        },
                 } => {
                     assert_eq!(finished_output, output);
                     saw_finished = true;
@@ -737,9 +790,7 @@ fn stdio_transport_rejects_invalid_custom_video_range() {
         meridian_core::protocol::CoreErrorCode::ValidationFailed
     ));
     assert!(
-        error.1.contains("start")
-            || error.1.contains("end")
-            || error.1.contains("greater than"),
+        error.1.contains("start") || error.1.contains("end") || error.1.contains("greater than"),
         "unexpected invalid-range message: {}",
         error.1
     );
@@ -854,7 +905,10 @@ fn stdio_transport_cancels_muxed_video_render_cleanly() {
         }
     }
 
-    assert!(saw_started, "expected muxed render to start before cancelling");
+    assert!(
+        saw_started,
+        "expected muxed render to start before cancelling"
+    );
 
     send_request(
         &mut stdin,
