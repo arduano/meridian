@@ -31,7 +31,7 @@ impl CoreState {
                 if self.midi_load_was_cancelled(load_generation) {
                     return Self::midi_load_cancelled_events();
                 }
-                let processed_midi_id = self.next_processed_midi_id();
+                let processed_midi_id = self.resource_ids.next_processed_midi_id();
                 let midi_length = midi.midi_length();
                 let total_notes = midi.total_notes();
                 let total_audio_events = midi.total_audio_events();

@@ -18,7 +18,7 @@ impl CoreState {
                 format!("unknown display_cache_id {}", display_cache_id.0),
             )];
         }
-        let display_session_id = self.next_display_session_id();
+        let display_session_id = self.resource_ids.next_display_session_id();
         self.display_sessions.insert(
             display_session_id,
             DisplaySessionResource { display_cache_id },
@@ -39,7 +39,7 @@ impl CoreState {
                 format!("unknown audio_cache_id {}", audio_cache_id.0),
             )];
         }
-        let audio_session_id = self.next_audio_session_id();
+        let audio_session_id = self.resource_ids.next_audio_session_id();
         self.audio_sessions
             .insert(audio_session_id, AudioSessionResource { audio_cache_id });
         vec![CoreEvent::AudioSessionCreated {

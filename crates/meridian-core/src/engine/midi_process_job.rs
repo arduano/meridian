@@ -1,9 +1,6 @@
 use std::{
     path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::{atomic::AtomicBool, Arc},
     thread,
 };
 
@@ -12,10 +9,7 @@ use crate::{
     protocol::{CoreErrorCode, CoreEvent, MidiProcessEvent, MidiProcessJobId, MidiProcessStatus},
 };
 
-use super::{
-    core_state::{CoreState, MidiProcessJobState},
-    support::error_event,
-};
+use super::{core_state::CoreState, job_runtime::MidiProcessJobState, support::error_event};
 
 impl CoreState {
     pub(super) fn start_process_midi_file(
@@ -31,17 +25,17 @@ impl CoreState {
             )];
         }
         let cancel = Arc::new(AtomicBool::new(false));
-        let job_id = MidiProcessJobId(self.next_resource_id);
-        self.next_resource_id += 1;
+        let job_id = MidiProcessJobId(self.resource_ids.next_job_id());
         self.active_midi_process_job_id = Some(job_id);
-        self.midi_process_job = Some(MidiProcessJobState {
-            cancel: Arc::clone(&cancel),
-            status: MidiProcessStatus::Running {
+        self.midi_process_job = Some(MidiProcessJobState::new(
+            Arc::clone(&cancel),
+            None,
+            MidiProcessStatus::Running {
                 job_id,
                 input: input.clone(),
                 output: output.clone(),
             },
-        });
+        ));
 
         let core_handle = self.core_handle.clone();
         thread::spawn(move || {
@@ -58,7 +52,7 @@ impl CoreState {
     pub(super) fn cancel_midi_file_process(&mut self) -> Vec<CoreEvent> {
         match &mut self.midi_process_job {
             Some(job) => {
-                job.cancel.store(true, Ordering::SeqCst);
+                job.request_cancel();
                 if let MidiProcessStatus::Running {
                     job_id,
                     input,
@@ -89,15 +83,17 @@ impl CoreState {
                 input,
                 output,
             } => {
-                self.midi_process_job =
-                    self.midi_process_job.take().map(|job| MidiProcessJobState {
-                        cancel: job.cancel,
-                        status: MidiProcessStatus::Running {
+                self.midi_process_job = self.midi_process_job.take().map(|job| {
+                    MidiProcessJobState::new(
+                        job.cancel,
+                        None,
+                        MidiProcessStatus::Running {
                             job_id: *job_id,
                             input: input.clone(),
                             output: output.clone(),
                         },
-                    });
+                    )
+                });
             }
             MidiProcessEvent::Progress { .. } => {}
             MidiProcessEvent::ProcessFinished { .. }

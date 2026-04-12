@@ -3,9 +3,8 @@ use std::{
     path::PathBuf,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicU64},
+        atomic::AtomicU64,
     },
-    thread::JoinHandle,
     time::Instant,
 };
 
@@ -17,39 +16,23 @@ use crate::{
     midi::audio_cache::InRamAudioCache,
     midi::{MidiCacheStack, ProcessedMidi},
     protocol::{
-        AnalysisJobId, AudioCacheId, AudioRenderJobId, AudioRenderStatus, AudioSessionId,
-        CoreCommand, CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId,
-        MidiAnalysisJobStatus, MidiProcessJobId, MidiProcessStatus, ParsedMidiId, ProcessedMidiId,
-        VideoRenderJobId, VideoRenderStatus,
+        AnalysisJobId, AudioCacheId, AudioRenderJobId, AudioSessionId, CoreCommand,
+        CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId, MidiAnalysisJobStatus,
+        MidiProcessJobId, ParsedMidiId, ProcessedMidiId, VideoRenderJobId,
     },
     transport::TransportState,
 };
 
 use super::{
     CoreHandle, CoreResponse, RequestMessage,
+    job_runtime::{AudioRenderJobState, MidiProcessJobState, RenderJobState},
     resource_types::{
         AudioCacheRegistry, AudioSessionRegistry, DisplayCacheRegistry, DisplaySessionRegistry,
         ParsedMidiRegistry, ProcessedMidiRegistry,
     },
+    resources::ids::ResourceIds,
     support::error_event,
 };
-
-pub(super) struct RenderJobState {
-    pub(super) cancel: Arc<AtomicBool>,
-    pub(super) worker: Option<JoinHandle<()>>,
-    pub(super) status: VideoRenderStatus,
-}
-
-pub(super) struct AudioRenderJobState {
-    pub(super) cancel: Arc<AtomicBool>,
-    pub(super) worker: Option<JoinHandle<()>>,
-    pub(super) status: AudioRenderStatus,
-}
-
-pub(super) struct MidiProcessJobState {
-    pub(super) cancel: Arc<AtomicBool>,
-    pub(super) status: MidiProcessStatus,
-}
 
 pub(super) struct CoreState {
     pub(super) core_handle: CoreHandle,
@@ -62,7 +45,7 @@ pub(super) struct CoreState {
     pub(super) audio_caches: AudioCacheRegistry,
     pub(super) display_sessions: DisplaySessionRegistry,
     pub(super) audio_sessions: AudioSessionRegistry,
-    pub(super) next_resource_id: u64,
+    pub(super) resource_ids: ResourceIds,
     pub(super) active_parsed_midi_id: Option<ParsedMidiId>,
     pub(super) active_processed_midi_id: Option<ProcessedMidiId>,
     pub(super) active_display_cache_id: Option<DisplayCacheId>,
@@ -107,7 +90,7 @@ impl CoreState {
             audio_caches: HashMap::new(),
             display_sessions: HashMap::new(),
             audio_sessions: HashMap::new(),
-            next_resource_id: 1,
+            resource_ids: ResourceIds::new(1),
             active_parsed_midi_id: None,
             active_processed_midi_id: None,
             active_display_cache_id: None,

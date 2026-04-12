@@ -34,7 +34,7 @@ impl CoreState {
                 if self.midi_load_was_cancelled(load_generation) {
                     return Self::midi_load_cancelled_events();
                 }
-                let parsed_midi_id = self.next_parsed_midi_id();
+                let parsed_midi_id = self.resource_ids.next_parsed_midi_id();
                 self.parsed_midis.insert(
                     parsed_midi_id,
                     ParsedMidiResource {
@@ -73,7 +73,7 @@ impl CoreState {
                 if self.midi_load_was_cancelled(load_generation) {
                     return Self::midi_load_cancelled_events();
                 }
-                let display_cache_id = self.next_display_cache_id();
+                let display_cache_id = self.resource_ids.next_display_cache_id();
                 let event = CoreEvent::DisplayCacheBuilt {
                     parsed_midi_id,
                     display_cache_id,
@@ -106,7 +106,7 @@ impl CoreState {
         };
         match parsed.cache_stack.display_cache() {
             Ok(cache) => {
-                let display_cache_id = self.next_display_cache_id();
+                let display_cache_id = self.resource_ids.next_display_cache_id();
                 let event = CoreEvent::DisplayCacheBuilt {
                     parsed_midi_id,
                     display_cache_id,
@@ -156,7 +156,7 @@ impl CoreState {
                 if self.midi_load_was_cancelled(load_generation) {
                     return Self::midi_load_cancelled_events();
                 }
-                let audio_cache_id = self.next_audio_cache_id();
+                let audio_cache_id = self.resource_ids.next_audio_cache_id();
                 let total_events = cache.events().len();
                 self.audio_caches.insert(
                     audio_cache_id,
@@ -359,7 +359,7 @@ impl CoreState {
         let display_cache_id = if let Some(display_cache_id) = existing_display {
             display_cache_id
         } else {
-            let display_cache_id = self.next_display_cache_id();
+            let display_cache_id = self.resource_ids.next_display_cache_id();
             self.display_caches.insert(
                 display_cache_id,
                 DisplayCacheResource {
@@ -380,7 +380,7 @@ impl CoreState {
         let audio_cache_id = if let Some(audio_cache_id) = existing_audio {
             audio_cache_id
         } else {
-            let audio_cache_id = self.next_audio_cache_id();
+            let audio_cache_id = self.resource_ids.next_audio_cache_id();
             self.audio_caches.insert(
                 audio_cache_id,
                 AudioCacheResource {

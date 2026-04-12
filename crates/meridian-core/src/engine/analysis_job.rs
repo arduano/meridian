@@ -26,8 +26,7 @@ impl CoreState {
             )];
         };
 
-        let job_id = AnalysisJobId(self.next_resource_id);
-        self.next_resource_id += 1;
+        let job_id = AnalysisJobId(self.resource_ids.next_job_id());
         let status = MidiAnalysisJobStatus::Running {
             job_id,
             parsed_midi_id,

@@ -1,7 +1,7 @@
 use std::{
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::AtomicBool,
     },
     thread,
 };
@@ -14,10 +14,7 @@ use crate::{
     protocol::{AudioRenderJobId, AudioRenderStatus, CoreErrorCode, CoreEvent},
 };
 
-use super::{
-    core_state::{AudioRenderJobState, CoreState},
-    support::error_event,
-};
+use super::{core_state::CoreState, job_runtime::AudioRenderJobState, support::error_event};
 
 impl CoreState {
     pub(super) fn request_cancel_render_audio(&mut self) -> bool {
@@ -25,7 +22,7 @@ impl CoreState {
             return false;
         };
 
-        job.cancel.store(true, Ordering::SeqCst);
+        job.request_cancel();
         if let AudioRenderStatus::Running {
             job_id,
             output,
@@ -104,8 +101,7 @@ impl CoreState {
         }
         let soundfont_cache = SoundfontCache::new();
         let cancel = Arc::new(AtomicBool::new(false));
-        let job_id = AudioRenderJobId(self.next_resource_id);
-        self.next_resource_id += 1;
+        let job_id = AudioRenderJobId(self.resource_ids.next_job_id());
         self.active_audio_render_job_id = Some(job_id);
         let initial_status = AudioRenderStatus::Running {
             job_id,
@@ -132,11 +128,11 @@ impl CoreState {
                 },
             );
         });
-        self.audio_render_job = Some(AudioRenderJobState {
-            cancel: Arc::clone(&cancel),
-            worker: Some(worker),
-            status: initial_status,
-        });
+        self.audio_render_job = Some(AudioRenderJobState::new(
+            Arc::clone(&cancel),
+            Some(worker),
+            initial_status,
+        ));
 
         vec![CoreEvent::AudioRenderStatus {
             status: self.audio_render_status(),
@@ -164,11 +160,11 @@ impl CoreState {
                 total_events,
                 ..
             } => {
-                self.audio_render_job =
-                    self.audio_render_job.take().map(|job| AudioRenderJobState {
-                        cancel: job.cancel,
-                        worker: job.worker,
-                        status: AudioRenderStatus::Running {
+                self.audio_render_job = self.audio_render_job.take().map(|job| {
+                    AudioRenderJobState::new(
+                        job.cancel,
+                        job.worker,
+                        AudioRenderStatus::Running {
                             job_id: *job_id,
                             output: output.clone(),
                             total_events: *total_events,
@@ -177,7 +173,8 @@ impl CoreState {
                             rendered_seconds: 0.0,
                             frames_written: 0,
                         },
-                    });
+                    )
+                });
             }
             AudioRenderEvent::RenderProgress {
                 job_id,
@@ -221,7 +218,7 @@ impl CoreState {
             | AudioRenderEvent::RenderCancelled { .. }
             | AudioRenderEvent::RenderFailed { .. } => {
                 if let Some(mut job) = self.audio_render_job.take() {
-                    if let Some(worker) = job.worker.take() {
+                    if let Some(worker) = job.take_worker() {
                         let _ = worker.join();
                     }
                 }

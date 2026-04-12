@@ -1,6 +1,6 @@
 mod caches;
 mod gc;
-mod ids;
+pub(super) mod ids;
 mod loading;
 mod processed;
 mod sessions;

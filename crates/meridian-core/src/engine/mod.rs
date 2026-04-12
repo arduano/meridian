@@ -1,6 +1,7 @@
 mod analysis_job;
 mod audio_render_job;
 mod core_state;
+mod job_runtime;
 mod midi_process_job;
 mod resource_types;
 mod resources;
