@@ -3,6 +3,8 @@
 pkgs.mkShell {
   packages = with pkgs; [
     pkg-config
+    ffmpeg
+    deno
     alsa-lib
     fontconfig
     freetype
@@ -28,6 +30,7 @@ pkgs.mkShell {
       pkgs.alsa-lib
       pkgs.fontconfig
       pkgs.freetype
+      pkgs.ffmpeg
       pkgs.libxkbcommon
       pkgs.wayland
       pkgs.libx11

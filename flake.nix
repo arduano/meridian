@@ -20,20 +20,6 @@
           path = ./.;
           name = "meridian";
         };
-        midiToolkitSrc = builtins.path {
-          path = ../midi-toolkit-rs;
-          name = "midi-toolkit-rs";
-        };
-        xsynthSrc = builtins.path {
-          path = ../xsynth;
-          name = "xsynth";
-        };
-        workspaceSrc = pkgs.runCommand "meridian-workspace-src" {} ''
-          mkdir -p "$out"
-          cp -a ${meridianSrc} "$out/meridian"
-          cp -a ${midiToolkitSrc} "$out/midi-toolkit-rs"
-          cp -a ${xsynthSrc} "$out/xsynth"
-        '';
         commonNativeBuildInputs = with pkgs; [
           pkg-config
         ];
@@ -61,8 +47,7 @@
           pkgs.rustPlatform.buildRustPackage {
             inherit pname;
             version = "0.1.0";
-            src = workspaceSrc;
-            sourceRoot = "source/meridian";
+            src = meridianSrc;
             cargoLock = {
               lockFile = ./Cargo.lock;
             };
@@ -126,6 +111,8 @@ EOF
 
         devShells.default = pkgs.mkShell {
           packages = commonNativeBuildInputs ++ commonBuildInputs ++ [
+            pkgs.ffmpeg
+            pkgs.deno
             rustToolchain
           ];
 

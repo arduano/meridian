@@ -13,10 +13,10 @@ Meridian is a Rust workspace for MIDI inspection, modification, audio rendering,
 
 - Rust toolchain compatible with [`rust-toolchain.toml`](/home/arduano/programming/meridian/rust-toolchain.toml)
 - On Linux, native libraries for ALSA, fontconfig, X11/Wayland, and OpenGL/Vulkan
-- `ffmpeg` for encoded audio/video rendering and related smoke tests
+- The included [`shell.nix`](/home/arduano/programming/meridian/shell.nix) supplies the native Linux libraries, `ffmpeg`, and `deno` used by the build, rendering, and SDK workflows
 - A real desktop session for running the UI; headless SSH sessions can still build and run non-UI paths
 
-The included [`shell.nix`](/home/arduano/programming/meridian/shell.nix) supplies the native Linux libraries expected by the Rust crates. On Linux, the safest default is to run Cargo commands through `nix-shell`.
+On Linux, the safest default is to run Cargo and Deno commands through `nix-shell`.
 
 If you use `direnv`, run `direnv allow` once in this repo. The included [`.envrc`](/home/arduano/programming/meridian/.envrc) loads the `shell.nix` environment and keeps the host Rust toolchain preferred.
 
