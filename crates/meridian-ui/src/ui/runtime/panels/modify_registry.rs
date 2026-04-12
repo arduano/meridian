@@ -317,29 +317,6 @@ pub(super) fn modify_pass_policy_for_field_prefix(
         .find(|policy| policy.field_prefix == field_prefix)
 }
 
-pub(super) fn modify_pass_keys() -> &'static [&'static str] {
-    &[
-        "range_select",
-        "tempo_map",
-        "time_warp",
-        "channel_remap",
-        "track_route",
-        "program",
-        "control_change",
-        "pitch_bend",
-        "velocity_map",
-        "note_length",
-        "quantize",
-        "humanize",
-        "key_map",
-        "meta_text",
-        "sysex",
-        "shared_metadata_track",
-        "change_ppq",
-        "extract_track",
-    ]
-}
-
 pub(super) fn sync_range_select_controls(app: &App, config: &MidiFileProcessingConfig) {
     if let MidiModifierTool::RangeSelect(tool) = &config.tool {
         let ppq = get_ppq(app);

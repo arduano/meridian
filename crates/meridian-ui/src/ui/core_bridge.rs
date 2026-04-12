@@ -8,8 +8,7 @@ use meridian_core::{
     audio::{AudioConfig, AudioRenderConfig},
     display::MIN_VIEW_RANGE_SECONDS,
     midi::{
-        MidiFileInspection, MidiFileProcessingConfig, MidiFilesMergeConfig, MidiProcessingConfig,
-        analysis::MidiAnalysisKind,
+        MidiFileProcessingConfig, analysis::MidiAnalysisKind,
     },
     protocol::{CoreCommand, CoreEvent, MidiProcessStatus, ParsedMidiId, VideoRenderConfig},
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
@@ -131,36 +130,6 @@ impl UiCoreBridge {
         self.request(CoreCommand::LoadParsedMidi { path }, model)
     }
 
-    pub fn inspect_midi_files(
-        &self,
-        paths: Vec<PathBuf>,
-        model: &Arc<Mutex<UiViewModel>>,
-    ) -> Result<Vec<MidiFileInspection>, MeridianError> {
-        Self::find_event(
-            self.request(CoreCommand::InspectMidiFiles { paths }, model)?,
-            |event| match event {
-                CoreEvent::MidiFilesInspected { inspections } => Some(inspections),
-                _ => None,
-            },
-            "missing midi inspection result",
-        )
-    }
-
-    pub fn build_processed_midi(
-        &self,
-        parsed_midi_id: ParsedMidiId,
-        config: MidiProcessingConfig,
-        model: &Arc<Mutex<UiViewModel>>,
-    ) -> Result<Vec<CoreEvent>, MeridianError> {
-        self.request(
-            CoreCommand::BuildProcessedMidi {
-                parsed_midi_id,
-                config,
-            },
-            model,
-        )
-    }
-
     pub fn start_midi_analysis_job(
         &self,
         parsed_midi_id: ParsedMidiId,
@@ -187,23 +156,6 @@ impl UiCoreBridge {
         self.request(
             CoreCommand::StartProcessMidiFile {
                 input,
-                output,
-                config,
-            },
-            model,
-        )
-    }
-
-    pub fn merge_midi_files(
-        &self,
-        inputs: Vec<PathBuf>,
-        output: PathBuf,
-        config: MidiFilesMergeConfig,
-        model: &Arc<Mutex<UiViewModel>>,
-    ) -> Result<Vec<CoreEvent>, MeridianError> {
-        self.request(
-            CoreCommand::MergeMidiFiles {
-                inputs,
                 output,
                 config,
             },
@@ -391,6 +343,7 @@ impl UiCoreBridge {
         command: CoreCommand,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
+        // Keep bridge callers thin: every command is reduced into the shared UI model here.
         let events = self.core.request(command)?;
         reduce_core_events(model, &events);
         Ok(events)
@@ -427,16 +380,5 @@ impl UiCoreBridge {
         };
         layout.set_renderer_kind(renderer);
         layout.scene
-    }
-
-    fn find_event<T>(
-        events: Vec<CoreEvent>,
-        mut find: impl FnMut(CoreEvent) -> Option<T>,
-        missing_message: &'static str,
-    ) -> Result<T, MeridianError> {
-        events
-            .into_iter()
-            .find_map(&mut find)
-            .ok_or_else(|| MeridianError::Protocol(missing_message.into()))
     }
 }

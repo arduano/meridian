@@ -1,6 +1,5 @@
 use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use meridian_core::render::{
@@ -62,25 +61,6 @@ pub(crate) fn remember_background_png(state: &mut UiViewModel, path: String) {
 
 pub(crate) fn remember_aura_png(state: &mut UiViewModel, path: String) {
     state.remembered_assets.aura_png = Some(path);
-}
-
-pub(crate) fn last_palette_png(state: &UiViewModel) -> Option<PathBuf> {
-    state.remembered_assets.palette_png.clone()
-}
-
-pub(crate) fn last_background_png(state: &UiViewModel) -> Option<String> {
-    state.remembered_assets.background_png.clone()
-}
-
-pub(crate) fn last_aura_png(state: &UiViewModel) -> Option<String> {
-    state.remembered_assets.aura_png.clone()
-}
-
-pub(crate) fn file_name_or_path(path: &Path) -> String {
-    path.file_name()
-        .and_then(OsStr::to_str)
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| path.display().to_string())
 }
 
 fn active_palette_path_from_notes(notes: &NoteProjectorConfig) -> Option<PathBuf> {

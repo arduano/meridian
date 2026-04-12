@@ -105,6 +105,7 @@ pub fn apply_events_to_app(
 }
 
 pub fn reduce_core_events(shared_state: &Arc<Mutex<UiViewModel>>, events: &[CoreEvent]) {
+    // `reduce` owns shared model state; `apply` owns projection into Slint controls.
     reduce::reduce_core_events(shared_state, events);
 }
 
