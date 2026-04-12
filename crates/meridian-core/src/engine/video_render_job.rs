@@ -38,6 +38,10 @@ impl CoreState {
             )];
         }
 
+        if let Err(error) = config.validate() {
+            return vec![error_event(CoreErrorCode::ValidationFailed, error.to_string())];
+        }
+
         let audio_inputs = if config.audio.is_some() {
             if let Some(path) = config.midi_path.clone() {
                 let current_path = self.snapshot().midi_path;

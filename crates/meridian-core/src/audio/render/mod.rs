@@ -61,6 +61,7 @@ pub(crate) fn render_audio_pipe_from_cache(
         pipe_path,
         audio_params,
         use_limiter,
+        cancel,
     )?;
     let noop_config = AudioRenderConfig {
         output: pipe_path.to_path_buf(),

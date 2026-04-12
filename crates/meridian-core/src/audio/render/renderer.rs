@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    path::Path,
+    sync::atomic::AtomicBool,
+};
 
 use xsynth_core::{
     AudioPipe, AudioStreamParams,
@@ -49,8 +52,9 @@ impl OfflineAudioRenderer {
         pipe_path: &Path,
         audio_params: AudioStreamParams,
         use_limiter: bool,
+        cancel: &AtomicBool,
     ) -> Result<Self, MeridianError> {
-        let writer = AudioSampleWriter::create_raw_pipe(pipe_path)?;
+        let writer = AudioSampleWriter::create_raw_pipe(pipe_path, cancel)?;
         Self::new_with_writer(
             audio_config,
             soundfont_cache,

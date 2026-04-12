@@ -87,6 +87,7 @@ fn render_encoded_audio_unix(
         fifo.path(),
         audio_params,
         settings.use_limiter,
+        cancel,
     ) {
         Ok(renderer) => renderer,
         Err(error) => {
