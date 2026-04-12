@@ -181,7 +181,7 @@ fn clip_audio_cache(
     time_range: ResolvedVideoTimeRange,
 ) -> InRamAudioCache {
     let full_length = audio_cache.length();
-    if time_range.start_time <= 0.0 && (full_length - time_range.end_time).abs() < f64::EPSILON {
+    if time_range.start_time == 0.0 && (full_length - time_range.end_time).abs() < f64::EPSILON {
         return audio_cache.as_ref().clone();
     }
     audio_cache.clip_time_range(time_range.start_time, time_range.end_time)

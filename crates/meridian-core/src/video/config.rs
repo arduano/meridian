@@ -5,6 +5,7 @@ use crate::{
     audio::AudioConfig,
     midi::audio_cache::InRamAudioCache,
     protocol::VideoRenderConfig,
+    transport::PREVIEW_START_TIME_SECONDS,
 };
 
 pub struct VideoRenderAudioInputs {
@@ -56,7 +57,7 @@ impl VideoRenderConfig {
         midi_length: f64,
     ) -> Result<ResolvedVideoTimeRange, MeridianError> {
         let song_end = midi_length.max(0.0);
-        let start_time = self.start_time.unwrap_or(0.0);
+        let start_time = self.start_time.unwrap_or(PREVIEW_START_TIME_SECONDS);
         let end_time = self.end_time.unwrap_or(song_end);
 
         if start_time > song_end {
@@ -99,7 +100,7 @@ fn validate_time_bound(value: Option<f64>, label: &str) -> Result<(), MeridianEr
 mod tests {
     use std::path::PathBuf;
 
-    use super::{ResolvedVideoTimeRange, should_use_isolated_core};
+    use super::{PREVIEW_START_TIME_SECONDS, ResolvedVideoTimeRange, should_use_isolated_core};
     use crate::protocol::{VideoOutputContainer, VideoRenderConfig};
 
     fn config(midi_path: Option<PathBuf>) -> VideoRenderConfig {
@@ -154,9 +155,9 @@ mod tests {
         assert_eq!(
             resolved,
             ResolvedVideoTimeRange {
-                start_time: 0.0,
+                start_time: PREVIEW_START_TIME_SECONDS,
                 end_time: 12.0,
-                duration_seconds: 12.0,
+                duration_seconds: 13.0,
             }
         );
     }

@@ -67,6 +67,8 @@ pub(super) fn apply_event_overrides_to_app(app: &App, event: &CoreEvent, state: 
             app.set_status_text(status_text(state).into());
             app.set_visible_note_count_text("0".into());
             app.set_active_keys_text("0".into());
+            app.set_render_start_time_text("-1".into());
+            app.set_render_end_time_text(state.midi_length.max(0.0).to_string().into());
         }
         CoreEvent::ProcessedMidiBuilt {
             midi_length,

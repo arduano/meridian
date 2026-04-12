@@ -1,5 +1,4 @@
 use super::*;
-use meridian_core::transport::PREVIEW_START_TIME_SECONDS;
 
 pub(in super::super) fn wire_render_export_callbacks(
     app: &App,
@@ -36,14 +35,11 @@ pub(in super::super) fn wire_render_export_callbacks(
             app.set_render_range_mode_text(mode.into());
             if mode == "custom" {
                 if app.get_render_start_time_text().is_empty() {
-                    app.set_render_start_time_text(
-                        PREVIEW_START_TIME_SECONDS.to_string().into(),
-                    );
-                }
-                if app.get_render_end_time_text().is_empty() {
-                    if let Some(end_time) = default_render_end_time_text(&app) {
-                        app.set_render_end_time_text(end_time.into());
-                    }
+                    apply_default_render_time_range(&app, app.get_midi_length_seconds() as f64);
+                } else if app.get_render_end_time_text().is_empty() {
+                    let (_, end_time) =
+                        default_render_time_range_text(app.get_midi_length_seconds() as f64);
+                    app.set_render_end_time_text(end_time.into());
                 }
             }
             app.window().request_redraw();
@@ -476,13 +472,4 @@ pub(in super::super) fn wire_render_export_callbacks(
             app.window().request_redraw();
         });
     }
-}
-
-fn default_render_end_time_text(app: &App) -> Option<String> {
-    let raw = app.get_length_text();
-    let seconds = raw
-        .split_whitespace()
-        .next()
-        .and_then(|value| value.parse::<f64>().ok())?;
-    Some(seconds.to_string())
 }

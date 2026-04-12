@@ -5,6 +5,7 @@ use meridian_core::{
         AudioOutputFormat, FrameColorMode, VideoAudioConfig, VideoExportConfig,
         VideoOutputContainer,
     },
+    transport::PREVIEW_START_TIME_SECONDS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -349,6 +350,19 @@ pub(super) fn parse_render_time_seconds(text: &str, label: &str) -> Result<f64, 
     Ok(seconds)
 }
 
+pub(crate) fn default_render_time_range_text(midi_length: f64) -> (String, String) {
+    (
+        PREVIEW_START_TIME_SECONDS.to_string(),
+        midi_length.max(0.0).to_string(),
+    )
+}
+
+pub(crate) fn apply_default_render_time_range(app: &App, midi_length: f64) {
+    let (start_time, end_time) = default_render_time_range_text(midi_length);
+    app.set_render_start_time_text(start_time.into());
+    app.set_render_end_time_text(end_time.into());
+}
+
 pub(super) fn parse_render_channels(text: &str) -> Result<u16, String> {
     match text {
         "mono" => Ok(1),
@@ -438,6 +452,14 @@ mod tests {
         assert_eq!(
             parse_render_time_seconds("-1", "render start time").unwrap(),
             -1.0
+        );
+    }
+
+    #[test]
+    fn default_render_time_range_text_uses_preview_preroll_and_song_end() {
+        assert_eq!(
+            default_render_time_range_text(12.5),
+            ("-1".into(), "12.5".into())
         );
     }
 }
