@@ -2,18 +2,20 @@ mod support;
 
 use std::{
     fs,
+    path::PathBuf,
     time::{Duration, Instant},
 };
 
 use meridian_core::{
     PROTOCOL_VERSION,
+    audio::{AudioBackend, AudioConfig, AudioRenderConfig, AudioRenderEvent},
     midi::{
         KeyMapEntry, KeyMapTool, MidiFileProcessingConfig, MidiFilesMergeConfig, MidiModifierTool,
         RangeEdgeBehavior, RangeSelectTool, analysis::MidiAnalysisKind,
     },
     protocol::{
-        CoreCommand, CoreEvent, FrameColorMode, ImageExportConfig, JsonRequest, JsonResponse,
-        MidiProcessEvent, MidiProcessStatus,
+        AudioOutputFormat, AudioRenderStatus, CoreCommand, CoreEvent, FrameColorMode,
+        ImageExportConfig, JsonRequest, JsonResponse, MidiProcessEvent, MidiProcessStatus,
     },
     render::{
         DisplayTimeSpace, FlatKeyboardProjectorConfig, FlatNoteProjectorConfig,
@@ -387,6 +389,199 @@ fn midi_analysis_job_fails_when_requested_file_metrics_cannot_be_computed() {
     }
 
     panic!("analysis job did not fail");
+}
+
+fn write_audio_render_midi(render_dir_name: &str, long_tail: bool) -> (PathBuf, PathBuf) {
+    let dir = support::temp_dir(render_dir_name);
+    let midi = dir.join("input.mid");
+    let mut track = vec![
+        Event::new_delta_tempo_event(0, 500_000),
+        Event::new_delta_note_on_event(0, 0, 60, 100),
+        Event::new_delta_note_off_event(96, 0, 60),
+    ];
+
+    if long_tail {
+        track.extend([
+            Event::new_delta_note_on_event(5_760, 0, 64, 100),
+            Event::new_delta_note_off_event(96, 0, 64),
+        ]);
+    }
+
+    support::write_toolkit_midi(&midi, 96, vec![track]);
+    (dir, midi)
+}
+
+#[test]
+fn audio_render_job_reports_started_progress_and_finished_status() {
+    let (_dir, midi) = write_audio_render_midi("meridian-core-audio-render-finish", false);
+    let output = midi.parent().unwrap().join("render.wav");
+    let core = spawn_core();
+    let event_rx = core.subscribe_events();
+
+    let events = core
+        .request(CoreCommand::StartRenderAudio {
+            config: AudioRenderConfig {
+                midi_path: Some(midi.clone()),
+                audio: Some(AudioConfig {
+                    backend: AudioBackend::Xsynth,
+                    ..AudioConfig::default()
+                }),
+                output: output.clone(),
+                sample_rate: Some(22_050),
+                channels: Some(2),
+                use_limiter: Some(true),
+                format: AudioOutputFormat::Wav,
+                ffmpeg_args: Vec::new(),
+                soundfonts: Vec::new(),
+            },
+        })
+        .expect("start audio render");
+
+    assert!(matches!(
+        events.as_slice(),
+        [CoreEvent::AudioRenderStatus {
+            status: AudioRenderStatus::Running { output: running_output, .. }
+        }] if running_output == &output
+    ));
+
+    let mut saw_started = false;
+    let mut saw_finished = false;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        let Ok(event) = event_rx.recv_timeout(Duration::from_millis(200)) else {
+            continue;
+        };
+        match event {
+            CoreEvent::AudioRender {
+                event: AudioRenderEvent::RenderStarted { output: started_output, .. },
+            } => {
+                assert_eq!(started_output, output);
+                saw_started = true;
+            }
+            CoreEvent::AudioRender {
+                event: AudioRenderEvent::RenderProgress { .. },
+            } => {}
+            CoreEvent::AudioRender {
+                event: AudioRenderEvent::RenderFinished { output: finished_output, .. },
+            } => {
+                assert_eq!(finished_output, output);
+                saw_finished = true;
+                break;
+            }
+            CoreEvent::AudioRender {
+                event: AudioRenderEvent::RenderCancelled { .. },
+            } => panic!("unexpected audio render cancellation"),
+            CoreEvent::AudioRender {
+                event: AudioRenderEvent::RenderFailed { message },
+            } => panic!("audio render failed: {message}"),
+            _ => {}
+        }
+    }
+
+    assert!(saw_started, "audio render did not emit a started event");
+    assert!(saw_finished, "audio render did not finish");
+    assert!(output.exists(), "expected audio output to exist");
+
+    let status = core
+        .request(CoreCommand::GetRenderAudioStatus)
+        .expect("get audio render status");
+    assert!(matches!(
+        status.as_slice(),
+        [CoreEvent::AudioRenderStatus {
+            status: AudioRenderStatus::Idle
+        }]
+    ));
+}
+
+#[test]
+fn audio_render_job_cancels_and_clears_status() {
+    let (_dir, midi) = write_audio_render_midi("meridian-core-audio-render-cancel", true);
+    let output = midi.parent().unwrap().join("render.wav");
+    let core = spawn_core();
+    let event_rx = core.subscribe_events();
+
+    let events = core
+        .request(CoreCommand::StartRenderAudio {
+            config: AudioRenderConfig {
+                midi_path: Some(midi.clone()),
+                audio: Some(AudioConfig {
+                    backend: AudioBackend::Xsynth,
+                    ..AudioConfig::default()
+                }),
+                output: output.clone(),
+                sample_rate: Some(22_050),
+                channels: Some(2),
+                use_limiter: Some(true),
+                format: AudioOutputFormat::Wav,
+                ffmpeg_args: Vec::new(),
+                soundfonts: Vec::new(),
+            },
+        })
+        .expect("start audio render");
+
+    assert!(matches!(
+        events.as_slice(),
+        [CoreEvent::AudioRenderStatus {
+            status: AudioRenderStatus::Running { output: running_output, .. }
+        }] if running_output == &output
+    ));
+
+    let cancel_events = core
+        .request(CoreCommand::CancelRenderAudio)
+        .expect("cancel audio render");
+    assert!(matches!(
+        cancel_events.as_slice(),
+        [CoreEvent::AudioRenderStatus {
+            status: AudioRenderStatus::Cancelling { output: cancelling_output, .. }
+        }] if cancelling_output == &output
+    ));
+
+    let mut saw_started = false;
+    let mut saw_cancelled = false;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        let Ok(event) = event_rx.recv_timeout(Duration::from_millis(200)) else {
+            continue;
+        };
+        match event {
+            CoreEvent::AudioRender {
+                event: AudioRenderEvent::RenderStarted { output: started_output, .. },
+            } => {
+                assert_eq!(started_output, output);
+                saw_started = true;
+            }
+            CoreEvent::AudioRender {
+                event: AudioRenderEvent::RenderProgress { .. },
+            } => {}
+            CoreEvent::AudioRender {
+                event: AudioRenderEvent::RenderCancelled { output: cancelled_output, .. },
+            } => {
+                assert_eq!(cancelled_output, output);
+                saw_cancelled = true;
+                break;
+            }
+            CoreEvent::AudioRender {
+                event: AudioRenderEvent::RenderFinished { .. },
+            } => panic!("audio render should have been cancelled"),
+            CoreEvent::AudioRender {
+                event: AudioRenderEvent::RenderFailed { message },
+            } => panic!("audio render failed during cancel test: {message}"),
+            _ => {}
+        }
+    }
+
+    assert!(saw_started, "audio render did not emit a started event");
+    assert!(saw_cancelled, "audio render did not emit a cancelled event");
+
+    let status = core
+        .request(CoreCommand::GetRenderAudioStatus)
+        .expect("get audio render status");
+    assert!(matches!(
+        status.as_slice(),
+        [CoreEvent::AudioRenderStatus {
+            status: AudioRenderStatus::Idle
+        }]
+    ));
 }
 
 #[test]

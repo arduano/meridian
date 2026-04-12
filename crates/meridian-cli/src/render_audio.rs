@@ -114,3 +114,40 @@ fn validate_audio_output_path(output: &Path, format: AudioOutputFormat) -> Resul
         )))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use meridian_core::protocol::AudioOutputFormat;
+
+    use super::validate_audio_output_path;
+
+    #[test]
+    fn validate_audio_output_path_accepts_matching_extensions() {
+        for (path, format) in [
+            (Path::new("render.wav"), AudioOutputFormat::Wav),
+            (Path::new("render.flac"), AudioOutputFormat::Flac),
+            (Path::new("render.mp3"), AudioOutputFormat::Mp3),
+        ] {
+            validate_audio_output_path(path, format).expect("matching extension should be valid");
+        }
+    }
+
+    #[test]
+    fn validate_audio_output_path_rejects_missing_or_mismatched_extensions() {
+        for (path, format, expected_fragment) in [
+            (Path::new("render"), AudioOutputFormat::Wav, ".wav"),
+            (Path::new("render.wav"), AudioOutputFormat::Flac, ".flac"),
+            (Path::new("render.flac"), AudioOutputFormat::Mp3, ".mp3"),
+        ] {
+            let error = validate_audio_output_path(path, format)
+                .expect_err("mismatched extension should be rejected");
+            let message = error.to_string();
+            assert!(
+                message.contains(expected_fragment),
+                "unexpected error message: {message}"
+            );
+        }
+    }
+}
