@@ -281,6 +281,7 @@ fn run_render_audio(args: RenderAudioArgs) -> Result<(), MeridianError> {
     crate::render_audio::run(
         &args.midi,
         &args.output,
+        args.format,
         args.sample_rate,
         args.channels,
         !args.no_limiter,

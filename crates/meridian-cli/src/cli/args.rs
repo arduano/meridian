@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use meridian_core::{
-    protocol::{FrameColorMode, ImageOutputFormat, VideoOutputContainer},
+    protocol::{AudioOutputFormat, FrameColorMode, ImageOutputFormat, VideoOutputContainer},
     render::{DisplayTimeSpace, RendererKind},
 };
 
@@ -172,6 +172,8 @@ pub(super) struct RenderAudioArgs {
     pub(super) midi: PathBuf,
     #[arg(long)]
     pub(super) output: PathBuf,
+    #[arg(long, value_enum, default_value_t = AudioOutputFormat::Wav)]
+    pub(super) format: AudioOutputFormat,
     #[arg(long, default_value_t = 44_100)]
     pub(super) sample_rate: u32,
     #[arg(long, default_value_t = 2)]

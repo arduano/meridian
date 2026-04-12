@@ -6,7 +6,10 @@ use std::{
 
 use meridian_core::{
     MeridianError,
-    protocol::{ProtocolAudioRenderConfig, ProtocolClient, ProtocolCommand, ProtocolEvent},
+    protocol::{
+        AudioOutputFormat, ProtocolAudioRenderConfig, ProtocolClient, ProtocolCommand,
+        ProtocolEvent,
+    },
 };
 
 use crate::render_common::{
@@ -18,12 +21,14 @@ use crate::render_common::{
 pub fn run(
     midi: &Path,
     output: &Path,
+    format: AudioOutputFormat,
     sample_rate: u32,
     channels: u16,
     use_limiter: bool,
     soundfonts: &[PathBuf],
 ) -> Result<(), MeridianError> {
     let cancel = install_cancel_handler()?;
+    validate_audio_output_path(output, format)?;
 
     let client = ProtocolClient::spawn();
     let mut stdout = BufWriter::new(io::stdout().lock());
@@ -41,7 +46,7 @@ pub fn run(
             sample_rate: Some(sample_rate),
             channels: Some(channels),
             use_limiter: Some(use_limiter),
-            format: meridian_core::protocol::AudioOutputFormat::Wav,
+            format,
             ffmpeg_args: Vec::new(),
             soundfonts: soundfonts.to_vec(),
         },
@@ -86,4 +91,26 @@ pub fn run(
 
     let _ = client.shutdown();
     result
+}
+
+fn validate_audio_output_path(output: &Path, format: AudioOutputFormat) -> Result<(), MeridianError> {
+    let expected_extension = match format {
+        AudioOutputFormat::Wav => "wav",
+        AudioOutputFormat::Flac => "flac",
+        AudioOutputFormat::Mp3 => "mp3",
+    };
+
+    let Some(actual_extension) = output.extension().and_then(|extension| extension.to_str()) else {
+        return Err(MeridianError::Platform(format!(
+            "audio output path must use .{expected_extension} for the selected format"
+        )));
+    };
+
+    if actual_extension.eq_ignore_ascii_case(expected_extension) {
+        Ok(())
+    } else {
+        Err(MeridianError::Platform(format!(
+            "audio output path must use .{expected_extension} for the selected format"
+        )))
+    }
 }
