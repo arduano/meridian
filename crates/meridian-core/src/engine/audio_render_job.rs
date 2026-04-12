@@ -22,37 +22,14 @@ impl CoreState {
             return false;
         };
 
-        job.request_cancel();
-        if let AudioRenderStatus::Running {
-            job_id,
-            output,
-            total_events,
-            event_index,
-            time_seconds,
-            rendered_seconds,
-            frames_written,
-        } = &job.status
-        {
-            job.status = AudioRenderStatus::Cancelling {
-                job_id: *job_id,
-                output: output.clone(),
-                total_events: *total_events,
-                event_index: *event_index,
-                time_seconds: *time_seconds,
-                rendered_seconds: *rendered_seconds,
-                frames_written: *frames_written,
-            };
-        }
-
+        job.request_cancel_and_mark();
         true
     }
 
     pub(super) fn active_audio_render_job_id_from_state(&self) -> Option<AudioRenderJobId> {
-        self.audio_render_job.as_ref().and_then(|job| match &job.status {
-            AudioRenderStatus::Running { job_id, .. }
-            | AudioRenderStatus::Cancelling { job_id, .. } => Some(*job_id),
-            AudioRenderStatus::Idle => None,
-        })
+        self.audio_render_job
+            .as_ref()
+            .and_then(|job| job.active_job_id())
     }
 
     pub(super) fn start_render_audio(&mut self, config: AudioRenderConfig) -> Vec<CoreEvent> {
@@ -102,7 +79,6 @@ impl CoreState {
         let soundfont_cache = SoundfontCache::new();
         let cancel = Arc::new(AtomicBool::new(false));
         let job_id = AudioRenderJobId(self.resource_ids.next_job_id());
-        self.active_audio_render_job_id = Some(job_id);
         let initial_status = AudioRenderStatus::Running {
             job_id,
             output: config.output.clone(),
@@ -218,11 +194,8 @@ impl CoreState {
             | AudioRenderEvent::RenderCancelled { .. }
             | AudioRenderEvent::RenderFailed { .. } => {
                 if let Some(mut job) = self.audio_render_job.take() {
-                    if let Some(worker) = job.take_worker() {
-                        let _ = worker.join();
-                    }
+                    job.finish_worker();
                 }
-                self.active_audio_render_job_id = None;
             }
         }
 

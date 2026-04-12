@@ -16,9 +16,9 @@ use crate::{
     midi::audio_cache::InRamAudioCache,
     midi::{MidiCacheStack, ProcessedMidi},
     protocol::{
-        AnalysisJobId, AudioCacheId, AudioRenderJobId, AudioSessionId, CoreCommand,
+        AnalysisJobId, AudioCacheId, AudioSessionId, CoreCommand,
         CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId, MidiAnalysisJobStatus,
-        MidiProcessJobId, ParsedMidiId, ProcessedMidiId, VideoRenderJobId,
+        ParsedMidiId, ProcessedMidiId,
     },
     transport::TransportState,
 };
@@ -52,9 +52,6 @@ pub(super) struct CoreState {
     pub(super) active_audio_cache_id: Option<AudioCacheId>,
     pub(super) active_display_session_id: Option<DisplaySessionId>,
     pub(super) active_audio_session_id: Option<AudioSessionId>,
-    pub(super) active_video_render_job_id: Option<VideoRenderJobId>,
-    pub(super) active_audio_render_job_id: Option<AudioRenderJobId>,
-    pub(super) active_midi_process_job_id: Option<MidiProcessJobId>,
     pub(super) current_audio_cache: Option<Arc<InRamAudioCache>>,
     pub(super) analysis_jobs: HashMap<AnalysisJobId, MidiAnalysisJobStatus>,
     pub(super) display: LiveDisplaySession,
@@ -97,9 +94,6 @@ impl CoreState {
             active_audio_cache_id: None,
             active_display_session_id: None,
             active_audio_session_id: None,
-            active_video_render_job_id: None,
-            active_audio_render_job_id: None,
-            active_midi_process_job_id: None,
             current_audio_cache: None,
             analysis_jobs: HashMap::new(),
             display: LiveDisplaySession::new(),
@@ -309,22 +303,18 @@ impl CoreState {
             CoreCommand::UnloadDisplayContext => {
                 let cancel_events = self.cancel_active_render_jobs(true, false);
                 self.broadcast_internal(cancel_events);
-                self.active_video_render_job_id = self.active_video_render_job_id_from_state();
                 self.unload_display_context()
             }
             CoreCommand::UnloadAudioContext => {
                 let cancel_events = self.cancel_active_render_jobs(false, true);
                 self.broadcast_internal(cancel_events);
                 let events = self.unload_audio_context();
-                self.active_audio_render_job_id = self.active_audio_render_job_id_from_state();
                 events
             }
             CoreCommand::UnloadRenderContext => {
                 let cancel_events = self.cancel_active_render_jobs(true, true);
                 self.broadcast_internal(cancel_events);
                 let events = self.unload_render_context();
-                self.active_video_render_job_id = self.active_video_render_job_id_from_state();
-                self.active_audio_render_job_id = self.active_audio_render_job_id_from_state();
                 events
             }
             CoreCommand::DropInactiveMidiResources => self.drop_inactive_midi_resources(),
@@ -500,14 +490,11 @@ impl CoreState {
     fn begin_shutdown(&mut self) {
         let cancel_events = self.cancel_active_render_jobs(true, true);
         self.broadcast_internal(cancel_events);
-        self.active_video_render_job_id = self.active_video_render_job_id_from_state();
-        self.active_audio_render_job_id = self.active_audio_render_job_id_from_state();
     }
 
     fn finish_shutdown(&mut self) -> Vec<CoreEvent> {
         self.audio_session = None;
         self.midi_process_job = None;
-        self.active_midi_process_job_id = None;
         vec![CoreEvent::ShutdownComplete]
     }
 

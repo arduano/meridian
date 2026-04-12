@@ -54,14 +54,12 @@ impl CoreState {
         let mut events = Vec::new();
 
         if cancel_video && self.request_cancel_render_video() {
-            self.active_video_render_job_id = self.active_video_render_job_id_from_state();
             events.push(CoreEvent::VideoRenderStatus {
                 status: self.video_render_status(),
             });
         }
 
         if cancel_audio && self.request_cancel_render_audio() {
-            self.active_audio_render_job_id = self.active_audio_render_job_id_from_state();
             events.push(CoreEvent::AudioRenderStatus {
                 status: self.audio_render_status(),
             });

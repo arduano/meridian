@@ -22,45 +22,12 @@ impl CoreState {
             return false;
         };
 
-        job.request_cancel();
-        if let VideoRenderStatus::Running {
-            job_id,
-            output,
-            container,
-            fps,
-            width,
-            height,
-            total_frames,
-            frame_index,
-            current_time,
-            elapsed_seconds,
-            audio_progress,
-        } = &job.status
-        {
-            job.status = VideoRenderStatus::Cancelling {
-                job_id: *job_id,
-                output: output.clone(),
-                container: *container,
-                fps: *fps,
-                width: *width,
-                height: *height,
-                total_frames: *total_frames,
-                frame_index: *frame_index,
-                current_time: *current_time,
-                elapsed_seconds: *elapsed_seconds,
-                audio_progress: audio_progress.clone(),
-            };
-        }
-
+        job.request_cancel_and_mark();
         true
     }
 
     pub(super) fn active_video_render_job_id_from_state(&self) -> Option<VideoRenderJobId> {
-        self.render_job.as_ref().and_then(|job| match &job.status {
-            VideoRenderStatus::Running { job_id, .. }
-            | VideoRenderStatus::Cancelling { job_id, .. } => Some(*job_id),
-            VideoRenderStatus::Idle => None,
-        })
+        self.render_job.as_ref().and_then(|job| job.active_job_id())
     }
 
     pub(super) fn start_render_video(&mut self, config: VideoRenderConfig) -> Vec<CoreEvent> {
@@ -100,7 +67,6 @@ impl CoreState {
 
         let cancel = Arc::new(AtomicBool::new(false));
         let job_id = VideoRenderJobId(self.resource_ids.next_job_id());
-        self.active_video_render_job_id = Some(job_id);
         let initial_status = VideoRenderStatus::Running {
             job_id,
             output: config.output.clone(),
@@ -249,11 +215,8 @@ impl CoreState {
             | VideoRenderEvent::RenderFinished { .. }
             | VideoRenderEvent::RenderFailed { .. } => {
                 if let Some(mut job) = self.render_job.take() {
-                    if let Some(worker) = job.take_worker() {
-                        let _ = worker.join();
-                    }
+                    job.finish_worker();
                 }
-                self.active_video_render_job_id = None;
             }
         }
 

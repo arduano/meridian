@@ -26,7 +26,6 @@ impl CoreState {
         }
         let cancel = Arc::new(AtomicBool::new(false));
         let job_id = MidiProcessJobId(self.resource_ids.next_job_id());
-        self.active_midi_process_job_id = Some(job_id);
         self.midi_process_job = Some(MidiProcessJobState::new(
             Arc::clone(&cancel),
             None,
@@ -52,19 +51,7 @@ impl CoreState {
     pub(super) fn cancel_midi_file_process(&mut self) -> Vec<CoreEvent> {
         match &mut self.midi_process_job {
             Some(job) => {
-                job.request_cancel();
-                if let MidiProcessStatus::Running {
-                    job_id,
-                    input,
-                    output,
-                } = &job.status
-                {
-                    job.status = MidiProcessStatus::Cancelling {
-                        job_id: *job_id,
-                        input: input.clone(),
-                        output: output.clone(),
-                    };
-                }
+                job.request_cancel_and_mark();
                 vec![CoreEvent::MidiProcessStatus {
                     status: self.midi_process_status(),
                 }]
@@ -100,7 +87,6 @@ impl CoreState {
             | MidiProcessEvent::ProcessCancelled { .. }
             | MidiProcessEvent::ProcessFailed { .. } => {
                 self.midi_process_job = None;
-                self.active_midi_process_job_id = None;
             }
         }
 
@@ -118,5 +104,9 @@ impl CoreState {
             .as_ref()
             .map(|job| job.status.clone())
             .unwrap_or(MidiProcessStatus::Idle)
+    }
+
+    pub(super) fn active_midi_process_job_id_from_state(&self) -> Option<MidiProcessJobId> {
+        self.midi_process_job.as_ref().and_then(|job| job.active_job_id())
     }
 }

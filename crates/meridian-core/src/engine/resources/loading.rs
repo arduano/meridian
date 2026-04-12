@@ -130,7 +130,6 @@ impl CoreState {
         self.current_audio_cache = None;
         self.active_audio_cache_id = None;
         self.active_audio_session_id = None;
-        self.active_audio_render_job_id = None;
         self.audio_clock.set_playing(false);
         self.audio_player.reset();
 
