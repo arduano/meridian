@@ -2,7 +2,6 @@ import type {
   AnalysisJobId,
   AudioRenderEvent,
   AudioRenderEventWrapper,
-  AudioRenderJobId,
   AudioRenderStatus,
   AudioRenderStatusEventWrapper,
   CoreEvent,
@@ -12,18 +11,17 @@ import type {
   MidiAnalysisJobStatusEventWrapper,
   MidiProcessEvent,
   MidiProcessEventWrapper,
-  MidiProcessJobId,
   MidiProcessStatus,
   MidiProcessStatusEventWrapper,
   ParsedMidiId,
   VideoRenderEvent,
   VideoRenderEventWrapper,
-  VideoRenderJobId,
   VideoRenderStatus,
   VideoRenderStatusEventWrapper,
 } from "../../protocol.ts";
 import type { MeridianProtocolClient } from "./protocol_client.ts";
 import { MeridianSubprocessError, requireEvent } from "./internal.ts";
+import { ReplayableJobHandle } from "./replayable_job_handle.ts";
 
 export interface AnalysisProgress {
   progress: number;
@@ -110,20 +108,11 @@ export class MidiAnalysisJobHandle {
   }
 }
 
-export class MidiProcessJobHandle {
-  readonly jobId: MidiProcessJobId;
-  #protocol: MeridianProtocolClient;
-  #unsubscribe: (() => void) | null = null;
-  #eventListeners = new Set<(event: MidiProcessEvent) => void>();
-  #eventHistory: MidiProcessEvent[] = [];
-  #settled = false;
-  #done: Promise<Extract<MidiProcessEvent, { type: "process_finished" }>>;
-  #resolve!: (
-    value: Extract<MidiProcessEvent, { type: "process_finished" }>,
-  ) => void;
-  #reject!: (error: Error) => void;
-  #status: MidiProcessStatus;
-
+export class MidiProcessJobHandle extends ReplayableJobHandle<
+  MidiProcessStatus,
+  MidiProcessEvent,
+  Extract<MidiProcessEvent, { type: "process_finished" }>
+> {
   constructor(
     protocol: MeridianProtocolClient,
     initialStatus: MidiProcessStatus,
@@ -133,60 +122,34 @@ export class MidiProcessJobHandle {
         "Cannot create a process handle from idle status",
       );
     }
-    this.#protocol = protocol;
-    this.#status = initialStatus;
-    this.jobId = initialStatus.job_id;
-    this.#done = new Promise((resolve, reject) => {
-      this.#resolve = resolve;
-      this.#reject = reject;
-    });
-    this.#unsubscribe = protocol.onEvent((event) => this.#handleEvent(event));
-    for (const event of protocol.recentEvents()) {
-      this.#handleEvent(event);
-      if (this.#settled) {
-        break;
-      }
-    }
-  }
-
-  onEvent(listener: (event: MidiProcessEvent) => void): () => void {
-    this.#eventListeners.add(listener);
-    for (const event of this.#eventHistory) {
-      listener(event);
-    }
-    return () => {
-      this.#eventListeners.delete(listener);
-    };
+    super(protocol, initialStatus);
+    this.startTracking();
   }
 
   async refreshStatus(): Promise<MidiProcessStatus> {
-    const events = await this.#protocol.request({
+    const events = await this.protocol.request({
       type: "get_midi_file_process_status",
     });
     const wrapper = requireEvent(events, "midi_process_status");
-    this.#status = wrapper.status;
-    return this.#status;
+    this.updateStatus(wrapper.status);
+    return this.status;
   }
 
   async cancel(): Promise<MidiProcessStatus> {
-    const events = await this.#protocol.request({
+    const events = await this.protocol.request({
       type: "cancel_midi_file_process",
     });
     const wrapper = requireEvent(events, "midi_process_status");
-    this.#status = wrapper.status;
-    return this.#status;
+    this.updateStatus(wrapper.status);
+    return this.status;
   }
 
-  wait(): Promise<Extract<MidiProcessEvent, { type: "process_finished" }>> {
-    return this.#done;
-  }
-
-  #handleEvent(event: CoreEvent): void {
-    if (this.#settled) {
+  protected handleCoreEvent(event: CoreEvent): void {
+    if (this.isSettled()) {
       return;
     }
     if (event.type === "midi_process_status") {
-      this.#status = (event as MidiProcessStatusEventWrapper).status;
+      this.updateStatus((event as MidiProcessStatusEventWrapper).status);
       return;
     }
     if (event.type !== "midi_process") {
@@ -196,30 +159,16 @@ export class MidiProcessJobHandle {
     if (wrapped.event.job_id !== this.jobId) {
       return;
     }
-    this.#eventHistory.push(wrapped.event);
-    for (const listener of this.#eventListeners) {
-      listener(wrapped.event);
-    }
+    this.emitEvent(wrapped.event);
     switch (wrapped.event.type) {
       case "process_finished":
-        this.#settled = true;
-        this.#unsubscribe?.();
-        this.#unsubscribe = null;
-        this.#resolve(wrapped.event);
+        this.finish(wrapped.event);
         break;
       case "process_cancelled":
-        this.#settled = true;
-        this.#unsubscribe?.();
-        this.#unsubscribe = null;
-        this.#reject(
-          new MeridianSubprocessError("MIDI processing job was cancelled"),
-        );
+        this.fail("MIDI processing job was cancelled");
         break;
       case "process_failed":
-        this.#settled = true;
-        this.#unsubscribe?.();
-        this.#unsubscribe = null;
-        this.#reject(new MeridianSubprocessError(wrapped.event.message));
+        this.fail(wrapped.event.message);
         break;
       default:
         break;
@@ -227,20 +176,11 @@ export class MidiProcessJobHandle {
   }
 }
 
-export class AudioRenderJobHandle {
-  readonly jobId: AudioRenderJobId;
-  #protocol: MeridianProtocolClient;
-  #unsubscribe: (() => void) | null = null;
-  #eventListeners = new Set<(event: AudioRenderEvent) => void>();
-  #eventHistory: AudioRenderEvent[] = [];
-  #settled = false;
-  #done: Promise<Extract<AudioRenderEvent, { type: "render_finished" }>>;
-  #resolve!: (
-    value: Extract<AudioRenderEvent, { type: "render_finished" }>,
-  ) => void;
-  #reject!: (error: Error) => void;
-  #status: AudioRenderStatus;
-
+export class AudioRenderJobHandle extends ReplayableJobHandle<
+  AudioRenderStatus,
+  AudioRenderEvent,
+  Extract<AudioRenderEvent, { type: "render_finished" }>
+> {
   constructor(
     protocol: MeridianProtocolClient,
     initialStatus: AudioRenderStatus,
@@ -250,60 +190,34 @@ export class AudioRenderJobHandle {
         "Cannot create an audio render handle from idle status",
       );
     }
-    this.#protocol = protocol;
-    this.#status = initialStatus;
-    this.jobId = initialStatus.job_id;
-    this.#done = new Promise((resolve, reject) => {
-      this.#resolve = resolve;
-      this.#reject = reject;
-    });
-    this.#unsubscribe = protocol.onEvent((event) => this.#handleEvent(event));
-    for (const event of protocol.recentEvents()) {
-      this.#handleEvent(event);
-      if (this.#settled) {
-        break;
-      }
-    }
-  }
-
-  onEvent(listener: (event: AudioRenderEvent) => void): () => void {
-    this.#eventListeners.add(listener);
-    for (const event of this.#eventHistory) {
-      listener(event);
-    }
-    return () => {
-      this.#eventListeners.delete(listener);
-    };
+    super(protocol, initialStatus);
+    this.startTracking();
   }
 
   async refreshStatus(): Promise<AudioRenderStatus> {
-    const events = await this.#protocol.request({
+    const events = await this.protocol.request({
       type: "get_render_audio_status",
     });
     const wrapper = requireEvent(events, "audio_render_status");
-    this.#status = wrapper.status;
-    return this.#status;
+    this.updateStatus(wrapper.status);
+    return this.status;
   }
 
   async cancel(): Promise<AudioRenderStatus> {
-    const events = await this.#protocol.request({
+    const events = await this.protocol.request({
       type: "cancel_render_audio",
     });
     const wrapper = requireEvent(events, "audio_render_status");
-    this.#status = wrapper.status;
-    return this.#status;
+    this.updateStatus(wrapper.status);
+    return this.status;
   }
 
-  wait(): Promise<Extract<AudioRenderEvent, { type: "render_finished" }>> {
-    return this.#done;
-  }
-
-  #handleEvent(event: CoreEvent): void {
-    if (this.#settled) {
+  protected handleCoreEvent(event: CoreEvent): void {
+    if (this.isSettled()) {
       return;
     }
     if (event.type === "audio_render_status") {
-      this.#status = (event as AudioRenderStatusEventWrapper).status;
+      this.updateStatus((event as AudioRenderStatusEventWrapper).status);
       return;
     }
     if (event.type !== "audio_render") {
@@ -313,30 +227,16 @@ export class AudioRenderJobHandle {
     if ("job_id" in wrapped.event && wrapped.event.job_id !== this.jobId) {
       return;
     }
-    this.#eventHistory.push(wrapped.event);
-    for (const listener of this.#eventListeners) {
-      listener(wrapped.event);
-    }
+    this.emitEvent(wrapped.event);
     switch (wrapped.event.type) {
       case "render_finished":
-        this.#settled = true;
-        this.#unsubscribe?.();
-        this.#unsubscribe = null;
-        this.#resolve(wrapped.event);
+        this.finish(wrapped.event);
         break;
       case "render_cancelled":
-        this.#settled = true;
-        this.#unsubscribe?.();
-        this.#unsubscribe = null;
-        this.#reject(
-          new MeridianSubprocessError("Audio render job was cancelled"),
-        );
+        this.fail("Audio render job was cancelled");
         break;
       case "render_failed":
-        this.#settled = true;
-        this.#unsubscribe?.();
-        this.#unsubscribe = null;
-        this.#reject(new MeridianSubprocessError(wrapped.event.message));
+        this.fail(wrapped.event.message);
         break;
       default:
         break;
@@ -344,20 +244,11 @@ export class AudioRenderJobHandle {
   }
 }
 
-export class VideoRenderJobHandle {
-  readonly jobId: VideoRenderJobId;
-  #protocol: MeridianProtocolClient;
-  #unsubscribe: (() => void) | null = null;
-  #eventListeners = new Set<(event: VideoRenderEvent) => void>();
-  #eventHistory: VideoRenderEvent[] = [];
-  #settled = false;
-  #done: Promise<Extract<VideoRenderEvent, { type: "render_finished" }>>;
-  #resolve!: (
-    value: Extract<VideoRenderEvent, { type: "render_finished" }>,
-  ) => void;
-  #reject!: (error: Error) => void;
-  #status: VideoRenderStatus;
-
+export class VideoRenderJobHandle extends ReplayableJobHandle<
+  VideoRenderStatus,
+  VideoRenderEvent,
+  Extract<VideoRenderEvent, { type: "render_finished" }>
+> {
   constructor(
     protocol: MeridianProtocolClient,
     initialStatus: VideoRenderStatus,
@@ -367,60 +258,34 @@ export class VideoRenderJobHandle {
         "Cannot create a video render handle from idle status",
       );
     }
-    this.#protocol = protocol;
-    this.#status = initialStatus;
-    this.jobId = initialStatus.job_id;
-    this.#done = new Promise((resolve, reject) => {
-      this.#resolve = resolve;
-      this.#reject = reject;
-    });
-    this.#unsubscribe = protocol.onEvent((event) => this.#handleEvent(event));
-    for (const event of protocol.recentEvents()) {
-      this.#handleEvent(event);
-      if (this.#settled) {
-        break;
-      }
-    }
-  }
-
-  onEvent(listener: (event: VideoRenderEvent) => void): () => void {
-    this.#eventListeners.add(listener);
-    for (const event of this.#eventHistory) {
-      listener(event);
-    }
-    return () => {
-      this.#eventListeners.delete(listener);
-    };
+    super(protocol, initialStatus);
+    this.startTracking();
   }
 
   async refreshStatus(): Promise<VideoRenderStatus> {
-    const events = await this.#protocol.request({
+    const events = await this.protocol.request({
       type: "get_render_video_status",
     });
     const wrapper = requireEvent(events, "video_render_status");
-    this.#status = wrapper.status;
-    return this.#status;
+    this.updateStatus(wrapper.status);
+    return this.status;
   }
 
   async cancel(): Promise<VideoRenderStatus> {
-    const events = await this.#protocol.request({
+    const events = await this.protocol.request({
       type: "cancel_render_video",
     });
     const wrapper = requireEvent(events, "video_render_status");
-    this.#status = wrapper.status;
-    return this.#status;
+    this.updateStatus(wrapper.status);
+    return this.status;
   }
 
-  wait(): Promise<Extract<VideoRenderEvent, { type: "render_finished" }>> {
-    return this.#done;
-  }
-
-  #handleEvent(event: CoreEvent): void {
-    if (this.#settled) {
+  protected handleCoreEvent(event: CoreEvent): void {
+    if (this.isSettled()) {
       return;
     }
     if (event.type === "video_render_status") {
-      this.#status = (event as VideoRenderStatusEventWrapper).status;
+      this.updateStatus((event as VideoRenderStatusEventWrapper).status);
       return;
     }
     if (event.type !== "video_render") {
@@ -430,30 +295,16 @@ export class VideoRenderJobHandle {
     if ("job_id" in wrapped.event && wrapped.event.job_id !== this.jobId) {
       return;
     }
-    this.#eventHistory.push(wrapped.event);
-    for (const listener of this.#eventListeners) {
-      listener(wrapped.event);
-    }
+    this.emitEvent(wrapped.event);
     switch (wrapped.event.type) {
       case "render_finished":
-        this.#settled = true;
-        this.#unsubscribe?.();
-        this.#unsubscribe = null;
-        this.#resolve(wrapped.event);
+        this.finish(wrapped.event);
         break;
       case "render_cancelled":
-        this.#settled = true;
-        this.#unsubscribe?.();
-        this.#unsubscribe = null;
-        this.#reject(
-          new MeridianSubprocessError("Video render job was cancelled"),
-        );
+        this.fail("Video render job was cancelled");
         break;
       case "render_failed":
-        this.#settled = true;
-        this.#unsubscribe?.();
-        this.#unsubscribe = null;
-        this.#reject(new MeridianSubprocessError(wrapped.event.message));
+        this.fail(wrapped.event.message);
         break;
       default:
         break;

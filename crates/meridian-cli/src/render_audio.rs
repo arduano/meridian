@@ -1,15 +1,18 @@
 use std::{
-    io::{self, BufWriter, Write},
+    io::{self, BufWriter},
     path::{Path, PathBuf},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::Ordering,
 };
 
 use meridian_core::{
     MeridianError,
     protocol::{ProtocolAudioRenderConfig, ProtocolClient, ProtocolCommand, ProtocolEvent},
+};
+
+use crate::render_common::{
+    assert_no_protocol_error,
+    install_cancel_handler,
+    write_event,
 };
 
 pub fn run(
@@ -20,14 +23,7 @@ pub fn run(
     use_limiter: bool,
     soundfonts: &[PathBuf],
 ) -> Result<(), MeridianError> {
-    let cancel = Arc::new(AtomicBool::new(false));
-    {
-        let cancel = Arc::clone(&cancel);
-        ctrlc::set_handler(move || {
-            cancel.store(true, Ordering::SeqCst);
-        })
-        .map_err(|e| MeridianError::Platform(format!("failed to install ctrl-c handler: {e}")))?;
-    }
+    let cancel = install_cancel_handler()?;
 
     let client = ProtocolClient::spawn();
     let mut stdout = BufWriter::new(io::stdout().lock());
@@ -61,7 +57,7 @@ pub fn run(
 
         match client.recv()? {
             event @ ProtocolEvent::AudioRender { .. } => {
-                write_event(&mut stdout, &event)?;
+                write_event(&mut stdout, &event, "audio render event")?;
                 match event {
                     ProtocolEvent::AudioRender { event } => match event {
                         meridian_core::audio::AudioRenderEvent::RenderFinished { .. } => {
@@ -90,26 +86,4 @@ pub fn run(
 
     let _ = client.shutdown();
     result
-}
-
-fn write_event(
-    stdout: &mut BufWriter<impl Write>,
-    event: &ProtocolEvent,
-) -> Result<(), MeridianError> {
-    serde_json::to_writer(&mut *stdout, event).map_err(|e| {
-        MeridianError::Protocol(format!("failed to serialize audio render event: {e}"))
-    })?;
-    stdout.write_all(b"\n")?;
-    stdout.flush()?;
-    Ok(())
-}
-
-fn assert_no_protocol_error(events: &[ProtocolEvent]) -> Result<(), MeridianError> {
-    if let Some(ProtocolEvent::Error { code, message }) = events
-        .iter()
-        .find(|event| matches!(event, ProtocolEvent::Error { .. }))
-    {
-        return Err(MeridianError::Protocol(format!("{code:?}: {message}")));
-    }
-    Ok(())
 }

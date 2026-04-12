@@ -1,12 +1,11 @@
 use meridian_core::midi::{
-    MidiFileProcessingConfig, MidiModifierTool, QuantizeTool, RangeSelectTool, TempoMapTool,
-    analysis::MidiAnalysisKind,
+    analysis::MidiAnalysisKind, MidiFileProcessingConfig, MidiModifierTool, QuantizeMode,
+    QuantizeTool, RangeEdgeBehavior, RangeSelectTool, TempoMapTool,
 };
 
 use super::args::{
-    AnalyzeArgs, ProcessCommonArgs, ProcessQuantizeArgs, ProcessSelectArgs,
-    ProcessTempoFlattenArgs, ProcessTempoScaleArgs, default_analysis_kinds, map_analysis_kind,
-    map_quantize_mode, map_range_edge_behavior,
+    AnalyzeArgs, AnalysisKindArg, ProcessQuantizeArgs, ProcessSelectArgs, ProcessTempoFlattenArgs,
+    ProcessTempoScaleArgs, QuantizeModeArg, RangeEdgeBehaviorArg,
 };
 
 pub(super) enum ProcessTool {
@@ -31,11 +30,7 @@ pub(super) fn analysis_kinds(args: &AnalyzeArgs) -> Vec<MidiAnalysisKind> {
     kinds
 }
 
-pub(super) fn build_process_config(
-    common: &ProcessCommonArgs,
-    tool: ProcessTool,
-) -> MidiFileProcessingConfig {
-    let _ = common;
+pub(super) fn build_process_config(tool: ProcessTool) -> MidiFileProcessingConfig {
     MidiFileProcessingConfig {
         tool: match tool {
             ProcessTool::Select(tool) => MidiModifierTool::RangeSelect(tool),
@@ -70,5 +65,41 @@ pub(super) fn process_quantize_tool(args: &ProcessQuantizeArgs) -> QuantizeTool 
     QuantizeTool {
         rounding_ticks: args.grid_ticks,
         mode: map_quantize_mode(args.mode),
+    }
+}
+
+fn default_analysis_kinds() -> Vec<MidiAnalysisKind> {
+    vec![
+        MidiAnalysisKind::File,
+        MidiAnalysisKind::Summary,
+        MidiAnalysisKind::Events,
+        MidiAnalysisKind::Notes,
+        MidiAnalysisKind::Tempo,
+    ]
+}
+
+fn map_analysis_kind(kind: AnalysisKindArg) -> MidiAnalysisKind {
+    match kind {
+        AnalysisKindArg::File => MidiAnalysisKind::File,
+        AnalysisKindArg::Summary => MidiAnalysisKind::Summary,
+        AnalysisKindArg::Events => MidiAnalysisKind::Events,
+        AnalysisKindArg::Notes => MidiAnalysisKind::Notes,
+        AnalysisKindArg::Tempo => MidiAnalysisKind::Tempo,
+    }
+}
+
+fn map_range_edge_behavior(kind: RangeEdgeBehaviorArg) -> RangeEdgeBehavior {
+    match kind {
+        RangeEdgeBehaviorArg::Keep => RangeEdgeBehavior::Keep,
+        RangeEdgeBehaviorArg::Skip => RangeEdgeBehavior::Skip,
+        RangeEdgeBehaviorArg::Trim => RangeEdgeBehavior::Trim,
+    }
+}
+
+fn map_quantize_mode(kind: QuantizeModeArg) -> QuantizeMode {
+    match kind {
+        QuantizeModeArg::NoteStartOnly => QuantizeMode::NoteStartOnly,
+        QuantizeModeArg::NoteStartAndEnd => QuantizeMode::NoteStartAndEnd,
+        QuantizeModeArg::AllEvents => QuantizeMode::AllEvents,
     }
 }

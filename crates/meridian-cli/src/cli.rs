@@ -150,7 +150,7 @@ fn run_analyze(args: args::AnalyzeArgs) -> Result<(), MeridianError> {
 }
 
 fn run_process(tool: ProcessTool, common: ProcessCommonArgs) -> Result<(), MeridianError> {
-    let config = build_process_config(&common, tool);
+    let config = build_process_config(tool);
     let client = ProtocolClient::spawn();
     let status_events = client.request(ProtocolCommand::StartProcessMidiFile {
         input: common.input.clone(),

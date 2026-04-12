@@ -8,8 +8,6 @@ import type {
   HumanizeTool,
   KeyMapTool,
   MetaTextTool,
-  MidiAnalysisData,
-  MidiFilesMergeConfig,
   MidiFilesMergedEvent,
   MidiLoadedEvent,
   MidiModifierTool,
@@ -18,11 +16,9 @@ import type {
   ParsedMidiId,
   PitchBendTool,
   ProgramTool,
-  ProtocolVideoRenderConfig,
   QuantizeTool,
   RangeSelectTool,
   SharedMetadataTrackTool,
-  SdkAudioRenderConfig,
   SysexTool,
   TempoPoint,
   TimeWarpTool,
@@ -46,7 +42,12 @@ import {
   MidiProcessJobHandle,
   VideoRenderJobHandle,
 } from "./handles.ts";
-import { inferRendererFromScene, type ToolConfig } from "./internal.ts";
+import { type ToolConfig } from "./internal.ts";
+import {
+  normalizeMidiMergeConfig,
+  toSdkAudioRenderConfig,
+  toProtocolVideoRenderConfig,
+} from "./normalizers.ts";
 import {
   AudioRenderTask,
   MidiAnalysisTask,
@@ -276,12 +277,7 @@ export class MeridianClient {
   async mergeMidiFiles(
     options: MidiMergeOptions,
   ): Promise<MidiFilesMergedEvent> {
-    const config: MidiFilesMergeConfig = {
-      mode: options.config?.mode ?? "append_tracks",
-      normalize_metadata_track: options.config?.normalize_metadata_track ??
-        false,
-      ppq_override: options.config?.ppq_override ?? null,
-    };
+    const config = normalizeMidiMergeConfig(options.config);
     const events = await this.protocol.request({
       type: "merge_midi_files",
       inputs: [...options.inputs],
@@ -295,20 +291,9 @@ export class MeridianClient {
     options: AudioRenderOptions,
   ): Promise<AudioRenderJobHandle> {
     await this.resources.loadAudioMidi(options.midiPath);
-
-    const config: SdkAudioRenderConfig = {
-      midi_path: options.midiPath,
-      output: options.output,
-      sample_rate: options.sampleRate ?? null,
-      channels: options.channels ?? null,
-      use_limiter: options.useLimiter ?? null,
-      format: options.format ?? "wav",
-      ffmpeg_args: options.ffmpegArgs ?? [],
-      soundfonts: options.soundfonts ?? [],
-    };
     const events = await this.protocol.request({
       type: "start_render_audio",
-      config,
+      config: toSdkAudioRenderConfig(options),
     });
     const wrapper = requireEvent(events, "audio_render_status");
     if (wrapper.status.state === "idle") {
@@ -326,35 +311,9 @@ export class MeridianClient {
   async startVideoRender(
     options: VideoRenderOptions,
   ): Promise<VideoRenderJobHandle> {
-    const renderer = options.renderer ?? inferRendererFromScene(options.scene);
-    if (!renderer && !options.scene) {
-      throw new MeridianSubprocessError(
-        "Video render requires either a renderer or a scene config",
-      );
-    }
-    const config: ProtocolVideoRenderConfig = {
-      midi_path: options.midiPath,
-      output: options.output,
-      container: options.container ?? "mp4",
-      fps: options.fps,
-      width: options.width,
-      height: options.height,
-      renderer,
-      scene: options.scene ? structuredClone(options.scene) : null,
-      view_range: options.viewRange ?? null,
-      time_space: options.timeSpace ?? null,
-      first_key: options.firstKey ?? null,
-      last_key: options.lastKey ?? null,
-      export: {
-        color_mode: options.rgbMode ?? "premultiplied",
-        export_alpha_mask: options.exportAlphaMask ?? false,
-      },
-      ffmpeg_args: options.ffmpegArgs ?? [],
-      audio: null,
-    };
     const events = await this.protocol.request({
       type: "start_render_video",
-      config,
+      config: toProtocolVideoRenderConfig(options),
     });
     const wrapper = requireEvent(events, "video_render_status");
     if (wrapper.status.state === "idle") {

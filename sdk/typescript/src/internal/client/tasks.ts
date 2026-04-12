@@ -1,26 +1,10 @@
 import type {
   AudioRenderEvent,
   MidiAnalysisData,
-  MidiAnalysisKind,
-  MidiFilesMergeConfig,
-  MidiFilesMergedEvent,
-  MidiModifierTool,
   MidiProcessEvent,
-  ParsedMidiId,
-  ProtocolVideoRenderConfig,
-  SdkAudioRenderConfig,
-  TempoPoint,
-  TimeWarpTool,
-  TrackRouteTool,
   VideoRenderEvent,
 } from "../../protocol.ts";
-import { midiTools } from "../../helpers.ts";
 import type { MeridianClient } from "./meridian_client.ts";
-import {
-  inferRendererFromScene,
-  type ToolConfig,
-  uniqueKinds,
-} from "./internal.ts";
 import {
   AudioRenderJobHandle,
   MidiAnalysisJobHandle,
@@ -30,56 +14,11 @@ import {
 import type {
   AudioRenderOptions,
   MidiAnalysisOptions,
-  MidiMergeOptions,
-  MidiModificationOptions,
   MidiToolTaskOptions,
   StartAnalysisForFileOptions,
   VideoRenderOptions,
 } from "./options.ts";
-import { MeridianSubprocessError, requireEvent } from "./internal.ts";
-
-const DEFAULT_ANALYSIS_KINDS: MidiAnalysisKind[] = [
-  "file",
-  "summary",
-  "events",
-  "notes",
-  "tempo",
-];
-
-function analysisOptionsToSpec(
-  midiPath: string,
-  options: MidiAnalysisOptions = {},
-): StartAnalysisForFileOptions {
-  const hasExplicitKinds = options.file === true ||
-    options.summary === true ||
-    options.events === true ||
-    options.notes === true ||
-    options.tempo === true;
-  const kinds: MidiAnalysisKind[] = hasExplicitKinds
-    ? []
-    : [...DEFAULT_ANALYSIS_KINDS];
-  if (options.file) kinds.push("file");
-  if (options.summary) kinds.push("summary");
-  if (options.events) kinds.push("events");
-  if (options.notes) kinds.push("notes");
-  if (options.tempo) kinds.push("tempo");
-
-  let bucketCount: number | null = null;
-  if (options.buckets === true) {
-    kinds.push("buckets");
-    bucketCount = 256;
-  } else if (typeof options.buckets === "number") {
-    kinds.push("buckets");
-    bucketCount = options.buckets;
-  }
-
-  return {
-    midiPath,
-    kinds: uniqueKinds(kinds),
-    bucketCount,
-    ...(options.onProgress ? { onProgress: options.onProgress } : {}),
-  };
-}
+import { normalizeAnalysisOptions, normalizeAudioRenderOptions, normalizeMidiToolOptions, normalizeVideoRenderOptions } from "./normalizers.ts";
 
 export class MidiAnalysisTask implements PromiseLike<MidiAnalysisData> {
   #client: MeridianClient;
@@ -93,7 +32,7 @@ export class MidiAnalysisTask implements PromiseLike<MidiAnalysisData> {
     options: MidiAnalysisOptions = {},
   ) {
     this.#client = client;
-    this.#spec = analysisOptionsToSpec(midiPath, options);
+    this.#spec = normalizeAnalysisOptions(midiPath, options);
   }
 
   start(): Promise<MidiAnalysisJobHandle> {
@@ -151,12 +90,7 @@ export class MidiProcessTask
 
   constructor(client: MeridianClient, options: MidiToolTaskOptions) {
     this.#client = client;
-    this.#options = {
-      input: options.input,
-      output: options.output,
-      tool: structuredClone(options.tool),
-      ...(options.onEvent ? { onEvent: options.onEvent } : {}),
-    };
+    this.#options = normalizeMidiToolOptions(options);
   }
 
   start(): Promise<MidiProcessJobHandle> {
@@ -202,12 +136,7 @@ export class MidiProcessTask
   }
 
   #snapshot(): MidiToolTaskOptions {
-    return {
-      input: this.#options.input,
-      output: this.#options.output,
-      tool: structuredClone(this.#options.tool),
-      ...(this.#options.onEvent ? { onEvent: this.#options.onEvent } : {}),
-    };
+    return normalizeMidiToolOptions(this.#options);
   }
 }
 
@@ -223,17 +152,7 @@ export class AudioRenderTask
 
   constructor(client: MeridianClient, options: AudioRenderOptions) {
     this.#client = client;
-    this.#options = {
-      midiPath: options.midiPath,
-      output: options.output,
-      sampleRate: options.sampleRate ?? null,
-      channels: options.channels ?? null,
-      useLimiter: options.useLimiter ?? null,
-      ffmpegArgs: options.ffmpegArgs ? [...options.ffmpegArgs] : [],
-      soundfonts: options.soundfonts ? [...options.soundfonts] : [],
-      ...(options.format !== undefined ? { format: options.format } : {}),
-      ...(options.onEvent ? { onEvent: options.onEvent } : {}),
-    };
+    this.#options = normalizeAudioRenderOptions(options);
   }
 
   start(): Promise<AudioRenderJobHandle> {
@@ -277,19 +196,7 @@ export class AudioRenderTask
   }
 
   #snapshot(): AudioRenderOptions {
-    return {
-      midiPath: this.#options.midiPath,
-      output: this.#options.output,
-      sampleRate: this.#options.sampleRate ?? null,
-      channels: this.#options.channels ?? null,
-      useLimiter: this.#options.useLimiter ?? null,
-      ffmpegArgs: [...(this.#options.ffmpegArgs ?? [])],
-      soundfonts: [...(this.#options.soundfonts ?? [])],
-      ...(this.#options.format !== undefined
-        ? { format: this.#options.format }
-        : {}),
-      ...(this.#options.onEvent ? { onEvent: this.#options.onEvent } : {}),
-    };
+    return normalizeAudioRenderOptions(this.#options);
   }
 }
 
@@ -305,25 +212,7 @@ export class VideoRenderTask
 
   constructor(client: MeridianClient, options: VideoRenderOptions) {
     this.#client = client;
-    const renderer = options.renderer ?? inferRendererFromScene(options.scene);
-    this.#options = {
-      midiPath: options.midiPath,
-      output: options.output,
-      container: options.container ?? "mp4",
-      fps: options.fps,
-      width: options.width,
-      height: options.height,
-      renderer,
-      scene: options.scene ? structuredClone(options.scene) : null,
-      viewRange: options.viewRange ?? null,
-      timeSpace: options.timeSpace ?? null,
-      firstKey: options.firstKey ?? null,
-      lastKey: options.lastKey ?? null,
-      rgbMode: options.rgbMode ?? "premultiplied",
-      exportAlphaMask: options.exportAlphaMask ?? false,
-      ffmpegArgs: options.ffmpegArgs ? [...options.ffmpegArgs] : [],
-      ...(options.onEvent ? { onEvent: options.onEvent } : {}),
-    };
+    this.#options = normalizeVideoRenderOptions(options);
   }
 
   start(): Promise<VideoRenderJobHandle> {
@@ -367,23 +256,6 @@ export class VideoRenderTask
   }
 
   #snapshot(): VideoRenderOptions {
-    return {
-      midiPath: this.#options.midiPath,
-      output: this.#options.output,
-      container: this.#options.container ?? "mp4",
-      fps: this.#options.fps,
-      width: this.#options.width,
-      height: this.#options.height,
-      renderer: this.#options.renderer ?? null,
-      scene: this.#options.scene ? structuredClone(this.#options.scene) : null,
-      viewRange: this.#options.viewRange ?? null,
-      timeSpace: this.#options.timeSpace ?? null,
-      firstKey: this.#options.firstKey ?? null,
-      lastKey: this.#options.lastKey ?? null,
-      rgbMode: this.#options.rgbMode ?? "premultiplied",
-      exportAlphaMask: this.#options.exportAlphaMask ?? false,
-      ffmpegArgs: [...(this.#options.ffmpegArgs ?? [])],
-      ...(this.#options.onEvent ? { onEvent: this.#options.onEvent } : {}),
-    };
+    return normalizeVideoRenderOptions(this.#options);
   }
 }

@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use meridian_core::{
-    midi::{QuantizeMode, RangeEdgeBehavior, analysis::MidiAnalysisKind},
     protocol::{FrameColorMode, ImageOutputFormat, VideoOutputContainer},
     render::{DisplayTimeSpace, RendererKind},
 };
@@ -272,40 +271,4 @@ pub(super) enum QuantizeModeArg {
     NoteStartOnly,
     NoteStartAndEnd,
     AllEvents,
-}
-
-pub(super) fn default_analysis_kinds() -> Vec<MidiAnalysisKind> {
-    vec![
-        MidiAnalysisKind::File,
-        MidiAnalysisKind::Summary,
-        MidiAnalysisKind::Events,
-        MidiAnalysisKind::Notes,
-        MidiAnalysisKind::Tempo,
-    ]
-}
-
-pub(super) fn map_analysis_kind(kind: AnalysisKindArg) -> MidiAnalysisKind {
-    match kind {
-        AnalysisKindArg::File => MidiAnalysisKind::File,
-        AnalysisKindArg::Summary => MidiAnalysisKind::Summary,
-        AnalysisKindArg::Events => MidiAnalysisKind::Events,
-        AnalysisKindArg::Notes => MidiAnalysisKind::Notes,
-        AnalysisKindArg::Tempo => MidiAnalysisKind::Tempo,
-    }
-}
-
-pub(super) fn map_range_edge_behavior(kind: RangeEdgeBehaviorArg) -> RangeEdgeBehavior {
-    match kind {
-        RangeEdgeBehaviorArg::Keep => RangeEdgeBehavior::Keep,
-        RangeEdgeBehaviorArg::Skip => RangeEdgeBehavior::Skip,
-        RangeEdgeBehaviorArg::Trim => RangeEdgeBehavior::Trim,
-    }
-}
-
-pub(super) fn map_quantize_mode(kind: QuantizeModeArg) -> QuantizeMode {
-    match kind {
-        QuantizeModeArg::NoteStartOnly => QuantizeMode::NoteStartOnly,
-        QuantizeModeArg::NoteStartAndEnd => QuantizeMode::NoteStartAndEnd,
-        QuantizeModeArg::AllEvents => QuantizeMode::AllEvents,
-    }
 }
