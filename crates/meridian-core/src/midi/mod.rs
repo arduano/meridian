@@ -14,6 +14,7 @@ pub mod parsed;
 pub mod processed;
 pub mod processing;
 pub mod ram;
+mod traversal;
 pub mod tempo_map;
 #[cfg(test)]
 pub(crate) mod test_support;

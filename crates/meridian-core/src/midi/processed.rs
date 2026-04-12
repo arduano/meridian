@@ -1,9 +1,8 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use midi_toolkit::{
-    events::{Event, MIDIEventEnum},
+    events::Event,
     prelude::{EventSequenceExt, ResultIterExt},
-    sequence::event::{Delta, Track},
 };
 use rustc_hash::FxHashMap;
 
@@ -16,6 +15,7 @@ use crate::{
         display_cache::DisplayMidiCache,
         parsed::ParsedMidiFile,
         processing::{MidiProcessingConfig, ZeroVelocityNoteOnMode},
+        traversal::walk_merged_midi_items,
         ram::block::InRamNoteBlock,
         tempo_map::TempoMap,
     },
@@ -121,7 +121,7 @@ fn build_processed_midi_cancelable(
         .unwrap_items();
 
     let track_count = midi.track_count().max(1);
-    let mut time = 0.0;
+    let time = 0.0;
     let mut open_notes: FxHashMap<(u8, TrackAndChannel), VecDeque<OpenNote>> = FxHashMap::default();
     let mut finished_notes = vec![Vec::<FinishedNote>::new(); 256];
     let mut analysis = MidiAnalysisAccumulator::new(track_count);
@@ -130,136 +130,175 @@ fn build_processed_midi_cancelable(
     let mut current_audio_data = Vec::new();
     let mut current_audio_control = Vec::new();
     let mut audio_blocks = Vec::new();
+    struct ProcessedTraversalState<'a> {
+        time: f64,
+        current_output_time: f64,
+        analysis: &'a mut MidiAnalysisAccumulator,
+        open_notes: &'a mut FxHashMap<(u8, TrackAndChannel), VecDeque<OpenNote>>,
+        finished_notes: &'a mut [Vec<FinishedNote>],
+        current_audio_time: &'a mut f64,
+        current_audio_data: &'a mut Vec<u8>,
+        current_audio_control: &'a mut Vec<u8>,
+        audio_blocks: &'a mut Vec<CompressedAudio>,
+    }
 
-    type ToolkitEvent = Delta<f64, Track<Event>>;
-    for event in merged {
-        if should_cancel() {
-            return Err(MeridianError::Cancelled("midi load cancelled".into()));
-        }
-        let event: ToolkitEvent = event;
-        time += event.delta;
-        let output_time = (time + config.time.offset_seconds).max(0.0);
-        analysis.observe_time_advance(output_time);
-        flush_audio_block(
-            &mut audio_blocks,
-            &mut current_audio_time,
-            &mut current_audio_data,
-            &mut current_audio_control,
-            output_time,
-        );
+    let mut traversal_state = ProcessedTraversalState {
+        time,
+        current_output_time: 0.0,
+        analysis: &mut analysis,
+        open_notes: &mut open_notes,
+        finished_notes: &mut finished_notes,
+        current_audio_time: &mut current_audio_time,
+        current_audio_data: &mut current_audio_data,
+        current_audio_control: &mut current_audio_control,
+        audio_blocks: &mut audio_blocks,
+    };
 
-        let track = event.track;
-        analysis.observe_event(event.as_event(), output_time);
-        match event.as_event() {
-            Event::NoteOn(note_on) => {
-                analysis.observe_note_on_velocity(note_on.velocity);
-                let velocity = config.notes.map_velocity(note_on.velocity);
-                let is_note_off = velocity == 0
-                    && matches!(
-                        config.zero_velocity_note_on,
-                        ZeroVelocityNoteOnMode::NoteOff
-                    );
-                if is_note_off {
+    walk_merged_midi_items(
+        merged,
+        &should_cancel,
+        &mut traversal_state,
+        |state, event| {
+            state.time += event.delta;
+            state.current_output_time = (state.time + config.time.offset_seconds).max(0.0);
+            state
+                .analysis
+                .observe_time_advance(state.current_output_time);
+            flush_audio_block(
+                state.audio_blocks,
+                state.current_audio_time,
+                state.current_audio_data,
+                state.current_audio_control,
+                state.current_output_time,
+            );
+            Ok(())
+        },
+        |state, event| {
+            let track = event.track();
+            state
+                .analysis
+                .observe_event(event.as_event(), state.current_output_time);
+            match event.as_event() {
+                Event::NoteOn(note_on) => {
+                    state.analysis.observe_note_on_velocity(note_on.velocity);
+                    let velocity = config.notes.map_velocity(note_on.velocity);
+                    let is_note_off = velocity == 0
+                        && matches!(
+                            config.zero_velocity_note_on,
+                            ZeroVelocityNoteOnMode::NoteOff
+                        );
+                    if is_note_off {
+                        end_note(
+                            state.open_notes,
+                            state.finished_notes,
+                            state.analysis,
+                            state.current_output_time,
+                            note_on.key,
+                            note_on.channel,
+                            track,
+                            config,
+                        );
+                        return Ok(());
+                    }
+                    if !config.events.notes {
+                        return Ok(());
+                    }
+                    let Some(key) = config.notes.map_key(note_on.key) else {
+                        return Ok(());
+                    };
+                    let track_chan = TrackAndChannel::new(track, note_on.channel);
+                    state
+                        .analysis
+                        .observe_note_start(state.current_output_time, key as usize, track_chan);
+                    state
+                        .open_notes
+                        .entry((key, track_chan))
+                        .or_default()
+                        .push_back(OpenNote {
+                            start: state.current_output_time,
+                            track_chan,
+                        });
+                    state
+                        .current_audio_data
+                        .extend_from_slice(&[0x90 | note_on.channel, key, velocity]);
+                }
+                Event::NoteOff(note_off) => {
+                    state.analysis.observe_note_off();
                     end_note(
-                        &mut open_notes,
-                        &mut finished_notes,
-                        &mut analysis,
-                        output_time,
-                        note_on.key,
-                        note_on.channel,
+                        state.open_notes,
+                        state.finished_notes,
+                        state.analysis,
+                        state.current_output_time,
+                        note_off.key,
+                        note_off.channel,
                         track,
                         config,
                     );
-                    continue;
-                }
-                if !config.events.notes {
-                    continue;
-                }
-                let Some(key) = config.notes.map_key(note_on.key) else {
-                    continue;
-                };
-                let track_chan = TrackAndChannel::new(track, note_on.channel);
-                analysis.observe_note_start(output_time, key as usize, track_chan);
-                open_notes
-                    .entry((key, track_chan))
-                    .or_default()
-                    .push_back(OpenNote {
-                        start: output_time,
-                        track_chan,
-                    });
-                current_audio_data.extend_from_slice(&[0x90 | note_on.channel, key, velocity]);
-            }
-            Event::NoteOff(note_off) => {
-                analysis.observe_note_off();
-                end_note(
-                    &mut open_notes,
-                    &mut finished_notes,
-                    &mut analysis,
-                    output_time,
-                    note_off.key,
-                    note_off.channel,
-                    track,
-                    config,
-                );
-                if config.events.notes {
-                    if let Some(key) = config.notes.map_key(note_off.key) {
-                        current_audio_data.extend_from_slice(&[0x80 | note_off.channel, key]);
+                    if config.events.notes {
+                        if let Some(key) = config.notes.map_key(note_off.key) {
+                            state
+                                .current_audio_data
+                                .extend_from_slice(&[0x80 | note_off.channel, key]);
+                        }
                     }
                 }
-            }
-            Event::PolyphonicKeyPressure(event) => {
-                if !config.events.polyphonic_pressure {
-                    continue;
+                Event::PolyphonicKeyPressure(event) => {
+                    if !config.events.polyphonic_pressure {
+                        return Ok(());
+                    }
+                    if let Some(key) = config.notes.map_key(event.key) {
+                        state.current_audio_data.extend_from_slice(&[
+                            0xA0 | event.channel,
+                            key,
+                            config.notes.map_velocity(event.velocity),
+                        ]);
+                    }
                 }
-                if let Some(key) = config.notes.map_key(event.key) {
-                    current_audio_data.extend_from_slice(&[
-                        0xA0 | event.channel,
-                        key,
-                        config.notes.map_velocity(event.velocity),
-                    ]);
+                Event::ControlChange(event) => {
+                    if !config.events.channel_controls {
+                        return Ok(());
+                    }
+                    let bytes = [0xB0 | event.channel, event.controller, event.value];
+                    state.current_audio_data.extend_from_slice(&bytes);
+                    state.current_audio_control.extend_from_slice(&bytes);
                 }
-            }
-            Event::ControlChange(event) => {
-                if !config.events.channel_controls {
-                    continue;
+                Event::ProgramChange(event) => {
+                    if !config.events.program_changes {
+                        return Ok(());
+                    }
+                    let program = if config.piano_only { 0 } else { event.program };
+                    let bytes = [0xC0 | event.channel, program];
+                    state.current_audio_data.extend_from_slice(&bytes);
+                    state.current_audio_control.extend_from_slice(&bytes);
                 }
-                let bytes = [0xB0 | event.channel, event.controller, event.value];
-                current_audio_data.extend_from_slice(&bytes);
-                current_audio_control.extend_from_slice(&bytes);
-            }
-            Event::ProgramChange(event) => {
-                if !config.events.program_changes {
-                    continue;
+                Event::ChannelPressure(event) => {
+                    if !config.events.channel_pressure {
+                        return Ok(());
+                    }
+                    let bytes = [0xD0 | event.channel, event.pressure];
+                    state.current_audio_data.extend_from_slice(&bytes);
+                    state.current_audio_control.extend_from_slice(&bytes);
                 }
-                let program = if config.piano_only { 0 } else { event.program };
-                let bytes = [0xC0 | event.channel, program];
-                current_audio_data.extend_from_slice(&bytes);
-                current_audio_control.extend_from_slice(&bytes);
-            }
-            Event::ChannelPressure(event) => {
-                if !config.events.channel_pressure {
-                    continue;
+                Event::PitchWheelChange(event) => {
+                    if !config.events.pitch_bend {
+                        return Ok(());
+                    }
+                    let value = event.pitch + 8192;
+                    let bytes = [
+                        0xE0 | event.channel,
+                        (value & 0x7F) as u8,
+                        ((value >> 7) & 0x7F) as u8,
+                    ];
+                    state.current_audio_data.extend_from_slice(&bytes);
+                    state.current_audio_control.extend_from_slice(&bytes);
                 }
-                let bytes = [0xD0 | event.channel, event.pressure];
-                current_audio_data.extend_from_slice(&bytes);
-                current_audio_control.extend_from_slice(&bytes);
+                _ => {}
             }
-            Event::PitchWheelChange(event) => {
-                if !config.events.pitch_bend {
-                    continue;
-                }
-                let value = event.pitch + 8192;
-                let bytes = [
-                    0xE0 | event.channel,
-                    (value & 0x7F) as u8,
-                    ((value >> 7) & 0x7F) as u8,
-                ];
-                current_audio_data.extend_from_slice(&bytes);
-                current_audio_control.extend_from_slice(&bytes);
-            }
-            _ => {}
-        }
-    }
+            Ok(())
+        },
+        |_, _| Ok(()),
+    )?;
+    drop(traversal_state);
 
     if should_cancel() {
         return Err(MeridianError::Cancelled("midi load cancelled".into()));

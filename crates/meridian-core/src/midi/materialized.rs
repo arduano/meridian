@@ -1,9 +1,8 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use midi_toolkit::{
-    events::{Event, MIDIEventEnum},
+    events::Event,
     prelude::*,
-    sequence::event::{Delta, EventBatch, Track},
 };
 use rustc_hash::FxHashMap;
 
@@ -14,6 +13,7 @@ use super::{
     audio_cache::{CompressedAudio, InRamAudioCache},
     parsed::ParsedMidiFile,
     ram::{InRamMidiCache, block::InRamNoteBlock},
+    traversal::walk_merged_midi_items,
     tempo_map::TempoMap,
 };
 
@@ -149,7 +149,7 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
     let mut time_seconds = 0.0;
     let mut time_ticks = 0_u64;
     let mut notes = 0_u64;
-    let mut micros_per_quarter = 500_000_u32;
+    let micros_per_quarter = 500_000_u32;
     let mut processed_events = 0_u64;
 
     progress(MidiBuildProgress::from_counts(
@@ -158,52 +158,93 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
         parsed.cached_total_event_count(),
     ));
 
-    type ToolkitBatch = Delta<u64, Track<EventBatch<Event>>>;
-    for batch in merged {
-        if should_cancel() {
-            return Err(MeridianError::Cancelled("midi load cancelled".into()));
-        }
-        let batch: ToolkitBatch = batch;
-        let batch_event_count = batch.count() as u64;
-        processed_events += batch_event_count;
+    struct MaterializedTraversalState<'a> {
+        keys: &'a mut Option<Vec<KeyBuilder>>,
+        tempo_map: &'a mut Option<TempoMap>,
+        dirty_keys: &'a mut Option<Vec<usize>>,
+        dirty_key_flags: &'a mut Option<[bool; MIDI_KEY_COUNT]>,
+        audio_blocks: &'a mut Option<Vec<CompressedAudio>>,
+        current_audio_data: &'a mut Option<Vec<u8>>,
+        current_audio_control: &'a mut Option<Vec<u8>>,
+        time_seconds: f64,
+        time_ticks: u64,
+        notes: u64,
+        micros_per_quarter: u32,
+        processed_events: u64,
+        progress_stride: u64,
+    }
 
-        if batch.delta > 0 {
-            if let Some(keys) = keys.as_mut() {
-                if let (Some(dirty_keys), Some(dirty_key_flags)) =
-                    (dirty_keys.as_mut(), dirty_key_flags.as_mut())
-                {
-                    for key_index in dirty_keys.drain(..) {
-                        dirty_key_flags[key_index] = false;
-                        keys[key_index].flush(time_seconds, time_ticks);
+    let total_events = parsed.cached_total_event_count();
+    let progress_stride = total_events
+        .map(|events| (events.max(1) / 200).max(1))
+        .unwrap_or(INDETERMINATE_PROGRESS_STRIDE);
+
+    let mut traversal_state = MaterializedTraversalState {
+        keys: &mut keys,
+        tempo_map: &mut tempo_map,
+        dirty_keys: &mut dirty_keys,
+        dirty_key_flags: &mut dirty_key_flags,
+        audio_blocks: &mut audio_blocks,
+        current_audio_data: &mut current_audio_data,
+        current_audio_control: &mut current_audio_control,
+        time_seconds,
+        time_ticks,
+        notes,
+        micros_per_quarter,
+        processed_events,
+        progress_stride,
+    };
+
+    walk_merged_midi_items(
+        merged,
+        &should_cancel,
+        &mut traversal_state,
+        |state, batch| {
+            state.processed_events += batch.count() as u64;
+
+            if batch.delta > 0 {
+                if let Some(keys) = state.keys.as_mut() {
+                    if let (Some(dirty_keys), Some(dirty_key_flags)) =
+                        (state.dirty_keys.as_mut(), state.dirty_key_flags.as_mut())
+                    {
+                        for key_index in dirty_keys.drain(..) {
+                            dirty_key_flags[key_index] = false;
+                            keys[key_index].flush(state.time_seconds, state.time_ticks);
+                        }
                     }
                 }
-            }
-            if let (Some(audio_blocks), Some(current_audio_data), Some(current_audio_control)) = (
-                audio_blocks.as_mut(),
-                current_audio_data.as_mut(),
-                current_audio_control.as_mut(),
-            ) {
-                flush_audio_block(
-                    audio_blocks,
-                    current_audio_data,
-                    current_audio_control,
-                    time_seconds,
-                );
+                if let (Some(audio_blocks), Some(current_audio_data), Some(current_audio_control)) = (
+                    state.audio_blocks.as_mut(),
+                    state.current_audio_data.as_mut(),
+                    state.current_audio_control.as_mut(),
+                ) {
+                    flush_audio_block(
+                        audio_blocks,
+                        current_audio_data,
+                        current_audio_control,
+                        state.time_seconds,
+                    );
+                }
+
+                state.time_ticks += batch.delta;
+                state.time_seconds +=
+                    batch.delta as f64 * state.micros_per_quarter as f64 / 1_000_000.0 / ppq as f64;
             }
 
-            time_ticks += batch.delta;
-            time_seconds +=
-                batch.delta as f64 * micros_per_quarter as f64 / 1_000_000.0 / ppq as f64;
-        }
-
-        for event in batch.iter_events() {
-            let track = event.track;
+            Ok(())
+        },
+        |state, event| {
+            let track = event.track();
 
             match event.as_event() {
                 Event::Tempo(tempo) => {
-                    micros_per_quarter = tempo.tempo;
-                    if let Some(tempo_map) = tempo_map.as_mut() {
-                        tempo_map.push_tempo_change(time_ticks, time_seconds, micros_per_quarter);
+                    state.micros_per_quarter = tempo.tempo;
+                    if let Some(tempo_map) = state.tempo_map.as_mut() {
+                        tempo_map.push_tempo_change(
+                            state.time_ticks,
+                            state.time_seconds,
+                            state.micros_per_quarter,
+                        );
                     }
                 }
                 Event::NoteOn(note_on) => {
@@ -211,17 +252,17 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
                     if key_index < MIDI_KEY_COUNT {
                         let track_chan = TrackAndChannel::new(track, note_on.channel);
                         if note_on.velocity == 0 {
-                            if let Some(keys) = keys.as_mut() {
-                                keys[key_index].end_note(track_chan, time_seconds, time_ticks);
+                            if let Some(keys) = state.keys.as_mut() {
+                                keys[key_index].end_note(track_chan, state.time_seconds, state.time_ticks);
                             }
                         } else {
-                            if let Some(keys) = keys.as_mut() {
+                            if let Some(keys) = state.keys.as_mut() {
                                 let key = &mut keys[key_index];
                                 let was_empty = key.block_builder.is_empty();
                                 key.add_note(track_chan);
                                 if was_empty {
                                     if let (Some(dirty_keys), Some(dirty_key_flags)) =
-                                        (dirty_keys.as_mut(), dirty_key_flags.as_mut())
+                                        (state.dirty_keys.as_mut(), state.dirty_key_flags.as_mut())
                                     {
                                         if !dirty_key_flags[key_index] {
                                             dirty_key_flags[key_index] = true;
@@ -230,11 +271,11 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
                                     }
                                 }
                             }
-                            notes += 1;
+                            state.notes += 1;
                         }
                     }
                     if let (Some(current_audio_data), Some(current_audio_control)) =
-                        (current_audio_data.as_mut(), current_audio_control.as_mut())
+                        (state.current_audio_data.as_mut(), state.current_audio_control.as_mut())
                     {
                         push_audio_event(
                             event.as_event(),
@@ -246,13 +287,13 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
                 Event::NoteOff(note_off) => {
                     let key_index = note_off.key as usize;
                     if key_index < MIDI_KEY_COUNT {
-                        if let Some(keys) = keys.as_mut() {
+                        if let Some(keys) = state.keys.as_mut() {
                             let track_chan = TrackAndChannel::new(track, note_off.channel);
-                            keys[key_index].end_note(track_chan, time_seconds, time_ticks);
+                            keys[key_index].end_note(track_chan, state.time_seconds, state.time_ticks);
                         }
                     }
                     if let (Some(current_audio_data), Some(current_audio_control)) =
-                        (current_audio_data.as_mut(), current_audio_control.as_mut())
+                        (state.current_audio_data.as_mut(), state.current_audio_control.as_mut())
                     {
                         push_audio_event(
                             event.as_event(),
@@ -263,7 +304,7 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
                 }
                 _ => {
                     if let (Some(current_audio_data), Some(current_audio_control)) =
-                        (current_audio_data.as_mut(), current_audio_control.as_mut())
+                        (state.current_audio_data.as_mut(), state.current_audio_control.as_mut())
                     {
                         push_audio_event(
                             event.as_event(),
@@ -273,25 +314,33 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
                     }
                 }
             }
-        }
 
-        let total_events = parsed.cached_total_event_count();
-        let progress_stride = total_events
-            .map(|events| (events.max(1) / 200).max(1))
-            .unwrap_or(INDETERMINATE_PROGRESS_STRIDE);
-        let previous_events = processed_events.saturating_sub(batch_event_count);
-        let crossed_stride = processed_events / progress_stride > previous_events / progress_stride;
-        if processed_events == batch_event_count
-            || total_events.is_some_and(|total_events| processed_events >= total_events)
-            || crossed_stride
-        {
-            progress(MidiBuildProgress::from_counts(
-                processed_events,
-                notes,
-                total_events,
-            ));
-        }
-    }
+            Ok(())
+        },
+        |state, batch| {
+            let batch_event_count = batch.count() as u64;
+            let previous_events = state.processed_events.saturating_sub(batch_event_count);
+            let crossed_stride =
+                state.processed_events / state.progress_stride > previous_events / state.progress_stride;
+            if state.processed_events == batch_event_count
+                || total_events.is_some_and(|total_events| state.processed_events >= total_events)
+                || crossed_stride
+            {
+                progress(MidiBuildProgress::from_counts(
+                    state.processed_events,
+                    state.notes,
+                    total_events,
+                ));
+            }
+            Ok(())
+        },
+    )?;
+
+    time_seconds = traversal_state.time_seconds;
+    time_ticks = traversal_state.time_ticks;
+    notes = traversal_state.notes;
+    processed_events = traversal_state.processed_events;
+    drop(traversal_state);
 
     if should_cancel() {
         return Err(MeridianError::Cancelled("midi load cancelled".into()));
