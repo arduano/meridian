@@ -45,6 +45,44 @@ fn render_video_writes_output_file_when_ffmpeg_is_available() {
 }
 
 #[test]
+fn render_video_accepts_custom_time_range_flags() {
+    if !support::ffmpeg_available() {
+        eprintln!("skipping CLI video range smoke because ffmpeg is unavailable");
+        return;
+    }
+
+    let midi = support::write_test_midi("smoke-two-notes.mid");
+    let out = support::temp_path("render-range.mp4");
+
+    let output = Command::new(support::cli_path())
+        .args([
+            "render",
+            "video",
+            midi.to_string_lossy().as_ref(),
+            "--output",
+            out.to_string_lossy().as_ref(),
+            "--start-time",
+            "0.0",
+            "--end-time",
+            "0.5",
+            "--fps",
+            "4",
+            "--width",
+            "160",
+            "--height",
+            "90",
+            "--ffmpeg-flags",
+            "-y",
+        ])
+        .output()
+        .expect("run ranged render video command");
+
+    assert!(output.status.success(), "ranged render video failed: {output:?}");
+    assert!(out.exists(), "expected ranged video output to exist");
+    assert!(fs::metadata(&out).expect("ranged video metadata").len() > 0);
+}
+
+#[test]
 fn render_audio_writes_output_file_when_soundfont_is_available() {
     render_audio_smoke(
         AudioOutputFormat::Wav,

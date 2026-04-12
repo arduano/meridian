@@ -160,6 +160,10 @@ pub(super) struct RenderVideoArgs {
     pub(super) midi: PathBuf,
     #[arg(long)]
     pub(super) output: PathBuf,
+    #[arg(long)]
+    pub(super) start_time: Option<f64>,
+    #[arg(long)]
+    pub(super) end_time: Option<f64>,
     #[arg(long, default_value_t = 60.0)]
     pub(super) fps: f64,
     #[arg(long, value_enum, default_value_t = VideoOutputContainer::Mp4)]

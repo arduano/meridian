@@ -44,6 +44,8 @@ export interface AudioRenderOptions {
 export interface VideoRenderOptions {
   midiPath: string;
   output: string;
+  startTime?: number | null;
+  endTime?: number | null;
   container?: ProtocolVideoRenderConfig["container"];
   fps: number;
   width: number;

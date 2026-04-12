@@ -23,6 +23,8 @@ use crate::render_common::{
 pub fn run(
     midi: &Path,
     output: &Path,
+    start_time: Option<f64>,
+    end_time: Option<f64>,
     fps: f64,
     container: VideoOutputContainer,
     width: u32,
@@ -54,6 +56,8 @@ pub fn run(
             scene: None,
             view_range: Some(view_range),
             time_space: Some(time_space),
+            start_time,
+            end_time,
             first_key: Some(first_key),
             last_key: Some(last_key),
             ffmpeg_args: parse_ffmpeg_args(ffmpeg_flags)?,

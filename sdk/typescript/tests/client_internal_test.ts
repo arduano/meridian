@@ -279,6 +279,8 @@ Deno.test("video render request forwards muxed audio options", async () => {
   await client.startVideoRender({
     midiPath: "song.mid",
     output: "out.mkv",
+    startTime: 1.25,
+    endTime: 3.5,
     fps: 30,
     width: 160,
     height: 90,
@@ -297,6 +299,8 @@ Deno.test("video render request forwards muxed audio options", async () => {
   const start = protocol.requests[0] as {
     type: string;
     config: {
+      start_time: number | null;
+      end_time: number | null;
       audio: {
         sample_rate: number | null;
         channels: number | null;
@@ -308,6 +312,12 @@ Deno.test("video render request forwards muxed audio options", async () => {
   };
   if (start.type !== "start_render_video") {
     throw new Error(`Unexpected start command: ${start.type}`);
+  }
+  if (start.config.start_time !== 1.25) {
+    throw new Error(`Expected start_time 1.25, got ${String(start.config.start_time)}`);
+  }
+  if (start.config.end_time !== 3.5) {
+    throw new Error(`Expected end_time 3.5, got ${String(start.config.end_time)}`);
   }
   if (start.config.audio === null) {
     throw new Error("Expected muxed audio config to be serialized");

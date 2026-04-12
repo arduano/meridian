@@ -285,6 +285,8 @@ fn run_render_video(args: RenderVideoArgs) -> Result<(), MeridianError> {
     crate::render_video::run(
         &args.midi,
         &args.output,
+        args.start_time,
+        args.end_time,
         args.fps,
         args.container,
         args.width,

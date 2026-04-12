@@ -191,6 +191,8 @@ Deno.test("stdio protocol smoke tests video render", async () => {
         scene: null,
         view_range: 2,
         time_space: null,
+        start_time: null,
+        end_time: null,
         first_key: null,
         last_key: null,
         export: {
@@ -269,6 +271,8 @@ Deno.test("stdio protocol smoke tests muxed video render", async () => {
         scene: null,
         view_range: 2,
         time_space: null,
+        start_time: null,
+        end_time: null,
         first_key: null,
         last_key: null,
         export: {
@@ -383,6 +387,8 @@ Deno.test("stdio protocol accepts explicit scene config for video render", async
         },
         view_range: 2,
         time_space: null,
+        start_time: null,
+        end_time: null,
         first_key: null,
         last_key: null,
         export: {

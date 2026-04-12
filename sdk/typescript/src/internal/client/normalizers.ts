@@ -102,6 +102,8 @@ export function normalizeVideoRenderOptions(
   return {
     midiPath: options.midiPath,
     output: options.output,
+    startTime: options.startTime ?? null,
+    endTime: options.endTime ?? null,
     container: options.container ?? "mp4",
     fps: options.fps,
     width: options.width,
@@ -152,6 +154,8 @@ export function toProtocolVideoRenderConfig(
   return {
     midi_path: options.midiPath,
     output: options.output,
+    start_time: options.startTime ?? null,
+    end_time: options.endTime ?? null,
     container: options.container ?? "mp4",
     fps: options.fps,
     width: options.width,
