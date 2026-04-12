@@ -244,14 +244,39 @@ pub(in super::super) fn restore_persisted_ui_state(
         let mut state = shared_state.lock().expect("ui model mutex poisoned");
         restore_last_asset_paths(&mut state, &config.preferences);
     }
-    restore_export_preferences(app, &config.preferences.export);
+    let midi_length = shared_state
+        .lock()
+        .expect("ui model mutex poisoned")
+        .snapshot
+        .as_ref()
+        .map(|snapshot| snapshot.midi_length);
+    restore_export_preferences(app, &config.preferences.export, midi_length);
     restore_modify_preferences(app, &config.preferences.modify);
     restore_merge_preferences(app, &config.preferences.merge);
 }
 
-fn restore_export_preferences(app: &App, preferences: &ExportPreferences) {
+fn restore_export_preferences(
+    app: &App,
+    preferences: &ExportPreferences,
+    midi_length: Option<f64>,
+) {
+    let preferences = restored_export_preferences(preferences, midi_length);
     export_text_bindings!(restore_text_fields, app, preferences);
     export_bool_bindings!(restore_bool_fields, app, preferences);
+}
+
+pub(in super::super) fn restored_export_preferences(
+    preferences: &ExportPreferences,
+    midi_length: Option<f64>,
+) -> ExportPreferences {
+    let mut restored = preferences.clone();
+    if let Some(midi_length) = midi_length {
+        let (start_time, end_time) =
+            super::super::export::default_render_time_range_text(midi_length);
+        restored.start_time_text = start_time;
+        restored.end_time_text = end_time;
+    }
+    restored
 }
 
 fn restore_modify_preferences(app: &App, preferences: &ModifyPreferences) {
@@ -305,15 +330,13 @@ fn capture_ui_config(
     config.preferences.modify = capture_modify_preferences(app);
     config.preferences.merge = capture_merge_preferences(app);
     config.preferences.window = capture_window_preferences(app);
-    config.preferences.last_palette_png =
-        active_palette_path_from_scene(&config.preferences.scene)
-            .or_else(|| remembered_assets.palette_png.clone());
+    config.preferences.last_palette_png = active_palette_path_from_scene(&config.preferences.scene)
+        .or_else(|| remembered_assets.palette_png.clone());
     config.preferences.last_background_png =
         active_background_path_from_scene(&config.preferences.scene)
             .or_else(|| remembered_assets.background_png.clone());
-    config.preferences.last_aura_png =
-        active_aura_path_from_scene(&config.preferences.scene)
-            .or_else(|| remembered_assets.aura_png.clone());
+    config.preferences.last_aura_png = active_aura_path_from_scene(&config.preferences.scene)
+        .or_else(|| remembered_assets.aura_png.clone());
 
     config
 }

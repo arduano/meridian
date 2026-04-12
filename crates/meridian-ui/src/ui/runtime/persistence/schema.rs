@@ -10,6 +10,16 @@ use serde::{Deserialize, Serialize};
 
 pub(in super::super) const CONFIG_VERSION: u32 = 1;
 
+pub(in super::super) fn validate_config_version(version: u32) -> Result<(), String> {
+    if version == CONFIG_VERSION {
+        Ok(())
+    } else {
+        Err(format!(
+            "unsupported UI config version {version}; expected {CONFIG_VERSION}"
+        ))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub(in super::super) struct UiConfigFile {

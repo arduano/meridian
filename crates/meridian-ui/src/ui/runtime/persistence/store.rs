@@ -6,7 +6,7 @@ use std::{
 
 use directories::ProjectDirs;
 
-use super::schema::UiConfigFile;
+use super::schema::{UiConfigFile, validate_config_version};
 
 pub(super) const CONFIG_FILE_NAME: &str = "config.json";
 pub(super) const CONFIG_BAK_FILE_NAME: &str = "config.json.bak";
@@ -35,14 +35,40 @@ pub(super) fn load_ui_config_from_dir(
 
     match load_ui_config_file(&primary_path) {
         Ok(Some(config)) => Ok(Some(config)),
-        Ok(None) => load_ui_config_file(&backup_path),
+        Ok(None) => match load_ui_config_file(&backup_path) {
+            Ok(Some(config)) => {
+                if let Err(error) = recover_primary_from_backup(&primary_path, &backup_path) {
+                    eprintln!(
+                        "meridian-ui: recovered {} from {} but failed to repair primary: {error}",
+                        backup_path.display(),
+                        primary_path.display()
+                    );
+                } else {
+                    eprintln!(
+                        "meridian-ui: restored {} from {}",
+                        primary_path.display(),
+                        backup_path.display()
+                    );
+                }
+                Ok(Some(config))
+            }
+            other => other,
+        },
         Err(primary_error) => match load_ui_config_file(&backup_path) {
             Ok(Some(config)) => {
-                eprintln!(
-                    "meridian-ui: failed to parse {}; restored from {}",
-                    primary_path.display(),
-                    backup_path.display()
-                );
+                if let Err(error) = recover_primary_from_backup(&primary_path, &backup_path) {
+                    eprintln!(
+                        "meridian-ui: failed to load {}; recovered from {} but failed to repair primary: {error}",
+                        primary_path.display(),
+                        backup_path.display()
+                    );
+                } else {
+                    eprintln!(
+                        "meridian-ui: failed to load {}; restored from {}",
+                        primary_path.display(),
+                        backup_path.display()
+                    );
+                }
                 Ok(Some(config))
             }
             Ok(None) => Err(primary_error),
@@ -95,30 +121,13 @@ fn load_ui_config_file(path: &Path) -> Result<Option<UiConfigFile>, String> {
         fs::read(path).map_err(|error| format!("failed to read {}: {error}", path.display()))?;
     let config = serde_json::from_slice::<UiConfigFile>(&bytes)
         .map_err(|error| format!("failed to parse {}: {error}", path.display()))?;
+    validate_config_version(config.version)
+        .map_err(|error| format!("failed to load {}: {error}", path.display()))?;
     Ok(Some(config))
 }
 
 fn replace_config_file(primary: &Path, backup: &Path, temp: &Path) -> Result<(), String> {
-    let had_primary = primary.exists();
-
-    if had_primary {
-        if backup.exists() {
-            fs::remove_file(backup)
-                .map_err(|error| format!("failed to clear {}: {error}", backup.display()))?;
-        }
-        fs::rename(primary, backup).map_err(|error| {
-            format!(
-                "failed to move {} to {}: {error}",
-                primary.display(),
-                backup.display()
-            )
-        })?;
-    }
-
     if let Err(error) = fs::rename(temp, primary) {
-        if had_primary && backup.exists() {
-            let _ = fs::rename(backup, primary);
-        }
         return Err(format!(
             "failed to move {} into place as {}: {error}",
             temp.display(),
@@ -126,7 +135,22 @@ fn replace_config_file(primary: &Path, backup: &Path, temp: &Path) -> Result<(),
         ));
     }
 
+    if let Err(error) = fs::copy(primary, backup) {
+        return Err(format!(
+            "failed to refresh {} from {}: {error}",
+            backup.display(),
+            primary.display()
+        ));
+    }
+
     Ok(())
+}
+
+fn recover_primary_from_backup(primary: &Path, backup: &Path) -> Result<(), String> {
+    let bytes = fs::read(backup)
+        .map_err(|error| format!("failed to read {}: {error}", backup.display()))?;
+    fs::write(primary, bytes)
+        .map_err(|error| format!("failed to restore {}: {error}", primary.display()))
 }
 
 fn resolve_config_dir(dir_override: Option<&Path>) -> Result<Option<PathBuf>, String> {

@@ -8,9 +8,10 @@ use super::build_startup_options;
 use super::store::{
     CONFIG_BAK_FILE_NAME, CONFIG_FILE_NAME, load_ui_config_from_dir, save_ui_config_to_dir,
 };
+use super::sync::restored_export_preferences;
 use crate::ui::runtime::persistence::schema::{
-    ExportPreferences, MergePreferences, ModifyPreferences, UiConfigFile, UiPreferences,
-    WindowPreferences,
+    CONFIG_VERSION, ExportPreferences, MergePreferences, ModifyPreferences, UiConfigFile,
+    UiPreferences, WindowPreferences,
 };
 use crate::ui::state::UiOptions;
 
@@ -43,6 +44,53 @@ fn load_falls_back_to_backup_when_primary_is_invalid() {
         .expect("config should exist");
 
     assert_eq!(loaded, config);
+}
+
+#[test]
+fn load_rejects_unsupported_config_version_without_backup() {
+    let dir = tempdir().expect("tempdir");
+    let mut config = sample_config();
+    config.version = CONFIG_VERSION + 1;
+
+    let primary = dir.path().join(CONFIG_FILE_NAME);
+    fs::write(
+        &primary,
+        serde_json::to_vec_pretty(&config).expect("serialize config"),
+    )
+    .expect("write primary");
+
+    let error =
+        load_ui_config_from_dir(Some(dir.path())).expect_err("unsupported version should fail");
+
+    assert!(error.contains("unsupported UI config version"));
+}
+
+#[test]
+fn load_recovers_primary_and_preserves_backup_on_autosave() {
+    let dir = tempdir().expect("tempdir");
+    let config = sample_config();
+
+    save_ui_config_to_dir(Some(dir.path()), &config).expect("save config");
+    let primary = dir.path().join(CONFIG_FILE_NAME);
+    let backup = dir.path().join(CONFIG_BAK_FILE_NAME);
+    fs::copy(&primary, &backup).expect("copy backup");
+    fs::write(&primary, b"{ definitely not valid json").expect("corrupt primary");
+
+    let loaded = load_ui_config_from_dir(Some(dir.path()))
+        .expect("load config")
+        .expect("config should exist");
+
+    assert_eq!(loaded, config);
+
+    let primary_after_load: UiConfigFile =
+        serde_json::from_slice(&fs::read(&primary).expect("read primary")).expect("parse primary");
+    assert_eq!(primary_after_load, config);
+
+    save_ui_config_to_dir(Some(dir.path()), &loaded).expect("autosave config");
+
+    let backup_after_save: UiConfigFile =
+        serde_json::from_slice(&fs::read(&backup).expect("read backup")).expect("parse backup");
+    assert_eq!(backup_after_save, config);
 }
 
 #[test]
@@ -85,9 +133,26 @@ fn startup_options_default_loaded_midi_to_preview_preroll() {
     assert_eq!(startup.start_time, PREVIEW_START_TIME_SECONDS);
 }
 
+#[test]
+fn restored_export_preferences_keep_loaded_midi_time_range_defaults() {
+    let mut preferences = sample_config().preferences.export;
+    preferences.start_time_text = "12.5".into();
+    preferences.end_time_text = "47.25".into();
+
+    let restored = restored_export_preferences(&preferences, Some(91.25));
+
+    assert_eq!(
+        restored.start_time_text,
+        PREVIEW_START_TIME_SECONDS.to_string()
+    );
+    assert_eq!(restored.end_time_text, "91.25");
+    assert_eq!(restored.mode_text, preferences.mode_text);
+    assert_eq!(restored.audio_format_text, preferences.audio_format_text);
+}
+
 fn sample_config() -> UiConfigFile {
     UiConfigFile {
-        version: 1,
+        version: CONFIG_VERSION,
         preferences: UiPreferences {
             view_range: 1.5,
             first_key: 8,
