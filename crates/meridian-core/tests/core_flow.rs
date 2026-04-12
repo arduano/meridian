@@ -324,6 +324,72 @@ fn midi_analysis_job_runs_without_building_display_cache() {
 }
 
 #[test]
+fn midi_analysis_job_fails_when_requested_file_metrics_cannot_be_computed() {
+    let source_midi = support::write_test_midi();
+    let test_dir = support::temp_dir("meridian-core-analysis-gzip-failure");
+    let midi = test_dir.join("missing-gzip-source.mid");
+    fs::copy(&source_midi, &midi).expect("copy midi fixture for isolated failure test");
+    let core = spawn_core();
+    let event_rx = core.subscribe_events();
+
+    let parsed_events = core
+        .request(CoreCommand::LoadParsedMidi { path: midi.clone() })
+        .expect("load parsed midi");
+    let parsed_midi_id = parsed_events
+        .iter()
+        .find_map(|event| match event {
+            CoreEvent::ParsedMidiLoaded { parsed_midi_id, .. } => Some(*parsed_midi_id),
+            _ => None,
+        })
+        .expect("parsed midi id");
+
+    fs::remove_file(&midi).expect("remove midi source before file metrics analysis");
+
+    let status_events = core
+        .request(CoreCommand::StartMidiAnalysisJob {
+            parsed_midi_id,
+            kinds: vec![MidiAnalysisKind::File],
+            bucket_count: None,
+        })
+        .expect("start midi analysis job");
+
+    assert!(matches!(
+        status_events.as_slice(),
+        [CoreEvent::MidiAnalysisJobStatus {
+            status: meridian_core::protocol::MidiAnalysisJobStatus::Running { .. }
+        }]
+    ));
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        let event = event_rx
+            .recv_timeout(Duration::from_millis(200))
+            .expect("receive analysis job event");
+        match event {
+            CoreEvent::MidiAnalysisJob { event } => match event {
+                meridian_core::protocol::MidiAnalysisJobEvent::Failed { message, .. } => {
+                    assert!(
+                        message.contains("failed to compute gzip size"),
+                        "unexpected analysis failure: {message}"
+                    );
+                    return;
+                }
+                meridian_core::protocol::MidiAnalysisJobEvent::Finished { result, .. } => {
+                    panic!(
+                        "analysis job should fail when file metrics cannot be computed, got gzip_bytes={}",
+                        result.file.gzip_bytes
+                    );
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+
+    panic!("analysis job did not fail");
+}
+
+#[test]
 fn process_midi_file_applies_range_select_tool() {
     let dir = support::temp_dir("meridian-core-process-test");
     let midi = dir.join("input.mid");

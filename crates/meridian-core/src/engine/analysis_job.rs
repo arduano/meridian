@@ -42,8 +42,14 @@ impl CoreState {
         thread::spawn(move || {
             let gzip_handle = if kinds.is_empty() || kinds.contains(&MidiAnalysisKind::File) {
                 let parsed = std::sync::Arc::clone(cache_stack.parsed());
+                let path = parsed.signature().filepath.clone();
                 Some(thread::spawn(move || {
-                    parsed.cached_gzip_size().unwrap_or(0)
+                    parsed.cached_gzip_size().map_err(|error| {
+                        format!(
+                            "failed to compute gzip size for {}: {error}",
+                            path.display()
+                        )
+                    })
                 }))
             } else {
                 None
@@ -64,6 +70,7 @@ impl CoreState {
             }) {
                 Ok(analysis) => analysis,
                 Err(error) => {
+                    let _ = join_gzip_metrics_worker(gzip_handle);
                     let _ = core_handle.publish_analysis_job_event(MidiAnalysisJobEvent::Failed {
                         job_id,
                         message: error.to_string(),
@@ -90,7 +97,16 @@ impl CoreState {
                     status: "Computing File Metrics".into(),
                 });
             }
-            let gzip_bytes = gzip_handle.and_then(|handle| handle.join().ok());
+            let gzip_bytes = match join_gzip_metrics_worker(gzip_handle) {
+                Ok(gzip_bytes) => gzip_bytes,
+                Err(message) => {
+                    let _ = core_handle.publish_analysis_job_event(MidiAnalysisJobEvent::Failed {
+                        job_id,
+                        message,
+                    });
+                    return;
+                }
+            };
             let result = select_analysis_kinds(
                 analyze_cached_midi_with_gzip_bytes(
                     cache_stack.parsed(),
@@ -200,4 +216,17 @@ impl CoreState {
             });
         }
     }
+}
+
+fn join_gzip_metrics_worker(
+    handle: Option<thread::JoinHandle<Result<u64, String>>>,
+) -> Result<Option<u64>, String> {
+    let Some(handle) = handle else {
+        return Ok(None);
+    };
+
+    handle
+        .join()
+        .map_err(|_| "gzip metrics worker panicked".to_string())?
+        .map(Some)
 }
