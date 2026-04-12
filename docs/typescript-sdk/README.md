@@ -31,6 +31,17 @@ runtime can:
 - [Examples](./examples.md): runnable TypeScript example entry points in the
   repository
 
+## Where Things Live
+
+- [`sdk/typescript/src`](../../sdk/typescript/src): the public package entrypoint,
+  runtime adapters, and protocol wrappers
+- [`sdk/typescript/generated`](../../sdk/typescript/generated): generated schema
+  and protocol types
+- [`sdk/typescript/examples`](../../sdk/typescript/examples): runnable examples
+- [`sdk/typescript/tests`](../../sdk/typescript/tests): runtime and protocol
+  regression tests
+- [`README.md`](../../README.md): repo-wide setup and validation commands
+
 ## Current Status
 
 - Package name: `@meridian/cli-sdk`
