@@ -141,6 +141,10 @@ export type MidiFilesInspectedEvent = Extract<
   ProtocolEvent,
   { type: "midi_files_inspected" }
 >;
+export type StateSnapshotEvent = Extract<
+  ProtocolEvent,
+  { type: "state_snapshot" }
+>;
 export type MidiLoadedEvent = Extract<ProtocolEvent, { type: "midi_loaded" }>;
 export type MidiFileProcessedEvent = Extract<
   ProtocolEvent,
@@ -173,6 +177,10 @@ export type AudioRenderEventWrapper = Extract<
 export type AudioRenderStatusEventWrapper = Extract<
   ProtocolEvent,
   { type: "audio_render_status" }
+>;
+export type FrameSavedEvent = Extract<
+  ProtocolEvent,
+  { type: "frame_saved" }
 >;
 export type VideoRenderEventWrapper = Extract<
   ProtocolEvent,
@@ -209,6 +217,28 @@ export type ResponseFor<C extends ProtocolCommand> = C extends
     ? [AudioRenderStatusEventWrapper] | [ErrorEvent]
   : C extends { type: "get_render_audio_status" }
     ? [AudioRenderStatusEventWrapper] | [ErrorEvent]
+  : C extends { type: "set_time" }
+    ? [StateSnapshotEvent] | [ErrorEvent]
+  : C extends { type: "tick_projector_physics" }
+    ? [StateSnapshotEvent] | [ErrorEvent]
+  : C extends { type: "reset_projector_physics" }
+    ? [StateSnapshotEvent] | [ErrorEvent]
+  : C extends { type: "step_time" }
+    ? [StateSnapshotEvent] | [ErrorEvent]
+  : C extends { type: "set_playing" }
+    ? [StateSnapshotEvent] | [ErrorEvent]
+  : C extends { type: "toggle_playing" }
+    ? [StateSnapshotEvent] | [ErrorEvent]
+  : C extends { type: "set_scene_config" }
+    ? [StateSnapshotEvent] | [ErrorEvent]
+  : C extends { type: "set_view_range" }
+    ? [StateSnapshotEvent] | [ErrorEvent]
+  : C extends { type: "set_key_range" }
+    ? [StateSnapshotEvent] | [ErrorEvent]
+  : C extends { type: "set_viewport" }
+    ? [StateSnapshotEvent] | [ErrorEvent]
+  : C extends { type: "save_frame" }
+    ? [FrameSavedEvent] | [ErrorEvent]
   : C extends { type: "start_render_video" }
     ? [VideoRenderStatusEventWrapper] | [ErrorEvent]
   : C extends { type: "cancel_render_video" }

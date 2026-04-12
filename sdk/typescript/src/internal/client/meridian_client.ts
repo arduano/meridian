@@ -4,21 +4,25 @@ import type {
   ChangePpqTool,
   ChannelRemapTool,
   ControlChangeTool,
+  FrameSavedEvent,
   ExtractTrackTool,
   HumanizeTool,
   KeyMapTool,
   MetaTextTool,
   MidiFilesMergedEvent,
+  MidiFilesInspectedEvent,
   MidiLoadedEvent,
   MidiModifierTool,
   MidiProcessEvent,
   NoteLengthTool,
   ParsedMidiId,
+  ProtocolStateSnapshot,
   PitchBendTool,
   ProgramTool,
   QuantizeTool,
   RangeSelectTool,
   SharedMetadataTrackTool,
+  SceneConfig,
   SysexTool,
   TempoPoint,
   TimeWarpTool,
@@ -34,6 +38,7 @@ import type {
   MidiModificationOptions,
   MidiToolTaskOptions,
   StartAnalysisForFileOptions,
+  SaveFrameOptions,
   VideoRenderOptions,
 } from "./options.ts";
 import {
@@ -45,6 +50,7 @@ import {
 import { type ToolConfig } from "./internal.ts";
 import {
   normalizeMidiMergeConfig,
+  normalizeSaveFrameOptions,
   toSdkAudioRenderConfig,
   toProtocolVideoRenderConfig,
 } from "./normalizers.ts";
@@ -62,8 +68,30 @@ export class MeridianClient {
   readonly resources = {
     loadParsedMidi: (path: string): Promise<ParsedMidiId> =>
       this.loadParsedMidi(path),
+    loadMidi: (path: string): Promise<MidiLoadedEvent> => this.loadMidi(path),
     loadAudioMidi: (path: string): Promise<MidiLoadedEvent> =>
       this.loadAudioMidi(path),
+    inspectMidiFiles: (paths: string[]): Promise<MidiFilesInspectedEvent["inspections"]> =>
+      this.inspectMidiFiles(paths),
+  };
+  readonly display = {
+    setTime: (time: number): Promise<ProtocolStateSnapshot> => this.setTime(time),
+    setSceneConfig: (scene: SceneConfig): Promise<ProtocolStateSnapshot> =>
+      this.setSceneConfig(scene),
+    setViewRange: (
+      seconds: number,
+      timeSpace?: ProtocolStateSnapshot["time_space"] | null,
+    ): Promise<ProtocolStateSnapshot> => this.setViewRange(seconds, timeSpace),
+    setKeyRange: (
+      firstKey: number,
+      lastKey: number,
+    ): Promise<ProtocolStateSnapshot> => this.setKeyRange(firstKey, lastKey),
+    setViewport: (
+      width: number,
+      height: number,
+    ): Promise<ProtocolStateSnapshot> => this.setViewport(width, height),
+    saveFrame: (options: SaveFrameOptions): Promise<FrameSavedEvent> =>
+      this.saveFrame(options),
   };
   readonly audio = {
     render: (options: AudioRenderOptions): AudioRenderTask =>
@@ -287,6 +315,16 @@ export class MeridianClient {
     return requireEvent(events, "midi_files_merged");
   }
 
+  async inspectMidiFiles(
+    paths: string[],
+  ): Promise<MidiFilesInspectedEvent["inspections"]> {
+    const events = await this.protocol.request({
+      type: "inspect_midi_files",
+      paths: [...paths],
+    });
+    return requireEvent(events, "midi_files_inspected").inspections;
+  }
+
   async startAudioRender(
     options: AudioRenderOptions,
   ): Promise<AudioRenderJobHandle> {
@@ -328,6 +366,73 @@ export class MeridianClient {
     return handle;
   }
 
+  async setTime(time: number): Promise<ProtocolStateSnapshot> {
+    const events = await this.protocol.request({
+      type: "set_time",
+      time,
+    });
+    return requireEvent(events, "state_snapshot").state;
+  }
+
+  async setSceneConfig(scene: SceneConfig): Promise<ProtocolStateSnapshot> {
+    const events = await this.protocol.request({
+      type: "set_scene_config",
+      scene: structuredClone(scene),
+    });
+    return requireEvent(events, "state_snapshot").state;
+  }
+
+  async setViewRange(
+    seconds: number,
+    timeSpace?: ProtocolStateSnapshot["time_space"] | null,
+  ): Promise<ProtocolStateSnapshot> {
+    const events = await this.protocol.request({
+      type: "set_view_range",
+      seconds,
+      time_space: timeSpace ?? null,
+    });
+    return requireEvent(events, "state_snapshot").state;
+  }
+
+  async setKeyRange(
+    firstKey: number,
+    lastKey: number,
+  ): Promise<ProtocolStateSnapshot> {
+    const events = await this.protocol.request({
+      type: "set_key_range",
+      first_key: firstKey,
+      last_key: lastKey,
+    });
+    return requireEvent(events, "state_snapshot").state;
+  }
+
+  async setViewport(
+    width: number,
+    height: number,
+  ): Promise<ProtocolStateSnapshot> {
+    const events = await this.protocol.request({
+      type: "set_viewport",
+      width,
+      height,
+    });
+    return requireEvent(events, "state_snapshot").state;
+  }
+
+  async saveFrame(
+    options: SaveFrameOptions,
+  ): Promise<FrameSavedEvent> {
+    const normalized = normalizeSaveFrameOptions(options);
+    const events = await this.protocol.request({
+      type: "save_frame",
+      output: normalized.output,
+      format: normalized.format ?? null,
+      viewport_width: normalized.viewportWidth ?? null,
+      viewport_height: normalized.viewportHeight ?? null,
+      export: normalized.export,
+    });
+    return requireEvent(events, "frame_saved");
+  }
+
   private async loadParsedMidi(path: string): Promise<ParsedMidiId> {
     const events = await this.protocol.request({
       type: "load_parsed_midi",
@@ -340,6 +445,14 @@ export class MeridianClient {
   private async loadAudioMidi(path: string): Promise<MidiLoadedEvent> {
     const events = await this.protocol.request({
       type: "load_audio_midi",
+      path,
+    });
+    return requireEvent(events, "midi_loaded");
+  }
+
+  private async loadMidi(path: string): Promise<MidiLoadedEvent> {
+    const events = await this.protocol.request({
+      type: "load_midi",
       path,
     });
     return requireEvent(events, "midi_loaded");

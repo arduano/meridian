@@ -1,6 +1,7 @@
 import type { DeepPartial } from "../../helpers.ts";
 import type {
   AudioRenderOptions,
+  SaveFrameOptions,
   MidiAnalysisOptions,
   MidiToolTaskOptions,
   StartAnalysisForFileOptions,
@@ -8,11 +9,13 @@ import type {
   VideoRenderOptions,
 } from "./options.ts";
 import type {
+  ImageExportConfig,
   MidiAnalysisKind,
   MidiFilesMergeConfig,
   ProtocolVideoRenderConfig,
   SdkAudioRenderConfig,
 } from "../../protocol.ts";
+import { deepMerge } from "../../helpers.ts";
 import { inferRendererFromScene, MeridianSubprocessError, uniqueKinds } from "./internal.ts";
 
 export const DEFAULT_ANALYSIS_KINDS: MidiAnalysisKind[] = [
@@ -57,6 +60,13 @@ export function normalizeAnalysisOptions(
     ...(options.onProgress ? { onProgress: options.onProgress } : {}),
   };
 }
+
+const DEFAULT_IMAGE_EXPORT_CONFIG: ImageExportConfig = {
+  color_mode: "premultiplied",
+  export_premultiplied_rgb: false,
+  export_straight_rgb: false,
+  export_alpha_mask: false,
+};
 
 export function normalizeMidiToolOptions(
   options: MidiToolTaskOptions,
@@ -182,6 +192,22 @@ export function toProtocolVideoRenderAudioConfig(
     use_limiter: audio.useLimiter ?? null,
     soundfonts: audio.soundfonts ? [...audio.soundfonts] : [],
     ffmpeg_args: audio.ffmpegArgs ? [...audio.ffmpegArgs] : [],
+  };
+}
+
+export function normalizeSaveFrameOptions(
+  options: SaveFrameOptions,
+): SaveFrameOptions & { export: ImageExportConfig } {
+  return {
+    output: options.output,
+    ...(options.format !== undefined ? { format: options.format } : {}),
+    ...(options.viewportWidth !== undefined
+      ? { viewportWidth: options.viewportWidth }
+      : {}),
+    ...(options.viewportHeight !== undefined
+      ? { viewportHeight: options.viewportHeight }
+      : {}),
+    export: deepMerge(DEFAULT_IMAGE_EXPORT_CONFIG, options.export),
   };
 }
 

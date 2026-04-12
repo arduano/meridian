@@ -1,6 +1,8 @@
 import type { DeepPartial } from "../../helpers.ts";
 import type {
   AudioRenderEvent,
+  ImageExportConfig,
+  ImageOutputFormat,
   MidiAnalysisKind,
   MidiFilesMergeConfig,
   MidiModifierTool,
@@ -84,6 +86,14 @@ export interface MidiMergeOptions {
   inputs: string[];
   output: string;
   config?: DeepPartial<MidiFilesMergeConfig>;
+}
+
+export interface SaveFrameOptions {
+  output: string;
+  format?: ImageOutputFormat;
+  viewportWidth?: number;
+  viewportHeight?: number;
+  export?: DeepPartial<ImageExportConfig>;
 }
 
 export type { SdkAudioRenderConfig };

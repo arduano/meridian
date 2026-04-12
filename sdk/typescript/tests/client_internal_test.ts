@@ -413,6 +413,122 @@ Deno.test("video render handle replays a recent finished event", async () => {
   }
 });
 
+Deno.test("display and inspection helpers forward stdio commands", async () => {
+  const snapshotEvent: CoreEvent = {
+    type: "state_snapshot",
+    state: {
+      midi_path: "song.mid",
+      current_time: 1.25,
+      playing: false,
+      scene: DEFAULT_TWO_D_SCENE,
+      view_range: 16,
+      time_space: "time",
+      first_key: 0,
+      last_key: 127,
+      viewport_width: 160,
+      viewport_height: 90,
+    },
+  };
+  const frameSavedEvent: CoreEvent = {
+    type: "frame_saved",
+    output: "frame.png",
+    format: "png",
+    stats: {
+      visible_notes: 2,
+      active_keys: 2,
+      note_quads: 8,
+      keyboard_quads: 4,
+      total_quads: 12,
+      total_vertices: 48,
+    },
+    bytes_written: 2048,
+    exports: {
+      premultiplied_rgb: null,
+      straight_rgb: null,
+      alpha_mask: null,
+    },
+  };
+  const protocol = new FakeProtocolClient({
+    requestHandler: (command) => {
+      switch ((command as { type: string }).type) {
+        case "inspect_midi_files":
+          return [{
+            type: "midi_files_inspected",
+            inspections: [
+              {
+                path: "song.mid",
+                file_bytes: 123,
+                midi_length: 1.5,
+                total_notes: 2,
+                total_event_count: 6,
+                declared_track_count: 1,
+                actual_track_count: 1,
+                ticks_per_quarter: 96,
+                tempo_event_count: 1,
+                time_signature_event_count: 0,
+                key_signature_event_count: 0,
+                track_name_event_count: 1,
+                initial_bpm: 120,
+                error: null,
+              },
+            ],
+          } satisfies CoreEvent];
+        case "set_time":
+        case "set_scene_config":
+        case "set_view_range":
+        case "set_key_range":
+        case "set_viewport":
+          return [snapshotEvent];
+        case "save_frame":
+          return [frameSavedEvent];
+        default:
+          throw new Error(`Unexpected command ${(command as { type: string }).type}`);
+      }
+    },
+  });
+  const client = new MeridianClient(protocol as unknown as MeridianProtocolClient);
+
+  const inspections = await client.resources.inspectMidiFiles([
+    "song.mid",
+  ]);
+  const [inspection] = inspections;
+  if (!inspection || inspections.length !== 1 || inspection.total_notes !== 2) {
+    throw new Error(`Unexpected inspections: ${JSON.stringify(inspections)}`);
+  }
+  await client.display.setTime(1.5);
+  await client.display.setSceneConfig(DEFAULT_TWO_D_SCENE);
+  await client.display.setViewRange(8, "tick");
+  await client.display.setKeyRange(21, 108);
+  await client.display.setViewport(320, 180);
+  const saved = await client.display.saveFrame({
+    output: "frame.png",
+    export: { export_alpha_mask: true },
+  });
+
+  if (saved.output !== "frame.png") {
+    throw new Error(`Unexpected saved output: ${saved.output}`);
+  }
+
+  const requests = protocol.requests as Array<{ type: string; [key: string]: unknown }>;
+  if (requests[0]?.type !== "inspect_midi_files") {
+    throw new Error(`Unexpected first request: ${requests[0]?.type}`);
+  }
+  const saveFrameRequest = requests.find((request) => request.type === "save_frame");
+  if (!saveFrameRequest) {
+    throw new Error("Expected save_frame request to be sent");
+  }
+  const exportConfig = saveFrameRequest.export as Record<string, unknown>;
+  if (exportConfig.color_mode !== "premultiplied") {
+    throw new Error(`Unexpected export color mode: ${String(exportConfig.color_mode)}`);
+  }
+  if (exportConfig.export_alpha_mask !== true) {
+    throw new Error("Expected export_alpha_mask to be preserved");
+  }
+  if (exportConfig.export_premultiplied_rgb !== false || exportConfig.export_straight_rgb !== false) {
+    throw new Error(`Unexpected default export config: ${JSON.stringify(exportConfig)}`);
+  }
+});
+
 Deno.test("audio render start forwards encoded-output options", async () => {
   const protocol = new FakeProtocolClient({
     requestHandler: (command) => {

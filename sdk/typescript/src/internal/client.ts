@@ -11,6 +11,7 @@ export type {
   MidiMergeOptions,
   MidiModificationOptions,
   MidiToolTaskOptions,
+  SaveFrameOptions,
   StartAnalysisForFileOptions,
   VideoRenderAudioOptions,
   VideoRenderOptions,

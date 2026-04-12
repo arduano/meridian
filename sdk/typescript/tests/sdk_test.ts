@@ -446,3 +446,46 @@ Deno.test("resource helpers load parsed and audio midi through the SDK", async (
     await client.close();
   }
 });
+
+Deno.test("inspection and save-frame helpers run through the SDK", async () => {
+  const executablePath = defaultExecutablePath();
+  await ensureExecutable(executablePath);
+
+  const tempDir = await Deno.makeTempDir({
+    prefix: "meridian-sdk-frame-",
+  });
+  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const output = `${tempDir}/frame.png`;
+
+  const client = await createDenoMeridianClient(executablePath);
+  try {
+    const inspections = await client.resources.inspectMidiFiles([midiPath]);
+    const [inspection] = inspections;
+    if (!inspection || inspections.length !== 1) {
+      throw new Error(`Expected one inspection, got ${inspections.length}`);
+    }
+    if (inspection.total_notes !== 2) {
+      throw new Error(
+        `Expected 2 notes in inspection, got ${inspection.total_notes}`,
+      );
+    }
+
+    await client.resources.loadMidi(midiPath);
+    await client.display.setTime(0);
+    await client.display.setViewport(160, 90);
+    const saved = await client.display.saveFrame({
+      output,
+      format: "png",
+    });
+
+    if (saved.output !== output) {
+      throw new Error(`Expected saved output ${output}, got ${saved.output}`);
+    }
+    const stat = await Deno.stat(output);
+    if (!stat.isFile || stat.size === 0) {
+      throw new Error(`Expected non-empty frame output at ${output}`);
+    }
+  } finally {
+    await client.close();
+  }
+});
