@@ -11,3 +11,5 @@ fit cleanly in the top-level README.
 ## Sections
 
 - [TypeScript SDK](./typescript-sdk/README.md): Deno-first SDK docs with runtime support notes and examples
+- [Starting Points](./starting-points.md): contributor map for core, UI, CLI,
+  SDK, rendering, and tests

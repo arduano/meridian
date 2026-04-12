@@ -16,6 +16,12 @@ Meridian is a Rust workspace for MIDI inspection, modification, audio rendering,
 - [`crates/meridian-ui`](crates/meridian-ui): Slint desktop UI
 - [`sdk/typescript`](sdk/typescript): TypeScript SDK for driving `meridian-cli`
 
+## Docs
+
+- [Repository docs](docs/README.md)
+- [Starting points](docs/starting-points.md): contributor map for core, UI,
+  CLI, SDK, rendering, and tests
+
 ## Requirements
 
 - Rust toolchain compatible with [`rust-toolchain.toml`](rust-toolchain.toml)
