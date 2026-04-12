@@ -8,6 +8,7 @@ use meridian_core::{
     audio::{AudioBackend, AudioConfig},
     protocol::{CoreEvent, StateSnapshot},
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
+    transport::PREVIEW_START_TIME_SECONDS,
 };
 
 use super::{view::App, view_model::UiViewModel};
@@ -71,7 +72,7 @@ impl Default for UiStartupOptions {
                 ..AudioConfig::default()
             },
             scene: SceneLayout::default().scene,
-            start_time: 0.0,
+            start_time: PREVIEW_START_TIME_SECONDS,
             view_range: 0.5,
             time_space: DisplayTimeSpace::Time,
             first_key: 0,

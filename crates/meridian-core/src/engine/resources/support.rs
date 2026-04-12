@@ -82,7 +82,7 @@ impl CoreState {
         self.active_audio_session_id = None;
         self.midi_path = None;
         self.transport.reset(now);
-        self.audio_clock.set_time(0.0);
+        self.audio_clock.set_time(self.transport.current_time());
         self.audio_clock.set_playing(false);
         self.audio_player.reset();
         self.display.unload_midi(now);

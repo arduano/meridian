@@ -12,6 +12,7 @@ use meridian_core::{
     },
     protocol::{CoreCommand, CoreEvent, MidiProcessStatus, ParsedMidiId, VideoRenderConfig},
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
+    transport::PREVIEW_START_TIME_SECONDS,
 };
 
 use super::{
@@ -74,7 +75,7 @@ impl UiCoreBridge {
         )?;
         self.request(
             CoreCommand::SetTime {
-                time: options.start_time.max(0.0),
+                time: options.start_time.max(PREVIEW_START_TIME_SECONDS),
             },
             model,
         )?;
@@ -236,7 +237,12 @@ impl UiCoreBridge {
         time: f64,
         model: &Arc<Mutex<UiViewModel>>,
     ) -> Result<Vec<CoreEvent>, MeridianError> {
-        self.request(CoreCommand::SetTime { time }, model)
+        self.request(
+            CoreCommand::SetTime {
+                time: time.max(PREVIEW_START_TIME_SECONDS),
+            },
+            model,
+        )
     }
 
     pub fn set_time_space(

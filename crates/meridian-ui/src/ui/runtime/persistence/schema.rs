@@ -4,6 +4,7 @@ use meridian_core::{
     audio::{AudioBackend, AudioConfig},
     midi::{MidiFileProcessingConfig, QuantizeTool},
     render::{DisplayTimeSpace, SceneConfig, SceneLayout},
+    transport::PREVIEW_START_TIME_SECONDS,
 };
 use serde::{Deserialize, Serialize};
 
@@ -98,7 +99,7 @@ impl Default for ExportPreferences {
         Self {
             mode_text: "video_audio".into(),
             range_mode_text: "full_song".into(),
-            start_time_text: "0.0".into(),
+            start_time_text: PREVIEW_START_TIME_SECONDS.to_string(),
             end_time_text: String::new(),
             video_resolution_text: "1920x1080".into(),
             video_fps_text: "60".into(),

@@ -48,7 +48,7 @@ impl PlaybackClock {
 
     pub fn set_time(&self, time: f64) {
         let mut state = self.state.lock().unwrap();
-        state.base_time = time.max(0.0);
+        state.base_time = time;
         state.anchor = Instant::now();
         state.generation += 1;
         self.wake.notify_all();

@@ -100,7 +100,7 @@ impl CoreState {
         let now = Instant::now();
         self.transport.reset(now);
         self.display.mark_physics_tick(now);
-        self.audio_clock.set_time(0.0);
+        self.audio_clock.set_time(self.transport.current_time());
         self.audio_clock.set_playing(false);
         self.restart_audio_session();
         vec![CoreEvent::ProcessedMidiAttached {

@@ -87,9 +87,9 @@ fn validate_time_bound(value: Option<f64>, label: &str) -> Result<(), MeridianEr
     let Some(value) = value else {
         return Ok(());
     };
-    if !value.is_finite() || value < 0.0 {
+    if !value.is_finite() {
         return Err(MeridianError::InvalidMidi(format!(
-            "{label} must be a finite value >= 0"
+            "{label} must be a finite value"
         )));
     }
     Ok(())
@@ -134,10 +134,10 @@ mod tests {
     }
 
     #[test]
-    fn validate_rejects_negative_start_time() {
+    fn validate_allows_negative_start_time() {
         let mut config = config(None);
         config.start_time = Some(-0.5);
-        assert!(config.validate().is_err());
+        assert!(config.validate().is_ok());
     }
 
     #[test]
@@ -173,6 +173,22 @@ mod tests {
                 start_time: 1.25,
                 end_time: 3.5,
                 duration_seconds: 2.25,
+            }
+        );
+    }
+
+    #[test]
+    fn resolve_time_range_preserves_negative_start_bounds() {
+        let mut config = config(None);
+        config.start_time = Some(-1.0);
+        config.end_time = Some(0.5);
+        let resolved = config.resolve_time_range(5.0).expect("resolve range");
+        assert_eq!(
+            resolved,
+            ResolvedVideoTimeRange {
+                start_time: -1.0,
+                end_time: 0.5,
+                duration_seconds: 1.5,
             }
         );
     }

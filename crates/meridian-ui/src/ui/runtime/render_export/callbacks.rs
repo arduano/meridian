@@ -1,4 +1,5 @@
 use super::*;
+use meridian_core::transport::PREVIEW_START_TIME_SECONDS;
 
 pub(in super::super) fn wire_render_export_callbacks(
     app: &App,
@@ -35,7 +36,9 @@ pub(in super::super) fn wire_render_export_callbacks(
             app.set_render_range_mode_text(mode.into());
             if mode == "custom" {
                 if app.get_render_start_time_text().is_empty() {
-                    app.set_render_start_time_text("0.0".into());
+                    app.set_render_start_time_text(
+                        PREVIEW_START_TIME_SECONDS.to_string().into(),
+                    );
                 }
                 if app.get_render_end_time_text().is_empty() {
                     if let Some(end_time) = default_render_end_time_text(&app) {

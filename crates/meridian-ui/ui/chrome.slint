@@ -92,12 +92,14 @@ export component TransportButton inherits Rectangle {
 // Horizontal seek bar. Thin track, blue fill, round thumb.
 
 export component TimeScrubber inherits Rectangle {
+    in property <float> minimum: -1;
     in property <float> value: 0;
     in property <float> maximum: 1;
     callback scrubbed(float);
 
-    private property <float> clamped-value: value < 0 ? 0 : value > maximum ? maximum : value;
-    private property <float> fill-ratio: maximum <= 0 ? 0 : clamped-value / maximum;
+    private property <float> clamped-value: value < minimum ? minimum : value > maximum ? maximum : value;
+    private property <float> range: maximum - minimum;
+    private property <float> fill-ratio: range <= 0 ? 0 : (clamped-value - minimum) / range;
 
     height: 32px;
     background: transparent;
@@ -136,11 +138,11 @@ export component TimeScrubber inherits Rectangle {
         mouse-cursor: pointer;
         moved => {
             if (self.pressed) {
-                root.scrubbed(maximum * max(0, min(1, self.mouse-x / max(1px, parent.width))));
+                root.scrubbed(minimum + range * max(0, min(1, self.mouse-x / max(1px, parent.width))));
             }
         }
         clicked => {
-            root.scrubbed(maximum * max(0, min(1, self.mouse-x / max(1px, parent.width))));
+            root.scrubbed(minimum + range * max(0, min(1, self.mouse-x / max(1px, parent.width))));
         }
     }
 }

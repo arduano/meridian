@@ -165,7 +165,8 @@ export component App inherits Window {
     in-out property <float> video-ptc-note-up-speed-float: 0.2;
     in-out property <float> video-ptc-aura-strength-float: 2.0;
 
-    in-out property <float> current-time-seconds: 0;
+    in-out property <float> preview-start-seconds: -1;
+    in-out property <float> current-time-seconds: -1;
     in-out property <float> midi-length-seconds: 1;
     in-out property <[InspectorRow]> inspector-items;
     in-out property <string> analysis-note-count-text: "—";
@@ -562,7 +563,7 @@ export component App inherits Window {
                 return accept;
             }
             if (event.text == Key.Home) {
-                root.seek-time(0.0);
+                root.seek-time(root.preview-start-seconds);
                 return accept;
             }
             if (event.text == Key.End) {
@@ -657,6 +658,7 @@ export component App inherits Window {
                                     TimeScrubber {
                                         horizontal-stretch: 1;
                                         min-width: 200px;
+                                        minimum: root.preview-start-seconds;
                                         value: root.current-time-seconds;
                                         maximum: root.midi-length-seconds;
                                         scrubbed(v) => { root.seek-time(v); }

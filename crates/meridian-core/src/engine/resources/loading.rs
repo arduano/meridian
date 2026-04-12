@@ -53,7 +53,7 @@ impl CoreState {
         let now = Instant::now();
         self.transport.reset(now);
         self.display.mark_physics_tick(now);
-        self.audio_clock.set_time(0.0);
+        self.audio_clock.set_time(self.transport.current_time());
         self.audio_clock.set_playing(false);
         vec![CoreEvent::DisplayCacheAttached {
             display_cache_id,
@@ -93,6 +93,11 @@ impl CoreState {
         self.active_audio_session_id = None;
         self.midi_path = Some(parsed.path.clone());
         self.current_audio_cache = Some(audio_cache);
+        let now = Instant::now();
+        self.transport.reset(now);
+        self.display.mark_physics_tick(now);
+        self.audio_clock.set_time(self.transport.current_time());
+        self.audio_clock.set_playing(false);
         self.restart_audio_session();
         vec![CoreEvent::AudioCacheAttached {
             audio_cache_id,
@@ -113,7 +118,7 @@ impl CoreState {
             self.active_parsed_midi_id = None;
             self.midi_path = None;
             self.transport.reset(now);
-            self.audio_clock.set_time(0.0);
+            self.audio_clock.set_time(self.transport.current_time());
             self.audio_clock.set_playing(false);
         } else {
             self.display.mark_physics_tick(now);
@@ -138,7 +143,7 @@ impl CoreState {
             self.active_parsed_midi_id = None;
             self.midi_path = None;
             self.transport.reset(now);
-            self.audio_clock.set_time(0.0);
+            self.audio_clock.set_time(self.transport.current_time());
         }
 
         vec![CoreEvent::StateSnapshot {

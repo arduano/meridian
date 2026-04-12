@@ -1,6 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use meridian_core::render::{NoteProjectorConfig, RendererKind, SceneConfig};
+use meridian_core::transport::PREVIEW_START_TIME_SECONDS;
 use tempfile::tempdir;
 
 use super::build_startup_options;
@@ -70,6 +71,18 @@ fn startup_options_merge_preferences_and_cli_overrides() {
         startup.scene,
         SceneConfig::TwoD(ref two_d) if matches!(two_d.notes, NoteProjectorConfig::Flat(_))
     ));
+}
+
+#[test]
+fn startup_options_default_loaded_midi_to_preview_preroll() {
+    let launch = UiOptions {
+        midi_path: Some(PathBuf::from("song.mid")),
+        ..UiOptions::default()
+    };
+
+    let startup = build_startup_options(&launch, None);
+
+    assert_eq!(startup.start_time, PREVIEW_START_TIME_SECONDS);
 }
 
 fn sample_config() -> UiConfigFile {

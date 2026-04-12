@@ -9,6 +9,7 @@ use meridian_core::{
     MeridianError,
     render::{SceneLayout, headless::render_scene_headless_to_rgba, pfa::wgpu::encode_rgba_to_png},
     spawn_core,
+    transport::PREVIEW_START_TIME_SECONDS,
 };
 use slint::{ComponentHandle, Image, PhysicalSize, Rgba8Pixel, SharedPixelBuffer};
 
@@ -61,7 +62,7 @@ pub fn write_debug_snapshot(
         startup.midi_path = Some(midi_path.clone());
     }
     if let Some(start_time) = options.start_time {
-        startup.start_time = start_time.max(0.0);
+        startup.start_time = start_time.max(PREVIEW_START_TIME_SECONDS);
     }
     if let Some(view_range) = options.view_range {
         startup.view_range = view_range.max(meridian_core::display::MIN_VIEW_RANGE_SECONDS);

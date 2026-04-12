@@ -1,6 +1,8 @@
 use slint::ComponentHandle;
 
-use meridian_core::{display::MIN_VIEW_RANGE_SECONDS, render::SceneLayout};
+use meridian_core::{
+    display::MIN_VIEW_RANGE_SECONDS, render::SceneLayout, transport::PREVIEW_START_TIME_SECONDS,
+};
 
 use super::{App, UiOptions, UiStartupOptions, schema::UiConfigFile};
 
@@ -41,9 +43,12 @@ pub(in super::super) fn build_startup_options(
     }
     if let Some(midi_path) = &launch.midi_path {
         startup.midi_path = Some(midi_path.clone());
-        startup.start_time = launch.start_time.unwrap_or(0.0).max(0.0);
+        startup.start_time = launch
+            .start_time
+            .unwrap_or(PREVIEW_START_TIME_SECONDS)
+            .max(PREVIEW_START_TIME_SECONDS);
     } else if let Some(start_time) = launch.start_time {
-        startup.start_time = start_time.max(0.0);
+        startup.start_time = start_time.max(PREVIEW_START_TIME_SECONDS);
     }
 
     startup.first_key = startup.first_key.min(startup.last_key);

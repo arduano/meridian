@@ -343,8 +343,8 @@ pub(super) fn parse_render_time_seconds(text: &str, label: &str) -> Result<f64, 
         .trim()
         .parse::<f64>()
         .map_err(|_| format!("invalid {label} `{text}`"))?;
-    if !seconds.is_finite() || seconds < 0.0 {
-        return Err(format!("{label} must be a finite value >= 0"));
+    if !seconds.is_finite() {
+        return Err(format!("{label} must be a finite value"));
     }
     Ok(seconds)
 }
@@ -434,8 +434,11 @@ mod tests {
     }
 
     #[test]
-    fn parse_render_time_seconds_rejects_negative_values() {
-        assert!(parse_render_time_seconds("-1", "render start time").is_err());
+    fn parse_render_time_seconds_allows_negative_values() {
+        assert_eq!(
+            parse_render_time_seconds("-1", "render start time").unwrap(),
+            -1.0
+        );
     }
 }
 
