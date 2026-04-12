@@ -21,7 +21,7 @@ pub(crate) mod test_support;
 pub mod tools;
 pub mod views;
 
-use std::{fs::File, path::PathBuf, time::UNIX_EPOCH};
+use std::{fs::File, path::{Path, PathBuf}, time::UNIX_EPOCH};
 
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
@@ -161,6 +161,10 @@ pub(crate) fn open_file_and_signature(
             last_modified: file_last_modified,
         },
     ))
+}
+
+pub(crate) fn cleanup_output_file(output: &Path) {
+    let _ = std::fs::remove_file(output);
 }
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]

@@ -70,7 +70,6 @@ impl CoreState {
                 format!("unknown processed_midi_id {}", processed_midi_id.0),
             )];
         };
-        self.clear_conflicting_active_midi(parsed_midi_id);
         let midi = Arc::clone(&self.processed_midis[&processed_midi_id].midi);
         let Some(parsed) = self.parsed_midis.get(&parsed_midi_id) else {
             return vec![error_event(
@@ -78,26 +77,35 @@ impl CoreState {
                 "processed midi is missing its parsed MIDI parent",
             )];
         };
+        let parsed_path = parsed.path.clone();
+        let parsed_stack = parsed.cache_stack.clone();
+        let now = Instant::now();
+        let display = match self.prepare_display_session_for_midi(
+            crate::midi::MIDIFileUnion::InRam(midi.display_cache().instantiate()),
+            now,
+        ) {
+            Ok(display) => display,
+            Err(error) => {
+                return vec![error_event(CoreErrorCode::Internal, error.to_string())];
+            }
+        };
+
+        if self.active_midi_conflicts_with(parsed_midi_id) {
+            self.clear_active_midi_context(now);
+        }
 
         self.audio_session = None;
         self.processed_midi = Some(Arc::clone(&midi));
-        self.midi_cache = Some(parsed.cache_stack.clone());
+        self.midi_cache = Some(parsed_stack);
         self.active_parsed_midi_id = Some(parsed_midi_id);
         self.active_processed_midi_id = Some(processed_midi_id);
         self.active_display_cache_id = None;
         self.active_audio_cache_id = None;
         self.active_display_session_id = None;
         self.active_audio_session_id = None;
-        self.midi_path = Some(parsed.path.clone());
+        self.midi_path = Some(parsed_path);
         self.current_audio_cache = Some(midi.audio_cache());
-        self.display.load_midi(
-            crate::midi::MIDIFileUnion::InRam(midi.display_cache().instantiate()),
-            Instant::now(),
-        );
-        if let Err(error) = self.refresh_note_colors() {
-            return vec![error_event(CoreErrorCode::Internal, error.to_string())];
-        }
-        let now = Instant::now();
+        self.display = display;
         self.transport.reset(now);
         self.display.mark_physics_tick(now);
         self.audio_clock.set_time(self.transport.current_time());

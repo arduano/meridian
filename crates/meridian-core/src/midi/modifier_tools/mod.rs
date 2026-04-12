@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::error::MeridianError;
 
-use super::{parsed::ParsedMidiFile, tools::MidiModifierTool};
+use super::{cleanup_output_file, parsed::ParsedMidiFile, tools::MidiModifierTool};
 
 pub mod change_ppq;
 pub mod channel_remap;
@@ -64,7 +64,7 @@ pub fn apply_modifier_tool_to_parsed_file(
     should_cancel: &dyn Fn() -> bool,
 ) -> Result<(), MeridianError> {
     let mut progress = common::ToolProgress::new(on_progress, should_cancel);
-    match tool {
+    let result = match tool {
         MidiModifierTool::ChannelRemap(tool) => {
             channel_remap::apply_channel_remap_tool_to_parsed_file(
                 parsed,
@@ -149,5 +149,57 @@ pub fn apply_modifier_tool_to_parsed_file(
                 &mut progress,
             )
         }
+    };
+    if result.is_err() {
+        cleanup_output_file(output);
+    }
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use crate::{
+        error::MeridianError,
+        midi::{
+            MidiModifierTool, parsed::ParsedMidiFile,
+            test_support::{TestDir, note_off, note_on, write_toolkit_midi},
+        },
+    };
+
+    use super::NoteLengthTool;
+
+    #[test]
+    fn modifier_cleanup_removes_partial_output_on_cancel() {
+        let dir = TestDir::new("modifier-cleanup-on-cancel");
+        let input = dir.path("input.mid");
+        let output = dir.path("output.mid");
+
+        write_toolkit_midi(&input, 96, &[vec![note_on(0, 0, 60, 100), note_off(12, 0, 60)]]);
+        let parsed = ParsedMidiFile::load_from_file(&input).expect("parse input midi");
+        let cancel = AtomicBool::new(false);
+        let mut saw_progress = false;
+
+        let result = super::apply_modifier_tool_to_parsed_file(
+            &output,
+            &MidiModifierTool::NoteLength(NoteLengthTool {
+                min_ticks: None,
+                max_ticks: None,
+                scale: Some(1.0),
+                fixed_ticks: None,
+            }),
+            &parsed,
+            &mut |_, _| {
+                if !saw_progress {
+                    saw_progress = true;
+                    cancel.store(true, Ordering::SeqCst);
+                }
+            },
+            &|| cancel.load(Ordering::SeqCst),
+        );
+
+        assert!(matches!(result, Err(MeridianError::Cancelled(_))));
+        assert!(!output.exists());
     }
 }

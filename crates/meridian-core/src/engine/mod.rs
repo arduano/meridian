@@ -161,13 +161,21 @@ impl CoreHandle {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, thread, time::Duration};
+    use std::{path::PathBuf, sync::Arc, thread, time::Duration, time::Instant};
 
+    use flume::unbounded;
     use crate::{
-        audio::{AudioBackend, AudioConfig},
-        midi::test_support::{note_off, note_on, write_toolkit_midi},
+        audio::{AudioBackend, AudioConfig, MeridianSoundfont, XSynthSettings},
+        engine::core_state::CoreState,
+        midi::{
+            MidiProcessingConfig,
+            test_support::{note_off, note_on, write_toolkit_midi},
+        },
         protocol::{CoreCommand, CoreErrorCode, CoreEvent, StateSnapshot},
-        render::DisplayTimeSpace,
+        render::{
+            DisplayTimeSpace, FlatNoteProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
+            SceneConfig, TwoDSceneConfig, ZenithPaletteSpec,
+        },
     };
 
     use super::{CoreHandle, spawn_core};
@@ -188,6 +196,25 @@ mod tests {
         })
         .expect("set test audio backend");
         core
+    }
+
+    fn test_state() -> CoreState {
+        let (sender, _receiver) = unbounded();
+        let subscribers = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut state = CoreState::new(
+            sender,
+            subscribers,
+            Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        );
+        state.audio_config = AudioConfig {
+            backend: AudioBackend::None,
+            ..AudioConfig::default()
+        };
+        state
+            .audio_player
+            .switch(&state.audio_config)
+            .expect("switch test audio backend");
+        state
     }
 
     fn snapshot(core: &CoreHandle) -> StateSnapshot {
@@ -302,6 +329,127 @@ mod tests {
         assert!(replaced_state.midi_loaded);
 
         shutdown(&core);
+    }
+
+    #[test]
+    fn set_audio_config_rolls_back_when_backend_switch_fails() {
+        let core = test_core();
+        let before = snapshot(&core);
+
+        let response = core
+            .request(CoreCommand::SetAudioConfig {
+                config: AudioConfig {
+                    backend: AudioBackend::Xsynth,
+                    soundfonts: vec![MeridianSoundfont {
+                        path: Some(PathBuf::from(
+                            "/definitely/not/a/real/soundfont/path.sf2",
+                        )),
+                        ..MeridianSoundfont::default()
+                    }],
+                    xsynth: XSynthSettings::default(),
+                },
+            })
+            .expect("set audio config request should return a response");
+
+        assert!(matches!(
+            response.as_slice(),
+            [CoreEvent::Error {
+                code: CoreErrorCode::Internal,
+                ..
+            }]
+        ));
+        let after = snapshot(&core);
+        assert_eq!(after.audio, before.audio);
+        shutdown(&core);
+    }
+
+    fn invalid_palette_scene() -> SceneConfig {
+        SceneConfig::TwoD(TwoDSceneConfig {
+            background: Default::default(),
+            keyboard_height: Default::default(),
+            notes: NoteProjectorConfig::Flat(FlatNoteProjectorConfig {
+                palette: NotePaletteConfig::ZenithPalette {
+                    palette: ZenithPaletteSpec::PngFile {
+                        path: PathBuf::from("/definitely/not/a/real/palette.png"),
+                    },
+                    randomize: false,
+                },
+            }),
+            keyboard: Default::default(),
+        })
+    }
+
+    #[test]
+    fn loading_display_midi_keeps_previous_file_when_note_colors_fail() {
+        let mut state = test_state();
+        let first_midi = midi_fixture("smoke-two-notes.mid");
+        let second_midi = midi_fixture("piano/burgmuller-op100-no13-consolation.mid");
+
+        let first_events = state.load_midi_legacy(first_midi.clone());
+        assert!(matches!(first_events.as_slice(), [CoreEvent::MidiLoaded { .. }]));
+        let before = state.snapshot();
+
+        state
+            .display
+            .set_scene_config(invalid_palette_scene(), Instant::now());
+
+        let events = state.load_display_midi(second_midi);
+        assert!(matches!(
+            events.as_slice(),
+            [CoreEvent::Error {
+                code: CoreErrorCode::Internal,
+                ..
+            }]
+        ));
+
+        assert_eq!(state.midi_path, before.midi_path);
+        assert_eq!(state.active_parsed_midi_id, before.active_parsed_midi_id);
+        assert_eq!(state.active_display_cache_id, before.active_display_cache_id);
+        assert!(state.display.midi_loaded());
+    }
+
+    #[test]
+    fn attaching_processed_midi_keeps_previous_file_when_note_colors_fail() {
+        let mut state = test_state();
+        let first_midi = midi_fixture("smoke-two-notes.mid");
+        let second_midi = midi_fixture("piano/burgmuller-op100-no13-consolation.mid");
+
+        let first_events = state.load_midi_legacy(first_midi.clone());
+        assert!(matches!(first_events.as_slice(), [CoreEvent::MidiLoaded { .. }]));
+        let before = state.snapshot();
+
+        let parsed_events = state.load_parsed_midi_resource(second_midi);
+        let parsed_midi_id = match parsed_events.as_slice() {
+            [CoreEvent::ParsedMidiLoaded { parsed_midi_id, .. }] => *parsed_midi_id,
+            other => panic!("unexpected parsed midi response: {other:?}"),
+        };
+        let processed_events =
+            state.build_processed_midi_resource(parsed_midi_id, MidiProcessingConfig::default());
+        let processed_midi_id = match processed_events.as_slice() {
+            [CoreEvent::ProcessedMidiBuilt {
+                processed_midi_id, ..
+            }] => *processed_midi_id,
+            other => panic!("unexpected processed midi response: {other:?}"),
+        };
+
+        state
+            .display
+            .set_scene_config(invalid_palette_scene(), Instant::now());
+
+        let events = state.attach_processed_midi_resource(processed_midi_id);
+        assert!(matches!(
+            events.as_slice(),
+            [CoreEvent::Error {
+                code: CoreErrorCode::Internal,
+                ..
+            }]
+        ));
+
+        assert_eq!(state.midi_path, before.midi_path);
+        assert_eq!(state.active_parsed_midi_id, before.active_parsed_midi_id);
+        assert_eq!(state.active_display_cache_id, before.active_display_cache_id);
+        assert_eq!(state.active_processed_midi_id, before.active_processed_midi_id);
+        assert!(state.display.midi_loaded());
     }
 
     #[test]

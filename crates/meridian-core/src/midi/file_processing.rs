@@ -9,6 +9,7 @@ use crate::{
 };
 
 use super::{
+    cleanup_output_file,
     modifier_tools::apply_modifier_tool_to_parsed_file, parsed::ParsedMidiFile,
     processing::MidiFileProcessingConfig,
 };
@@ -29,13 +30,17 @@ pub fn process_midi_file_to_file(
 ) -> Result<MidiFileProcessSummary, MeridianError> {
     let mut on_event = |_event: MidiProcessEvent| {};
     let mut progress = ProcessProgressEmitter::new(MidiProcessJobId(0), &mut on_event);
-    process_midi_file_to_file_inner(
+    let result = process_midi_file_to_file_inner(
         input,
         output,
         config,
         &AtomicBool::new(false),
         &mut progress,
-    )
+    );
+    if result.is_err() {
+        cleanup_output_file(output);
+    }
+    result
 }
 
 pub fn process_midi_file_job(
@@ -58,6 +63,7 @@ pub fn process_midi_file_job(
     match result {
         Ok(summary) => {
             if cancel.load(Ordering::SeqCst) {
+                cleanup_output_file(output);
                 on_event(MidiProcessEvent::ProcessCancelled {
                     job_id,
                     input: summary.input,
@@ -76,6 +82,7 @@ pub fn process_midi_file_job(
             Ok(())
         }
         Err(error) => {
+            cleanup_output_file(output);
             if cancel.load(Ordering::SeqCst) {
                 on_event(MidiProcessEvent::ProcessCancelled {
                     job_id,
@@ -196,5 +203,83 @@ impl<'a> ProcessProgressEmitter<'a> {
             label: label.to_owned(),
         });
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use crate::{
+        error::MeridianError,
+        midi::{
+            MidiModifierTool,
+            modifier_tools::NoteLengthTool,
+            processing::MidiFileProcessingConfig,
+            test_support::{TestDir, note_off, note_on, write_toolkit_midi},
+        },
+        protocol::MidiProcessJobId,
+    };
+
+    #[test]
+    fn process_job_cleans_partial_output_on_cancel() {
+        let dir = TestDir::new("process-cleanup-on-cancel");
+        let input = dir.path("input.mid");
+        let output = dir.path("output.mid");
+
+        write_toolkit_midi(&input, 96, &[vec![note_on(0, 0, 60, 100), note_off(12, 0, 60)]]);
+
+        let cancel = AtomicBool::new(false);
+        let mut saw_progress = false;
+        let result = super::process_midi_file_job(
+            &input,
+            &output,
+            &MidiFileProcessingConfig {
+                tool: MidiModifierTool::NoteLength(NoteLengthTool {
+                    min_ticks: None,
+                    max_ticks: None,
+                    scale: Some(1.0),
+                    fixed_ticks: None,
+                }),
+            },
+            MidiProcessJobId(1),
+            &cancel,
+            |event| {
+                if let crate::protocol::MidiProcessEvent::Progress { .. } = event {
+                    if !saw_progress {
+                        saw_progress = true;
+                        cancel.store(true, Ordering::SeqCst);
+                    }
+                }
+            },
+        );
+
+        assert!(result.is_ok());
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn process_sync_cleans_output_on_error() {
+        let dir = TestDir::new("process-cleanup-on-error");
+        let input = dir.path("input.mid");
+        let output = dir.path("output.mid");
+
+        write_toolkit_midi(&input, 96, &[vec![note_on(0, 0, 60, 100), note_off(12, 0, 60)]]);
+
+        let result = super::process_midi_file_to_file(
+            &input,
+            &output,
+            &MidiFileProcessingConfig {
+                tool: MidiModifierTool::NoteLength(NoteLengthTool {
+                    min_ticks: None,
+                    max_ticks: None,
+                    scale: Some(f32::NAN),
+                    fixed_ticks: None,
+                }),
+            },
+        );
+
+        assert!(matches!(result, Err(MeridianError::Validation(_))));
+        assert!(!output.exists());
     }
 }

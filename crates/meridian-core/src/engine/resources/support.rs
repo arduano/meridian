@@ -41,7 +41,7 @@ impl CoreState {
         });
     }
 
-    fn active_midi_conflicts_with(&self, parsed_midi_id: ParsedMidiId) -> bool {
+    pub(super) fn active_midi_conflicts_with(&self, parsed_midi_id: ParsedMidiId) -> bool {
         self.active_parsed_midi_id
             .is_some_and(|active_parsed_midi_id| active_parsed_midi_id != parsed_midi_id)
     }

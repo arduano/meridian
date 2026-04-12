@@ -320,10 +320,10 @@ impl CoreState {
             CoreCommand::DropInactiveMidiResources => self.drop_inactive_midi_resources(),
             CoreCommand::LoadMidi { path } => self.load_midi_legacy(path),
             CoreCommand::SetAudioConfig { config } => {
-                self.audio_config = config;
-                if let Err(error) = self.audio_player.switch(&self.audio_config) {
+                if let Err(error) = self.audio_player.switch(&config) {
                     return vec![error_event(CoreErrorCode::Internal, error.to_string())];
                 }
+                self.audio_config = config;
                 self.restart_audio_session();
                 vec![
                     CoreEvent::StateSnapshot {

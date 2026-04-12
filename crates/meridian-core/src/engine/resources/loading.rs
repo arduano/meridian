@@ -8,6 +8,22 @@ use crate::{
 use super::super::core_state::CoreState;
 
 impl CoreState {
+    pub(super) fn prepare_display_session_for_midi(
+        &self,
+        midi: crate::midi::MIDIFileUnion,
+        now: Instant,
+    ) -> Result<crate::display::LiveDisplaySession, crate::error::MeridianError> {
+        let layout = self.display.layout().clone();
+        let mut display = crate::display::LiveDisplaySession::new();
+        display.set_scene_config(layout.scene, now);
+        display.set_view_range(layout.view_range, Some(layout.time_space));
+        display.set_key_range(layout.first_key, layout.last_key);
+        display.apply_viewport_overrides(Some(layout.viewport_width), Some(layout.viewport_height))?;
+        display.load_midi(midi, now);
+        display.refresh_note_colors()?;
+        Ok(display)
+    }
+
     pub(in crate::engine) fn attach_display_cache_resource(
         &mut self,
         display_cache_id: DisplayCacheId,
@@ -22,7 +38,6 @@ impl CoreState {
                 format!("unknown display_cache_id {}", display_cache_id.0),
             )];
         };
-        self.clear_conflicting_active_midi(parsed_midi_id);
         let display_cache = Arc::clone(&self.display_caches[&display_cache_id].cache);
         let Some(parsed) = self.parsed_midis.get(&parsed_midi_id) else {
             return vec![crate::engine::support::error_event(
@@ -33,6 +48,24 @@ impl CoreState {
         let parsed_path = parsed.path.clone();
         let parsed_stack = parsed.cache_stack.clone();
 
+        let now = Instant::now();
+        let display = match self.prepare_display_session_for_midi(
+            crate::midi::MIDIFileUnion::InRam(display_cache.instantiate()),
+            now,
+        ) {
+            Ok(display) => display,
+            Err(error) => {
+                return vec![crate::engine::support::error_event(
+                    CoreErrorCode::Internal,
+                    error.to_string(),
+                )];
+            }
+        };
+
+        if self.active_midi_conflicts_with(parsed_midi_id) {
+            self.clear_active_midi_context(now);
+        }
+
         self.processed_midi = None;
         self.midi_cache = Some(parsed_stack);
         self.active_parsed_midi_id = Some(parsed_midi_id);
@@ -40,17 +73,7 @@ impl CoreState {
         self.active_display_cache_id = Some(display_cache_id);
         self.active_display_session_id = None;
         self.midi_path = Some(parsed_path);
-        self.display.load_midi(
-            crate::midi::MIDIFileUnion::InRam(display_cache.instantiate()),
-            Instant::now(),
-        );
-        if let Err(error) = self.refresh_note_colors() {
-            return vec![crate::engine::support::error_event(
-                CoreErrorCode::Internal,
-                error.to_string(),
-            )];
-        }
-        let now = Instant::now();
+        self.display = display;
         self.transport.reset(now);
         self.display.mark_physics_tick(now);
         self.audio_clock.set_time(self.transport.current_time());
