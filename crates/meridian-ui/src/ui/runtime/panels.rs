@@ -4,6 +4,8 @@ mod merge;
 pub(super) use merge::{append_merge_source_paths, initialize_merge_panel, wire_merge_callbacks};
 mod modify;
 pub(super) use modify::{initialize_modify_panel, wire_modify_callbacks};
+mod modify_registry;
+use modify_registry::*;
 mod modify_parsers;
 use modify_parsers::*;
 mod modify_tools;
