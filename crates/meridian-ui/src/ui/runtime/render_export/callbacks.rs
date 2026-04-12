@@ -4,7 +4,7 @@ pub(in super::super) fn wire_render_export_callbacks(
     app: &App,
     bridge: &UiCoreBridge,
     shared_state: &Arc<Mutex<UiViewModel>>,
-    export_state: &Arc<Mutex<RenderExportCoordinator>>,
+    export_state: &Arc<Mutex<RenderExportController>>,
 ) {
     {
         let app_weak = app.as_weak();
@@ -276,12 +276,12 @@ pub(in super::super) fn wire_render_export_callbacks(
                 return;
             };
             let app_weak = app_weak.clone();
-            let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
-            let audio_format =
-                AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
-            let video_container =
-                video_output_container_from_text(app.get_render_video_container_text().as_str());
             let suggested_output = current_export_output_path(&app).unwrap_or_else(|_| {
+                let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
+                let audio_format =
+                    AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
+                let video_container =
+                    video_output_container_from_text(app.get_render_video_container_text().as_str());
                 PathBuf::from(default_render_output_path(
                     app.get_selected_midi_name().as_str(),
                     mode,
@@ -289,6 +289,10 @@ pub(in super::super) fn wire_render_export_callbacks(
                     video_container,
                 ))
             });
+            let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
+            let audio_format = AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
+            let video_container =
+                video_output_container_from_text(app.get_render_video_container_text().as_str());
             std::thread::spawn(move || {
                 let mut dialog = rfd::FileDialog::new();
                 if let Some(parent) = suggested_output.parent() {
@@ -333,9 +337,8 @@ pub(in super::super) fn wire_render_export_callbacks(
             let Some(app) = app_weak.upgrade() else {
                 return;
             };
-            let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
-            let final_output = match current_export_output_path(&app) {
-                Ok(path) => path,
+            let draft = match RenderExportDraft::from_app(&app) {
+                Ok(draft) => draft,
                 Err(message) => {
                     set_export_status(&app, "Failed", message, 0.0);
                     app.window().request_redraw();
@@ -344,32 +347,38 @@ pub(in super::super) fn wire_render_export_callbacks(
             };
 
             {
-                let mut export = export_state
+                let mut controller = export_state
                     .lock()
                     .expect("render export coordinator mutex poisoned");
-                if export.active {
+                if controller.is_active() {
                     return;
                 }
-                *export = RenderExportCoordinator {
-                    active: true,
-                    mode: Some(mode),
-                    final_output: Some(final_output.clone()),
-                    ..RenderExportCoordinator::default()
-                };
+                if controller.begin(draft.clone()).is_err() {
+                    return;
+                }
             }
 
-            app.set_render_output_path_text(final_output.display().to_string().into());
+            app.set_render_output_path_text(draft.final_output.display().to_string().into());
 
             set_export_status(
                 &app,
                 "Preparing export",
-                final_output.display().to_string(),
+                draft.final_output.display().to_string(),
                 0.0,
             );
-            if let Err(message) =
-                start_render_export_jobs(&app, &bridge, &shared_state, &export_state)
-            {
-                fail_export(&app, &export_state, message);
+            if let Err(message) = start_render_export_jobs(
+                &app,
+                &bridge,
+                &shared_state,
+                &export_state,
+                &draft,
+            ) {
+                export_state
+                    .lock()
+                    .expect("render export coordinator mutex poisoned")
+                    .clear();
+                set_export_status(&app, "Failed", message, 0.0);
+                app.window().request_redraw();
             }
         });
     }
@@ -384,10 +393,10 @@ pub(in super::super) fn wire_render_export_callbacks(
             };
 
             let active = {
-                let export = export_state
+                let controller = export_state
                     .lock()
                     .expect("render export coordinator mutex poisoned");
-                export.active
+                controller.is_active()
             };
             if !active {
                 return;
@@ -407,7 +416,10 @@ pub(in super::super) fn wire_render_export_callbacks(
             }
 
             if !video_running && !audio_running {
-                clear_export_state(&export_state);
+                export_state
+                    .lock()
+                    .expect("render export coordinator mutex poisoned")
+                    .clear();
                 set_export_status(&app, "Cancelled", "Render cancelled".to_string(), 0.0);
             }
             app.window().request_redraw();

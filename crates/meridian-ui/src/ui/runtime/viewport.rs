@@ -62,7 +62,7 @@ pub(super) fn install_core_event_listener(
     app: &App,
     core: &CoreHandle,
     shared_state: &Arc<Mutex<UiViewModel>>,
-    export_state: &Arc<Mutex<RenderExportCoordinator>>,
+    export_state: &Arc<Mutex<RenderExportController>>,
 ) {
     let receiver = core.subscribe_events();
     let app_weak = app.as_weak();
@@ -70,7 +70,10 @@ pub(super) fn install_core_event_listener(
     let export_state = Arc::clone(export_state);
     std::thread::spawn(move || {
         for event in receiver {
-            update_export_state_from_event(&export_state, &shared_state, &event);
+            export_state
+                .lock()
+                .expect("render export coordinator mutex poisoned")
+                .observe_core_event(&shared_state, &event);
             match &event {
                 CoreEvent::MidiLoadProgress {
                     path,
@@ -218,191 +221,11 @@ fn update_analysis_status_ui(app: &App, status: &meridian_core::protocol::MidiAn
     }
 }
 
-fn update_export_state_from_event(
-    export_state: &Arc<Mutex<RenderExportCoordinator>>,
-    shared_state: &Arc<Mutex<UiViewModel>>,
-    event: &CoreEvent,
-) {
-    let mut export = export_state
-        .lock()
-        .expect("render export coordinator mutex poisoned");
-    if !export.active {
-        return;
-    }
-
-    let Some(mode) = export.mode else {
-        return;
-    };
-    let Some(final_output) = export.final_output.clone() else {
-        return;
-    };
-
-    match (mode, event) {
-        (
-            RenderExportMode::VideoAudio | RenderExportMode::VideoOnly,
-            CoreEvent::VideoRender { event },
-        ) => match event {
-            meridian_core::protocol::VideoRenderEvent::RenderFinished { output, .. }
-                if output == &final_output =>
-            {
-                // Wait for the subsequent status reset before declaring success so the UI
-                // doesn't race ahead of the final render job teardown.
-            }
-            meridian_core::protocol::VideoRenderEvent::RenderCancelled { .. } => {
-                export.outcome = Some(RenderJobOutcome::Cancelled);
-            }
-            meridian_core::protocol::VideoRenderEvent::RenderFailed { message } => {
-                export.outcome = Some(RenderJobOutcome::Failed(message.clone()));
-            }
-            _ => {}
-        },
-        (RenderExportMode::AudioOnly, CoreEvent::AudioRender { event }) => match event {
-            meridian_core::audio::AudioRenderEvent::RenderFinished { output, .. }
-                if output == &final_output =>
-            {
-                // Wait for the status transition back to idle before finishing in the UI.
-            }
-            meridian_core::audio::AudioRenderEvent::RenderCancelled { .. } => {
-                export.outcome = Some(RenderJobOutcome::Cancelled);
-            }
-            meridian_core::audio::AudioRenderEvent::RenderFailed { message } => {
-                export.outcome = Some(RenderJobOutcome::Failed(message.clone()));
-            }
-            _ => {}
-        },
-        (
-            RenderExportMode::VideoAudio | RenderExportMode::VideoOnly,
-            CoreEvent::VideoRenderStatus {
-                status: meridian_core::protocol::VideoRenderStatus::Idle,
-            },
-        ) if export.outcome.is_none() && video_render_was_active(shared_state) => {
-            export.outcome = Some(RenderJobOutcome::Finished);
-        }
-        (
-            RenderExportMode::AudioOnly,
-            CoreEvent::AudioRenderStatus {
-                status: meridian_core::protocol::AudioRenderStatus::Idle,
-            },
-        ) if export.outcome.is_none() && audio_render_was_active(shared_state) => {
-            export.outcome = Some(RenderJobOutcome::Finished);
-        }
-        _ => {}
-    }
-}
-
-fn video_render_was_active(shared_state: &Arc<Mutex<UiViewModel>>) -> bool {
-    matches!(
-        shared_state
-            .lock()
-            .expect("shared UI state mutex poisoned")
-            .render_jobs
-            .video,
-        meridian_core::protocol::VideoRenderStatus::Running { .. }
-            | meridian_core::protocol::VideoRenderStatus::Cancelling { .. }
-    )
-}
-
-fn audio_render_was_active(shared_state: &Arc<Mutex<UiViewModel>>) -> bool {
-    matches!(
-        shared_state
-            .lock()
-            .expect("shared UI state mutex poisoned")
-            .render_jobs
-            .audio,
-        meridian_core::protocol::AudioRenderStatus::Running { .. }
-            | meridian_core::protocol::AudioRenderStatus::Cancelling { .. }
-    )
-}
-
 fn runtime_state_poll_interval(playing: bool) -> Duration {
     if playing {
         Duration::from_millis(16)
     } else {
         Duration::from_millis(250)
-    }
-}
-
-fn update_render_export_ui(app: &App, export_state: &Arc<Mutex<RenderExportCoordinator>>) {
-    enum UiAction {
-        None,
-        Finished(PathBuf),
-        Failed(String),
-        Cancelled,
-    }
-
-    let action = {
-        let mut export = export_state
-            .lock()
-            .expect("render export coordinator mutex poisoned");
-        if !export.active {
-            return;
-        }
-
-        let Some(mode) = export.mode else {
-            return;
-        };
-
-        let outcome = export.outcome.clone();
-        match outcome {
-            Some(RenderJobOutcome::Failed(message)) => {
-                export.active = false;
-                UiAction::Failed(message)
-            }
-            Some(RenderJobOutcome::Cancelled) => {
-                export.active = false;
-                UiAction::Cancelled
-            }
-            Some(RenderJobOutcome::Finished) => {
-                export.active = false;
-                UiAction::Finished(
-                    export
-                        .final_output
-                        .clone()
-                        .unwrap_or_else(|| PathBuf::from("render.out")),
-                )
-            }
-            None => {
-                let progress = match mode {
-                    RenderExportMode::VideoAudio => app
-                        .get_video_render_progress()
-                        .min(app.get_audio_render_progress()),
-                    RenderExportMode::VideoOnly => app.get_video_render_progress(),
-                    RenderExportMode::AudioOnly => app.get_audio_render_progress(),
-                };
-                let status = match mode {
-                    RenderExportMode::VideoAudio => "Rendering video + audio",
-                    RenderExportMode::VideoOnly => "Rendering video",
-                    RenderExportMode::AudioOnly => "Rendering audio",
-                };
-                set_export_status(
-                    app,
-                    status,
-                    export
-                        .final_output
-                        .as_ref()
-                        .map(|path| path.display().to_string())
-                        .unwrap_or_else(|| "working".into()),
-                    progress,
-                );
-                UiAction::None
-            }
-        }
-    };
-
-    match action {
-        UiAction::None => {}
-        UiAction::Finished(output) => {
-            set_export_status(app, "Finished", output.display().to_string(), 1.0);
-            if app.get_render_open_after_export() {
-                let _ = open::that_detached(&output);
-            }
-        }
-        UiAction::Failed(message) => {
-            set_export_status(app, "Failed", message, 0.0);
-        }
-        UiAction::Cancelled => {
-            set_export_status(app, "Cancelled", "Render cancelled".to_string(), 0.0);
-        }
     }
 }
 
@@ -444,7 +267,7 @@ pub(super) fn install_timer(
     pending_viewport_image: &Rc<RefCell<Option<slint::Image>>>,
     viewport_size: &Rc<RefCell<(u32, u32)>>,
     disable_wgpu: bool,
-    export_state: &Arc<Mutex<RenderExportCoordinator>>,
+    export_state: &Arc<Mutex<RenderExportController>>,
 ) -> slint::Timer {
     let animation_timer = slint::Timer::default();
     let app_for_timer = app.as_weak();
@@ -509,7 +332,24 @@ pub(super) fn install_timer(
                 if has_viewport && (disable_wgpu || app.get_play_label() == "Pause") {
                     app.window().request_redraw();
                 }
-                update_render_export_ui(&app, &export_state_for_timer);
+                let snapshot = export_state_for_timer
+                    .lock()
+                    .expect("render export coordinator mutex poisoned")
+                    .snapshot(RenderExportProgress::from_app(&app));
+                if let Some(snapshot) = snapshot {
+                    let RenderExportUiSnapshot {
+                        status,
+                        detail,
+                        progress,
+                        terminal,
+                    } = snapshot;
+                    set_export_status(&app, status, detail, progress);
+                    if let Some(RenderExportUiTerminal::Finished(output)) = terminal {
+                        if app.get_render_open_after_export() {
+                            let _ = open::that_detached(&output);
+                        }
+                    }
+                }
             }
         },
     );
@@ -527,13 +367,19 @@ mod tests {
         },
     };
 
-    fn export_state(mode: RenderExportMode, output: &str) -> Arc<Mutex<RenderExportCoordinator>> {
-        Arc::new(Mutex::new(RenderExportCoordinator {
-            active: true,
-            mode: Some(mode),
-            final_output: Some(PathBuf::from(output)),
-            outcome: None,
-        }))
+    fn export_state(mode: RenderExportMode, output: &str) -> Arc<Mutex<RenderExportController>> {
+        let export_state = Arc::new(Mutex::new(RenderExportController::default()));
+        export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned")
+            .begin(RenderExportDraft {
+                mode,
+                audio_format: AudioOnlyFormat::Wav,
+                video_container: VideoOutputContainer::Mp4,
+                final_output: PathBuf::from(output),
+            })
+            .expect("render export controller should accept a fresh draft");
+        export_state
     }
 
     fn shared_state() -> Arc<Mutex<UiViewModel>> {
@@ -562,42 +408,51 @@ mod tests {
             audio_progress: None,
         };
 
-        update_export_state_from_event(
-            &export_state,
-            &shared_state,
-            &CoreEvent::VideoRender {
-                event: VideoRenderEvent::RenderFinished {
-                    job_id: VideoRenderJobId(1),
-                    total_frames: 10,
-                    elapsed_seconds: 1.0,
-                    average_fps: 10.0,
-                    output: PathBuf::from("render.mp4"),
-                    container: VideoOutputContainer::Mp4,
-                    exports: Default::default(),
+        export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned")
+            .observe_core_event(
+                &shared_state,
+                &CoreEvent::VideoRender {
+                    event: VideoRenderEvent::RenderFinished {
+                        job_id: VideoRenderJobId(1),
+                        total_frames: 10,
+                        elapsed_seconds: 1.0,
+                        average_fps: 10.0,
+                        output: PathBuf::from("render.mp4"),
+                        container: VideoOutputContainer::Mp4,
+                        exports: Default::default(),
+                    },
                 },
-            },
-        );
-        assert!(
-            export_state
-                .lock()
-                .expect("render export coordinator mutex poisoned")
-                .outcome
-                .is_none()
-        );
+            );
+        let running_snapshot = export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned")
+            .snapshot(RenderExportProgress {
+                video: 0.8,
+                audio: 0.9,
+            })
+            .expect("running export should still produce a snapshot");
+        assert_eq!(running_snapshot.status, "Rendering video + audio");
+        assert!(running_snapshot.terminal.is_none());
 
-        update_export_state_from_event(
-            &export_state,
-            &shared_state,
-            &CoreEvent::VideoRenderStatus {
-                status: VideoRenderStatus::Idle,
-            },
-        );
+        export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned")
+            .observe_core_event(
+                &shared_state,
+                &CoreEvent::VideoRenderStatus {
+                    status: VideoRenderStatus::Idle,
+                },
+            );
+        let finished_snapshot = export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned")
+            .snapshot(RenderExportProgress::default())
+            .expect("finished export should produce a terminal snapshot");
         assert!(matches!(
-            export_state
-                .lock()
-                .expect("render export coordinator mutex poisoned")
-                .outcome,
-            Some(RenderJobOutcome::Finished)
+            finished_snapshot.terminal,
+            Some(RenderExportUiTerminal::Finished(output)) if output == PathBuf::from("render.mp4")
         ));
     }
 
@@ -623,32 +478,38 @@ mod tests {
             audio_progress: None,
         };
 
-        update_export_state_from_event(
-            &export_state,
-            &shared_state,
-            &CoreEvent::VideoRender {
-                event: VideoRenderEvent::RenderCancelled {
-                    job_id: VideoRenderJobId(1),
-                    frame_index: 3,
-                    total_frames: 10,
-                    elapsed_seconds: 0.3,
+        export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned")
+            .observe_core_event(
+                &shared_state,
+                &CoreEvent::VideoRender {
+                    event: VideoRenderEvent::RenderCancelled {
+                        job_id: VideoRenderJobId(1),
+                        frame_index: 3,
+                        total_frames: 10,
+                        elapsed_seconds: 0.3,
+                    },
                 },
-            },
-        );
-        update_export_state_from_event(
-            &export_state,
-            &shared_state,
-            &CoreEvent::VideoRenderStatus {
-                status: VideoRenderStatus::Idle,
-            },
-        );
+            );
+        export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned")
+            .observe_core_event(
+                &shared_state,
+                &CoreEvent::VideoRenderStatus {
+                    status: VideoRenderStatus::Idle,
+                },
+            );
 
+        let snapshot = export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned")
+            .snapshot(RenderExportProgress::default())
+            .expect("cancelled export should produce a terminal snapshot");
         assert!(matches!(
-            export_state
-                .lock()
-                .expect("render export coordinator mutex poisoned")
-                .outcome,
-            Some(RenderJobOutcome::Cancelled)
+            snapshot.terminal,
+            Some(RenderExportUiTerminal::Cancelled)
         ));
     }
 
@@ -670,40 +531,48 @@ mod tests {
             frames_written: 48_000,
         };
 
-        update_export_state_from_event(
-            &export_state,
-            &shared_state,
-            &CoreEvent::AudioRender {
-                event: AudioRenderEvent::RenderFinished {
-                    job_id: AudioRenderJobId(1),
-                    output: PathBuf::from("render.wav"),
-                    frames_written: 48_000,
-                    rendered_seconds: 1.0,
+        export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned")
+            .observe_core_event(
+                &shared_state,
+                &CoreEvent::AudioRender {
+                    event: AudioRenderEvent::RenderFinished {
+                        job_id: AudioRenderJobId(1),
+                        output: PathBuf::from("render.wav"),
+                        frames_written: 48_000,
+                        rendered_seconds: 1.0,
+                    },
                 },
-            },
-        );
+            );
         assert!(
             export_state
                 .lock()
                 .expect("render export coordinator mutex poisoned")
-                .outcome
+                .snapshot(RenderExportProgress::default())
+                .expect("running export should still produce a snapshot")
+                .terminal
                 .is_none()
         );
 
-        update_export_state_from_event(
-            &export_state,
-            &shared_state,
-            &CoreEvent::AudioRenderStatus {
-                status: AudioRenderStatus::Idle,
-            },
-        );
+        export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned")
+            .observe_core_event(
+                &shared_state,
+                &CoreEvent::AudioRenderStatus {
+                    status: AudioRenderStatus::Idle,
+                },
+            );
 
+        let snapshot = export_state
+            .lock()
+            .expect("render export coordinator mutex poisoned")
+            .snapshot(RenderExportProgress::default())
+            .expect("finished export should produce a terminal snapshot");
         assert!(matches!(
-            export_state
-                .lock()
-                .expect("render export coordinator mutex poisoned")
-                .outcome,
-            Some(RenderJobOutcome::Finished)
+            snapshot.terminal,
+            Some(RenderExportUiTerminal::Finished(output)) if output == PathBuf::from("render.wav")
         ));
     }
 

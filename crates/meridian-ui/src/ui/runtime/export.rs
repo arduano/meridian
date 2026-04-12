@@ -67,14 +67,6 @@ pub(super) enum RenderJobOutcome {
     Failed(String),
 }
 
-#[derive(Debug, Clone, Default)]
-pub(super) struct RenderExportCoordinator {
-    pub(super) active: bool,
-    pub(super) mode: Option<RenderExportMode>,
-    pub(super) final_output: Option<PathBuf>,
-    pub(super) outcome: Option<RenderJobOutcome>,
-}
-
 pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let persisted_config = load_ui_config();
     let startup = build_startup_options(&options, persisted_config.as_ref());
@@ -98,7 +90,7 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let render_load_generation = Arc::new(AtomicU64::new(0));
     let audio_load_generation = Arc::new(AtomicU64::new(0));
     let analysis_load_generation = Arc::new(AtomicU64::new(0));
-    let export_state = Arc::new(Mutex::new(RenderExportCoordinator::default()));
+    let export_state = Arc::new(Mutex::new(RenderExportController::default()));
     let pending_viewport_image = Rc::new(RefCell::new(None));
     let viewport_size = Rc::new(RefCell::new((1280_u32, 720_u32)));
     initialize_core(&bridge, &startup, &app, &shared_state)?;
@@ -170,7 +162,7 @@ fn wire_callbacks(
     render_load_generation: &Arc<AtomicU64>,
     audio_load_generation: &Arc<AtomicU64>,
     analysis_load_generation: &Arc<AtomicU64>,
-    export_state: &Arc<Mutex<RenderExportCoordinator>>,
+    export_state: &Arc<Mutex<RenderExportController>>,
 ) {
     wire_transport_callbacks(app, bridge, shared_state);
     wire_video_callbacks(app, bridge, shared_state);
@@ -340,29 +332,7 @@ pub(super) fn parse_render_channels(text: &str) -> Result<u16, String> {
 }
 
 pub(super) fn current_export_output_path(app: &App) -> Result<PathBuf, String> {
-    let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
-    let audio_format = AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
-    let video_container =
-        video_output_container_from_text(app.get_render_video_container_text().as_str());
-    let raw = if app.get_render_output_path_text().is_empty() {
-        default_render_output_path(
-            app.get_selected_midi_name().as_str(),
-            mode,
-            audio_format,
-            video_container,
-        )
-    } else {
-        app.get_render_output_path_text().to_string()
-    };
-    if raw.is_empty() {
-        return Err("select a MIDI before exporting".into());
-    }
-    Ok(normalize_output_path(
-        Path::new(&raw),
-        mode,
-        audio_format,
-        video_container,
-    ))
+    RenderExportDraft::from_app(app).map(|draft| draft.final_output)
 }
 
 #[cfg(test)]
@@ -411,6 +381,7 @@ pub(super) fn build_video_render_config(
     snapshot: &StateSnapshot,
     output: PathBuf,
     mode: RenderExportMode,
+    container: VideoOutputContainer,
 ) -> Result<VideoRenderConfig, String> {
     let (width, height) = parse_render_resolution(app.get_render_video_resolution_text().as_str())?;
     let fps = parse_render_fps(app.get_render_video_fps_text().as_str())?;
@@ -462,7 +433,7 @@ pub(super) fn build_video_render_config(
     Ok(VideoRenderConfig {
         midi_path: snapshot.midi_path.clone(),
         output,
-        container: video_output_container_from_text(app.get_render_video_container_text().as_str()),
+        container,
         fps,
         width,
         height,

@@ -1,26 +1,11 @@
 use super::*;
 
-pub(in super::super) fn clear_export_state(export_state: &Arc<Mutex<RenderExportCoordinator>>) {
-    *export_state
-        .lock()
-        .expect("render export coordinator mutex poisoned") = RenderExportCoordinator::default();
-}
-
-pub(in super::super) fn fail_export(
-    app: &App,
-    export_state: &Arc<Mutex<RenderExportCoordinator>>,
-    message: String,
-) {
-    clear_export_state(export_state);
-    set_export_status(app, "Failed", message, 0.0);
-    app.window().request_redraw();
-}
-
 pub(in super::super) fn start_render_export_jobs(
     app: &App,
     bridge: &UiCoreBridge,
     shared_state: &Arc<Mutex<UiViewModel>>,
-    export_state: &Arc<Mutex<RenderExportCoordinator>>,
+    export_state: &Arc<Mutex<RenderExportController>>,
+    draft: &RenderExportDraft,
 ) -> Result<(), String> {
     let snapshot = shared_state
         .lock()
@@ -32,38 +17,36 @@ pub(in super::super) fn start_render_export_jobs(
         return Err("load a MIDI before exporting".into());
     }
 
-    let mode = RenderExportMode::from_text(app.get_render_mode_text().as_str());
-    let audio_format = AudioOnlyFormat::from_text(app.get_render_audio_format_text().as_str());
-    let final_output = {
-        let export = export_state
-            .lock()
-            .expect("render export coordinator mutex poisoned");
-        if !export.active {
-            return Err("export was cancelled".into());
-        }
-        export
-            .final_output
-            .clone()
-            .ok_or_else(|| "missing final export path".to_string())?
-    };
+    let mode = draft.mode;
+    let audio_format = draft.audio_format;
+    let final_output = draft.final_output.clone();
 
     let video_config = mode
         .wants_video()
-        .then(|| build_video_render_config(app, &snapshot, final_output.clone(), mode))
+        .then(|| {
+            build_video_render_config(
+                app,
+                &snapshot,
+                final_output.clone(),
+                mode,
+                draft.video_container,
+            )
+        })
         .transpose()?;
     let audio_config = (mode == RenderExportMode::AudioOnly)
         .then(|| build_audio_render_config(app, &snapshot, final_output.clone(), audio_format))
         .transpose()?;
 
     {
-        let mut export = export_state
+        let controller = export_state
             .lock()
             .expect("render export coordinator mutex poisoned");
-        if !export.active {
+        if !controller.is_active() {
             return Err("export was cancelled".into());
         }
-        export.mode = Some(mode);
-        export.outcome = None;
+        if controller.draft().map(|active| active.final_output.as_path()) != Some(final_output.as_path()) {
+            return Err("export draft changed".into());
+        }
     }
 
     if let Some(config) = video_config {
