@@ -411,6 +411,11 @@ fn write_audio_render_midi(render_dir_name: &str, long_tail: bool) -> (PathBuf, 
     (dir, midi)
 }
 
+fn bundled_soundfont_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/soundfonts/freepats-upright-kw-small/UprightPianoKW-small-20190703.sf2")
+}
+
 #[test]
 fn audio_render_job_reports_started_progress_and_finished_status() {
     let (_dir, midi) = write_audio_render_midi("meridian-core-audio-render-finish", false);
@@ -432,7 +437,7 @@ fn audio_render_job_reports_started_progress_and_finished_status() {
                 use_limiter: Some(true),
                 format: AudioOutputFormat::Wav,
                 ffmpeg_args: Vec::new(),
-                soundfonts: Vec::new(),
+                soundfonts: vec![bundled_soundfont_path()],
             },
         })
         .expect("start audio render");
@@ -514,7 +519,7 @@ fn audio_render_job_cancels_and_clears_status() {
                 use_limiter: Some(true),
                 format: AudioOutputFormat::Wav,
                 ffmpeg_args: Vec::new(),
-                soundfonts: Vec::new(),
+                soundfonts: vec![bundled_soundfont_path()],
             },
         })
         .expect("start audio render");
