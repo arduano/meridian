@@ -28,6 +28,8 @@ progressive on purpose:
 
 - [Troubleshooting](./troubleshooting.md): common setup, rendering, and config
   failure modes
+- [Environment Reference](./reference/environment.md): environment variables
+  and host requirements that affect rendering, tests, and persistence
 - [Testing Guide](./testing.md): focused validation commands by subsystem
 
 ## Contributor Docs
