@@ -55,7 +55,6 @@ Common pairings:
 
 Audio rendering needs usable soundfont assets. In this repo, examples resolve a
 vendored soundfont under `assets/soundfonts` and also allow override through
-environment variables such as `MERIDIAN_EXAMPLE_SOUNDFONT` or
 `MERIDIAN_SOUNDFONT`.
 
 Practically:

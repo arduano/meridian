@@ -48,7 +48,7 @@ cargo run -p meridian-ui
 If the accelerated viewport cannot start on your host, use:
 
 ```bash
-MERIDIAN_DISABLE_WGPU=1 cargo run -p meridian-ui
+cargo run -p meridian-ui -- --disable-wgpu
 ```
 
 The simplest UI smoke path is:

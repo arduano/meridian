@@ -2,11 +2,10 @@ import { createDenoMeridianClient } from "../src/index.ts";
 
 const executablePath = Deno.env.get("MERIDIAN_CLI_BIN") ??
   new URL("../../../target/debug/meridian-cli", import.meta.url).pathname;
-const midiPath = Deno.env.get("MERIDIAN_MIDI") ??
-  new URL(
-    "../../../assets/midis/piano/burgmuller-op100-no4-the-little-party.mid",
-    import.meta.url,
-  ).pathname;
+const midiPath = new URL(
+  "../../../assets/midis/piano/burgmuller-op100-no4-the-little-party.mid",
+  import.meta.url,
+).pathname;
 
 const client = await createDenoMeridianClient(executablePath);
 

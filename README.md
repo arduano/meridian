@@ -162,7 +162,7 @@ cargo run -p meridian-ui
 Run the UI without the accelerated viewport:
 
 ```bash
-MERIDIAN_DISABLE_WGPU=1 cargo run -p meridian-ui
+cargo run -p meridian-ui -- --disable-wgpu
 ```
 
 Run TypeScript SDK checks:

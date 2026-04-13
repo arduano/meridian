@@ -21,7 +21,7 @@ struct Cli {
     last_key: Option<u8>,
     #[arg(long, value_parser = parse_renderer)]
     renderer: Option<RendererKind>,
-    #[arg(long, env = "MERIDIAN_DISABLE_WGPU", default_value_t = false)]
+    #[arg(long)]
     disable_wgpu: bool,
     #[cfg(feature = "debug-snapshots")]
     #[arg(long, hide = true)]

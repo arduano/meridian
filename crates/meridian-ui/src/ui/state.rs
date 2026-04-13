@@ -5,7 +5,6 @@
 //! the public entrypoint so callers do not need to know that split.
 
 use std::{
-    env,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
@@ -48,10 +47,7 @@ impl Default for UiOptions {
             view_range: None,
             first_key: None,
             last_key: None,
-            disable_wgpu: matches!(
-                env::var("MERIDIAN_DISABLE_WGPU").as_deref(),
-                Ok("1" | "true" | "yes")
-            ),
+            disable_wgpu: false,
         }
     }
 }
@@ -83,10 +79,7 @@ impl Default for UiStartupOptions {
             time_space: DisplayTimeSpace::Time,
             first_key: 0,
             last_key: 127,
-            disable_wgpu: matches!(
-                env::var("MERIDIAN_DISABLE_WGPU").as_deref(),
-                Ok("1" | "true" | "yes")
-            ),
+            disable_wgpu: false,
         }
     }
 }

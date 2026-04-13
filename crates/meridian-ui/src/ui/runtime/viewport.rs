@@ -238,7 +238,7 @@ pub(super) fn install_viewport(
     disable_wgpu: bool,
 ) -> Result<(), MeridianError> {
     if disable_wgpu {
-        app.set_status_text("Accelerated viewport disabled via MERIDIAN_DISABLE_WGPU=1".into());
+        app.set_status_text("Accelerated viewport disabled via --disable-wgpu".into());
         return Ok(());
     }
 

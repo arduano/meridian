@@ -107,8 +107,7 @@ export async function createFixtureMidi(
 }
 
 export async function defaultSoundfontPath(): Promise<string> {
-  const envPath = Deno.env.get("MERIDIAN_EXAMPLE_SOUNDFONT") ??
-    Deno.env.get("MERIDIAN_SOUNDFONT");
+  const envPath = Deno.env.get("MERIDIAN_SOUNDFONT");
   if (envPath) {
     return envPath;
   }
@@ -123,7 +122,7 @@ export async function defaultSoundfontPath(): Promise<string> {
   }
 
   throw new Error(
-    "Bundled example soundfont is missing; set MERIDIAN_EXAMPLE_SOUNDFONT or MERIDIAN_SOUNDFONT",
+    "Bundled example soundfont is missing; set MERIDIAN_SOUNDFONT",
   );
 }
 
