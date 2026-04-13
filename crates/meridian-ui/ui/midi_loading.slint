@@ -5,8 +5,9 @@
 //    selected file display → load prompt → loading progress →
 //    loaded state → unload → error display
 //
-//  Each tab integrates these as needed. Render/Audio use the
-//  full pipeline; Modify/Analysis use analysis-only loading.
+//  Each tab integrates these as needed. Render/Audio build the
+//  heavier playback/render resources, Modify does a lightweight
+//  source inspection, and Analysis runs the full analysis flow.
 // ═══════════════════════════════════════════════════════════
 
 import { MidiLoadState } from "structs.slint";

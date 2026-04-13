@@ -5,7 +5,7 @@ use super::*;
 // All user-facing timing fields are shown as decimal full notes.
 
 pub(in super::super) fn get_ppq(app: &App) -> u32 {
-    app.get_analysis_ticks_per_quarter_text()
+    app.get_modify_source_ticks_per_quarter_text()
         .as_str()
         .trim()
         .parse::<u32>()

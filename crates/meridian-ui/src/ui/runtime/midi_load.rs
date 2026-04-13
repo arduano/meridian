@@ -198,6 +198,55 @@ pub(super) fn load_audio_midi_async(
     });
 }
 
+pub(super) fn load_modify_midi_async(
+    app: &App,
+    modify_load_generation: &Arc<AtomicU64>,
+    midi_path: &str,
+) {
+    app.set_modify_load_state(MidiLoadState::Loading);
+    app.set_modify_loading_status("Inspecting MIDI for modify…".into());
+    app.set_modify_loading_progress(0.0);
+    app.set_modify_load_error(Default::default());
+    reset_modify_outputs(app);
+    app.window().request_redraw();
+
+    let path = PathBuf::from(midi_path.to_string());
+    let requested_name: slint::SharedString = midi_path.into();
+    let request_generation = modify_load_generation.fetch_add(1, Ordering::SeqCst) + 1;
+    let app_weak = app.as_weak();
+    let modify_load_generation = Arc::clone(modify_load_generation);
+    std::thread::spawn(move || {
+        let inspection = meridian_core::midi::inspect::inspect_midi_file(path);
+        if !load_request_is_current(&modify_load_generation, request_generation) {
+            return;
+        }
+        let _ = app_weak.upgrade_in_event_loop(move |app| {
+            if !load_request_is_current(&modify_load_generation, request_generation) {
+                return;
+            }
+            if app.get_selected_midi_name() != requested_name {
+                return;
+            }
+
+            if let Some(error) = inspection.error.as_deref() {
+                reset_modify_outputs(&app);
+                app.set_modify_load_state(MidiLoadState::Error);
+                app.set_modify_load_error(error.into());
+                app.set_modify_loading_status(Default::default());
+                app.window().request_redraw();
+                return;
+            }
+
+            apply_modify_inspection_to_app(&app, &inspection);
+            app.set_modify_load_state(MidiLoadState::Loaded);
+            app.set_modify_loading_progress(1.0);
+            app.set_modify_loading_status("Modify source ready".into());
+            app.set_modify_load_error(Default::default());
+            app.window().request_redraw();
+        });
+    });
+}
+
 pub(super) fn load_analysis_midi_async(
     app: &App,
     bridge: &UiCoreBridge,
@@ -338,6 +387,18 @@ pub(super) fn reset_analysis_outputs(app: &App) {
     app.set_analysis_note_density_text("—".into());
 }
 
+pub(super) fn reset_modify_outputs(app: &App) {
+    app.set_modify_source_note_count_text("—".into());
+    app.set_modify_source_track_count_text("—".into());
+    app.set_modify_source_midi_length_text("—".into());
+    app.set_modify_source_tempo_text("—".into());
+    app.set_modify_source_key_range_text("—".into());
+    app.set_modify_source_avg_velocity_text("—".into());
+    app.set_modify_source_note_density_text("—".into());
+    app.set_modify_source_total_events_text("—".into());
+    app.set_modify_source_ticks_per_quarter_text("—".into());
+}
+
 fn update_analysis_progress(
     app_weak: &slint::Weak<App>,
     requested_name: &slint::SharedString,
@@ -368,4 +429,29 @@ fn update_analysis_progress(
 
 fn load_request_is_current(generation: &Arc<AtomicU64>, request_generation: u64) -> bool {
     generation.load(Ordering::SeqCst) == request_generation
+}
+
+fn apply_modify_inspection_to_app(app: &App, inspection: &meridian_core::midi::MidiFileInspection) {
+    app.set_modify_source_note_count_text(inspection.total_notes.to_string().into());
+    app.set_modify_source_track_count_text(inspection.actual_track_count.to_string().into());
+    app.set_modify_source_midi_length_text(format!("{:.3} s", inspection.midi_length).into());
+    app.set_modify_source_tempo_text(
+        if inspection.initial_bpm > 0.0 {
+            format!("{:.0} BPM", inspection.initial_bpm)
+        } else {
+            "—".into()
+        }
+        .into(),
+    );
+    app.set_modify_source_total_events_text(inspection.total_event_count.to_string().into());
+    app.set_modify_source_ticks_per_quarter_text(
+        inspection
+            .ticks_per_quarter
+            .map(|ticks| ticks.to_string())
+            .unwrap_or_else(|| "—".into())
+            .into(),
+    );
+    app.set_modify_source_key_range_text("—".into());
+    app.set_modify_source_avg_velocity_text("—".into());
+    app.set_modify_source_note_density_text("—".into());
 }

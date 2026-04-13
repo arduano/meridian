@@ -104,6 +104,7 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let preview_load_generation = Arc::new(AtomicU64::new(0));
     let render_load_generation = Arc::new(AtomicU64::new(0));
     let audio_load_generation = Arc::new(AtomicU64::new(0));
+    let modify_load_generation = Arc::new(AtomicU64::new(0));
     let analysis_load_generation = Arc::new(AtomicU64::new(0));
     let export_state = install_render_export_runtime(&app, &bridge, &shared_state);
     let pending_viewport_image = Rc::new(RefCell::new(None));
@@ -120,6 +121,7 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
         &preview_load_generation,
         &render_load_generation,
         &audio_load_generation,
+        &modify_load_generation,
         &analysis_load_generation,
     );
     install_drag_drop(&app);
@@ -174,6 +176,7 @@ fn wire_callbacks(
     preview_load_generation: &Arc<AtomicU64>,
     render_load_generation: &Arc<AtomicU64>,
     audio_load_generation: &Arc<AtomicU64>,
+    modify_load_generation: &Arc<AtomicU64>,
     analysis_load_generation: &Arc<AtomicU64>,
 ) {
     wire_transport_callbacks(app, bridge, shared_state);
@@ -188,6 +191,7 @@ fn wire_callbacks(
         preview_load_generation,
         render_load_generation,
         audio_load_generation,
+        modify_load_generation,
         analysis_load_generation,
     );
 }

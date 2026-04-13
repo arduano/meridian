@@ -235,16 +235,16 @@ export component ModifyPanel inherits Rectangle {
     in property <string> modify-shared-move-pitch-bend-text: "off";
     in property <string> modify-shared-move-channel-pressure-text: "off";
 
-    // ── Reference analytics (cheap subset) ──
-    in property <string> analysis-note-count-text: "—";
-    in property <string> analysis-track-count-text: "—";
-    in property <string> analysis-midi-length-text: "—";
-    in property <string> analysis-tempo-text: "—";
-    in property <string> analysis-key-range-text: "—";
-    in property <string> analysis-avg-velocity-text: "—";
-    in property <string> analysis-note-density-text: "—";
-    in property <string> analysis-total-events-text: "—";
-    in property <string> analysis-ticks-per-quarter-text: "—";
+    // ── Source inspection (cheap subset) ──
+    in property <string> modify-source-note-count-text: "—";
+    in property <string> modify-source-track-count-text: "—";
+    in property <string> modify-source-midi-length-text: "—";
+    in property <string> modify-source-tempo-text: "—";
+    in property <string> modify-source-key-range-text: "—";
+    in property <string> modify-source-avg-velocity-text: "—";
+    in property <string> modify-source-note-density-text: "—";
+    in property <string> modify-source-total-events-text: "—";
+    in property <string> modify-source-ticks-per-quarter-text: "—";
 
     // ── Callbacks ──
     callback select-file;
@@ -331,6 +331,7 @@ export component ModifyPanel inherits Rectangle {
     Flickable {
         width: parent.width;
         height: parent.height;
+        interactive: false;
 
         VerticalLayout {
             width: parent.width;
@@ -348,7 +349,7 @@ export component ModifyPanel inherits Rectangle {
                 MidiStateSection {
                     midi-state: root.midi-state;
                     file-name: root.selected-midi-name;
-                    load-description: "Parses MIDI data for the modify workflow. Processing writes a separate file — the source is never touched.";
+                    load-description: "Inspects the source MIDI for the modify workflow. Processing writes a separate file — the source is never touched.";
                     load-label: "Load for Modify";
                     mode-label: "modify";
                     show-unload: true;
@@ -363,7 +364,7 @@ export component ModifyPanel inherits Rectangle {
                 }
 
                 // ── Source file quick-reference strip ──
-                if root.has-midi && root.analysis-note-count-text != "—" : Rectangle {
+                if root.has-midi && root.modify-source-note-count-text != "—" : Rectangle {
                     height: 28px;
                     border-radius: 6px;
                     background: Theme.surface-card;
@@ -379,22 +380,22 @@ export component ModifyPanel inherits Rectangle {
                         HorizontalLayout {
                             spacing: 4px;
                             Text { text: "Notes"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
-                            Text { text: root.analysis-note-count-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+                            Text { text: root.modify-source-note-count-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
                         }
                         HorizontalLayout {
                             spacing: 4px;
                             Text { text: "Tracks"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
-                            Text { text: root.analysis-track-count-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+                            Text { text: root.modify-source-track-count-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
                         }
                         HorizontalLayout {
                             spacing: 4px;
                             Text { text: "PPQ"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
-                            Text { text: root.analysis-ticks-per-quarter-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+                            Text { text: root.modify-source-ticks-per-quarter-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
                         }
                         HorizontalLayout {
                             spacing: 4px;
                             Text { text: "Length"; color: Theme.text-faint; font-size: Theme.font-size-xs; font-weight: 600; vertical-alignment: center; }
-                            Text { text: root.analysis-midi-length-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
+                            Text { text: root.modify-source-midi-length-text; color: Theme.text-secondary; font-size: Theme.font-size-xs; font-family: Theme.font-family-mono; font-weight: 600; vertical-alignment: center; }
                         }
                     }
                 }

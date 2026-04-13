@@ -18,6 +18,7 @@ use super::video::{
 pub(super) fn app_has_active_midi_load(app: &App) -> bool {
     app.get_render_load_state() == MidiLoadState::Loading
         || app.get_audio_load_state() == MidiLoadState::Loading
+        || app.get_modify_load_state() == MidiLoadState::Loading
         || app.get_analysis_load_state() == MidiLoadState::Loading
 }
 

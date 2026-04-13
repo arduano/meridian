@@ -7,6 +7,7 @@ pub(super) fn wire_midi_callbacks(
     preview_load_generation: &Arc<AtomicU64>,
     render_load_generation: &Arc<AtomicU64>,
     audio_load_generation: &Arc<AtomicU64>,
+    modify_load_generation: &Arc<AtomicU64>,
     analysis_load_generation: &Arc<AtomicU64>,
 ) {
     {
@@ -16,6 +17,7 @@ pub(super) fn wire_midi_callbacks(
         let preview_load_generation = Arc::clone(preview_load_generation);
         let render_load_generation = Arc::clone(render_load_generation);
         let audio_load_generation = Arc::clone(audio_load_generation);
+        let modify_load_generation = Arc::clone(modify_load_generation);
         let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_select_midi_file(move || {
             let app_weak = app_weak.clone();
@@ -24,6 +26,7 @@ pub(super) fn wire_midi_callbacks(
             let preview_load_generation = Arc::clone(&preview_load_generation);
             let render_load_generation = Arc::clone(&render_load_generation);
             let audio_load_generation = Arc::clone(&audio_load_generation);
+            let modify_load_generation = Arc::clone(&modify_load_generation);
             let analysis_load_generation = Arc::clone(&analysis_load_generation);
             std::thread::spawn(move || {
                 let file = rfd::FileDialog::new()
@@ -40,6 +43,7 @@ pub(super) fn wire_midi_callbacks(
                             &preview_load_generation,
                             &render_load_generation,
                             &audio_load_generation,
+                            &modify_load_generation,
                             &analysis_load_generation,
                             name,
                         );
@@ -56,6 +60,7 @@ pub(super) fn wire_midi_callbacks(
         let preview_load_generation = Arc::clone(preview_load_generation);
         let render_load_generation = Arc::clone(render_load_generation);
         let audio_load_generation = Arc::clone(audio_load_generation);
+        let modify_load_generation = Arc::clone(modify_load_generation);
         let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_drop_midi_file(move |path| {
             if let Some(app) = app_weak.upgrade() {
@@ -74,6 +79,7 @@ pub(super) fn wire_midi_callbacks(
                     &preview_load_generation,
                     &render_load_generation,
                     &audio_load_generation,
+                    &modify_load_generation,
                     &analysis_load_generation,
                     path.clone(),
                 );
@@ -99,6 +105,7 @@ pub(super) fn wire_midi_callbacks(
                         &audio_load_generation,
                         &path,
                     ),
+                    4 => load_modify_midi_async(&app, &modify_load_generation, &path),
                     _ => load_analysis_midi_async(
                         &app,
                         &bridge,
@@ -106,6 +113,19 @@ pub(super) fn wire_midi_callbacks(
                         &analysis_load_generation,
                         &path,
                     ),
+                }
+            }
+        });
+    }
+
+    {
+        let app_weak = app.as_weak();
+        let modify_load_generation = Arc::clone(modify_load_generation);
+        app.on_load_for_modify(move || {
+            if let Some(app) = app_weak.upgrade() {
+                let midi_name = app.get_selected_midi_name();
+                if !midi_name.is_empty() {
+                    load_modify_midi_async(&app, &modify_load_generation, &midi_name);
                 }
             }
         });
@@ -128,6 +148,21 @@ pub(super) fn wire_midi_callbacks(
                         &midi_name,
                     );
                 }
+            }
+        });
+    }
+
+    {
+        let app_weak = app.as_weak();
+        let modify_load_generation = Arc::clone(modify_load_generation);
+        app.on_cancel_load_modify(move || {
+            if let Some(app) = app_weak.upgrade() {
+                modify_load_generation.fetch_add(1, Ordering::SeqCst);
+                if app.get_modify_load_state() == MidiLoadState::Loading {
+                    app.set_modify_load_state(MidiLoadState::Selected);
+                }
+                app.set_modify_loading_progress(0.0);
+                app.set_modify_loading_status(Default::default());
             }
         });
     }
@@ -280,6 +315,7 @@ pub(super) fn wire_midi_callbacks(
         let preview_load_generation = Arc::clone(preview_load_generation);
         let render_load_generation = Arc::clone(render_load_generation);
         let audio_load_generation = Arc::clone(audio_load_generation);
+        let modify_load_generation = Arc::clone(modify_load_generation);
         let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_unload_preview(move || {
             if let Some(app) = app_weak.upgrade() {
@@ -290,6 +326,7 @@ pub(super) fn wire_midi_callbacks(
                     &preview_load_generation,
                     &render_load_generation,
                     &audio_load_generation,
+                    &modify_load_generation,
                     &analysis_load_generation,
                 );
             }
@@ -303,6 +340,32 @@ pub(super) fn wire_midi_callbacks(
         let preview_load_generation = Arc::clone(preview_load_generation);
         let render_load_generation = Arc::clone(render_load_generation);
         let audio_load_generation = Arc::clone(audio_load_generation);
+        let modify_load_generation = Arc::clone(modify_load_generation);
+        let analysis_load_generation = Arc::clone(analysis_load_generation);
+        app.on_unload_modify(move || {
+            if let Some(app) = app_weak.upgrade() {
+                unload_selected_midi(
+                    &app,
+                    &bridge,
+                    &shared_state,
+                    &preview_load_generation,
+                    &render_load_generation,
+                    &audio_load_generation,
+                    &modify_load_generation,
+                    &analysis_load_generation,
+                );
+            }
+        });
+    }
+
+    {
+        let app_weak = app.as_weak();
+        let bridge = bridge.clone();
+        let shared_state = Arc::clone(shared_state);
+        let preview_load_generation = Arc::clone(preview_load_generation);
+        let render_load_generation = Arc::clone(render_load_generation);
+        let audio_load_generation = Arc::clone(audio_load_generation);
+        let modify_load_generation = Arc::clone(modify_load_generation);
         let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_unload_render(move || {
             if let Some(app) = app_weak.upgrade() {
@@ -313,8 +376,22 @@ pub(super) fn wire_midi_callbacks(
                     &preview_load_generation,
                     &render_load_generation,
                     &audio_load_generation,
+                    &modify_load_generation,
                     &analysis_load_generation,
                 );
+            }
+        });
+    }
+
+    {
+        let app_weak = app.as_weak();
+        let modify_load_generation = Arc::clone(modify_load_generation);
+        app.on_retry_load_modify(move || {
+            if let Some(app) = app_weak.upgrade() {
+                let midi_name = app.get_selected_midi_name();
+                if !midi_name.is_empty() {
+                    load_modify_midi_async(&app, &modify_load_generation, &midi_name);
+                }
             }
         });
     }
@@ -326,6 +403,7 @@ pub(super) fn wire_midi_callbacks(
         let preview_load_generation = Arc::clone(preview_load_generation);
         let render_load_generation = Arc::clone(render_load_generation);
         let audio_load_generation = Arc::clone(audio_load_generation);
+        let modify_load_generation = Arc::clone(modify_load_generation);
         let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_unload_audio(move || {
             if let Some(app) = app_weak.upgrade() {
@@ -336,6 +414,7 @@ pub(super) fn wire_midi_callbacks(
                     &preview_load_generation,
                     &render_load_generation,
                     &audio_load_generation,
+                    &modify_load_generation,
                     &analysis_load_generation,
                 );
             }
@@ -349,6 +428,7 @@ pub(super) fn wire_midi_callbacks(
         let preview_load_generation = Arc::clone(preview_load_generation);
         let render_load_generation = Arc::clone(render_load_generation);
         let audio_load_generation = Arc::clone(audio_load_generation);
+        let modify_load_generation = Arc::clone(modify_load_generation);
         let analysis_load_generation = Arc::clone(analysis_load_generation);
         app.on_unload_analysis(move || {
             if let Some(app) = app_weak.upgrade() {
@@ -359,6 +439,7 @@ pub(super) fn wire_midi_callbacks(
                     &preview_load_generation,
                     &render_load_generation,
                     &audio_load_generation,
+                    &modify_load_generation,
                     &analysis_load_generation,
                 );
             }

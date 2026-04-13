@@ -8,11 +8,13 @@ pub(super) fn cancel_pending_midi_loads(
     preview_load_generation: &Arc<AtomicU64>,
     render_load_generation: &Arc<AtomicU64>,
     audio_load_generation: &Arc<AtomicU64>,
+    modify_load_generation: &Arc<AtomicU64>,
     analysis_load_generation: &Arc<AtomicU64>,
 ) {
     preview_load_generation.fetch_add(1, Ordering::SeqCst);
     render_load_generation.fetch_add(1, Ordering::SeqCst);
     audio_load_generation.fetch_add(1, Ordering::SeqCst);
+    modify_load_generation.fetch_add(1, Ordering::SeqCst);
     analysis_load_generation.fetch_add(1, Ordering::SeqCst);
 }
 
@@ -25,16 +27,21 @@ pub(super) fn reset_midi_ui_state(app: &App, state: MidiLoadState) {
     }
     app.set_render_load_state(state);
     app.set_audio_load_state(state);
+    app.set_modify_load_state(state);
     app.set_analysis_load_state(state);
     app.set_audio_load_error(Default::default());
     app.set_render_load_error(Default::default());
+    app.set_modify_load_error(Default::default());
     app.set_analysis_load_error(Default::default());
     app.set_audio_loading_progress(0.0);
     app.set_audio_loading_status(Default::default());
     app.set_render_loading_progress(0.0);
     app.set_render_loading_status(Default::default());
+    app.set_modify_loading_progress(0.0);
+    app.set_modify_loading_status(Default::default());
     app.set_analysis_loading_progress(0.0);
     app.set_analysis_loading_status(Default::default());
+    reset_modify_outputs(app);
     reset_analysis_outputs(app);
 }
 
@@ -52,6 +59,7 @@ pub(super) fn unload_selected_midi(
     preview_load_generation: &Arc<AtomicU64>,
     render_load_generation: &Arc<AtomicU64>,
     audio_load_generation: &Arc<AtomicU64>,
+    modify_load_generation: &Arc<AtomicU64>,
     analysis_load_generation: &Arc<AtomicU64>,
 ) {
     bridge.cancel_midi_loads();
@@ -60,6 +68,7 @@ pub(super) fn unload_selected_midi(
         preview_load_generation,
         render_load_generation,
         audio_load_generation,
+        modify_load_generation,
         analysis_load_generation,
     );
     if let Ok(events) = bridge.unload_render_context(shared_state) {
@@ -80,6 +89,7 @@ pub(super) fn replace_selected_midi(
     preview_load_generation: &Arc<AtomicU64>,
     render_load_generation: &Arc<AtomicU64>,
     audio_load_generation: &Arc<AtomicU64>,
+    modify_load_generation: &Arc<AtomicU64>,
     analysis_load_generation: &Arc<AtomicU64>,
     selected_midi_name: slint::SharedString,
 ) {
@@ -89,6 +99,7 @@ pub(super) fn replace_selected_midi(
         preview_load_generation,
         render_load_generation,
         audio_load_generation,
+        modify_load_generation,
         analysis_load_generation,
     );
     if let Ok(events) = bridge.unload_render_context(shared_state) {

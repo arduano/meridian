@@ -40,6 +40,7 @@ export component App inherits Window {
     // Per-mode load states (Rust sets these based on pipeline progress)
     in-out property <MidiLoadState> render-load-state:   no-midi;
     in-out property <MidiLoadState> audio-load-state:    no-midi;
+    in-out property <MidiLoadState> modify-load-state:   no-midi;
     in-out property <MidiLoadState> analysis-load-state:  no-midi;
 
     // Per-context loading progress
@@ -49,6 +50,9 @@ export component App inherits Window {
     in-out property <string> audio-loading-status: "";
     in-out property <float> audio-loading-progress: 0;
     in-out property <string> audio-load-error: "";
+    in-out property <string> modify-loading-status: "";
+    in-out property <float> modify-loading-progress: 0;
+    in-out property <string> modify-load-error: "";
     in-out property <string> analysis-loading-status: "";
     in-out property <float> analysis-loading-progress: 0;
     in-out property <string> analysis-load-error: "";
@@ -62,18 +66,22 @@ export component App inherits Window {
     callback load-for-preview;                  // load MIDI for preview playback (display + audio)
     callback load-for-render;                   // load MIDI for render/audio mode
     callback load-for-audio;                    // load MIDI for audio-only mode
-    callback load-for-analysis;                 // load MIDI for modify/analysis mode
+    callback load-for-modify;                   // inspect MIDI for modify mode
+    callback load-for-analysis;                 // load MIDI for full analysis mode
     callback cancel-load-preview;               // cancel preview loading
     callback cancel-load-render;                // cancel render-context loading
     callback cancel-load-audio;                 // cancel audio-context loading
+    callback cancel-load-modify;                // cancel modify inspection
     callback cancel-load-analysis;              // cancel analysis-context loading
     callback unload-preview;                    // unload the currently selected MIDI everywhere
     callback unload-render;                     // unload the currently selected MIDI everywhere
     callback unload-audio;                      // unload the currently selected MIDI everywhere
+    callback unload-modify;                     // unload the currently selected MIDI everywhere
     callback unload-analysis;                   // unload the currently selected MIDI everywhere
     callback retry-load-preview;                // retry failed preview load
     callback retry-load-render;                 // retry failed render load
     callback retry-load-audio;                  // retry failed audio load
+    callback retry-load-modify;                 // retry modify inspection
     callback retry-load-analysis;               // retry failed analysis load
     callback select-merge-files;                // open multi-file picker for merge page
     callback clear-merge-files;                 // clear the merge queue
@@ -332,6 +340,15 @@ export component App inherits Window {
     in-out property <string> modify-result-track-count-text: "—";
     in-out property <string> modify-result-ppq-text: "—";
     in-out property <string> modify-result-event-count-text: "—";
+    in-out property <string> modify-source-note-count-text: "—";
+    in-out property <string> modify-source-track-count-text: "—";
+    in-out property <string> modify-source-midi-length-text: "—";
+    in-out property <string> modify-source-tempo-text: "—";
+    in-out property <string> modify-source-key-range-text: "—";
+    in-out property <string> modify-source-avg-velocity-text: "—";
+    in-out property <string> modify-source-note-density-text: "—";
+    in-out property <string> modify-source-total-events-text: "—";
+    in-out property <string> modify-source-ticks-per-quarter-text: "—";
     in-out property <string> modify-range-track-select-text: "";
     in-out property <string> modify-range-start-ticks-text: "";
     in-out property <string> modify-range-end-ticks-text: "";
@@ -1216,16 +1233,16 @@ export component App inherits Window {
                     visible: root.active-profile == 4;
                     x: 0; y: 0; width: parent.width; height: parent.height;
 
-                    midi-state:                    root.analysis-load-state;
+                    midi-state:                    root.modify-load-state;
                     selected-midi-name:            root.selected-midi-name;
-                    loading-status:                root.analysis-loading-status;
-                    loading-progress:              root.analysis-loading-progress;
-                    load-error:                    root.analysis-load-error;
+                    loading-status:                root.modify-loading-status;
+                    loading-progress:              root.modify-loading-progress;
+                    load-error:                    root.modify-load-error;
                     select-file                    => { root.select-midi-file(); }
-                    load-midi                      => { root.load-for-analysis(); }
-                    cancel-load                    => { root.cancel-load-analysis(); }
-                    unload-midi                    => { root.unload-analysis(); }
-                    retry-load                     => { root.retry-load-analysis(); }
+                    load-midi                      => { root.load-for-modify(); }
+                    cancel-load                    => { root.cancel-load-modify(); }
+                    unload-midi                    => { root.unload-modify(); }
+                    retry-load                     => { root.retry-load-modify(); }
 
                     modify-pass-key-text:          root.modify-pass-key-text;
                     modify-pass-title-text:        root.modify-pass-title-text;
@@ -1244,6 +1261,15 @@ export component App inherits Window {
                     modify-result-track-count-text: root.modify-result-track-count-text;
                     modify-result-ppq-text:        root.modify-result-ppq-text;
                     modify-result-event-count-text: root.modify-result-event-count-text;
+                    modify-source-note-count-text: root.modify-source-note-count-text;
+                    modify-source-track-count-text: root.modify-source-track-count-text;
+                    modify-source-midi-length-text: root.modify-source-midi-length-text;
+                    modify-source-tempo-text:      root.modify-source-tempo-text;
+                    modify-source-key-range-text:  root.modify-source-key-range-text;
+                    modify-source-avg-velocity-text: root.modify-source-avg-velocity-text;
+                    modify-source-note-density-text: root.modify-source-note-density-text;
+                    modify-source-total-events-text: root.modify-source-total-events-text;
+                    modify-source-ticks-per-quarter-text: root.modify-source-ticks-per-quarter-text;
                     modify-range-track-select-text: root.modify-range-track-select-text;
                     modify-range-start-ticks-text: root.modify-range-start-ticks-text;
                     modify-range-end-ticks-text: root.modify-range-end-ticks-text;
@@ -1308,16 +1334,6 @@ export component App inherits Window {
                     modify-shared-move-program-text: root.modify-shared-move-program-text;
                     modify-shared-move-pitch-bend-text: root.modify-shared-move-pitch-bend-text;
                     modify-shared-move-channel-pressure-text: root.modify-shared-move-channel-pressure-text;
-
-                    analysis-note-count-text:      root.analysis-note-count-text;
-                    analysis-track-count-text:     root.analysis-track-count-text;
-                    analysis-midi-length-text:     root.analysis-midi-length-text;
-                    analysis-tempo-text:           root.analysis-tempo-text;
-                    analysis-key-range-text:       root.analysis-key-range-text;
-                    analysis-avg-velocity-text:    root.analysis-avg-velocity-text;
-                    analysis-note-density-text:    root.analysis-note-density-text;
-                    analysis-total-events-text:    root.analysis-total-events-text;
-                    analysis-ticks-per-quarter-text: root.analysis-ticks-per-quarter-text;
 
                     select-pass(key)               => { root.select-modify-pass(key); }
                     update-control(key, value)     => { root.update-modify-control(key, value); }
