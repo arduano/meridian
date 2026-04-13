@@ -1,6 +1,6 @@
 use super::*;
 
-pub(in super::super) fn update_modify_control(
+pub(crate) fn update_modify_control(
     app: &App,
     key: &str,
     value: &str,

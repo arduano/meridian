@@ -67,7 +67,7 @@ pub(in super::super) fn reset_modify_pass_control_fields(app: &App) {
     app.set_modify_shared_move_channel_pressure_text("off".into());
 }
 
-pub(in super::super) fn sync_modify_pass_controls(app: &App, config: &MidiFileProcessingConfig) {
+pub(crate) fn sync_modify_pass_controls(app: &App, config: &MidiFileProcessingConfig) {
     reset_modify_pass_control_fields(app);
 
     if let Some(policy) = modify_pass_policy(tool_key(&config.tool)) {

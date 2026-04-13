@@ -6,6 +6,8 @@
 use super::*;
 
 mod sync;
-pub(super) use sync::sync_modify_pass_controls;
+pub(crate) use sync::sync_modify_pass_controls;
 mod update;
-pub(super) use update::update_modify_control;
+pub(crate) use update::update_modify_control;
+mod passes;
+pub(crate) use passes::*;
