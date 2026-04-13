@@ -763,20 +763,21 @@ export component SliderRow inherits Rectangle {
                     }
 
                     Rectangle {
-                        width: 24px;
+                        width: 40px;
                         height: 26px;
                         border-radius: 5px;
                         background: reset-touch.has-hover ? #162234 : #0f1724;
                         border-width: 1px;
                         border-color: reset-touch.has-hover ? #29415f : Theme.border-strong;
 
-                        Text {
-                            text: "↺";
-                            color: reset-touch.has-hover ? #9ec5ff : #6b8bb3;
-                            font-size: Theme.font-size-md;
-                            font-weight: 700;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
+                        Image {
+                            width: 14px;
+                            height: 14px;
+                            x: parent.width / 2 - self.width / 2;
+                            y: parent.height / 2 - self.height / 2;
+                            source: @image-url("../../../assets/icons/ui/rotate-ccw.svg");
+                            image-fit: contain;
+                            colorize: reset-touch.has-hover ? #9ec5ff : #6b8bb3;
                         }
 
                         reset-touch := TouchArea {
@@ -888,9 +889,12 @@ export component FilePicker inherits Rectangle {
             spacing: 8px;
 
             // Icon
-            Text {
-                text: "🎵";
-                font-size: Theme.font-size-2xl;
+            Image {
+                width: 18px;
+                height: 18px;
+                source: @image-url("../../../assets/icons/ui/file.svg");
+                image-fit: contain;
+                colorize: root.enabled ? Theme.text-accent : Theme.text-brand-muted;
                 vertical-alignment: center;
             }
 

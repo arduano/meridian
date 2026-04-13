@@ -165,10 +165,12 @@ export component PreviewWelcome inherits Rectangle {
                                 padding-right: 12px;
                                 spacing: 8px;
 
-                                Text {
-                                    text: "♪";
-                                    color: Theme.accent-fill;
-                                    font-size: Theme.font-size-lg;
+                                Image {
+                                    width: 18px;
+                                    height: 18px;
+                                    source: @image-url("../../../../assets/icons/ui/file-music.svg");
+                                    image-fit: contain;
+                                    colorize: Theme.text-accent;
                                     vertical-alignment: center;
                                 }
 
@@ -259,12 +261,14 @@ export component DropOverlay inherits Rectangle {
                         border-radius: 28px;
                         background: Theme.surface-badge;
 
-                        Text {
-                            text: "♪";
-                            color: rgb(96, 165, 250);
-                            font-size: 26px;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
+                        Image {
+                            width: 24px;
+                            height: 24px;
+                            x: parent.width / 2 - self.width / 2;
+                            y: parent.height / 2 - self.height / 2;
+                            source: @image-url("../../../../assets/icons/ui/file-music.svg");
+                            image-fit: contain;
+                            colorize: rgb(96, 165, 250);
                         }
                     }
                 }

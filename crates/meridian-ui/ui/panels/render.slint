@@ -486,10 +486,14 @@ export component RenderPanel inherits Rectangle {
                     VerticalLayout {
                         alignment: center;
                         padding-left: 5px;
-                        Text {
-                            text: root.encoding-open ? "▾" : "▸";
-                            color: Theme.text-muted;
-                            font-size: Theme.font-size-sm;
+                        Image {
+                            width: 14px;
+                            height: 14px;
+                            source: root.encoding-open
+                                ? @image-url("../../../../assets/icons/ui/chevron-down.svg")
+                                : @image-url("../../../../assets/icons/ui/chevron-right.svg");
+                            image-fit: contain;
+                            colorize: Theme.text-muted;
                         }
                     }
 
@@ -763,10 +767,14 @@ export component RenderPanel inherits Rectangle {
                     VerticalLayout {
                         alignment: center;
                         padding-left: 5px;
-                        Text {
-                            text: root.advanced-open ? "▾" : "▸";
-                            color: Theme.text-muted;
-                            font-size: Theme.font-size-sm;
+                        Image {
+                            width: 14px;
+                            height: 14px;
+                            source: root.advanced-open
+                                ? @image-url("../../../../assets/icons/ui/chevron-down.svg")
+                                : @image-url("../../../../assets/icons/ui/chevron-right.svg");
+                            image-fit: contain;
+                            colorize: Theme.text-muted;
                         }
                     }
 

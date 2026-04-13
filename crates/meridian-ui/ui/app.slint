@@ -685,7 +685,7 @@ export component App inherits Window {
                                     spacing: 6px;
 
                                     TransportButton {
-                                        icon: root.play-label == "Pause" ? "⏸" : "▶";
+                                        mode: root.play-label == "Pause" ? "pause" : "play";
                                         active: root.play-label == "Pause";
                                         pressed => { root.toggle-play(); }
                                     }

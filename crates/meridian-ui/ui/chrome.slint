@@ -63,7 +63,7 @@ export component TabGroupDivider inherits Rectangle {
 // 32×32 icon button for play/pause, zoom ±.
 
 export component TransportButton inherits Rectangle {
-    in property <string> icon;
+    in property <string> mode: "play";
     in property <bool> active: false;
     callback pressed;
 
@@ -72,13 +72,16 @@ export component TransportButton inherits Rectangle {
     border-radius: 6px;
     background: touch.has-hover ? Theme.surface-control-hover : root.active ? #162638 : transparent;
 
-    Text {
-        text: root.icon;
-        color: root.active ? Theme.text-accent : Theme.text-soft;
-        font-size: Theme.font-size-2xl;
-        font-weight: 700;
-        horizontal-alignment: center;
-        vertical-alignment: center;
+    Image {
+        width: 16px;
+        height: 16px;
+        x: parent.width / 2 - self.width / 2;
+        y: parent.height / 2 - self.height / 2;
+        source: root.mode == "pause"
+            ? @image-url("../../../assets/icons/ui/pause.svg")
+            : @image-url("../../../assets/icons/ui/play.svg");
+        image-fit: contain;
+        colorize: root.active ? Theme.text-accent : Theme.text-soft;
     }
 
     touch := TouchArea {
