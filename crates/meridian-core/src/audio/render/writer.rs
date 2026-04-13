@@ -1,9 +1,7 @@
-use std::{
-    fs::File,
-    io::{BufWriter, Write},
-    path::Path,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::{fs::File, io::BufWriter, path::Path};
+
+#[cfg(unix)]
+use std::{io::Write, sync::atomic::AtomicBool};
 
 use hound::{SampleFormat, WavSpec, WavWriter};
 use xsynth_core::AudioStreamParams;
@@ -12,6 +10,7 @@ use crate::MeridianError;
 
 pub(crate) enum AudioSampleWriter {
     Wav(WavWriter<BufWriter<File>>),
+    #[cfg(unix)]
     RawF32(BufWriter<File>),
 }
 
@@ -35,29 +34,12 @@ impl AudioSampleWriter {
         Ok(Self::Wav(writer))
     }
 
+    #[cfg(unix)]
     pub(crate) fn create_raw_pipe(
         pipe_path: &Path,
         cancel: &AtomicBool,
     ) -> Result<Self, MeridianError> {
-        #[cfg(unix)]
-        {
-            create_unix_raw_pipe(pipe_path, cancel)
-        }
-
-        #[cfg(not(unix))]
-        let writer = std::fs::OpenOptions::new()
-            .write(true)
-            .open(pipe_path)
-            .map_err(|error| {
-                MeridianError::Platform(format!(
-                    "failed to open audio pipe {}: {error}",
-                    pipe_path.display()
-                ))
-            })?;
-        #[cfg(not(unix))]
-        let _ = cancel;
-        #[cfg(not(unix))]
-        Ok(Self::RawF32(BufWriter::new(writer)))
+        create_unix_raw_pipe(pipe_path, cancel)
     }
 }
 
@@ -136,6 +118,7 @@ impl AudioSampleWriter {
                     })?;
                 }
             }
+            #[cfg(unix)]
             Self::RawF32(writer) => {
                 for sample in samples {
                     writer.write_all(&sample.to_le_bytes()).map_err(|error| {
@@ -154,6 +137,7 @@ impl AudioSampleWriter {
             Self::Wav(writer) => writer.finalize().map_err(|error| {
                 MeridianError::Platform(format!("failed to finalize xsynth wav render: {error}"))
             }),
+            #[cfg(unix)]
             Self::RawF32(mut writer) => writer.flush().map_err(Into::into),
         }
     }

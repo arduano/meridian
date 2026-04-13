@@ -1,4 +1,7 @@
-use std::{path::Path, sync::atomic::AtomicBool};
+use std::path::Path;
+
+#[cfg(unix)]
+use std::sync::atomic::AtomicBool;
 
 use xsynth_core::{
     AudioPipe, AudioStreamParams,
@@ -43,6 +46,7 @@ impl OfflineAudioRenderer {
         )
     }
 
+    #[cfg(unix)]
     pub(crate) fn new_raw_pipe(
         audio_config: &AudioConfig,
         soundfont_cache: &SoundfontCache,

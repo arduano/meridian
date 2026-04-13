@@ -1,10 +1,15 @@
 use std::{
-    ffi::CString,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
+};
+
+#[cfg(unix)]
+use std::{
+    ffi::CString,
     time::{SystemTime, UNIX_EPOCH},
 };
 
+#[cfg(unix)]
 use crate::MeridianError;
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
@@ -32,10 +37,6 @@ pub(crate) struct TempPathGuard {
 impl TempPathGuard {
     pub(crate) fn new(path: PathBuf) -> Self {
         Self { path }
-    }
-
-    pub(crate) fn path(&self) -> &Path {
-        &self.path
     }
 }
 

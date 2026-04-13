@@ -1,8 +1,11 @@
 use std::{
     path::Path,
-    process::{Child, Command, Stdio},
+    process::{Command, Stdio},
     sync::atomic::AtomicBool,
 };
+
+#[cfg(unix)]
+use std::process::Child;
 
 use crate::{
     MeridianError, ffmpeg,
@@ -191,6 +194,7 @@ fn render_encoded_audio_fallback(
     }
 }
 
+#[cfg(unix)]
 fn spawn_audio_encoder(
     output: &Path,
     format: AudioOutputFormat,
@@ -282,7 +286,7 @@ fn encode_audio_file(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use std::{
         env,

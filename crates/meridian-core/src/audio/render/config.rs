@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use xsynth_core::{AudioStreamParams, ChannelCount};
 
-use crate::{
-    MeridianError,
-    protocol::{AudioOutputFormat, VideoAudioConfig},
-};
+use crate::{MeridianError, protocol::AudioOutputFormat};
+
+#[cfg(unix)]
+use crate::protocol::VideoAudioConfig;
 
 use super::AudioConfig;
 
@@ -72,6 +72,7 @@ impl ResolvedAudioRenderSettings {
     }
 }
 
+#[cfg(unix)]
 pub(crate) fn resolve_video_audio_settings(
     audio_config: &AudioConfig,
     config: &VideoAudioConfig,

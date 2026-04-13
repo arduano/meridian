@@ -3,16 +3,26 @@
 //! This module owns the "render audio on the side while ffmpeg consumes the
 //! video pipe" path for video exports with audio.
 
+use std::{sync::Arc, sync::atomic::AtomicBool};
+
+#[cfg(unix)]
 use std::{
-    sync::atomic::{AtomicBool, Ordering},
-    sync::{Arc, Mutex},
+    sync::Mutex,
+    sync::atomic::Ordering,
     thread::{self, JoinHandle},
 };
 
+#[cfg(unix)]
 use crate::{
     MeridianError,
     audio::{SoundfontCache, render_audio_pipe_from_cache, resolve_video_audio_settings},
     midi::audio_cache::InRamAudioCache,
+    protocol::{VideoAudioConfig, VideoAudioProgress, VideoRenderConfig},
+};
+
+#[cfg(not(unix))]
+use crate::{
+    MeridianError,
     protocol::{VideoAudioConfig, VideoAudioProgress, VideoRenderConfig},
 };
 
@@ -33,6 +43,9 @@ pub(crate) enum VideoAudioMux {
         inputs: Option<VideoRenderAudioInputs>,
         audio: VideoAudioConfig,
     },
+    #[cfg_attr(not(unix), allow(dead_code))]
+    #[cfg(not(unix))]
+    Unsupported,
 }
 
 impl VideoAudioMux {
@@ -99,6 +112,10 @@ impl VideoAudioMux {
                 channels: *channels,
                 extra_args: &audio.ffmpeg_args,
             }),
+            #[cfg(not(unix))]
+            Self::Unsupported => Err(MeridianError::Unsupported(
+                "muxed audio video export currently requires unix named pipes".into(),
+            )),
         }
     }
 
@@ -140,6 +157,10 @@ impl VideoAudioMux {
                 }));
                 Ok(())
             }
+            #[cfg(not(unix))]
+            Self::Unsupported => Err(MeridianError::Unsupported(
+                "muxed audio video export currently requires unix named pipes".into(),
+            )),
         }
     }
 
@@ -147,6 +168,8 @@ impl VideoAudioMux {
         match self {
             #[cfg(unix)]
             Self::Pipe { worker, .. } => join_audio_worker(worker),
+            #[cfg(not(unix))]
+            Self::Unsupported => Ok(()),
         }
     }
 
@@ -157,21 +180,33 @@ impl VideoAudioMux {
                 .lock()
                 .expect("audio mux progress mutex poisoned")
                 .clone(),
+            #[cfg(not(unix))]
+            Self::Unsupported => VideoAudioProgress {
+                total_events: 0,
+                event_index: 0,
+                rendered_seconds: 0.0,
+            },
         }
     }
 
     pub(crate) fn cancel_and_join(&mut self) {
         #[cfg(unix)]
-        let Self::Pipe { cancel, worker, .. } = self;
         {
+            let Self::Pipe { cancel, worker, .. } = self;
             cancel.store(true, Ordering::SeqCst);
             if let Some(worker) = worker.take() {
                 let _ = worker.join();
             }
         }
+
+        #[cfg(not(unix))]
+        {
+            let _ = self;
+        }
     }
 }
 
+#[cfg(unix)]
 fn join_audio_worker(
     worker: Option<JoinHandle<Result<(), MeridianError>>>,
 ) -> Result<(), MeridianError> {
@@ -183,6 +218,7 @@ fn join_audio_worker(
         .map_err(|_| MeridianError::Platform("audio mux worker panicked".into()))?
 }
 
+#[cfg(unix)]
 fn clip_audio_cache(
     audio_cache: &Arc<InRamAudioCache>,
     time_range: ResolvedVideoTimeRange,

@@ -8,24 +8,34 @@ mod writer;
 pub use config::AudioRenderConfig;
 pub use events::AudioRenderEvent;
 
-use std::{path::Path, sync::atomic::AtomicBool};
+use std::sync::atomic::AtomicBool;
+
+#[cfg(unix)]
+use std::path::Path;
 
 use crate::{
     MeridianError,
     midi::{MidiCacheStack, audio_cache::InRamAudioCache},
-    protocol::{AudioOutputFormat, AudioRenderJobId, VideoAudioConfig, VideoAudioProgress},
+    protocol::{AudioOutputFormat, AudioRenderJobId},
 };
 
 use super::{AudioBackend, AudioConfig, soundfont_cache::SoundfontCache};
-use crate::audio::MeridianSoundfont;
+
+#[cfg(unix)]
+use crate::{
+    audio::MeridianSoundfont,
+    protocol::{VideoAudioConfig, VideoAudioProgress},
+};
 
 use config::resolve_render_settings;
 use encode::render_encoded_audio;
 use render_loop::{AudioRenderLoopResult, run_audio_render_loop};
 use renderer::OfflineAudioRenderer;
 
+#[cfg(unix)]
 pub(crate) use config::resolve_video_audio_settings;
 
+#[cfg(unix)]
 pub(crate) fn render_audio_pipe_from_cache(
     events: &InRamAudioCache,
     audio_config: &AudioConfig,
