@@ -1,12 +1,6 @@
 # Docs
 
-This directory is the main documentation index for Meridian. The structure is
-progressive on purpose:
-
-1. get one working path running
-2. learn the main user-facing workflows
-3. move into advanced knobs and troubleshooting
-4. use contributor docs only when you need codebase orientation
+This directory is the main documentation index for Meridian.
 
 ## Start Here
 

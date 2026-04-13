@@ -1,7 +1,7 @@
 # UI Persistence
 
 This page explains what the Meridian UI remembers across launches and what it
-resets on purpose.
+resets between sessions or MIDI loads.
 
 ## Persisted State
 

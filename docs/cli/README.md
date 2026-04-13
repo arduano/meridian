@@ -1,14 +1,14 @@
 # CLI Guide
 
-This guide is for the curated Meridian CLI surface in
-[`crates/meridian-cli`](../../crates/meridian-cli). The CLI is intentionally
-small and direct: use it for local work, use `stdio` for custom automation, and
-use the TypeScript SDK when you want a higher-level programmable integration.
+This section covers the curated Meridian CLI surface in
+[`crates/meridian-cli`](../../crates/meridian-cli). Use it for local command
+work, use `stdio` for custom automation, and use the TypeScript SDK when you
+want a higher-level programmable integration.
 
 The examples below assume your shell already has the required tools available.
 On Linux, `nix-shell` is the easiest way to get that environment.
 
-## Start Here
+## Sections
 
 - [Workflows](./workflows.md): analyze, inspect, process, and merge MIDI files
 - [Rendering](./rendering.md): audio, video, and frame export examples
@@ -17,8 +17,6 @@ On Linux, `nix-shell` is the easiest way to get that environment.
 
 ## First Commands
 
-These are the shortest useful commands to try first:
-
 ```bash
 cargo run -p meridian-cli -- --help
 cargo run -p meridian-cli -- analyze song.mid --pretty
@@ -26,10 +24,9 @@ cargo run -p meridian-cli -- inspect song.mid --pretty
 cargo run -p meridian-cli -- stdio
 ```
 
-If you only want to confirm the command surface, `--help` is the first check.
-If you want to confirm that a MIDI file parses, `analyze` is the fastest
-end-to-end command. If you want to drive Meridian from another process, start
-with `stdio`.
+`--help` is the quickest command-surface check. `analyze` is the fastest
+end-to-end parse check. `stdio` is the right starting point for another
+process.
 
 ## Curated Posture
 
@@ -58,11 +55,10 @@ That is deliberate.
 
 ## Reading Order
 
-Read the linked pages in this order if you are new to the CLI:
+Recommended order:
 
 1. [Workflows](./workflows.md)
 2. [Rendering](./rendering.md)
 3. [stdio Mode](./stdio.md)
 
-That progression goes from the smallest successful commands to the more
-configurable paths and finally to the automation surface.
+This moves from the basic commands to rendering and then to automation.

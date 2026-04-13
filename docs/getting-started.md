@@ -1,8 +1,6 @@
 # Getting Started
 
-This guide is the fastest way to get one successful Meridian workflow running.
-It is aimed at someone who wants to use the project first and read architecture
-docs later.
+Use this page to get Meridian running and verify a first CLI, UI, or SDK path.
 
 ## 1. Build Environment
 
@@ -66,7 +64,7 @@ cargo run -p meridian-cli -- render audio song.mid --output out.flac --format fl
 cargo run -p meridian-cli -- render video song.mid --output clip.mp4 --start-time -1 --end-time 8 --fps 30
 ```
 
-For the full command progression, continue to [CLI Guide](./cli/README.md).
+See [CLI Guide](./cli/README.md) for the rest of the command surface.
 
 ## 4. First Successful UI Launch
 
@@ -90,7 +88,7 @@ The simplest UI smoke path is:
 4. drag the time slider
 5. save a frame or open the export panel
 
-For the full panel-by-panel walkthrough, continue to [UI Guide](./ui/README.md).
+See [UI Guide](./ui/README.md) for the rest of the UI workflows.
 
 ## 5. TypeScript SDK Quick Start
 
@@ -107,7 +105,7 @@ deno check src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts
 deno test --allow-env --allow-read --allow-write --allow-run tests
 ```
 
-## 6. Where To Go Next
+## 6. Next Docs
 
 - [CLI Guide](./cli/README.md): user-facing commands from quickstart to advanced flags
 - [UI Guide](./ui/README.md): panels, playback, export, and persistence behavior
