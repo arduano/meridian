@@ -47,13 +47,13 @@ pub(super) fn apply_range_select_tool_to_parsed_file(
 ) -> Result<(), MeridianError> {
     let label = "Selecting MIDI range";
     progress.report(0, label)?;
-    validate_range_select_tool(&parsed, tool)?;
+    validate_range_select_tool(parsed, tool)?;
     let writer = open_midi_writer(output, parsed.midi().ppq())?;
 
     match tool.track_select {
         Some(track_index) => {
             progress.report(0, label)?;
-            let iter = selected_track_events(&parsed, track_index as u32, tool)
+            let iter = selected_track_events(parsed, track_index as u32, tool)
                 .expect("track iteration should exist for a validated track index");
             write_try_track_events(&writer, iter)?;
         }
@@ -61,7 +61,7 @@ pub(super) fn apply_range_select_tool_to_parsed_file(
             let track_count = parsed.midi().track_count();
             for track_index in 0..track_count {
                 progress.report_steps_completed(track_index, track_count, label)?;
-                let iter = selected_track_events(&parsed, track_index as u32, tool)
+                let iter = selected_track_events(parsed, track_index as u32, tool)
                     .expect("track iteration should exist for a known track index");
                 write_try_track_events(&writer, iter)?;
             }

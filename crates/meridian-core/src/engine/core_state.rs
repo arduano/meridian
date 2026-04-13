@@ -314,14 +314,14 @@ impl CoreState {
             CoreCommand::UnloadAudioContext => {
                 let cancel_events = self.cancel_active_render_jobs(false, true);
                 self.broadcast_internal(cancel_events);
-                let events = self.unload_audio_context();
-                events
+                
+                self.unload_audio_context()
             }
             CoreCommand::UnloadRenderContext => {
                 let cancel_events = self.cancel_active_render_jobs(true, true);
                 self.broadcast_internal(cancel_events);
-                let events = self.unload_render_context();
-                events
+                
+                self.unload_render_context()
             }
             CoreCommand::DropInactiveMidiResources => self.drop_inactive_midi_resources(),
             CoreCommand::LoadMidi { path } => self.load_midi_legacy(path),

@@ -44,7 +44,7 @@ pub(super) fn apply_sysex_tool_to_parsed_file(
         if track_index == 0 && !prepended_sysex.is_empty() {
             let startup = prepended_sysex.iter().cloned().map(Ok);
             if source_track_exists {
-                let body = sysex_track_events(&parsed, 0, tool.strip_all)
+                let body = sysex_track_events(parsed, 0, tool.strip_all)
                     .expect("track iteration should exist for a known track index");
                 write_try_track_events(&writer, startup.chain(body))?;
             } else {
@@ -53,7 +53,7 @@ pub(super) fn apply_sysex_tool_to_parsed_file(
             continue;
         }
 
-        let body = sysex_track_events(&parsed, track_index as u32, tool.strip_all)
+        let body = sysex_track_events(parsed, track_index as u32, tool.strip_all)
             .expect("track iteration should exist for a known track index");
         write_try_track_events(&writer, body)?;
     }

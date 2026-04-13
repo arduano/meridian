@@ -36,11 +36,10 @@ pub(super) fn wire_video_float_callbacks(
                 "pfa_border_width" => {
                     let parsed = value;
                     update_video_scene(&app, &bridge, &shared_state, move |scene| {
-                        if let SceneConfig::TwoD(config) = scene {
-                            if let NoteProjectorConfig::Pfa(notes) = &mut config.notes {
+                        if let SceneConfig::TwoD(config) = scene
+                            && let NoteProjectorConfig::Pfa(notes) = &mut config.notes {
                                 notes.border_width = parsed;
                             }
-                        }
                     });
                 }
                 "ptc_fov" => {

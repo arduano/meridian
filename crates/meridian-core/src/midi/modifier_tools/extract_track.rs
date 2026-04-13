@@ -28,10 +28,10 @@ pub(super) fn apply_extract_track_tool_to_parsed_file(
 ) -> Result<(), MeridianError> {
     let label = format!("Extracting track {}", tool.track_index);
     progress.report(0, &label)?;
-    validate_extract_track_tool(&parsed, tool)?;
+    validate_extract_track_tool(parsed, tool)?;
 
     let writer = open_midi_writer(output, parsed.midi().ppq())?;
-    let iter = extracted_track_events(&parsed, tool.track_index as u32)
+    let iter = extracted_track_events(parsed, tool.track_index as u32)
         .expect("track iteration should exist for a validated track index");
     write_try_track_events(&writer, iter)?;
     progress.report(100, &label)?;

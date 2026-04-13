@@ -22,6 +22,12 @@ pub struct PlaybackClock {
     wake: Condvar,
 }
 
+impl Default for PlaybackClock {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PlaybackClock {
     pub fn new() -> Self {
         Self {

@@ -54,7 +54,7 @@ pub(super) fn apply_program_tool_to_parsed_file(
         if track_index == 0 && !startup_programs.is_empty() {
             let startup = startup_programs.iter().cloned().map(Ok);
             if source_track_exists {
-                let body = program_track_events(&parsed, 0, tool)
+                let body = program_track_events(parsed, 0, tool)
                     .expect("track iteration should exist for a known track index");
                 write_try_track_events(&writer, startup.chain(body))?;
             } else {
@@ -63,7 +63,7 @@ pub(super) fn apply_program_tool_to_parsed_file(
             continue;
         }
 
-        let body = program_track_events(&parsed, track_index as u32, tool)
+        let body = program_track_events(parsed, track_index as u32, tool)
             .expect("track iteration should exist for a known track index");
         write_try_track_events(&writer, body)?;
     }

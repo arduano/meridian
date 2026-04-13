@@ -46,7 +46,7 @@ pub(super) fn apply_velocity_map_tool_to_parsed_file(
 
     for track_index in 0..track_count {
         progress.report_steps_completed(track_index, track_count, label)?;
-        let iter = velocity_mapped_track_events(&parsed, track_index as u32, velocity_lookup)
+        let iter = velocity_mapped_track_events(parsed, track_index as u32, velocity_lookup)
             .expect("track iteration should exist for a known track index");
         write_try_track_events(&writer, iter)?;
     }

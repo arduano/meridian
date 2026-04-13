@@ -198,14 +198,14 @@ pub fn merge_midi_files_to_file_with_progress(
     inputs: &[PathBuf],
     output: &Path,
     config: &MidiFilesMergeConfig,
-    mut on_progress: impl FnMut(MidiFilesMergeProgress),
+    on_progress: impl FnMut(MidiFilesMergeProgress),
 ) -> Result<MidiFilesMergeSummary, MeridianError> {
     merge_midi_files_to_file_with_progress_cancelable(
         inputs,
         output,
         config,
         || false,
-        move |progress| on_progress(progress),
+        on_progress,
     )
 }
 

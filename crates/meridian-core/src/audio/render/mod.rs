@@ -150,11 +150,10 @@ pub fn render_audio_from_cache(
         )
     }))
     .map_err(|_| MeridianError::Platform("xsynth panicked during offline audio render".into()))?
-    .map_err(|error| {
+    .inspect_err(|error| {
         on_event(AudioRenderEvent::RenderFailed {
             message: error.to_string(),
         });
-        error
     })
 }
 

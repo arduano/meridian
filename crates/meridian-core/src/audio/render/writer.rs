@@ -41,7 +41,7 @@ impl AudioSampleWriter {
     ) -> Result<Self, MeridianError> {
         #[cfg(unix)]
         {
-            return create_unix_raw_pipe(pipe_path, cancel);
+            create_unix_raw_pipe(pipe_path, cancel)
         }
 
         #[cfg(not(unix))]

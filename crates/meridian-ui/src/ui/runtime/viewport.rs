@@ -289,11 +289,10 @@ pub(super) fn install_timer(
                     app.get_viewport_px_width().max(1.0) as u32,
                     app.get_viewport_px_height().max(1.0) as u32,
                 );
-                if has_viewport {
-                    if let Some(image) = pending_viewport_image_for_timer.borrow_mut().take() {
+                if has_viewport
+                    && let Some(image) = pending_viewport_image_for_timer.borrow_mut().take() {
                         app.set_viewport_image(image);
                     }
-                }
                 if has_viewport && !app_is_loading(&app) {
                     let playing = shared_state_for_timer
                         .lock()
@@ -314,8 +313,8 @@ pub(super) fn install_timer(
                         should_refresh
                     };
 
-                    if should_refresh {
-                        if let Ok(events) = bridge_for_timer.refresh_state(&shared_state_for_timer)
+                    if should_refresh
+                        && let Ok(events) = bridge_for_timer.refresh_state(&shared_state_for_timer)
                         {
                             apply_events_to_app(&app, &shared_state_for_timer, &events);
                             let playing = shared_state_for_timer
@@ -327,7 +326,6 @@ pub(super) fn install_timer(
                                 app.window().request_redraw();
                             }
                         }
-                    }
                 }
                 if has_viewport && (disable_wgpu || app.get_play_label() == "Pause") {
                     app.window().request_redraw();
@@ -344,11 +342,10 @@ pub(super) fn install_timer(
                         terminal,
                     } = snapshot;
                     set_export_status(&app, status, detail, progress);
-                    if let Some(RenderExportUiTerminal::Finished(output)) = terminal {
-                        if app.get_render_open_after_export() {
+                    if let Some(RenderExportUiTerminal::Finished(output)) = terminal
+                        && app.get_render_open_after_export() {
                             let _ = open::that_detached(&output);
                         }
-                    }
                 }
             }
         },
@@ -452,7 +449,7 @@ mod tests {
             .expect("finished export should produce a terminal snapshot");
         assert!(matches!(
             finished_snapshot.terminal,
-            Some(RenderExportUiTerminal::Finished(output)) if output == PathBuf::from("render.mp4")
+            Some(RenderExportUiTerminal::Finished(output)) if output == *"render.mp4"
         ));
     }
 
@@ -572,7 +569,7 @@ mod tests {
             .expect("finished export should produce a terminal snapshot");
         assert!(matches!(
             snapshot.terminal,
-            Some(RenderExportUiTerminal::Finished(output)) if output == PathBuf::from("render.wav")
+            Some(RenderExportUiTerminal::Finished(output)) if output == *"render.wav"
         ));
     }
 

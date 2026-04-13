@@ -16,6 +16,12 @@ pub struct SoundfontCache {
     loaded: Mutex<HashMap<SoundfontCacheKey, Arc<dyn SoundfontBase>>>,
 }
 
+impl Default for SoundfontCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SoundfontCache {
     pub fn new() -> Self {
         Self {

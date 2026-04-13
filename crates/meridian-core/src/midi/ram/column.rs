@@ -16,6 +16,12 @@ pub struct InRamNoteColumnViewData {
     pub blocks_to_keyboard: usize,
 }
 
+impl Default for InRamNoteColumnViewData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InRamNoteColumnViewData {
     pub fn new() -> Self {
         Self {

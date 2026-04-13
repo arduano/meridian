@@ -57,20 +57,20 @@ pub(super) fn apply_shared_metadata_track_tool_to_parsed_file(
     progress: &mut ToolProgress<'_>,
 ) -> Result<(), MeridianError> {
     progress.report(0, "Scanning shared events")?;
-    validate_shared_metadata_track_tool(&parsed, tool)?;
+    validate_shared_metadata_track_tool(parsed, tool)?;
     let writer = open_midi_writer(output, parsed.midi().ppq())?;
-    let has_selected_shared_events = has_selected_shared_events(&parsed, tool)?;
+    let has_selected_shared_events = has_selected_shared_events(parsed, tool)?;
 
     if !tool.moves_any_events() || !has_selected_shared_events {
-        write_all_body_tracks(&writer, &parsed, tool, progress, 20, 100)?;
+        write_all_body_tracks(&writer, parsed, tool, progress, 20, 100)?;
         return finish_midi_writer(writer);
     }
 
     match tool.destination {
         SharedMetadataTrackDestination::CreateNew => {
             progress.report(30, "Building shared metadata track")?;
-            write_try_track_events(&writer, merged_selected_shared_events(&parsed, tool))?;
-            write_all_body_tracks(&writer, &parsed, tool, progress, 40, 100)?;
+            write_try_track_events(&writer, merged_selected_shared_events(parsed, tool))?;
+            write_all_body_tracks(&writer, parsed, tool, progress, 40, 100)?;
         }
         SharedMetadataTrackDestination::InsertInto { track_index } => {
             let track_count = parsed.midi().track_count();
@@ -80,12 +80,12 @@ pub(super) fn apply_shared_metadata_track_tool_to_parsed_file(
                     "Writing body tracks",
                 )?;
                 if source_track_index == track_index {
-                    let metadata = merged_selected_shared_events(&parsed, tool);
-                    let body = body_track_events(&parsed, source_track_index as u32, tool)
+                    let metadata = merged_selected_shared_events(parsed, tool);
+                    let body = body_track_events(parsed, source_track_index as u32, tool)
                         .expect("track iteration should exist for a known track index");
                     write_try_track_events(&writer, merge_events(metadata, body))?;
                 } else {
-                    let body = body_track_events(&parsed, source_track_index as u32, tool)
+                    let body = body_track_events(parsed, source_track_index as u32, tool)
                         .expect("track iteration should exist for a known track index");
                     write_try_track_events(&writer, body)?;
                 }

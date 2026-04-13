@@ -63,7 +63,7 @@ pub(super) fn apply_quantize_tool_to_parsed_file(
         match tool.mode {
             QuantizeMode::NoteStartOnly | QuantizeMode::NoteStartAndEnd => {
                 let iter = quantized_note_track_events(
-                    &parsed,
+                    parsed,
                     track_index as u32,
                     tool.rounding_ticks,
                     tool.mode,
@@ -73,7 +73,7 @@ pub(super) fn apply_quantize_tool_to_parsed_file(
             }
             QuantizeMode::AllEvents => {
                 let iter = quantized_all_event_track_events(
-                    &parsed,
+                    parsed,
                     track_index as u32,
                     tool.rounding_ticks,
                 )

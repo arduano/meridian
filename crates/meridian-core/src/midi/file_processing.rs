@@ -248,12 +248,11 @@ mod tests {
             MidiProcessJobId(1),
             &cancel,
             |event| {
-                if let crate::protocol::MidiProcessEvent::Progress { .. } = event {
-                    if !saw_progress {
+                if let crate::protocol::MidiProcessEvent::Progress { .. } = event
+                    && !saw_progress {
                         saw_progress = true;
                         cancel.store(true, Ordering::SeqCst);
                     }
-                }
             },
         );
 

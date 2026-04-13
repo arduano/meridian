@@ -92,11 +92,10 @@ pub(super) fn wire_video_control_callbacks(
                         return;
                     };
                     update_video_scene(&app, &bridge, &shared_state, move |scene| {
-                        if let SceneConfig::TwoD(config) = scene {
-                            if let NoteProjectorConfig::Pfa(notes) = &mut config.notes {
+                        if let SceneConfig::TwoD(config) = scene
+                            && let NoteProjectorConfig::Pfa(notes) = &mut config.notes {
                                 notes.border_width = parsed;
                             }
-                        }
                     });
                 }
                 "pfa_keyboard_same_width" => update_pfa_keyboard_bool(
@@ -120,11 +119,10 @@ pub(super) fn wire_video_control_callbacks(
                         _ => PFA_RED_TOP_BAR_COLOR,
                     };
                     update_video_scene(&app, &bridge, &shared_state, move |scene| {
-                        if let SceneConfig::TwoD(config) = scene {
-                            if let KeyboardProjectorConfig::Pfa(keyboard) = &mut config.keyboard {
+                        if let SceneConfig::TwoD(config) = scene
+                            && let KeyboardProjectorConfig::Pfa(keyboard) = &mut config.keyboard {
                                 keyboard.top_bar_color = color.to_string();
                             }
-                        }
                     });
                 }
                 "pfa_top_bar_color" => {
@@ -132,11 +130,10 @@ pub(super) fn wire_video_control_callbacks(
                         return;
                     };
                     update_video_scene(&app, &bridge, &shared_state, move |scene| {
-                        if let SceneConfig::TwoD(config) = scene {
-                            if let KeyboardProjectorConfig::Pfa(keyboard) = &mut config.keyboard {
+                        if let SceneConfig::TwoD(config) = scene
+                            && let KeyboardProjectorConfig::Pfa(keyboard) = &mut config.keyboard {
                                 keyboard.top_bar_color = color.clone();
                             }
-                        }
                     });
                 }
                 "palette_source" => {
@@ -418,11 +415,10 @@ pub(super) fn update_pfa_note_bool(
 ) {
     let enabled = bool_from_label(value);
     update_video_scene(app, bridge, shared_state, move |scene| {
-        if let SceneConfig::TwoD(config) = scene {
-            if let NoteProjectorConfig::Pfa(notes) = &mut config.notes {
+        if let SceneConfig::TwoD(config) = scene
+            && let NoteProjectorConfig::Pfa(notes) = &mut config.notes {
                 mutate(notes, enabled);
             }
-        }
     });
 }
 
@@ -435,11 +431,10 @@ pub(super) fn update_pfa_keyboard_bool(
 ) {
     let enabled = bool_from_label(value);
     update_video_scene(app, bridge, shared_state, move |scene| {
-        if let SceneConfig::TwoD(config) = scene {
-            if let KeyboardProjectorConfig::Pfa(keyboard) = &mut config.keyboard {
+        if let SceneConfig::TwoD(config) = scene
+            && let KeyboardProjectorConfig::Pfa(keyboard) = &mut config.keyboard {
                 mutate(keyboard, enabled);
             }
-        }
     });
 }
 

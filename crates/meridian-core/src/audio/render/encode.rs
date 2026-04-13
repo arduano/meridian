@@ -32,7 +32,7 @@ pub(crate) fn render_encoded_audio(
 ) -> Result<AudioRenderLoopResult, MeridianError> {
     #[cfg(unix)]
     {
-        return render_encoded_audio_unix(
+        render_encoded_audio_unix(
             events,
             audio_config,
             soundfont_cache,
@@ -41,7 +41,7 @@ pub(crate) fn render_encoded_audio(
             job_id,
             cancel,
             callback,
-        );
+        )
     }
 
     #[cfg(not(unix))]

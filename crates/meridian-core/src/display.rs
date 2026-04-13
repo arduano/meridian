@@ -29,6 +29,12 @@ pub struct LiveDisplaySession {
     last_physics_tick: Option<Instant>,
 }
 
+impl Default for LiveDisplaySession {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LiveDisplaySession {
     pub fn new() -> Self {
         let layout = SceneLayout::default();

@@ -407,89 +407,6 @@ pub(super) fn current_custom_video_time_range(
     Ok((Some(start_time), Some(end_time)))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default_video_output_path_is_next_to_selected_midi() {
-        let path = default_render_output_path(
-            "/tmp/example/song.mid",
-            RenderExportMode::VideoAudio,
-            AudioOnlyFormat::Wav,
-            VideoOutputContainer::Mp4,
-        );
-
-        assert_eq!(path, "/tmp/example/song.rendered.mp4");
-    }
-
-    #[test]
-    fn default_mkv_output_path_uses_selected_container_extension() {
-        let path = default_render_output_path(
-            "/tmp/example/song.mid",
-            RenderExportMode::VideoOnly,
-            AudioOnlyFormat::Wav,
-            VideoOutputContainer::Mkv,
-        );
-
-        assert_eq!(path, "/tmp/example/song.rendered.mkv");
-    }
-
-    #[test]
-    fn default_audio_output_path_uses_rendered_suffix() {
-        let path = default_render_output_path(
-            "/tmp/example/song.mid",
-            RenderExportMode::AudioOnly,
-            AudioOnlyFormat::Flac,
-            VideoOutputContainer::Mp4,
-        );
-
-        assert_eq!(path, "/tmp/example/song.rendered.flac");
-    }
-
-    #[test]
-    fn resolve_render_output_path_text_preserves_non_empty_paths() {
-        let path = resolve_render_output_path_text(
-            "/tmp/example/custom-name.txt",
-            "/tmp/example/song.mid",
-            RenderExportMode::AudioOnly,
-            AudioOnlyFormat::Flac,
-            VideoOutputContainer::Mp4,
-        );
-
-        assert_eq!(path, "/tmp/example/custom-name.txt");
-    }
-
-    #[test]
-    fn resolve_render_output_path_text_defaults_only_when_empty() {
-        let path = resolve_render_output_path_text(
-            "",
-            "/tmp/example/song.mid",
-            RenderExportMode::VideoAudio,
-            AudioOnlyFormat::Wav,
-            VideoOutputContainer::Mkv,
-        );
-
-        assert_eq!(path, "/tmp/example/song.rendered.mkv");
-    }
-
-    #[test]
-    fn parse_render_time_seconds_allows_negative_values() {
-        assert_eq!(
-            parse_render_time_seconds("-1", "render start time").unwrap(),
-            -1.0
-        );
-    }
-
-    #[test]
-    fn default_render_time_range_text_uses_preview_preroll_and_song_end() {
-        assert_eq!(
-            default_render_time_range_text(12.5),
-            ("-1".into(), "12.5".into())
-        );
-    }
-}
-
 pub(super) fn build_video_render_config(
     app: &App,
     snapshot: &StateSnapshot,
@@ -618,4 +535,87 @@ pub(super) fn set_export_status(
     app.set_render_export_status(status.into());
     app.set_render_export_detail_text(detail.into());
     app.set_render_export_progress(progress);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_video_output_path_is_next_to_selected_midi() {
+        let path = default_render_output_path(
+            "/tmp/example/song.mid",
+            RenderExportMode::VideoAudio,
+            AudioOnlyFormat::Wav,
+            VideoOutputContainer::Mp4,
+        );
+
+        assert_eq!(path, "/tmp/example/song.rendered.mp4");
+    }
+
+    #[test]
+    fn default_mkv_output_path_uses_selected_container_extension() {
+        let path = default_render_output_path(
+            "/tmp/example/song.mid",
+            RenderExportMode::VideoOnly,
+            AudioOnlyFormat::Wav,
+            VideoOutputContainer::Mkv,
+        );
+
+        assert_eq!(path, "/tmp/example/song.rendered.mkv");
+    }
+
+    #[test]
+    fn default_audio_output_path_uses_rendered_suffix() {
+        let path = default_render_output_path(
+            "/tmp/example/song.mid",
+            RenderExportMode::AudioOnly,
+            AudioOnlyFormat::Flac,
+            VideoOutputContainer::Mp4,
+        );
+
+        assert_eq!(path, "/tmp/example/song.rendered.flac");
+    }
+
+    #[test]
+    fn resolve_render_output_path_text_preserves_non_empty_paths() {
+        let path = resolve_render_output_path_text(
+            "/tmp/example/custom-name.txt",
+            "/tmp/example/song.mid",
+            RenderExportMode::AudioOnly,
+            AudioOnlyFormat::Flac,
+            VideoOutputContainer::Mp4,
+        );
+
+        assert_eq!(path, "/tmp/example/custom-name.txt");
+    }
+
+    #[test]
+    fn resolve_render_output_path_text_defaults_only_when_empty() {
+        let path = resolve_render_output_path_text(
+            "",
+            "/tmp/example/song.mid",
+            RenderExportMode::VideoAudio,
+            AudioOnlyFormat::Wav,
+            VideoOutputContainer::Mkv,
+        );
+
+        assert_eq!(path, "/tmp/example/song.rendered.mkv");
+    }
+
+    #[test]
+    fn parse_render_time_seconds_allows_negative_values() {
+        assert_eq!(
+            parse_render_time_seconds("-1", "render start time").unwrap(),
+            -1.0
+        );
+    }
+
+    #[test]
+    fn default_render_time_range_text_uses_preview_preroll_and_song_end() {
+        assert_eq!(
+            default_render_time_range_text(12.5),
+            ("-1".into(), "12.5".into())
+        );
+    }
 }

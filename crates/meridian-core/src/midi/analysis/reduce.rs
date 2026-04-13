@@ -73,7 +73,7 @@ pub(crate) fn reduce_extracted_analysis(
         steps_completed += 1;
         if steps_completed == 1
             || steps_completed == total_steps
-            || steps_completed % progress_stride == 0
+            || steps_completed.is_multiple_of(progress_stride)
         {
             progress(AnalysisProgressUpdate {
                 progress: 0.1 + 0.2 * (steps_completed as f32 / total_steps as f32),
@@ -127,7 +127,7 @@ pub(crate) fn reduce_extracted_analysis(
             delta: *delta,
         });
         steps_completed += 1;
-        if steps_completed == total_steps || steps_completed % progress_stride == 0 {
+        if steps_completed == total_steps || steps_completed.is_multiple_of(progress_stride) {
             progress(AnalysisProgressUpdate {
                 progress: 0.3 + 0.15 * (steps_completed as f32 / total_steps as f32),
                 status: "Preparing Bucket Summary".into(),
@@ -366,7 +366,7 @@ fn reduce_polyphony(
             active_after_track += transition.net_delta;
             index += 1;
             *steps_completed += 1;
-            if *steps_completed == total_steps || *steps_completed % progress_stride == 0 {
+            if *steps_completed == total_steps || (*steps_completed).is_multiple_of(progress_stride) {
                 progress(AnalysisProgressUpdate {
                     progress: 0.45 + 0.25 * (*steps_completed as f32 / total_steps as f32),
                     status: status.into(),
@@ -408,7 +408,7 @@ fn reduce_durations(
             max_note_length_seconds = max_note_length_seconds.max(duration);
         }
         *steps_completed += 1;
-        if *steps_completed == total_steps || *steps_completed % progress_stride == 0 {
+        if *steps_completed == total_steps || (*steps_completed).is_multiple_of(progress_stride) {
             progress(AnalysisProgressUpdate {
                 progress: 0.7 + 0.3 * (*steps_completed as f32 / total_steps as f32),
                 status: status.into(),

@@ -70,11 +70,10 @@ pub(in super::super) fn start_render_export_jobs(
             .start_render_audio(config, shared_state)
             .map_err(|error| error.to_string())?;
         if let Some(message) = events_error_message(&events) {
-            if app.get_video_render_status() != "Idle" {
-                if let Ok(cancel_events) = bridge.cancel_render_video(shared_state) {
+            if app.get_video_render_status() != "Idle"
+                && let Ok(cancel_events) = bridge.cancel_render_video(shared_state) {
                     apply_events_to_app(app, shared_state, &cancel_events);
                 }
-            }
             return Err(message);
         }
         apply_events_to_app(app, shared_state, &events);

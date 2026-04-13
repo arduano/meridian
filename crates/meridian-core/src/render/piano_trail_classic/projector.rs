@@ -1058,9 +1058,7 @@ mod tests {
         let midi_path = write_test_midi();
         let mut midi = MIDIFileUnion::load_ram(&midi_path).expect("load midi");
         let mut layout = SceneLayout::default();
-        let mut config = match ThreeDSceneConfig::default() {
-            ThreeDSceneConfig::PianoTrailClassic(config) => config,
-        };
+        let ThreeDSceneConfig::PianoTrailClassic(mut config) = ThreeDSceneConfig::default();
         layout.scene = SceneConfig::ThreeD(ThreeDSceneConfig::PianoTrailClassic(config.clone()));
         layout.view_range = 2.0;
 

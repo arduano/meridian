@@ -52,7 +52,7 @@ pub(super) fn apply_humanize_tool_to_parsed_file(
 
     for track_index in 0..track_count {
         progress.report_steps_completed(track_index, track_count, label)?;
-        let iter = humanized_track_events(&parsed, track_index as u32, tool)
+        let iter = humanized_track_events(parsed, track_index as u32, tool)
             .expect("track iteration should exist for a known track index");
         write_try_track_events(&writer, iter)?;
     }
@@ -164,7 +164,7 @@ fn deterministic_jitter(
         return 0;
     }
 
-    let amount = amount.unsigned_abs() as u64;
+    let amount = amount.unsigned_abs();
     let mut hash = splitmix64(seed ^ salt);
     hash = splitmix64(hash ^ note.start);
     hash = splitmix64(hash ^ ((note.channel as u64) << 8));

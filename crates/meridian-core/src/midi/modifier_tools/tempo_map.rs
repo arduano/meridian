@@ -62,7 +62,7 @@ pub(super) fn apply_tempo_map_tool_to_parsed_file(
         TempoMapTool::Flatten { tempo } => {
             let label = "Rewriting tempo map";
             progress.report(0, label)?;
-            let flattened_tempo = vec![Event::new_delta_tempo_event(0, *tempo)];
+            let flattened_tempo = [Event::new_delta_tempo_event(0, *tempo)];
             let track_count = parsed.midi().track_count().max(1);
 
             for track_index in 0..track_count {
@@ -71,14 +71,14 @@ pub(super) fn apply_tempo_map_tool_to_parsed_file(
                 if track_index == 0 {
                     let startup = flattened_tempo.iter().cloned().map(Ok);
                     if source_track_exists {
-                        let body = non_tempo_track_events(&parsed, 0)
+                        let body = non_tempo_track_events(parsed, 0)
                             .expect("track iteration should exist for a known track index");
                         write_try_track_events(&writer, startup.chain(body))?;
                     } else {
                         write_try_track_events(&writer, startup)?;
                     }
                 } else {
-                    let body = non_tempo_track_events(&parsed, track_index as u32)
+                    let body = non_tempo_track_events(parsed, track_index as u32)
                         .expect("track iteration should exist for a known track index");
                     write_try_track_events(&writer, body)?;
                 }
@@ -91,7 +91,7 @@ pub(super) fn apply_tempo_map_tool_to_parsed_file(
             progress.report(0, label)?;
             for track_index in 0..track_count {
                 progress.report_steps_completed(track_index, track_count, label)?;
-                let iter = scaled_tempo_track_events(&parsed, track_index as u32, *factor)
+                let iter = scaled_tempo_track_events(parsed, track_index as u32, *factor)
                     .expect("track iteration should exist for a known track index");
                 write_try_track_events(&writer, iter)?;
             }
@@ -116,14 +116,14 @@ pub(super) fn apply_tempo_map_tool_to_parsed_file(
                         if track_index == 0 {
                             let replacement = replacement_tempos.iter().cloned().map(Ok);
                             if source_track_exists {
-                                let body = non_tempo_track_events(&parsed, 0)
+                                let body = non_tempo_track_events(parsed, 0)
                                     .expect("track iteration should exist for a known track index");
                                 write_try_track_events(&writer, merge_events(body, replacement))?;
                             } else {
                                 write_try_track_events(&writer, replacement)?;
                             }
                         } else {
-                            let body = non_tempo_track_events(&parsed, track_index as u32)
+                            let body = non_tempo_track_events(parsed, track_index as u32)
                                 .expect("track iteration should exist for a known track index");
                             write_try_track_events(&writer, body)?;
                         }
@@ -138,7 +138,7 @@ pub(super) fn apply_tempo_map_tool_to_parsed_file(
                     for track_index in 0..track_count {
                         progress
                             .report(map_progress_range(20, 100, track_index, track_count), label)?;
-                        let body = non_tempo_track_events(&parsed, track_index as u32)
+                        let body = non_tempo_track_events(parsed, track_index as u32)
                             .expect("track iteration should exist for a known track index");
                         write_try_track_events(&writer, body)?;
                     }

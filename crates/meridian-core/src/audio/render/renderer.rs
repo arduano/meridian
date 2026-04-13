@@ -69,7 +69,7 @@ impl OfflineAudioRenderer {
         use_limiter: bool,
     ) -> Result<Self, MeridianError> {
         let group_options = ChannelGroupConfig {
-            channel_init_options: audio_config.xsynth.config.channel_init_options.clone(),
+            channel_init_options: audio_config.xsynth.config.channel_init_options,
             format: audio_config.xsynth.config.format,
             audio_params,
             parallelism: audio_config.xsynth.render.parallelism,

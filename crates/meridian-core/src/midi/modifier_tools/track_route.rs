@@ -41,14 +41,14 @@ pub(super) fn apply_track_route_tool_to_parsed_file(
     tool: &TrackRouteTool,
     progress: &mut ToolProgress<'_>,
 ) -> Result<(), MeridianError> {
-    validate_track_route_tool(&parsed, tool)?;
+    validate_track_route_tool(parsed, tool)?;
     let writer = open_midi_writer(output, parsed.midi().ppq())?;
 
     match tool {
         TrackRouteTool::CollapseAll => {
             let label = "Collapsing tracks";
             progress.report(0, label)?;
-            let iter = merged_track_events_for_indices(&parsed, 0..parsed.midi().track_count())?;
+            let iter = merged_track_events_for_indices(parsed, 0..parsed.midi().track_count())?;
             write_try_track_events(&writer, iter)?;
             progress.report(100, label)?;
         }
@@ -64,7 +64,7 @@ pub(super) fn apply_track_route_tool_to_parsed_file(
                     map_progress_range(0, 100, bucket, SPLIT_CHANNEL_BUCKETS),
                     &bucket_label,
                 )?;
-                let mut iter = split_channel_track_events(&parsed, bucket).peekable();
+                let mut iter = split_channel_track_events(parsed, bucket).peekable();
                 if iter.peek().is_some() {
                     write_try_track_events(&writer, iter)?;
                 }
@@ -92,7 +92,7 @@ pub(super) fn apply_track_route_tool_to_parsed_file(
 
             for (group_index, sources) in target_groups.into_iter().enumerate() {
                 progress.report_steps_completed(group_index, target_group_count, label)?;
-                let iter = merged_track_events_for_indices(&parsed, sources.into_iter())?;
+                let iter = merged_track_events_for_indices(parsed, sources.into_iter())?;
                 write_try_track_events(&writer, iter)?;
             }
             progress.report(100, label)?;

@@ -92,7 +92,7 @@ pub(in super::super) fn wire_render_export_callbacks(
                 return;
             };
             // Accept "WxH" or "W×H" or "W H"
-            let normalized = val.replace('×', "x").replace(' ', "x");
+            let normalized = val.replace(['×', ' '], "x");
             if parse_render_resolution(&normalized).is_ok() {
                 app.set_render_video_resolution_text(normalized.into());
                 if let Ok((w, h)) =
@@ -187,11 +187,10 @@ pub(in super::super) fn wire_render_export_callbacks(
                 return;
             };
             // Validate CRF is a number 0-51
-            if let Ok(n) = val.trim().parse::<u32>() {
-                if n <= 51 {
+            if let Ok(n) = val.trim().parse::<u32>()
+                && n <= 51 {
                     app.set_render_video_crf_text(n.to_string().into());
                 }
-            }
             app.window().request_redraw();
         });
     }
@@ -449,16 +448,14 @@ pub(in super::super) fn wire_render_export_callbacks(
 
             let video_running = app.get_video_render_status() != "Idle";
             let audio_running = app.get_audio_render_status() != "Idle";
-            if video_running {
-                if let Ok(events) = bridge.cancel_render_video(&shared_state) {
+            if video_running
+                && let Ok(events) = bridge.cancel_render_video(&shared_state) {
                     apply_events_to_app(&app, &shared_state, &events);
                 }
-            }
-            if audio_running {
-                if let Ok(events) = bridge.cancel_render_audio(&shared_state) {
+            if audio_running
+                && let Ok(events) = bridge.cancel_render_audio(&shared_state) {
                     apply_events_to_app(&app, &shared_state, &events);
                 }
-            }
 
             if !video_running && !audio_running {
                 export_state

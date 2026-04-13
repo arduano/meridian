@@ -56,7 +56,7 @@ impl VideoAudioMux {
             let total_events = clipped_audio_cache.events().len();
             let fifo = crate::ffmpeg::FifoGuard::create(&config.output, "audio")?;
             let _ = cancel;
-            return Ok(Self::Pipe {
+            Ok(Self::Pipe {
                 fifo,
                 sample_rate,
                 channels,
@@ -72,7 +72,7 @@ impl VideoAudioMux {
                     audio_config: inputs.audio_config,
                 }),
                 audio: audio.clone(),
-            });
+            })
         }
 
         #[cfg(not(unix))]

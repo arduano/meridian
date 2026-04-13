@@ -238,13 +238,12 @@ fn build_processed_midi_cancelable(
                         track,
                         config,
                     );
-                    if config.events.notes {
-                        if let Some(key) = config.notes.map_key(note_off.key) {
+                    if config.events.notes
+                        && let Some(key) = config.notes.map_key(note_off.key) {
                             state
                                 .current_audio_data
                                 .extend_from_slice(&[0x80 | note_off.channel, key]);
                         }
-                    }
                 }
                 Event::PolyphonicKeyPressure(event) => {
                     if !config.events.polyphonic_pressure {

@@ -10,7 +10,9 @@ use crate::{
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ZenithPaletteSpec {
+    #[default]
     Random,
     RandomGradients,
     PngFile { path: PathBuf },
@@ -18,7 +20,9 @@ pub enum ZenithPaletteSpec {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "source", rename_all = "snake_case")]
+#[derive(Default)]
 pub enum NotePaletteConfig {
+    #[default]
     DefaultTrackColors,
     ZenithPalette {
         palette: ZenithPaletteSpec,
@@ -27,17 +31,7 @@ pub enum NotePaletteConfig {
     },
 }
 
-impl Default for ZenithPaletteSpec {
-    fn default() -> Self {
-        Self::Random
-    }
-}
 
-impl Default for NotePaletteConfig {
-    fn default() -> Self {
-        Self::DefaultTrackColors
-    }
-}
 
 impl NotePaletteConfig {
     pub fn build_color_table(

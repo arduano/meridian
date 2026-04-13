@@ -75,7 +75,7 @@ pub(super) fn apply_control_change_tool_to_parsed_file(
         if track_index == 0 && !plan.startup_controls.is_empty() {
             let startup = plan.startup_controls.iter().cloned().map(Ok);
             if source_track_exists {
-                let body = control_changed_track_events(&parsed, 0, &plan)
+                let body = control_changed_track_events(parsed, 0, &plan)
                     .expect("track iteration should exist for a known track index");
                 write_try_track_events(&writer, startup.chain(body))?;
             } else {
@@ -84,7 +84,7 @@ pub(super) fn apply_control_change_tool_to_parsed_file(
             continue;
         }
 
-        let body = control_changed_track_events(&parsed, track_index as u32, &plan)
+        let body = control_changed_track_events(parsed, track_index as u32, &plan)
             .expect("track iteration should exist for a known track index");
         write_try_track_events(&writer, body)?;
     }

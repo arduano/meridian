@@ -832,7 +832,7 @@ pub(super) fn sync_quantize_controls(app: &App, config: &MidiFileProcessingConfi
     if let MidiModifierTool::Quantize(tool) = &config.tool {
         let ppq = get_ppq(app);
         app.set_modify_quantize_grid_ticks_text(
-            format_notes(tool.rounding_ticks as u64, ppq).into(),
+            format_notes(tool.rounding_ticks, ppq).into(),
         );
         app.set_modify_quantize_mode_text(format_serde_enum(&tool.mode).into());
     }
@@ -1158,28 +1158,6 @@ pub(super) fn update_shared_metadata_track_control(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tempo_map_destination_serde_labels_match_structured_ui_values() {
-        assert_eq!(
-            format_serde_enum(&TempoMapDestination::InjectIntoFirstTrack),
-            "inject_into_first_track"
-        );
-        assert_eq!(
-            format_serde_enum(&TempoMapDestination::CreateNewTempoTrack),
-            "create_new_tempo_track"
-        );
-        assert_eq!(
-            parse_serde_enum::<TempoMapDestination>("create_new_tempo_track", "tempo destination",)
-                .unwrap(),
-            TempoMapDestination::CreateNewTempoTrack
-        );
-    }
-}
-
 pub(super) fn sync_change_ppq_controls(app: &App, config: &MidiFileProcessingConfig) {
     if let MidiModifierTool::ChangePpq(tool) = &config.tool {
         app.set_modify_change_ppq_text(tool.ppq.to_string().into());
@@ -1226,4 +1204,26 @@ pub(super) fn update_extract_track_control(
         other => return Err(format!("unknown extract track control: {other}")),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tempo_map_destination_serde_labels_match_structured_ui_values() {
+        assert_eq!(
+            format_serde_enum(&TempoMapDestination::InjectIntoFirstTrack),
+            "inject_into_first_track"
+        );
+        assert_eq!(
+            format_serde_enum(&TempoMapDestination::CreateNewTempoTrack),
+            "create_new_tempo_track"
+        );
+        assert_eq!(
+            parse_serde_enum::<TempoMapDestination>("create_new_tempo_track", "tempo destination",)
+                .unwrap(),
+            TempoMapDestination::CreateNewTempoTrack
+        );
+    }
 }

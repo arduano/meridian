@@ -39,14 +39,18 @@ pub enum RendererKind {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ProjectorBackgroundScalingMode {
+    #[default]
     Stretch,
     Cover,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "source", rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ProjectorBackgroundConfig {
+    #[default]
     None,
     PngFile {
         path: String,
@@ -56,6 +60,7 @@ pub enum ProjectorBackgroundConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Default)]
 pub struct FlatNoteProjectorConfig {
     #[serde(default)]
     pub palette: NotePaletteConfig,
@@ -106,6 +111,7 @@ pub enum KeyboardHeightSpec {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Default)]
 pub struct TwoDSceneConfig {
     #[serde(default)]
     pub background: ProjectorBackgroundConfig,
@@ -195,7 +201,9 @@ pub struct TextSceneConfig {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum TextAnchor {
+    #[default]
     TopLeft,
     TopRight,
     BottomLeft,
@@ -205,7 +213,9 @@ pub enum TextAnchor {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum TextAlignment {
+    #[default]
     Left,
     Center,
     Right,
@@ -237,7 +247,9 @@ pub enum TextValueSource {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum TextValueFormat {
+    #[default]
     Raw,
     Integer,
     Decimal1,
@@ -365,16 +377,13 @@ pub struct SceneQuad {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum DisplayTimeSpace {
+    #[default]
     Time,
     Tick,
 }
 
-impl Default for DisplayTimeSpace {
-    fn default() -> Self {
-        Self::Time
-    }
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 pub struct SceneLayout {
@@ -398,13 +407,6 @@ impl Default for PfaNoteProjectorConfig {
     }
 }
 
-impl Default for FlatNoteProjectorConfig {
-    fn default() -> Self {
-        Self {
-            palette: NotePaletteConfig::default(),
-        }
-    }
-}
 
 impl Default for PfaKeyboardProjectorConfig {
     fn default() -> Self {
@@ -448,16 +450,6 @@ impl Default for KeyboardHeightSpec {
     }
 }
 
-impl Default for TwoDSceneConfig {
-    fn default() -> Self {
-        Self {
-            background: ProjectorBackgroundConfig::default(),
-            keyboard_height: KeyboardHeightSpec::default(),
-            notes: NoteProjectorConfig::default(),
-            keyboard: KeyboardProjectorConfig::default(),
-        }
-    }
-}
 
 impl Default for SceneConfig {
     fn default() -> Self {
@@ -530,23 +522,8 @@ impl Default for TextSceneConfig {
     }
 }
 
-impl Default for TextAnchor {
-    fn default() -> Self {
-        Self::TopLeft
-    }
-}
 
-impl Default for TextAlignment {
-    fn default() -> Self {
-        Self::Left
-    }
-}
 
-impl Default for TextValueFormat {
-    fn default() -> Self {
-        Self::Raw
-    }
-}
 
 impl Default for TextStyleConfig {
     fn default() -> Self {
@@ -578,17 +555,7 @@ impl Default for TextOverlayConfig {
     }
 }
 
-impl Default for ProjectorBackgroundScalingMode {
-    fn default() -> Self {
-        Self::Stretch
-    }
-}
 
-impl Default for ProjectorBackgroundConfig {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 impl PfaKeyboardProjectorConfig {
     pub fn resolved_top_bar_rgb(&self) -> [f32; 3] {

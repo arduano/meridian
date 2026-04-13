@@ -67,7 +67,7 @@ pub(super) fn submit_note_chunks(
             renderer
                 .resources
                 .note_instance_buffer
-                .slice(..(chunk.len() * std::mem::size_of::<NoteInstance>()) as u64),
+                .slice(..std::mem::size_of_val(chunk) as u64),
         );
         pass.draw(0..6, 0..chunk.len() as u32);
         drop(pass);
@@ -138,7 +138,7 @@ pub(super) fn submit_quad_chunks(
             renderer
                 .resources
                 .quad_instance_buffer
-                .slice(..(chunk.len() * std::mem::size_of::<SceneQuad>()) as u64),
+                .slice(..std::mem::size_of_val(chunk) as u64),
         );
         pass.draw(0..6, 0..chunk.len() as u32);
         drop(pass);

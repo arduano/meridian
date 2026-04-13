@@ -35,7 +35,7 @@ pub(super) fn apply_change_ppq_tool_to_parsed_file(
     for track_index in 0..track_count {
         progress.report_steps_completed(track_index, track_count, label)?;
         let iter =
-            scaled_ppq_track_events(&parsed, track_index as u32, parsed.midi().ppq(), tool.ppq)
+            scaled_ppq_track_events(parsed, track_index as u32, parsed.midi().ppq(), tool.ppq)
                 .expect("track iteration should exist for a known track index");
         write_try_track_events(&writer, iter)?;
     }

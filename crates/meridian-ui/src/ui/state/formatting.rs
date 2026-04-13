@@ -83,7 +83,7 @@ pub(super) fn format_percentage_compact(fraction: f64) -> String {
     } else if percent >= 1.0 {
         format!("{:.2}%", percent)
     } else if percent > 0.0 {
-        format!("<1%")
+        "<1%".to_string()
     } else {
         "0%".into()
     }
