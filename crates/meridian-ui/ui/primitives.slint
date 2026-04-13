@@ -889,13 +889,16 @@ export component FilePicker inherits Rectangle {
             spacing: 8px;
 
             // Icon
-            Image {
-                width: 18px;
-                height: 18px;
-                source: @image-url("../../../assets/icons/ui/file.svg");
-                image-fit: contain;
-                colorize: root.enabled ? Theme.text-accent : Theme.text-brand-muted;
-                vertical-alignment: center;
+            VerticalLayout {
+                alignment: center;
+
+                Image {
+                    width: 18px;
+                    height: 18px;
+                    source: @image-url("../../../assets/icons/ui/file.svg");
+                    image-fit: contain;
+                    colorize: root.enabled ? Theme.text-accent : Theme.text-brand-muted;
+                }
             }
 
             // Name + label

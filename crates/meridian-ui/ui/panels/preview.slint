@@ -165,13 +165,16 @@ export component PreviewWelcome inherits Rectangle {
                                 padding-right: 12px;
                                 spacing: 8px;
 
-                                Image {
-                                    width: 18px;
-                                    height: 18px;
-                                    source: @image-url("../../../../assets/icons/ui/file-music.svg");
-                                    image-fit: contain;
-                                    colorize: Theme.text-accent;
-                                    vertical-alignment: center;
+                                VerticalLayout {
+                                    alignment: center;
+
+                                    Image {
+                                        width: 18px;
+                                        height: 18px;
+                                        source: @image-url("../../../../assets/icons/ui/file-music.svg");
+                                        image-fit: contain;
+                                        colorize: Theme.text-accent;
+                                    }
                                 }
 
                                 Text {

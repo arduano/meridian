@@ -653,12 +653,15 @@ export component App inherits Window {
                                     spacing: 6px;
                                     alignment: center;
 
-                                    Image {
-                                        width: 16px;
-                                        height: 16px;
-                                        source: @image-url("../../../assets/icons/meridian.png");
-                                        image-fit: contain;
-                                        vertical-alignment: center;
+                                    VerticalLayout {
+                                        alignment: center;
+
+                                        Image {
+                                            width: 16px;
+                                            height: 16px;
+                                            source: @image-url("../../../assets/icons/meridian.png");
+                                            image-fit: contain;
+                                        }
                                     }
 
                                     Text { text: "Meridian"; color: Theme.text-brand-muted; font-size: Theme.font-size-lg; font-weight: 600; vertical-alignment: center; }
