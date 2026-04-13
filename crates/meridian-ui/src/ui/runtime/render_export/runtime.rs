@@ -33,13 +33,20 @@ pub(crate) struct RenderExportUiSnapshot {
 }
 
 #[derive(Debug, Clone)]
+enum RenderExportOutcome {
+    Finished,
+    Cancelled,
+    Failed(String),
+}
+
+#[derive(Debug, Clone)]
 struct RenderExportJob {
     draft: RenderExportDraft,
-    outcome: Option<RenderJobOutcome>,
+    outcome: Option<RenderExportOutcome>,
 }
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct RenderExportController {
+pub(crate) struct RenderExportRuntime {
     job: Option<RenderExportJob>,
 }
 
@@ -93,7 +100,7 @@ impl RenderExportProgress {
     }
 }
 
-impl RenderExportController {
+impl RenderExportRuntime {
     pub(crate) fn is_active(&self) -> bool {
         self.job.is_some()
     }
@@ -141,10 +148,10 @@ impl RenderExportController {
                     // Wait for the render status transition back to idle before finishing.
                 }
                 meridian_core::protocol::VideoRenderEvent::RenderCancelled { .. } => {
-                    job.outcome = Some(RenderJobOutcome::Cancelled);
+                    job.outcome = Some(RenderExportOutcome::Cancelled);
                 }
                 meridian_core::protocol::VideoRenderEvent::RenderFailed { message } => {
-                    job.outcome = Some(RenderJobOutcome::Failed(message.clone()));
+                    job.outcome = Some(RenderExportOutcome::Failed(message.clone()));
                 }
                 _ => {}
             },
@@ -155,10 +162,10 @@ impl RenderExportController {
                     // Wait for the render status transition back to idle before finishing.
                 }
                 meridian_core::audio::AudioRenderEvent::RenderCancelled { .. } => {
-                    job.outcome = Some(RenderJobOutcome::Cancelled);
+                    job.outcome = Some(RenderExportOutcome::Cancelled);
                 }
                 meridian_core::audio::AudioRenderEvent::RenderFailed { message } => {
-                    job.outcome = Some(RenderJobOutcome::Failed(message.clone()));
+                    job.outcome = Some(RenderExportOutcome::Failed(message.clone()));
                 }
                 _ => {}
             },
@@ -168,7 +175,7 @@ impl RenderExportController {
                     status: meridian_core::protocol::VideoRenderStatus::Idle,
                 },
             ) if job.outcome.is_none() && video_render_was_active(shared_state) => {
-                job.outcome = Some(RenderJobOutcome::Finished);
+                job.outcome = Some(RenderExportOutcome::Finished);
             }
             (
                 RenderExportMode::AudioOnly,
@@ -176,7 +183,7 @@ impl RenderExportController {
                     status: meridian_core::protocol::AudioRenderStatus::Idle,
                 },
             ) if job.outcome.is_none() && audio_render_was_active(shared_state) => {
-                job.outcome = Some(RenderJobOutcome::Finished);
+                job.outcome = Some(RenderExportOutcome::Finished);
             }
             _ => {}
         }
@@ -189,7 +196,7 @@ impl RenderExportController {
         let draft = self.draft()?.clone();
         let outcome = self.job.as_ref()?.outcome.clone();
         match outcome {
-            Some(RenderJobOutcome::Finished) => {
+            Some(RenderExportOutcome::Finished) => {
                 let output = draft.final_output.clone();
                 self.clear();
                 Some(RenderExportUiSnapshot {
@@ -199,7 +206,7 @@ impl RenderExportController {
                     terminal: Some(RenderExportUiTerminal::Finished(output)),
                 })
             }
-            Some(RenderJobOutcome::Failed(message)) => {
+            Some(RenderExportOutcome::Failed(message)) => {
                 self.clear();
                 Some(RenderExportUiSnapshot {
                     status: "Failed",
@@ -208,7 +215,7 @@ impl RenderExportController {
                     terminal: Some(RenderExportUiTerminal::Failed),
                 })
             }
-            Some(RenderJobOutcome::Cancelled) => {
+            Some(RenderExportOutcome::Cancelled) => {
                 self.clear();
                 Some(RenderExportUiSnapshot {
                     status: "Cancelled",

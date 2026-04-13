@@ -62,7 +62,7 @@ pub(super) fn install_core_event_listener(
     app: &App,
     core: &CoreHandle,
     shared_state: &Arc<Mutex<UiViewModel>>,
-    export_state: &Arc<Mutex<RenderExportController>>,
+    export_state: &Arc<Mutex<RenderExportRuntime>>,
 ) {
     let receiver = core.subscribe_events();
     let app_weak = app.as_weak();
@@ -267,7 +267,7 @@ pub(super) fn install_timer(
     pending_viewport_image: &Rc<RefCell<Option<slint::Image>>>,
     viewport_size: &Rc<RefCell<(u32, u32)>>,
     disable_wgpu: bool,
-    export_state: &Arc<Mutex<RenderExportController>>,
+    export_state: &Arc<Mutex<RenderExportRuntime>>,
 ) -> slint::Timer {
     let animation_timer = slint::Timer::default();
     let app_for_timer = app.as_weak();
@@ -364,8 +364,8 @@ mod tests {
         },
     };
 
-    fn export_state(mode: RenderExportMode, output: &str) -> Arc<Mutex<RenderExportController>> {
-        let export_state = Arc::new(Mutex::new(RenderExportController::default()));
+    fn export_state(mode: RenderExportMode, output: &str) -> Arc<Mutex<RenderExportRuntime>> {
+        let export_state = Arc::new(Mutex::new(RenderExportRuntime::default()));
         export_state
             .lock()
             .expect("render export coordinator mutex poisoned")

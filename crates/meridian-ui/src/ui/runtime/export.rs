@@ -82,13 +82,6 @@ pub(super) fn video_output_container_from_text(value: &str) -> VideoOutputContai
     }
 }
 
-#[derive(Debug, Clone)]
-pub(super) enum RenderJobOutcome {
-    Finished,
-    Cancelled,
-    Failed(String),
-}
-
 pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let persisted_config = load_ui_config();
     let startup = build_startup_options(&options, persisted_config.as_ref());
@@ -112,14 +105,13 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
     let render_load_generation = Arc::new(AtomicU64::new(0));
     let audio_load_generation = Arc::new(AtomicU64::new(0));
     let analysis_load_generation = Arc::new(AtomicU64::new(0));
-    let export_state = Arc::new(Mutex::new(RenderExportController::default()));
+    let export_state = install_render_export_runtime(&app, &bridge, &shared_state);
     let pending_viewport_image = Rc::new(RefCell::new(None));
     let viewport_size = Rc::new(RefCell::new((1280_u32, 720_u32)));
     initialize_core(&bridge, &startup, &app, &shared_state)?;
     initialize_merge_panel(&app, &shared_state);
     initialize_modify_panel(&app, &bridge, &shared_state);
     restore_persisted_ui_state(&app, &bridge, &shared_state, persisted_config.as_ref());
-    install_core_event_listener(&app, bridge.core(), &shared_state, &export_state);
     install_midi_process_listener(&app, bridge.core(), &shared_state);
     wire_callbacks(
         &app,
@@ -129,7 +121,6 @@ pub fn run_ui(options: UiOptions) -> Result<(), MeridianError> {
         &render_load_generation,
         &audio_load_generation,
         &analysis_load_generation,
-        &export_state,
     );
     install_drag_drop(&app);
     install_viewport(
@@ -184,12 +175,10 @@ fn wire_callbacks(
     render_load_generation: &Arc<AtomicU64>,
     audio_load_generation: &Arc<AtomicU64>,
     analysis_load_generation: &Arc<AtomicU64>,
-    export_state: &Arc<Mutex<RenderExportController>>,
 ) {
     wire_transport_callbacks(app, bridge, shared_state);
     wire_video_callbacks(app, bridge, shared_state);
     wire_audio_config_callbacks(app, bridge, shared_state);
-    wire_render_export_callbacks(app, bridge, shared_state, export_state);
     wire_merge_callbacks(app, bridge, shared_state);
     wire_modify_callbacks(app, bridge, shared_state);
     wire_midi_callbacks(

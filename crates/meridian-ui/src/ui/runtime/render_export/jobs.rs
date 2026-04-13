@@ -6,7 +6,7 @@ pub(in super::super) fn start_render_export_jobs(
     app: &App,
     bridge: &UiCoreBridge,
     shared_state: &Arc<Mutex<UiViewModel>>,
-    export_state: &Arc<Mutex<RenderExportController>>,
+    export_state: &Arc<Mutex<RenderExportRuntime>>,
     draft: &RenderExportDraft,
 ) -> Result<(), String> {
     let snapshot = shared_state

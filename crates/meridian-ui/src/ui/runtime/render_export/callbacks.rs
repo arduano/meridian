@@ -6,7 +6,7 @@ pub(in super::super) fn wire_render_export_callbacks(
     app: &App,
     bridge: &UiCoreBridge,
     shared_state: &Arc<Mutex<UiViewModel>>,
-    export_state: &Arc<Mutex<RenderExportController>>,
+    export_state: &Arc<Mutex<RenderExportRuntime>>,
 ) {
     {
         let app_weak = app.as_weak();
