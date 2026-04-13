@@ -7,14 +7,14 @@ pub mod shared;
 pub mod text;
 
 pub use shared::{
-    DisplayTimeSpace, FlatKeyboardProjectorConfig, FlatNoteProjectorConfig, KeyboardHeightSpec,
-    KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig, PFA_BLUE_TOP_BAR_COLOR,
-    PFA_GREEN_TOP_BAR_COLOR, PFA_RED_TOP_BAR_COLOR, PfaKeyboardProjectorConfig,
-    PfaNoteProjectorConfig, PianoTrailClassicSceneConfig, ProjectedScene,
-    ProjectorBackgroundConfig, ProjectorBackgroundScalingMode, ProjectorImageConfig, RendererKind,
-    SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState, SceneQuad, TextAlignment, TextAnchor,
-    TextOverlayConfig, TextRowConfig, TextSceneConfig, TextStyleConfig, TextValueFormat,
-    TextValueSource, ThreeDSceneConfig, TwoDSceneConfig, ZenithPaletteSpec, tick_scene_physics,
+    tick_scene_physics, DisplayTimeSpace, FlatKeyboardProjectorConfig, FlatNoteProjectorConfig,
+    KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
+    PfaKeyboardProjectorConfig, PfaNoteProjectorConfig, PianoTrailClassicSceneConfig,
+    ProjectedScene, ProjectorBackgroundConfig, ProjectorBackgroundScalingMode,
+    ProjectorImageConfig, RendererKind, SceneConfig, SceneLayer, SceneLayout, ScenePhysicsState,
+    SceneQuad, TextAlignment, TextAnchor, TextOverlayConfig, TextRowConfig, TextSceneConfig,
+    TextStyleConfig, TextValueFormat, TextValueSource, ThreeDSceneConfig, TwoDSceneConfig,
+    ZenithPaletteSpec, PFA_BLUE_TOP_BAR_COLOR, PFA_GREEN_TOP_BAR_COLOR, PFA_RED_TOP_BAR_COLOR,
 };
 
 use crate::midi::{backend::MIDIFileUnion, views::MIDIFileViewsUnion};
@@ -92,7 +92,6 @@ pub fn project_scene_views_into(
             config,
             layout,
             &text::TextRenderMetrics {
-                renderer_name: "text".into(),
                 viewport_width: layout.viewport_width,
                 viewport_height: layout.viewport_height,
                 ..text::TextRenderMetrics::default()

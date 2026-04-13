@@ -25,6 +25,13 @@ import { Theme } from "../theme.slint";
 component TextSceneEditorCard inherits Rectangle {
     in property <string> text;
     callback edited(string);
+    private property <string> draft: root.text;
+
+    changed text => {
+        if root.draft != root.text {
+            root.draft = root.text;
+        }
+    }
 
     height: 220px;
     border-radius: 8px;
@@ -34,13 +41,13 @@ component TextSceneEditorCard inherits Rectangle {
     clip: true;
 
     edit := TextEdit {
-        text: root.text;
-        placeholder-text: "MERIDIAN\nTime {{time.current|clock}}\nNotes {{notes.passed|int}} / {{notes.total|int}}";
+        text <=> root.draft;
+        placeholder-text: "MERIDIAN\nTime {{time.current|clock}}\nNotes {{notes.passed|number(decimals:0)}} / {{notes.total|number(decimals:0)}}";
         x: 10px;
         y: 10px;
         width: parent.width - 20px;
         height: parent.height - 20px;
-        edited => { root.edited(self.text); }
+        edited => { root.edited(root.draft); }
     }
 }
 
@@ -357,25 +364,6 @@ export component VideoPanel inherits Rectangle {
                         reset => { root.reset-asset("background_png"); }
                     }
 
-                    if root.is-text : Rectangle { height: 4px; }
-
-                    if root.is-text : InlineCustomRow {
-                        label: "Base Color";
-                        value: root.video-text-background-color-text;
-                        is-preset:
-                            root.video-text-background-color-text == "transparent"
-                            || root.video-text-background-color-text == "#00000000"
-                            || root.video-text-background-color-text == "#102B1E"
-                            || root.video-text-background-color-text == "#132031"
-                            || root.video-text-background-color-text == "#000000";
-                        custom-submitted(val) => { root.update-video-text-overlay("scene_background_color", val); }
-
-                        OptionChip { label: "Transparent"; active: root.video-text-background-color-text == "transparent" || root.video-text-background-color-text == "#00000000"; pressed => { root.update-video-text-overlay("scene_background_color", "transparent"); } }
-                        OptionChip { label: "Forest"; active: root.video-text-background-color-text == "#102B1E"; pressed => { root.update-video-text-overlay("scene_background_color", "#102B1E"); } }
-                        OptionChip { label: "Slate"; active: root.video-text-background-color-text == "#132031"; pressed => { root.update-video-text-overlay("scene_background_color", "#132031"); } }
-                        OptionChip { label: "Black"; active: root.video-text-background-color-text == "#000000"; pressed => { root.update-video-text-overlay("scene_background_color", "#000000"); } }
-                    }
-
                     Rectangle { height: 12px; }
                     Separator { }
                     Rectangle { height: 8px; }
@@ -418,10 +406,38 @@ export component VideoPanel inherits Rectangle {
                     if root.is-text : Rectangle { height: 6px; }
 
                     if root.is-text : Text {
-                        text: "Single text block. Use {{token}} or {{token|format}} and the insert chips below.";
+                        text: "Use {{source}} substitutions.\nCommon sources: time.current, time.remaining, time.length, notes.total, notes.passed, notes.remaining, notes.visible, keys.active, polyphony.current, tempo.bpm, density.nps.1s, density.nps.2s, tick.current, tick.remaining, tick.length, midi.name, viewport.width, viewport.height.";
                         color: Theme.text-muted;
                         font-size: Theme.font-size-sm;
                         wrap: word-wrap;
+                    }
+
+                    if root.is-text : Rectangle { height: 4px; }
+
+                    if root.is-text : Text {
+                        text: "Formats: |clock, |clock_millis, or |number(...).\nExamples: {{notes.total|number(decimals:0)}}, {{tempo.bpm|number(decimals:2, group:false)}}, {{tick.current|number(decimals:0, locale:de-DE)}}, {{time.current|clock_millis}}.\nnumber(...) supports decimals, min_decimals, max_decimals, group, and locale. Locales: en-US, de-DE, fr-FR.";
+                        color: Theme.text-muted;
+                        font-size: Theme.font-size-sm;
+                        wrap: word-wrap;
+                    }
+
+                    if root.is-text : Rectangle { height: 8px; }
+
+                    if root.is-text : InlineCustomRow {
+                        label: "Background";
+                        value: root.video-text-background-color-text;
+                        is-preset:
+                            root.video-text-background-color-text == "transparent"
+                            || root.video-text-background-color-text == "#00000000"
+                            || root.video-text-background-color-text == "#102B1E"
+                            || root.video-text-background-color-text == "#132031"
+                            || root.video-text-background-color-text == "#000000";
+                        custom-submitted(val) => { root.update-video-text-overlay("scene_background_color", val); }
+
+                        OptionChip { label: "Transparent"; active: root.video-text-background-color-text == "transparent" || root.video-text-background-color-text == "#00000000"; pressed => { root.update-video-text-overlay("scene_background_color", "transparent"); } }
+                        OptionChip { label: "Forest"; active: root.video-text-background-color-text == "#102B1E"; pressed => { root.update-video-text-overlay("scene_background_color", "#102B1E"); } }
+                        OptionChip { label: "Slate"; active: root.video-text-background-color-text == "#132031"; pressed => { root.update-video-text-overlay("scene_background_color", "#132031"); } }
+                        OptionChip { label: "Black"; active: root.video-text-background-color-text == "#000000"; pressed => { root.update-video-text-overlay("scene_background_color", "#000000"); } }
                     }
 
                     if root.is-text : Rectangle { height: 8px; }
@@ -437,41 +453,31 @@ export component VideoPanel inherits Rectangle {
                         OptionChip { label: "Time"; pressed => { root.insert-video-text-token("{{time.current|clock}}"); } }
                         OptionChip { label: "Remain"; pressed => { root.insert-video-text-token("{{time.remaining|clock}}"); } }
                         OptionChip { label: "Length"; pressed => { root.insert-video-text-token("{{time.length|clock}}"); } }
-                        OptionChip { label: "BPM"; pressed => { root.insert-video-text-token("{{tempo.bpm|bpm}}"); } }
-                        OptionChip { label: "NPS1"; pressed => { root.insert-video-text-token("{{density.nps1|0.0}}"); } }
-                        OptionChip { label: "NPS2"; pressed => { root.insert-video-text-token("{{density.nps2|0.0}}"); } }
+                        OptionChip { label: "BPM"; pressed => { root.insert-video-text-token("{{tempo.bpm|number(decimals:1)}}"); } }
+                        OptionChip { label: "NPS 1s"; pressed => { root.insert-video-text-token("{{density.nps.1s|number(decimals:1)}}"); } }
+                        OptionChip { label: "NPS 2s"; pressed => { root.insert-video-text-token("{{density.nps.2s|number(decimals:1)}}"); } }
                     }
 
                     if root.is-text : Rectangle { height: 4px; }
                     if root.is-text : InlineOptionRow {
                         label: "Counts";
-                        OptionChip { label: "Total"; pressed => { root.insert-video-text-token("{{notes.total|int}}"); } }
-                        OptionChip { label: "Passed"; pressed => { root.insert-video-text-token("{{notes.passed|int}}"); } }
-                        OptionChip { label: "Remain"; pressed => { root.insert-video-text-token("{{notes.remaining|int}}"); } }
-                        OptionChip { label: "Visible"; pressed => { root.insert-video-text-token("{{notes.visible|int}}"); } }
-                        OptionChip { label: "Keys"; pressed => { root.insert-video-text-token("{{keys.active|int}}"); } }
-                        OptionChip { label: "Poly"; pressed => { root.insert-video-text-token("{{polyphony.current|int}}"); } }
+                        OptionChip { label: "Total"; pressed => { root.insert-video-text-token("{{notes.total|number(decimals:0)}}"); } }
+                        OptionChip { label: "Passed"; pressed => { root.insert-video-text-token("{{notes.passed|number(decimals:0)}}"); } }
+                        OptionChip { label: "Remain"; pressed => { root.insert-video-text-token("{{notes.remaining|number(decimals:0)}}"); } }
+                        OptionChip { label: "Visible"; pressed => { root.insert-video-text-token("{{notes.visible|number(decimals:0)}}"); } }
+                        OptionChip { label: "Keys"; pressed => { root.insert-video-text-token("{{keys.active|number(decimals:0)}}"); } }
+                        OptionChip { label: "Poly"; pressed => { root.insert-video-text-token("{{polyphony.current|number(decimals:0)}}"); } }
                     }
 
                     if root.is-text : Rectangle { height: 4px; }
                     if root.is-text : InlineOptionRow {
                         label: "Other";
-                        OptionChip { label: "Tick"; pressed => { root.insert-video-text-token("{{tick.current|ticks}}"); } }
-                        OptionChip { label: "Tick Rem"; pressed => { root.insert-video-text-token("{{tick.remaining|ticks}}"); } }
-                        OptionChip { label: "Tick Len"; pressed => { root.insert-video-text-token("{{tick.length|ticks}}"); } }
+                        OptionChip { label: "Tick"; pressed => { root.insert-video-text-token("{{tick.current|number(decimals:0)}}"); } }
+                        OptionChip { label: "Tick Rem"; pressed => { root.insert-video-text-token("{{tick.remaining|number(decimals:0)}}"); } }
+                        OptionChip { label: "Tick Len"; pressed => { root.insert-video-text-token("{{tick.length|number(decimals:0)}}"); } }
                         OptionChip { label: "MIDI"; pressed => { root.insert-video-text-token("{{midi.name}}"); } }
-                        OptionChip { label: "Renderer"; pressed => { root.insert-video-text-token("{{renderer.name}}"); } }
-                        OptionChip { label: "W"; pressed => { root.insert-video-text-token("{{viewport.width|int}}"); } }
-                        OptionChip { label: "H"; pressed => { root.insert-video-text-token("{{viewport.height|int}}"); } }
-                    }
-
-                    if root.is-text : Rectangle { height: 4px; }
-                    if root.is-text : InlineOptionRow {
-                        label: "Insert";
-                        OptionChip { label: "Space"; pressed => { root.insert-video-text-token(" "); } }
-                        OptionChip { label: "/"; pressed => { root.insert-video-text-token(" / "); } }
-                        OptionChip { label: ":"; pressed => { root.insert-video-text-token(": "); } }
-                        OptionChip { label: "Line"; pressed => { root.insert-video-text-token("\n"); } }
+                        OptionChip { label: "W"; pressed => { root.insert-video-text-token("{{viewport.width|number(decimals:0)}}"); } }
+                        OptionChip { label: "H"; pressed => { root.insert-video-text-token("{{viewport.height|number(decimals:0)}}"); } }
                     }
 
                     if root.is-text : Rectangle { height: 12px; }

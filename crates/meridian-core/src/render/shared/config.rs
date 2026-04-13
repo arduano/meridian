@@ -59,8 +59,7 @@ pub enum ProjectorBackgroundConfig {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
-#[derive(Default)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS, Default)]
 pub struct FlatNoteProjectorConfig {
     #[serde(default)]
     pub palette: NotePaletteConfig,
@@ -110,8 +109,7 @@ pub enum KeyboardHeightSpec {
     AspectRatio { ratio: f32 },
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
-#[derive(Default)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS, Default)]
 pub struct TwoDSceneConfig {
     #[serde(default)]
     pub background: ProjectorBackgroundConfig,
@@ -225,7 +223,6 @@ pub enum TextAlignment {
 #[serde(rename_all = "snake_case")]
 pub enum TextValueSource {
     MidiName,
-    RendererName,
     ViewportWidth,
     ViewportHeight,
     CurrentTimeSeconds,
@@ -256,6 +253,7 @@ pub enum TextValueFormat {
     Decimal2,
     Decimal3,
     Clock,
+    ClockMillis,
     Seconds1,
     Seconds2,
     Bpm,
@@ -384,7 +382,6 @@ pub enum DisplayTimeSpace {
     Tick,
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 pub struct SceneLayout {
     pub scene: SceneConfig,
@@ -406,7 +403,6 @@ impl Default for PfaNoteProjectorConfig {
         }
     }
 }
-
 
 impl Default for PfaKeyboardProjectorConfig {
     fn default() -> Self {
@@ -449,7 +445,6 @@ impl Default for KeyboardHeightSpec {
         }
     }
 }
-
 
 impl Default for SceneConfig {
     fn default() -> Self {
@@ -522,9 +517,6 @@ impl Default for TextSceneConfig {
     }
 }
 
-
-
-
 impl Default for TextStyleConfig {
     fn default() -> Self {
         Self {
@@ -554,8 +546,6 @@ impl Default for TextOverlayConfig {
         }
     }
 }
-
-
 
 impl PfaKeyboardProjectorConfig {
     pub fn resolved_top_bar_rgb(&self) -> [f32; 3] {
@@ -741,7 +731,11 @@ impl TextSceneConfig {
 impl TextStyleConfig {
     pub fn normalized_name(&self) -> &str {
         let trimmed = self.name.trim();
-        if trimmed.is_empty() { "body" } else { trimmed }
+        if trimmed.is_empty() {
+            "body"
+        } else {
+            trimmed
+        }
     }
 
     pub fn normalized_font_family(&self) -> &str {
@@ -773,7 +767,11 @@ impl TextOverlayConfig {
 
     pub fn resolved_style_name(&self) -> &str {
         let trimmed = self.style.trim();
-        if trimmed.is_empty() { "body" } else { trimmed }
+        if trimmed.is_empty() {
+            "body"
+        } else {
+            trimmed
+        }
     }
 
     pub fn background_rgba(&self) -> Option<[f32; 4]> {

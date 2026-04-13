@@ -331,7 +331,6 @@ fn row_to_template(row: &TextRowConfig) -> String {
 fn template_token(source: TextValueSource, format: Option<TextValueFormat>) -> String {
     let source = match source {
         TextValueSource::MidiName => "midi.name",
-        TextValueSource::RendererName => "renderer.name",
         TextValueSource::ViewportWidth => "viewport.width",
         TextValueSource::ViewportHeight => "viewport.height",
         TextValueSource::CurrentTimeSeconds => "time.current",
@@ -347,8 +346,12 @@ fn template_token(source: TextValueSource, format: Option<TextValueFormat>) -> S
         TextValueSource::ActiveKeys => "keys.active",
         TextValueSource::CurrentPolyphony => "polyphony.current",
         TextValueSource::CurrentBpm => "tempo.bpm",
-        TextValueSource::CurrentNps1s => "density.nps1",
-        TextValueSource::CurrentNps2s => "density.nps2",
+        TextValueSource::CurrentNps1s => "density.nps.1s",
+        TextValueSource::CurrentNps2s => "density.nps.2s",
+    };
+    let format = match source {
+        "midi.name" => None,
+        _ => format,
     };
     match format {
         Some(format) => format!("{{{{{source}|{}}}}}", template_format_name(format)),
@@ -358,15 +361,16 @@ fn template_token(source: TextValueSource, format: Option<TextValueFormat>) -> S
 
 fn template_format_name(format: TextValueFormat) -> &'static str {
     match format {
-        TextValueFormat::Raw => "raw",
-        TextValueFormat::Integer => "int",
-        TextValueFormat::Decimal1 => "0.0",
-        TextValueFormat::Decimal2 => "0.00",
-        TextValueFormat::Decimal3 => "0.000",
+        TextValueFormat::Raw => "number",
+        TextValueFormat::Integer => "number(decimals:0)",
+        TextValueFormat::Decimal1 => "number(decimals:1)",
+        TextValueFormat::Decimal2 => "number(decimals:2)",
+        TextValueFormat::Decimal3 => "number(decimals:3)",
         TextValueFormat::Clock => "clock",
-        TextValueFormat::Seconds1 => "s1",
-        TextValueFormat::Seconds2 => "s2",
-        TextValueFormat::Bpm => "bpm",
-        TextValueFormat::Ticks => "ticks",
+        TextValueFormat::ClockMillis => "clock_millis",
+        TextValueFormat::Seconds1 => "number(decimals:1)",
+        TextValueFormat::Seconds2 => "number(decimals:2)",
+        TextValueFormat::Bpm => "number(decimals:1)",
+        TextValueFormat::Ticks => "number(decimals:0)",
     }
 }

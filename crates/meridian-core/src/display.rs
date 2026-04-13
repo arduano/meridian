@@ -5,11 +5,10 @@ use crate::{
     midi::{MIDIFileBase, MIDIFileUnion},
     protocol::{CoreErrorCode, CoreEvent, FrameStats, ImageExportConfig, ImageOutputFormat},
     render::{
-        ProjectedScene, SceneConfig, SceneLayout, ScenePhysicsState,
         headless::save_scene_headless,
         project_scene,
         text::{build_text_render_metrics, project_text_scene},
-        tick_scene_physics,
+        tick_scene_physics, ProjectedScene, SceneConfig, SceneLayout, ScenePhysicsState,
     },
     transport::TransportSnapshot,
 };
@@ -253,13 +252,8 @@ impl LiveDisplaySession {
         if matches!(self.layout.scene, SceneConfig::Text(_)) {
             let mut scene = ProjectedScene::default();
             if let SceneConfig::Text(config) = &self.layout.scene {
-                let metrics = build_text_render_metrics(
-                    self.midi.as_mut(),
-                    &self.layout,
-                    current_time,
-                    scene.visible_notes,
-                    scene.active_keys,
-                );
+                let metrics =
+                    build_text_render_metrics(self.midi.as_mut(), &self.layout, current_time);
                 project_text_scene(config, &self.layout, &metrics, &mut scene);
             }
             return Ok(scene);
