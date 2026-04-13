@@ -1,5 +1,8 @@
 # MIDI Workflows
 
+The examples below assume your shell already has the required tools available.
+On Linux, `nix-shell` is the easiest way to get that environment.
+
 This page covers the human-facing MIDI commands: `analyze`, `inspect`,
 `process`, and `merge`.
 
@@ -8,14 +11,14 @@ This page covers the human-facing MIDI commands: `analyze`, `inspect`,
 Use `analyze` when you want a quick read on a single MIDI file.
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- analyze song.mid --pretty'
+cargo run -p meridian-cli -- analyze song.mid --pretty
 ```
 
 The default analysis includes file, summary, events, notes, and tempo data.
 You can narrow the report by repeating `--include`:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- analyze song.mid --include summary --include notes --pretty'
+cargo run -p meridian-cli -- analyze song.mid --include summary --include notes --pretty
 ```
 
 Useful knobs:
@@ -34,7 +37,7 @@ Use `inspect` when you want to inspect one or more MIDI files without changing
 them.
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- inspect song.mid other.mid --pretty'
+cargo run -p meridian-cli -- inspect song.mid other.mid --pretty
 ```
 
 That command is useful when you want a quick comparison across files or when
@@ -56,7 +59,7 @@ Use `select` to cut out a tick range and optionally preserve leading system
 events.
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- process select song.mid --output excerpt.mid --start-ticks 0 --end-ticks 1920 --pretty'
+cargo run -p meridian-cli -- process select song.mid --output excerpt.mid --start-ticks 0 --end-ticks 1920 --pretty
 ```
 
 Important knobs:
@@ -74,7 +77,7 @@ The default edge behavior is `trim`.
 Use `tempo-flatten` to rewrite a file to a single tempo value.
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- process tempo-flatten song.mid --output flat.mid --tempo 500000 --pretty'
+cargo run -p meridian-cli -- process tempo-flatten song.mid --output flat.mid --tempo 500000 --pretty
 ```
 
 The `--tempo` value is a MIDI tempo in microseconds per quarter note.
@@ -84,7 +87,7 @@ The `--tempo` value is a MIDI tempo in microseconds per quarter note.
 Use `tempo-scale` to speed up or slow down the tempo map by a factor.
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- process tempo-scale song.mid --output faster.mid --factor 2.0 --pretty'
+cargo run -p meridian-cli -- process tempo-scale song.mid --output faster.mid --factor 2.0 --pretty
 ```
 
 Values greater than `1.0` speed up the file. Values between `0.0` and `1.0`
@@ -95,7 +98,7 @@ slow it down.
 Use `quantize` to snap events to a tick grid.
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- process quantize song.mid --output quantized.mid --grid-ticks 120 --mode note-start-and-end --pretty'
+cargo run -p meridian-cli -- process quantize song.mid --output quantized.mid --grid-ticks 120 --mode note-start-and-end --pretty
 ```
 
 Useful knobs:
@@ -111,7 +114,7 @@ The default mode is `note-start-only`.
 Use `merge` when you want to combine multiple MIDI files into one output.
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- merge left.mid right.mid --output merged.mid --pretty'
+cargo run -p meridian-cli -- merge left.mid right.mid --output merged.mid --pretty
 ```
 
 `merge` accepts one or more input files and always requires `--output`.

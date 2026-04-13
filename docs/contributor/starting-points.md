@@ -106,10 +106,10 @@ find the right file quickly.
 These are the first commands I would run when changing the repo:
 
 ```bash
-nix-shell --run 'cargo test -p meridian-core --lib'
-nix-shell --run 'cargo test -p meridian-cli --tests'
-nix-shell --run 'cargo test -p meridian-ui persistence::tests -- --nocapture'
-nix-shell --run 'cd sdk/typescript && deno test --allow-env --allow-read --allow-write --allow-run tests'
+cargo test -p meridian-core --lib
+cargo test -p meridian-cli --tests
+cargo test -p meridian-ui persistence::tests -- --nocapture
+cd sdk/typescript && deno test --allow-env --allow-read --allow-write --allow-run tests
 ```
 
 If you are changing render-heavy code, add the relevant focused smoke test from

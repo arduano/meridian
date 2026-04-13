@@ -1,9 +1,12 @@
 # stdio Mode
 
+The examples below assume your shell already has the required tools available.
+On Linux, `nix-shell` is the easiest way to get that environment.
+
 `stdio` is Meridian's long-lived line-delimited JSON protocol mode.
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- stdio'
+cargo run -p meridian-cli -- stdio
 ```
 
 Use it when you want to drive Meridian from another process and keep the CLI
@@ -36,7 +39,7 @@ files, process MIDI, merge files, and start audio or video renders.
 For ad hoc experimentation, the one-shot raw helper is also available:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- json "{\"protocol_version\":1,\"id\":1,\"command\":{\"type\":\"get_render_video_status\"}}"'
+cargo run -p meridian-cli -- json "{\"protocol_version\":1,\"id\":1,\"command\":{\"type\":\"get_render_video_status\"}}"
 ```
 
 That example sends a single render-status request and exits after printing the

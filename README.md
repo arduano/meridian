@@ -53,44 +53,49 @@ If you use `direnv`, run `direnv allow` once in this repo. The included
 [`.envrc`](.envrc) loads the `shell.nix` environment and keeps the host Rust
 toolchain preferred.
 
+The command examples below assume you are already in a shell with the required
+tools available. On Linux, `nix-shell` is the easiest way to get that
+environment.
+
 ## Validation Matrix
 
 These are the commands most useful for newcomer validation. They are grouped by
 the code surfaces they actually exercise.
 
 ```bash
-nix-shell --run 'cargo check --workspace'
+cargo check --workspace
 ```
 
 Checks all workspace crates.
 
 ```bash
-nix-shell --run 'cargo test -p meridian-core --lib'
+cargo test -p meridian-core --lib
 ```
 
 Runs the core unit test suite.
 
 ```bash
-nix-shell --run 'cargo test -p meridian-core --test core_flow'
+cargo test -p meridian-core --test core_flow
 ```
 
 Runs the core integration flow tests, including render and process smoke
 coverage.
 
 ```bash
-nix-shell --run 'cargo test -p meridian-cli --tests'
+cargo test -p meridian-cli --tests
 ```
 
 Runs the CLI integration and stdio tests.
 
 ```bash
-nix-shell --run 'cargo test -p meridian-ui'
+cargo test -p meridian-ui
 ```
 
 Runs the UI unit and integration tests.
 
 ```bash
-nix-shell --run 'cd sdk/typescript && deno test --allow-env --allow-read --allow-write --allow-run tests'
+cd sdk/typescript
+deno test --allow-env --allow-read --allow-write --allow-run tests
 ```
 
 Runs the full TypeScript SDK runtime test suite.
@@ -100,67 +105,68 @@ Runs the full TypeScript SDK runtime test suite.
 Run the CLI help:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- --help'
+cargo run -p meridian-cli -- --help
 ```
 
 Run CLI stdio protocol mode:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- stdio'
+cargo run -p meridian-cli -- stdio
 ```
 
 Analyze a MIDI file:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- analyze song.mid --pretty --buckets 64'
+cargo run -p meridian-cli -- analyze song.mid --pretty --buckets 64
 ```
 
 Inspect one or more MIDI files:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- inspect song.mid other.mid --pretty'
+cargo run -p meridian-cli -- inspect song.mid other.mid --pretty
 ```
 
 Merge MIDI files:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- merge left.mid right.mid --output merged.mid --pretty'
+cargo run -p meridian-cli -- merge left.mid right.mid --output merged.mid --pretty
 ```
 
 Process a MIDI file:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- process select song.mid --output excerpt.mid --start-ticks 0 --end-ticks 1920 --pretty'
+cargo run -p meridian-cli -- process select song.mid --output excerpt.mid --start-ticks 0 --end-ticks 1920 --pretty
 ```
 
 Render audio:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- render audio song.mid --output out.flac --format flac'
+cargo run -p meridian-cli -- render audio song.mid --output out.flac --format flac
 ```
 
 Render video with a custom time range:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- render video song.mid --output clip.mp4 --start-time 12.5 --end-time 18.0 --fps 30'
+cargo run -p meridian-cli -- render video song.mid --output clip.mp4 --start-time 12.5 --end-time 18.0 --fps 30
 ```
 
 Run the desktop UI:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-ui'
+cargo run -p meridian-ui
 ```
 
 Run the UI without the accelerated viewport:
 
 ```bash
-nix-shell --run 'MERIDIAN_DISABLE_WGPU=1 cargo run -p meridian-ui'
+MERIDIAN_DISABLE_WGPU=1 cargo run -p meridian-ui
 ```
 
 Run TypeScript SDK checks:
 
 ```bash
-nix-shell --run 'cd sdk/typescript && deno check src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts'
+cd sdk/typescript
+deno check src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts
 ```
 
 ## Notes

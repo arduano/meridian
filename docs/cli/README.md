@@ -5,6 +5,9 @@ This guide is for the curated Meridian CLI surface in
 small and direct: use it for local work, use `stdio` for custom automation, and
 use the TypeScript SDK when you want a higher-level programmable integration.
 
+The examples below assume your shell already has the required tools available.
+On Linux, `nix-shell` is the easiest way to get that environment.
+
 ## Start Here
 
 - [Workflows](./workflows.md): analyze, inspect, process, and merge MIDI files
@@ -17,10 +20,10 @@ use the TypeScript SDK when you want a higher-level programmable integration.
 These are the shortest useful commands to try first:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- --help'
-nix-shell --run 'cargo run -p meridian-cli -- analyze song.mid --pretty'
-nix-shell --run 'cargo run -p meridian-cli -- inspect song.mid --pretty'
-nix-shell --run 'cargo run -p meridian-cli -- stdio'
+cargo run -p meridian-cli -- --help
+cargo run -p meridian-cli -- analyze song.mid --pretty
+cargo run -p meridian-cli -- inspect song.mid --pretty
+cargo run -p meridian-cli -- stdio
 ```
 
 If you only want to confirm the command surface, `--help` is the first check.

@@ -1,5 +1,8 @@
 # Rendering
 
+The examples below assume your shell already has the required tools available.
+On Linux, `nix-shell` is the easiest way to get that environment.
+
 This page covers the CLI rendering commands: `render audio`, `render video`,
 and the stdout-oriented `render frame`.
 
@@ -8,7 +11,7 @@ and the stdout-oriented `render frame`.
 Use `render audio` to turn a MIDI file into WAV, FLAC, or MP3.
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- render audio song.mid --output out.flac --format flac'
+cargo run -p meridian-cli -- render audio song.mid --output out.flac --format flac
 ```
 
 Common knobs:
@@ -22,7 +25,7 @@ Common knobs:
 Example with an explicit soundfont:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- render audio song.mid --output out.mp3 --format mp3 --sample-rate 44100 --channels 2 --soundfont /path/to/font.sf2'
+cargo run -p meridian-cli -- render audio song.mid --output out.mp3 --format mp3 --sample-rate 44100 --channels 2 --soundfont /path/to/font.sf2
 ```
 
 If you omit `--soundfont`, Meridian uses its embedded/default soundfont path
@@ -33,7 +36,7 @@ when available.
 Use `render video` to write an encoded video file.
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- render video song.mid --output clip.mp4 --fps 30'
+cargo run -p meridian-cli -- render video song.mid --output clip.mp4 --fps 30
 ```
 
 The most useful knobs are:
@@ -52,7 +55,7 @@ The most useful knobs are:
 Example with a custom range and explicit renderer:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- render video song.mid --output clip.mkv --start-time -1.0 --end-time 18.0 --fps 60 --container mkv --renderer piano-trail-classic --ffmpeg-flags "-y"'
+cargo run -p meridian-cli -- render video song.mid --output clip.mkv --start-time -1.0 --end-time 18.0 --fps 60 --container mkv --renderer piano-trail-classic --ffmpeg-flags "-y"
 ```
 
 Negative start times are accepted, which is useful when you want preroll before
@@ -64,7 +67,7 @@ Use `render frame` when you want a single rendered frame on stdout instead of a
 file. That is useful for inspection, scripting, or shell-based comparisons.
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- render frame song.mid --time 12.5 --width 1280 --height 720 --renderer pfa'
+cargo run -p meridian-cli -- render frame song.mid --time 12.5 --width 1280 --height 720 --renderer pfa
 ```
 
 It shares the same renderer, time-space, and viewport controls as the video
@@ -74,6 +77,7 @@ video packets.
 ## Notes
 
 - Encoded video and encoded audio workflows rely on `ffmpeg` being available.
+  On Linux, the repo `nix-shell` provides it.
 - Keep `--ffmpeg-flags` quoted as one string so the shell parser sees it as one
   option value.
 - Match `--format` to the filename extension for audio output. The CLI rejects

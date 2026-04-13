@@ -24,12 +24,16 @@ If you use `direnv`, run:
 direnv allow
 ```
 
+The command examples below assume you are already in a shell with the required
+tools available. On Linux, that usually means running them from `nix-shell` or
+an equivalent environment.
+
 ## 2. Confirm The Workspace Builds
 
 Run the broad compile check first:
 
 ```bash
-nix-shell --run 'cargo check --workspace'
+cargo check --workspace
 ```
 
 If that passes, you have a usable baseline environment.
@@ -39,7 +43,7 @@ If that passes, you have a usable baseline environment.
 Pick any MIDI file and run:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- analyze song.mid --pretty --buckets 32'
+cargo run -p meridian-cli -- analyze song.mid --pretty --buckets 32
 ```
 
 If you want a few more immediate workflows after that:
@@ -47,19 +51,19 @@ If you want a few more immediate workflows after that:
 - inspect MIDI metadata:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- inspect song.mid --pretty'
+cargo run -p meridian-cli -- inspect song.mid --pretty
 ```
 
 - render audio:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- render audio song.mid --output out.flac --format flac'
+cargo run -p meridian-cli -- render audio song.mid --output out.flac --format flac
 ```
 
 - render video:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- render video song.mid --output clip.mp4 --start-time -1 --end-time 8 --fps 30'
+cargo run -p meridian-cli -- render video song.mid --output clip.mp4 --start-time -1 --end-time 8 --fps 30
 ```
 
 For the full command progression, continue to [CLI Guide](./cli/README.md).
@@ -69,13 +73,13 @@ For the full command progression, continue to [CLI Guide](./cli/README.md).
 Run the desktop UI:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-ui'
+cargo run -p meridian-ui
 ```
 
 If the accelerated viewport cannot start on your host, use:
 
 ```bash
-nix-shell --run 'MERIDIAN_DISABLE_WGPU=1 cargo run -p meridian-ui'
+MERIDIAN_DISABLE_WGPU=1 cargo run -p meridian-ui
 ```
 
 The simplest UI smoke path is:
@@ -98,8 +102,9 @@ If you want to drive Meridian programmatically, start here:
 The checked repo-local SDK workflow is:
 
 ```bash
-nix-shell --run 'cd sdk/typescript && deno check src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts'
-nix-shell --run 'cd sdk/typescript && deno test --allow-env --allow-read --allow-write --allow-run tests'
+cd sdk/typescript
+deno check src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts
+deno test --allow-env --allow-read --allow-write --allow-run tests
 ```
 
 ## 6. Where To Go Next
