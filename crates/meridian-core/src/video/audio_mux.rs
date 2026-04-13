@@ -37,7 +37,10 @@ use super::{
 pub(crate) enum VideoAudioMux {
     #[cfg(any(unix, windows))]
     Pipe {
+        #[cfg(unix)]
         pipe: crate::ffmpeg::AudioPipeGuard,
+        #[cfg(windows)]
+        pipe: Option<crate::ffmpeg::AudioPipeGuard>,
         sample_rate: u32,
         channels: u16,
         cancel: Arc<AtomicBool>,
@@ -73,7 +76,10 @@ impl VideoAudioMux {
             let pipe = crate::ffmpeg::AudioPipeGuard::create(&config.output, "audio")?;
             let _ = cancel;
             Ok(Self::Pipe {
+                #[cfg(unix)]
                 pipe,
+                #[cfg(windows)]
+                pipe: Some(pipe),
                 sample_rate,
                 channels,
                 cancel: Arc::clone(cancel),
@@ -105,13 +111,26 @@ impl VideoAudioMux {
         match self {
             #[cfg(any(unix, windows))]
             Self::Pipe {
+                #[cfg(unix)]
+                pipe,
+                #[cfg(windows)]
                 pipe,
                 sample_rate,
                 channels,
                 audio,
                 ..
             } => Ok(VideoFfmpegAudioInput {
+                #[cfg(unix)]
                 pipe_path: pipe.path(),
+                #[cfg(windows)]
+                pipe_path: pipe
+                    .as_ref()
+                    .ok_or_else(|| {
+                        MeridianError::Platform(
+                            "named audio pipe was already consumed before ffmpeg startup".into(),
+                        )
+                    })?
+                    .path(),
                 sample_rate: *sample_rate,
                 channels: *channels,
                 extra_args: &audio.ffmpeg_args,
@@ -178,11 +197,14 @@ impl VideoAudioMux {
                 let inputs = inputs.take().ok_or_else(|| {
                     MeridianError::Platform("audio mux inputs were already consumed".into())
                 })?;
-                let pipe_file = pipe.connect_writer()?;
+                let mut pipe = pipe.take().ok_or_else(|| {
+                    MeridianError::Platform("named audio pipe was already consumed".into())
+                })?;
                 let audio = audio.clone();
                 let cancel = Arc::clone(cancel);
                 let progress = Arc::clone(progress);
                 *worker = Some(thread::spawn(move || {
+                    let pipe_file = pipe.connect_writer(cancel.as_ref())?;
                     let soundfont_cache = SoundfontCache::new();
                     render_audio_pipe_from_cache(
                         inputs.audio_cache.as_ref(),

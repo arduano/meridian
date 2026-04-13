@@ -16,8 +16,7 @@ use super::{
         active_palette_path_from_scene, restore_last_asset_paths,
     },
     schema::{
-        ExportPreferences, MergePreferences, ModifyPreferences, UiConfigFile, WindowPosition,
-        WindowPreferences, WindowSize,
+        ExportPreferences, MergePreferences, ModifyPreferences, UiConfigFile, WindowPreferences,
     },
     store::save_ui_config_to_dir,
 };
@@ -363,21 +362,8 @@ fn capture_merge_preferences(app: &App) -> MergePreferences {
 }
 
 fn capture_window_preferences(app: &App) -> WindowPreferences {
-    let position = app.window().position();
-    let size = app.window().size();
-
-    WindowPreferences {
-        position: Some(WindowPosition {
-            x: position.x,
-            y: position.y,
-        }),
-        size: Some(WindowSize {
-            width: size.width.max(1),
-            height: size.height.max(1),
-        }),
-        maximized: app.window().is_maximized(),
-        fullscreen: app.window().is_fullscreen(),
-    }
+    let _ = app;
+    WindowPreferences::default()
 }
 
 fn non_empty_string(value: &str) -> Option<String> {

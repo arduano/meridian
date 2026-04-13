@@ -6,6 +6,9 @@ use std::{
 #[cfg(windows)]
 use std::fs::File;
 
+#[cfg(windows)]
+use std::{thread, time::Duration};
+
 #[cfg(unix)]
 use std::{
     ffi::CString,
@@ -26,10 +29,14 @@ use crate::MeridianError;
 
 #[cfg(windows)]
 use windows_sys::Win32::{
-    Foundation::{ERROR_PIPE_CONNECTED, GetLastError, INVALID_HANDLE_VALUE},
+    Foundation::{
+        ERROR_NO_DATA, ERROR_PIPE_CONNECTED, ERROR_PIPE_LISTENING, GetLastError,
+        INVALID_HANDLE_VALUE,
+    },
     Storage::FileSystem::PIPE_ACCESS_OUTBOUND,
     System::Pipes::{
-        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_TYPE_BYTE, PIPE_WAIT,
+        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_NOWAIT, PIPE_TYPE_BYTE,
+        PIPE_WAIT, SetNamedPipeHandleState,
     },
 };
 
@@ -136,7 +143,7 @@ impl AudioPipeGuard {
             CreateNamedPipeW(
                 wide_path.as_ptr(),
                 PIPE_ACCESS_OUTBOUND,
-                PIPE_TYPE_BYTE | PIPE_WAIT,
+                PIPE_TYPE_BYTE | PIPE_NOWAIT,
                 1,
                 64 * 1024,
                 64 * 1024,
@@ -162,7 +169,10 @@ impl AudioPipeGuard {
         &self.path
     }
 
-    pub(crate) fn connect_writer(&mut self) -> Result<File, MeridianError> {
+    pub(crate) fn connect_writer(
+        &mut self,
+        cancel: &std::sync::atomic::AtomicBool,
+    ) -> Result<File, MeridianError> {
         let handle = self.handle.take().ok_or_else(|| {
             MeridianError::Platform(format!(
                 "named audio pipe {} was already connected",
@@ -170,16 +180,48 @@ impl AudioPipeGuard {
             ))
         })?;
         let raw_handle = handle.as_raw_handle() as *mut core::ffi::c_void;
-        let connected = unsafe { ConnectNamedPipe(raw_handle, std::ptr::null_mut()) };
-        if connected == 0 {
-            let error = unsafe { GetLastError() };
-            if error != ERROR_PIPE_CONNECTED {
-                return Err(MeridianError::Platform(format!(
-                    "failed to connect named audio pipe {}: {}",
-                    self.path.display(),
-                    std::io::Error::from_raw_os_error(error as i32)
+        loop {
+            if cancel.load(Ordering::SeqCst) {
+                return Err(MeridianError::Cancelled(format!(
+                    "cancelled while waiting for named audio pipe {}",
+                    self.path.display()
                 )));
             }
+            let connected = unsafe { ConnectNamedPipe(raw_handle, std::ptr::null_mut()) };
+            if connected != 0 {
+                break;
+            }
+            let error = unsafe { GetLastError() };
+            match error {
+                ERROR_PIPE_CONNECTED => break,
+                ERROR_PIPE_LISTENING | ERROR_NO_DATA => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                _ => {
+                    return Err(MeridianError::Platform(format!(
+                        "failed to connect named audio pipe {}: {}",
+                        self.path.display(),
+                        std::io::Error::from_raw_os_error(error as i32)
+                    )));
+                }
+            }
+        }
+        let mut wait_mode = PIPE_WAIT;
+        let changed = unsafe {
+            SetNamedPipeHandleState(
+                raw_handle,
+                &mut wait_mode,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
+        if changed == 0 {
+            let error = unsafe { GetLastError() };
+            return Err(MeridianError::Platform(format!(
+                "failed to switch named audio pipe {} to blocking mode: {}",
+                self.path.display(),
+                std::io::Error::from_raw_os_error(error as i32)
+            )));
         }
         Ok(File::from(handle))
     }

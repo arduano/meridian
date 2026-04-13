@@ -256,8 +256,27 @@ pub(super) fn resolve_render_output_path_text(
     if current.is_empty() {
         default_render_output_path(selected_midi_name, mode, audio_format, video_container)
     } else {
-        current.to_string()
+        rewrite_render_output_path_extension(current, mode, audio_format, video_container)
     }
+}
+
+fn rewrite_render_output_path_extension(
+    current: &str,
+    mode: RenderExportMode,
+    audio_format: AudioOnlyFormat,
+    video_container: VideoOutputContainer,
+) -> String {
+    let extension = if mode == RenderExportMode::AudioOnly {
+        audio_format.extension()
+    } else {
+        video_container.extension()
+    };
+    let mut path = PathBuf::from(current);
+    if path.file_name().is_none() {
+        return current.to_string();
+    }
+    path.set_extension(extension);
+    path.display().to_string()
 }
 
 pub(super) fn sync_render_output_path(app: &App) {
@@ -575,7 +594,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_render_output_path_text_preserves_non_empty_paths() {
+    fn resolve_render_output_path_text_rewrites_non_empty_path_extension() {
         let path = resolve_render_output_path_text(
             "/tmp/example/custom-name.txt",
             "/tmp/example/song.mid",
@@ -584,7 +603,7 @@ mod tests {
             VideoOutputContainer::Mp4,
         );
 
-        assert_eq!(path, "/tmp/example/custom-name.txt");
+        assert_eq!(path, "/tmp/example/custom-name.flac");
     }
 
     #[test]
