@@ -1,21 +1,36 @@
 # Docs
 
-This directory is the starting point for repository documentation that does not
-fit cleanly in the top-level README.
+This directory is the main documentation index for Meridian. The structure is
+progressive on purpose:
+
+1. get one working path running
+2. learn the main user-facing workflows
+3. move into advanced knobs and troubleshooting
+4. use contributor docs only when you need codebase orientation
 
 ## Start Here
 
-- [Repository README](../README.md): workspace overview, requirements, and the
-  newcomer validation matrix
-- [TypeScript SDK](./typescript-sdk/README.md): setup, API surface, modifier
-  tool reference, and runnable example links
-- [Testing Guide](./testing.md): which commands to run for core, UI, CLI, and
-  SDK changes
+- [Getting Started](./getting-started.md): first successful CLI, UI, and SDK
+  paths
+- [Repository README](../README.md): workspace overview, requirements, and
+  validation matrix
 
-## Sections
+## Workflow Guides
 
-- [TypeScript SDK](./typescript-sdk/README.md): Deno-first SDK docs with runtime
-  support notes and examples
+- [CLI Guide](./cli/README.md): command-line workflows from quickstart to
+  advanced flags
+- [UI Guide](./ui/README.md): loading MIDI, playback, modify, merge, export,
+  and persistence behavior
+- [TypeScript SDK](./typescript-sdk/README.md): programmatic control through the
+  checked Deno-first SDK path
+
+## Reference And Troubleshooting
+
+- [Troubleshooting](./troubleshooting.md): common setup, rendering, and config
+  failure modes
+- [Testing Guide](./testing.md): focused validation commands by subsystem
+
+## Contributor Docs
+
 - [Starting Points](./starting-points.md): contributor map for core, UI, CLI,
   SDK, rendering, and tests
-- [Testing Guide](./testing.md): focused validation commands by subsystem

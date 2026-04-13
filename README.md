@@ -5,8 +5,12 @@ and desktop visualization.
 
 ## Start Here
 
-- [Repository docs](docs/README.md): the top-level docs index and the best place
-  to find feature-specific guides
+- [Getting started](docs/getting-started.md): the fastest path to a first
+  successful CLI, UI, or SDK workflow
+- [Repository docs](docs/README.md): the full documentation index
+- [CLI guide](docs/cli/README.md): command-line workflows from simple to
+  advanced
+- [UI guide](docs/ui/README.md): panel-by-panel UI workflows and export paths
 - [TypeScript SDK docs](docs/typescript-sdk/README.md): SDK setup, runtime
   support, and API surface notes
 - [Workspace layout](#workspace): where the core crates, CLI, UI, and SDK live
@@ -25,6 +29,10 @@ and desktop visualization.
 ## Docs
 
 - [Repository docs](docs/README.md)
+- [Getting started](docs/getting-started.md): first-run setup and smoke paths
+- [CLI guide](docs/cli/README.md): curated CLI workflows and advanced options
+- [UI guide](docs/ui/README.md): playback, panels, export, and persistence
+- [Troubleshooting](docs/troubleshooting.md): common setup and runtime failures
 - [Starting points](docs/starting-points.md): contributor map for core, UI, CLI,
   SDK, rendering, and tests
 
