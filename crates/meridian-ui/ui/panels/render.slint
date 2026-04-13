@@ -891,17 +891,27 @@ export component RenderPanel inherits Rectangle {
                     alignment: center;
                     spacing: 8px;
 
-                    if root.export-succeeded : Image {
-                        width: 18px;
-                        height: 18px;
-                        source: @image-url("../../../../assets/icons/ui/check.svg");
-                        image-fit: contain;
+                    if root.export-succeeded : VerticalLayout {
+                        alignment: center;
+
+                        Image {
+                            width: 18px;
+                            height: 18px;
+                            source: @image-url("../../../../assets/icons/ui/check.svg");
+                            image-fit: contain;
+                            colorize: Theme.status-success;
+                        }
                     }
-                    if root.export-failed : Image {
-                        width: 18px;
-                        height: 18px;
-                        source: @image-url("../../../../assets/icons/ui/x.svg");
-                        image-fit: contain;
+                    if root.export-failed : VerticalLayout {
+                        alignment: center;
+
+                        Image {
+                            width: 18px;
+                            height: 18px;
+                            source: @image-url("../../../../assets/icons/ui/x.svg");
+                            image-fit: contain;
+                            colorize: Theme.status-danger;
+                        }
                     }
                     Text {
                         text: root.export-status;
