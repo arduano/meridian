@@ -62,7 +62,7 @@ fn load_rejects_unsupported_config_version_without_backup() {
     let error =
         load_ui_config_from_dir(Some(dir.path())).expect_err("unsupported version should fail");
 
-    assert!(error.contains("unsupported UI config version"));
+    assert!(error.contains("unsupported meridian-ui config version"));
 }
 
 #[test]

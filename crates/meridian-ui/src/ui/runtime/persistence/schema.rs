@@ -15,7 +15,7 @@ pub(in super::super) fn validate_config_version(version: u32) -> Result<(), Stri
         Ok(())
     } else {
         Err(format!(
-            "unsupported UI config version {version}; expected {CONFIG_VERSION}"
+            "unsupported meridian-ui config version {version}; this build expects version {CONFIG_VERSION}. delete the saved UI config to regenerate defaults"
         ))
     }
 }

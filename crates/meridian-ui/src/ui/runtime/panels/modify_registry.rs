@@ -7,7 +7,14 @@ use super::*;
 
 mod policy;
 
-#[allow(unused_imports)]
-pub(crate) use policy::{
-    modify_pass_policy, modify_pass_policy_for_field_prefix, ModifyPassPolicy,
-};
+pub(crate) type ModifyPassPolicy = policy::ModifyPassPolicy;
+
+pub(crate) fn modify_pass_policy(pass_key: &str) -> Option<&'static ModifyPassPolicy> {
+    policy::modify_pass_policy(pass_key)
+}
+
+pub(crate) fn modify_pass_policy_for_field_prefix(
+    field_prefix: &str,
+) -> Option<&'static ModifyPassPolicy> {
+    policy::modify_pass_policy_for_field_prefix(field_prefix)
+}

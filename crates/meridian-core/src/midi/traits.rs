@@ -4,7 +4,6 @@ use crate::render::DisplayTimeSpace;
 
 use super::{DisplacedMIDINote, MIDIFileStats, MIDIFileUniqueSignature, MIDIViewRange};
 
-#[allow(dead_code)]
 #[enum_dispatch]
 pub trait MIDIFileBase {
     fn midi_length(&self) -> Option<f64>;

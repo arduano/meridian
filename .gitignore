@@ -1,3 +1,4 @@
 /target
 .direnv/
 .agents/
+sdk/typescript/node_modules/

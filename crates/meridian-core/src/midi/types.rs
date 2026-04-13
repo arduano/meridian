@@ -15,7 +15,6 @@ pub struct MIDIAnalysisSummary {
     pub densest_key_notes: u64,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MIDIFileStats {
     pub total_notes: Option<u64>,
