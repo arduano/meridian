@@ -46,6 +46,10 @@ pub fn spawn_ffmpeg_gray(
     )
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "ffmpeg spawning mirrors the complete command boundary without an extra transient options object."
+)]
 fn spawn_ffmpeg(
     output: &Path,
     container: VideoOutputContainer,

@@ -76,6 +76,10 @@ pub struct ProtocolVideoRenderConfig {
     pub audio: Option<VideoAudioConfig>,
 }
 
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Protocol commands stay unboxed at the wire boundary so serde/TS bindings remain straightforward."
+)]
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ProtocolCommand {

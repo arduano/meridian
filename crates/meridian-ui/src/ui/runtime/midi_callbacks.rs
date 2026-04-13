@@ -1,5 +1,9 @@
 use super::*;
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "MIDI callback wiring forwards the shared load generations explicitly so each page can cancel independently."
+)]
 pub(super) fn wire_midi_callbacks(
     app: &App,
     bridge: &UiCoreBridge,

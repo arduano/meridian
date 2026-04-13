@@ -169,6 +169,10 @@ pub(crate) fn initialize_core(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "UI callback wiring keeps the shared app, bridge, and load-generation handles explicit."
+)]
 fn wire_callbacks(
     app: &App,
     bridge: &UiCoreBridge,

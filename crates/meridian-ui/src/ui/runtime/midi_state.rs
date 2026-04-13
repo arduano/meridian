@@ -52,6 +52,10 @@ fn clear_analysis_state(shared_state: &Arc<Mutex<UiViewModel>>) {
         .clear_analysis();
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Unload/reset helpers touch every per-tab load generation and keep them explicit for clarity."
+)]
 pub(super) fn unload_selected_midi(
     app: &App,
     bridge: &UiCoreBridge,
@@ -82,6 +86,10 @@ pub(super) fn unload_selected_midi(
     app.window().request_redraw();
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Replacing the selected MIDI needs to reset every per-tab load state explicitly."
+)]
 pub(super) fn replace_selected_midi(
     app: &App,
     bridge: &UiCoreBridge,

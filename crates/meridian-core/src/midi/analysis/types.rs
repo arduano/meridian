@@ -124,6 +124,10 @@ pub struct CachedMidiAnalysis {
 }
 
 impl CachedMidiAnalysis {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "This constructor directly mirrors the cached analysis record layout."
+    )]
     pub(crate) fn from_parts(
         midi_length: f64,
         total_notes: u64,

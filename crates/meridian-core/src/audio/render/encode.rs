@@ -20,6 +20,10 @@ use super::{
 
 use super::super::soundfont_cache::SoundfontCache;
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Offline encoded renders need these explicit collaborators and job controls at the boundary."
+)]
 pub(crate) fn render_encoded_audio(
     events: &InRamAudioCache,
     audio_config: &AudioConfig,
@@ -60,6 +64,10 @@ pub(crate) fn render_encoded_audio(
 }
 
 #[cfg(unix)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "The Unix FIFO path mirrors the encoded render boundary without additional wrapper state."
+)]
 fn render_encoded_audio_unix(
     events: &InRamAudioCache,
     audio_config: &AudioConfig,

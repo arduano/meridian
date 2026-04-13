@@ -27,7 +27,7 @@ mod modify;
 mod reduce;
 mod video;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct UiOptions {
     pub midi_path: Option<PathBuf>,
     pub renderer: Option<RendererKind>,
@@ -36,20 +36,6 @@ pub struct UiOptions {
     pub first_key: Option<u8>,
     pub last_key: Option<u8>,
     pub disable_wgpu: bool,
-}
-
-impl Default for UiOptions {
-    fn default() -> Self {
-        Self {
-            midi_path: None,
-            renderer: None,
-            start_time: None,
-            view_range: None,
-            first_key: None,
-            last_key: None,
-            disable_wgpu: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

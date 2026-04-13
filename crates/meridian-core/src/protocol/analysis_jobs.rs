@@ -6,6 +6,10 @@ use crate::midi::analysis::{MidiAnalysisData, MidiAnalysisKind};
 use super::ids::{AnalysisJobId, ParsedMidiId};
 
 /// Streamed events emitted by the full analysis pipeline.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Finished analysis results stay inline so protocol serialization and TS bindings remain direct."
+)]
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MidiAnalysisJobEvent {
@@ -30,6 +34,10 @@ pub enum MidiAnalysisJobEvent {
 }
 
 /// Materialized job state derived from `MidiAnalysisJobEvent`.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Status snapshots mirror the wire shape directly and are serialized frequently."
+)]
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum MidiAnalysisJobStatus {

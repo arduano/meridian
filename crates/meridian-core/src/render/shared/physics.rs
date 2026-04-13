@@ -5,6 +5,10 @@ use crate::render::piano_trail_classic::{
     PianoTrailClassicPhysicsState, tick_piano_trail_classic_physics,
 };
 
+#[expect(
+    clippy::large_enum_variant,
+    reason = "This small internal enum stays flat so call sites can pattern-match scene physics directly."
+)]
 #[derive(Clone, Debug)]
 pub enum ScenePhysicsState {
     TwoD,

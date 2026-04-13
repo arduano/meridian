@@ -455,6 +455,10 @@ fn close_note_interval(
     true
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Tick transition accumulation is easier to follow with the transition scalars passed explicitly."
+)]
 fn record_tick_transition(
     tick_transitions: &mut Vec<TickTransitionPoint>,
     current_transition_tick: &mut Option<u64>,

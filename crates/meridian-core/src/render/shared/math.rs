@@ -1,5 +1,9 @@
 use super::SceneQuad;
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Gradient quad helpers take explicit corner positions and colors to match the caller's rendering data."
+)]
 pub(crate) fn vertical_gradient_quad(
     x1: f32,
     y1: f32,

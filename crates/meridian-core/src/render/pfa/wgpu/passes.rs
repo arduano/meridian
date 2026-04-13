@@ -4,6 +4,10 @@ use crate::render::{SceneQuad, shared::NoteInstance};
 
 use super::renderer::PrimitiveSceneRenderer;
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "WGPU submission helpers take explicit pipeline, target, and load-state knobs from the caller."
+)]
 pub(super) fn submit_note_chunks(
     renderer: &mut PrimitiveSceneRenderer,
     device: &wgpu::Device,
@@ -77,6 +81,10 @@ pub(super) fn submit_note_chunks(
     rendered_any
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Quad submission mirrors the note submission boundary with explicit render-pass inputs."
+)]
 pub(super) fn submit_quad_chunks(
     renderer: &mut PrimitiveSceneRenderer,
     device: &wgpu::Device,

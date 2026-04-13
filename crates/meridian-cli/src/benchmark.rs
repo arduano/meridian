@@ -35,6 +35,10 @@ struct TimingSummary {
     max: f64,
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "CLI entrypoints mirror parsed flags directly before they are folded into the runtime layout."
+)]
 pub fn run(
     midi: &std::path::Path,
     time: f64,

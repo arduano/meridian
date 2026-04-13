@@ -11,6 +11,10 @@ use meridian_core::{
     spawn_core,
 };
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "This CLI entrypoint maps one-to-one from explicit frame export flags."
+)]
 pub fn run(
     midi: &std::path::Path,
     format: ImageOutputFormat,

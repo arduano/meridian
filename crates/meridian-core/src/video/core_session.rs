@@ -9,13 +9,12 @@ use crate::{
 };
 
 pub(crate) fn read_core_state(core: &CoreHandle) -> Result<StateSnapshot, MeridianError> {
-    match core.request(CoreCommand::GetState)? {
-        events => match events.into_iter().next() {
-            Some(CoreEvent::StateSnapshot { state }) => Ok(state),
-            _ => Err(MeridianError::Protocol(
-                "unexpected response while reading core state".into(),
-            )),
-        },
+    let events = core.request(CoreCommand::GetState)?;
+    match events.into_iter().next() {
+        Some(CoreEvent::StateSnapshot { state }) => Ok(state),
+        _ => Err(MeridianError::Protocol(
+            "unexpected response while reading core state".into(),
+        )),
     }
 }
 

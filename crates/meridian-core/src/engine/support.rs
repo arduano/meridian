@@ -79,7 +79,8 @@ impl ImageOutputFormat {
         match path.extension().and_then(|ext| ext.to_str()) {
             Some("png") => Self::Png,
             Some("rgba") | Some("raw") => Self::Rgba,
-            Some("ppm") | _ => Self::Ppm,
+            Some("ppm") => Self::Ppm,
+            _ => Self::Ppm,
         }
     }
 }

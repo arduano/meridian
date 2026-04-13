@@ -176,172 +176,192 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
         .map(|events| (events.max(1) / 200).max(1))
         .unwrap_or(INDETERMINATE_PROGRESS_STRIDE);
 
-    let mut traversal_state = MaterializedTraversalState {
-        keys: &mut keys,
-        tempo_map: &mut tempo_map,
-        dirty_keys: &mut dirty_keys,
-        dirty_key_flags: &mut dirty_key_flags,
-        audio_blocks: &mut audio_blocks,
-        current_audio_data: &mut current_audio_data,
-        current_audio_control: &mut current_audio_control,
-        time_seconds,
-        time_ticks,
-        notes,
-        micros_per_quarter,
-        processed_events,
-        progress_stride,
-    };
+    let (time_seconds_out, time_ticks_out, notes_out, processed_events_out) = {
+        let mut traversal_state = MaterializedTraversalState {
+            keys: &mut keys,
+            tempo_map: &mut tempo_map,
+            dirty_keys: &mut dirty_keys,
+            dirty_key_flags: &mut dirty_key_flags,
+            audio_blocks: &mut audio_blocks,
+            current_audio_data: &mut current_audio_data,
+            current_audio_control: &mut current_audio_control,
+            time_seconds,
+            time_ticks,
+            notes,
+            micros_per_quarter,
+            processed_events,
+            progress_stride,
+        };
 
-    walk_merged_midi_items(
-        merged,
-        &should_cancel,
-        &mut traversal_state,
-        |state, batch| {
-            state.processed_events += batch.count() as u64;
+        walk_merged_midi_items(
+            merged,
+            &should_cancel,
+            &mut traversal_state,
+            |state, batch| {
+                state.processed_events += batch.count() as u64;
 
-            if batch.delta > 0 {
-                if let Some(keys) = state.keys.as_mut()
-                    && let (Some(dirty_keys), Some(dirty_key_flags)) =
-                        (state.dirty_keys.as_mut(), state.dirty_key_flags.as_mut())
-                {
-                    for key_index in dirty_keys.drain(..) {
-                        dirty_key_flags[key_index] = false;
-                        keys[key_index].flush(state.time_seconds, state.time_ticks);
-                    }
-                }
-                if let (Some(audio_blocks), Some(current_audio_data), Some(current_audio_control)) = (
-                    state.audio_blocks.as_mut(),
-                    state.current_audio_data.as_mut(),
-                    state.current_audio_control.as_mut(),
-                ) {
-                    flush_audio_block(
-                        audio_blocks,
-                        current_audio_data,
-                        current_audio_control,
-                        state.time_seconds,
-                    );
-                }
-
-                state.time_ticks += batch.delta;
-                state.time_seconds +=
-                    batch.delta as f64 * state.micros_per_quarter as f64 / 1_000_000.0 / ppq as f64;
-            }
-
-            Ok(())
-        },
-        |state, event| {
-            let track = event.track();
-
-            match event.as_event() {
-                Event::Tempo(tempo) => {
-                    state.micros_per_quarter = tempo.tempo;
-                    if let Some(tempo_map) = state.tempo_map.as_mut() {
-                        tempo_map.push_tempo_change(
-                            state.time_ticks,
-                            state.time_seconds,
-                            state.micros_per_quarter,
-                        );
-                    }
-                }
-                Event::NoteOn(note_on) => {
-                    let key_index = note_on.key as usize;
-                    if key_index < MIDI_KEY_COUNT {
-                        let track_chan = TrackAndChannel::new(track, note_on.channel);
-                        if note_on.velocity == 0 {
-                            if let Some(keys) = state.keys.as_mut() {
-                                keys[key_index].end_note(
-                                    track_chan,
-                                    state.time_seconds,
-                                    state.time_ticks,
-                                );
-                            }
-                        } else {
-                            if let Some(keys) = state.keys.as_mut() {
-                                let key = &mut keys[key_index];
-                                let was_empty = key.block_builder.is_empty();
-                                key.add_note(track_chan);
-                                if was_empty
-                                    && let (Some(dirty_keys), Some(dirty_key_flags)) =
-                                        (state.dirty_keys.as_mut(), state.dirty_key_flags.as_mut())
-                                    && !dirty_key_flags[key_index]
-                                {
-                                    dirty_key_flags[key_index] = true;
-                                    dirty_keys.push(key_index);
-                                }
-                            }
-                            state.notes += 1;
+                if batch.delta > 0 {
+                    if let Some(keys) = state.keys.as_mut()
+                        && let (Some(dirty_keys), Some(dirty_key_flags)) =
+                            (state.dirty_keys.as_mut(), state.dirty_key_flags.as_mut())
+                    {
+                        for key_index in dirty_keys.drain(..) {
+                            dirty_key_flags[key_index] = false;
+                            keys[key_index].flush(state.time_seconds, state.time_ticks);
                         }
                     }
-                    if let (Some(current_audio_data), Some(current_audio_control)) = (
+                    if let (
+                        Some(audio_blocks),
+                        Some(current_audio_data),
+                        Some(current_audio_control),
+                    ) = (
+                        state.audio_blocks.as_mut(),
                         state.current_audio_data.as_mut(),
                         state.current_audio_control.as_mut(),
                     ) {
-                        push_audio_event(
-                            event.as_event(),
+                        flush_audio_block(
+                            audio_blocks,
                             current_audio_data,
                             current_audio_control,
+                            state.time_seconds,
                         );
                     }
-                }
-                Event::NoteOff(note_off) => {
-                    let key_index = note_off.key as usize;
-                    if key_index < MIDI_KEY_COUNT
-                        && let Some(keys) = state.keys.as_mut()
-                    {
-                        let track_chan = TrackAndChannel::new(track, note_off.channel);
-                        keys[key_index].end_note(track_chan, state.time_seconds, state.time_ticks);
-                    }
-                    if let (Some(current_audio_data), Some(current_audio_control)) = (
-                        state.current_audio_data.as_mut(),
-                        state.current_audio_control.as_mut(),
-                    ) {
-                        push_audio_event(
-                            event.as_event(),
-                            current_audio_data,
-                            current_audio_control,
-                        );
-                    }
-                }
-                _ => {
-                    if let (Some(current_audio_data), Some(current_audio_control)) = (
-                        state.current_audio_data.as_mut(),
-                        state.current_audio_control.as_mut(),
-                    ) {
-                        push_audio_event(
-                            event.as_event(),
-                            current_audio_data,
-                            current_audio_control,
-                        );
-                    }
-                }
-            }
 
-            Ok(())
-        },
-        |state, batch| {
-            let batch_event_count = batch.count() as u64;
-            let previous_events = state.processed_events.saturating_sub(batch_event_count);
-            let crossed_stride = state.processed_events / state.progress_stride
-                > previous_events / state.progress_stride;
-            if state.processed_events == batch_event_count
-                || total_events.is_some_and(|total_events| state.processed_events >= total_events)
-                || crossed_stride
-            {
-                progress(MidiBuildProgress::from_counts(
-                    state.processed_events,
-                    state.notes,
-                    total_events,
-                ));
-            }
-            Ok(())
-        },
-    )?;
+                    state.time_ticks += batch.delta;
+                    state.time_seconds += batch.delta as f64 * state.micros_per_quarter as f64
+                        / 1_000_000.0
+                        / ppq as f64;
+                }
 
-    time_seconds = traversal_state.time_seconds;
-    time_ticks = traversal_state.time_ticks;
-    notes = traversal_state.notes;
-    processed_events = traversal_state.processed_events;
-    drop(traversal_state);
+                Ok(())
+            },
+            |state, event| {
+                let track = event.track();
+
+                match event.as_event() {
+                    Event::Tempo(tempo) => {
+                        state.micros_per_quarter = tempo.tempo;
+                        if let Some(tempo_map) = state.tempo_map.as_mut() {
+                            tempo_map.push_tempo_change(
+                                state.time_ticks,
+                                state.time_seconds,
+                                state.micros_per_quarter,
+                            );
+                        }
+                    }
+                    Event::NoteOn(note_on) => {
+                        let key_index = note_on.key as usize;
+                        if key_index < MIDI_KEY_COUNT {
+                            let track_chan = TrackAndChannel::new(track, note_on.channel);
+                            if note_on.velocity == 0 {
+                                if let Some(keys) = state.keys.as_mut() {
+                                    keys[key_index].end_note(
+                                        track_chan,
+                                        state.time_seconds,
+                                        state.time_ticks,
+                                    );
+                                }
+                            } else {
+                                if let Some(keys) = state.keys.as_mut() {
+                                    let key = &mut keys[key_index];
+                                    let was_empty = key.block_builder.is_empty();
+                                    key.add_note(track_chan);
+                                    if was_empty
+                                        && let (Some(dirty_keys), Some(dirty_key_flags)) = (
+                                            state.dirty_keys.as_mut(),
+                                            state.dirty_key_flags.as_mut(),
+                                        )
+                                        && !dirty_key_flags[key_index]
+                                    {
+                                        dirty_key_flags[key_index] = true;
+                                        dirty_keys.push(key_index);
+                                    }
+                                }
+                                state.notes += 1;
+                            }
+                        }
+                        if let (Some(current_audio_data), Some(current_audio_control)) = (
+                            state.current_audio_data.as_mut(),
+                            state.current_audio_control.as_mut(),
+                        ) {
+                            push_audio_event(
+                                event.as_event(),
+                                current_audio_data,
+                                current_audio_control,
+                            );
+                        }
+                    }
+                    Event::NoteOff(note_off) => {
+                        let key_index = note_off.key as usize;
+                        if key_index < MIDI_KEY_COUNT
+                            && let Some(keys) = state.keys.as_mut()
+                        {
+                            let track_chan = TrackAndChannel::new(track, note_off.channel);
+                            keys[key_index].end_note(
+                                track_chan,
+                                state.time_seconds,
+                                state.time_ticks,
+                            );
+                        }
+                        if let (Some(current_audio_data), Some(current_audio_control)) = (
+                            state.current_audio_data.as_mut(),
+                            state.current_audio_control.as_mut(),
+                        ) {
+                            push_audio_event(
+                                event.as_event(),
+                                current_audio_data,
+                                current_audio_control,
+                            );
+                        }
+                    }
+                    _ => {
+                        if let (Some(current_audio_data), Some(current_audio_control)) = (
+                            state.current_audio_data.as_mut(),
+                            state.current_audio_control.as_mut(),
+                        ) {
+                            push_audio_event(
+                                event.as_event(),
+                                current_audio_data,
+                                current_audio_control,
+                            );
+                        }
+                    }
+                }
+
+                Ok(())
+            },
+            |state, batch| {
+                let batch_event_count = batch.count() as u64;
+                let previous_events = state.processed_events.saturating_sub(batch_event_count);
+                let crossed_stride = state.processed_events / state.progress_stride
+                    > previous_events / state.progress_stride;
+                if state.processed_events == batch_event_count
+                    || total_events
+                        .is_some_and(|total_events| state.processed_events >= total_events)
+                    || crossed_stride
+                {
+                    progress(MidiBuildProgress::from_counts(
+                        state.processed_events,
+                        state.notes,
+                        total_events,
+                    ));
+                }
+                Ok(())
+            },
+        )?;
+
+        (
+            traversal_state.time_seconds,
+            traversal_state.time_ticks,
+            traversal_state.notes,
+            traversal_state.processed_events,
+        )
+    };
+
+    time_seconds = time_seconds_out;
+    time_ticks = time_ticks_out;
+    notes = notes_out;
+    processed_events = processed_events_out;
 
     if should_cancel() {
         return Err(MeridianError::Cancelled("midi load cancelled".into()));

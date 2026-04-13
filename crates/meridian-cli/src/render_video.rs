@@ -17,6 +17,10 @@ use crate::render_common::{
     assert_no_protocol_error, install_cancel_handler, write_event, write_events,
 };
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Video render CLI wiring keeps the full explicit flag surface visible at the boundary."
+)]
 pub fn run(
     midi: &Path,
     output: &Path,

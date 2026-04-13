@@ -335,6 +335,10 @@ fn tick_delta_to_seconds(delta_ticks: u64, micros_per_quarter: u32, ppq: u16) ->
     delta_ticks as f64 * micros_per_quarter as f64 / 1_000_000.0 / ppq as f64
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "The reduction pass threads shared progress and tempo-cache state through tight numeric helpers."
+)]
 fn reduce_polyphony(
     tick_transitions: &[TickTransitionPoint],
     midi_length: f64,
@@ -383,6 +387,10 @@ fn reduce_polyphony(
     (polyphony_area, max_simultaneous_notes)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "The duration reduction helper keeps progress accounting explicit alongside the cached tempo context."
+)]
 fn reduce_durations(
     intervals: &[NoteIntervalAggregate],
     segments: &[TempoSegment],

@@ -181,6 +181,10 @@ impl TextRasterizer {
         }
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Text drawing keeps the projected box geometry and style inputs explicit at the call site."
+    )]
     fn draw_text(
         &mut self,
         scene: &mut ProjectedScene,
@@ -870,6 +874,10 @@ fn anchor_top_left(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Overlay rectangle helpers operate on already-expanded pixel geometry."
+)]
 fn push_rect_px(
     scene: &mut ProjectedScene,
     viewport_width: f32,
@@ -1026,8 +1034,10 @@ mod tests {
 
     #[test]
     fn transparent_scene_background_skips_background_quad() {
-        let mut config = TextSceneConfig::default();
-        config.background_color = "transparent".into();
+        let config = TextSceneConfig {
+            background_color: "transparent".into(),
+            ..TextSceneConfig::default()
+        };
         let layout = SceneLayout {
             scene: SceneConfig::Text(config.clone()),
             viewport_width: 320,

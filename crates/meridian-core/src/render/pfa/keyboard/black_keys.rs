@@ -52,6 +52,10 @@ pub(super) fn push_black_keys(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Pressed black keys are emitted from precomputed geometry scalars for speed and readability."
+)]
 fn push_pressed_black_key(
     scene: &mut ProjectedScene,
     params: &PfaLayoutParams,
@@ -168,6 +172,10 @@ fn push_pressed_black_key(
     );
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Unpressed black keys share the same explicit geometry inputs as the pressed path."
+)]
 fn push_unpressed_black_key(
     scene: &mut ProjectedScene,
     params: &PfaLayoutParams,

@@ -155,6 +155,10 @@ impl LiveDisplaySession {
         Ok(())
     }
 
+    #[expect(
+        clippy::result_large_err,
+        reason = "This validation API returns a ready-to-publish core event so callers can forward it unchanged."
+    )]
     pub fn validate_layout(&self) -> Result<(), CoreEvent> {
         if self.layout.viewport_width == 0 || self.layout.viewport_height == 0 {
             return Err(CoreEvent::Error {

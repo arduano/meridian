@@ -405,8 +405,13 @@ fn emit_keyboard(
     active_keys: &mut usize,
     keyboard_quads: &mut usize,
 ) {
-    for key in key_layout.first_key..key_layout.last_key_exclusive {
-        let pressed = key_state[key].press > 0.0;
+    for (key, state) in key_state
+        .iter()
+        .enumerate()
+        .take(key_layout.last_key_exclusive)
+        .skip(key_layout.first_key)
+    {
+        let pressed = state.press > 0.0;
         if pressed {
             *active_keys += 1;
         }
@@ -416,8 +421,8 @@ fn emit_keyboard(
             [1.0, 1.0, 1.0, 1.0]
         };
         let base_right = base_left;
-        let left = blend_key_tint(base_left, key_state[key].left);
-        let right = blend_key_tint(base_right, key_state[key].right);
+        let left = blend_key_tint(base_left, state.left);
+        let right = blend_key_tint(base_right, state.right);
         if is_black_key(key as u8) {
             emit_black_key(
                 &mut scene.black_key_quads,
@@ -426,7 +431,7 @@ fn emit_keyboard(
                 key,
                 left,
                 right,
-                key_state[key].press,
+                state.press,
             );
             *keyboard_quads += 8;
         } else {
@@ -437,7 +442,7 @@ fn emit_keyboard(
                 key,
                 left,
                 right,
-                key_state[key].press,
+                state.press,
             );
             *keyboard_quads += 13;
         }
@@ -450,8 +455,13 @@ fn emit_aura(
     config: &PianoTrailClassicSceneConfig,
     key_state: &[KeyState],
 ) {
-    for key in key_layout.first_key..key_layout.last_key_exclusive {
-        let aura = key_state[key].aura;
+    for (key, state) in key_state
+        .iter()
+        .enumerate()
+        .take(key_layout.last_key_exclusive)
+        .skip(key_layout.first_key)
+    {
+        let aura = state.aura;
         if aura <= 0.0 {
             continue;
         }
@@ -467,8 +477,8 @@ fn emit_aura(
         x2 = middle + size;
         let y1 = size;
         let y2 = -size;
-        let left = scale_alpha(key_state[key].left, config.aura_strength);
-        let right = scale_alpha(key_state[key].right, config.aura_strength);
+        let left = scale_alpha(state.left, config.aura_strength);
+        let right = scale_alpha(state.right, config.aura_strength);
         push_aura_quad(
             scene,
             [x1, y1, 0.0],
@@ -910,6 +920,10 @@ fn transform_white_key(
     apply_key_motion_world(transformed, press, tilt_keys, 2.0, pivot_y, 0.0)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Key transforms keep the raw geometry inputs explicit inside the projector math."
+)]
 fn transform_black_key(
     position: [f32; 3],
     base_x: f32,
@@ -952,6 +966,10 @@ fn black_key_color(left: [f32; 4], right: [f32; 4], brightness: f32, blend: f32)
     ]
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Quad instances are emitted from already-expanded corner/color tuples."
+)]
 fn push_quad_instance(
     out: &mut Vec<PianoTrailClassicQuadInstance>,
     a: [f32; 3],

@@ -9,7 +9,7 @@ use super::{
 
 enum LoopEvent {
     Input(String),
-    Async(CoreEvent),
+    Async(Box<CoreEvent>),
     InputClosed,
     EventsClosed,
 }
@@ -72,7 +72,7 @@ where
                 Err(_) => LoopEvent::InputClosed,
             })
             .recv(&event_rx, |event| match event {
-                Ok(event) => LoopEvent::Async(event),
+                Ok(event) => LoopEvent::Async(Box::new(event)),
                 Err(_) => LoopEvent::EventsClosed,
             })
             .wait()
@@ -83,7 +83,7 @@ where
                 }
             }
             LoopEvent::Async(event) => {
-                if let Ok(event) = ProtocolEvent::try_from(event) {
+                if let Ok(event) = ProtocolEvent::try_from(*event) {
                     write_protocol_json(
                         stdout,
                         &ProtocolResponse {

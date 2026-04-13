@@ -266,11 +266,15 @@ export component MidiLoadParityBanner inherits Rectangle {
             vertical-alignment: center;
         }
 
-        Rectangle {
-            width: 1px;
-            height: 12px;
-            background: Theme.border-subtle;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 1px;
+                height: 12px;
+                background: Theme.border-subtle;
+            }
         }
+
 
         Text {
             text: root.message;

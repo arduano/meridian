@@ -84,13 +84,13 @@ pub(crate) fn build_key_x_layout(
     }
 
     let denom = (right - left + 1.0).max(1.0);
-    for key in 0..=MIDI_KEY_COUNT {
+    for (key, key_number) in KEY_NUMBERS.iter().enumerate().take(MIDI_KEY_COUNT + 1) {
         if !is_black_key(key as u8) {
-            layout.x1[key] = (KEY_NUMBERS[key] as f32 - left) / denom;
+            layout.x1[key] = (*key_number as f32 - left) / denom;
             layout.width[key] = 1.0 / denom;
         } else {
             let width = black_keys.width_factor / denom;
-            let offset = width * black_keys.offset_factors[KEY_NUMBERS[key] % 5];
+            let offset = width * black_keys.offset_factors[*key_number % 5];
             let next = (key + 1).min(MIDI_KEY_COUNT);
             layout.x1[key] = (KEY_NUMBERS[next] as f32 - left) / denom - offset;
             layout.width[key] = width;

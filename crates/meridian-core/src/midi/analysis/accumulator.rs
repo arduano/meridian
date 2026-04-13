@@ -224,6 +224,10 @@ impl MidiAnalysisAccumulator {
         )
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "These cached analysis fields are assembled in one place before materialization."
+    )]
     pub(crate) fn finalize_with_overrides(
         mut self,
         midi_length: f64,
