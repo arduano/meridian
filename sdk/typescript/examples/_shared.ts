@@ -1,4 +1,4 @@
-import { createDenoMeridianClient } from "../src/index.ts";
+import { createDenoMeridianClient } from "../mod.ts";
 
 const TWO_NOTE_FIXTURE = new Uint8Array([
   0x4d,

@@ -8,6 +8,7 @@ Start here after you already have one CLI, UI, or SDK workflow running.
 - [Starting Points](./starting-points.md): contributor map for core, UI, CLI,
   SDK, rendering, and tests
 - [Testing Guide](./testing.md): focused validation commands by subsystem
+- [Releasing](./releasing.md): shared versioning, tag flow, and GitHub release process
 
 ## Practical Order
 

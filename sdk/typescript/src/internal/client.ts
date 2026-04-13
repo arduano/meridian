@@ -1,5 +1,5 @@
 // Stable high-level SDK surface shared by the package root and runtime-specific
-// wrappers. Callers should normally import these types through `src/index.ts`
+// wrappers. Callers should normally import these types through `mod.ts`
 // instead of reaching into this file directly.
 export {
   MeridianProtocolError,

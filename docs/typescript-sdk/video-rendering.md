@@ -78,7 +78,7 @@ For Deno, expect the render path to need:
 ## Minimal Render
 
 ```ts
-import { createDenoMeridianClient } from "../sdk/typescript/src/index.ts";
+import { createDenoMeridianClient } from "../sdk/typescript/mod.ts";
 
 const client = await createDenoMeridianClient("./target/debug/meridian-cli");
 
@@ -185,7 +185,7 @@ typed scene structure the core renderer uses internally.
 Example:
 
 ```ts
-import type { SceneConfig } from "@meridian/cli-sdk";
+import type { SceneConfig } from "../../sdk/typescript/mod.ts";
 
 const scene: SceneConfig = {
   scene_type: "three_d",

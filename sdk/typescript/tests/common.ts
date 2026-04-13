@@ -1,4 +1,4 @@
-import { createDenoMeridianClient } from "../src/index.ts";
+import { createDenoMeridianClient } from "../mod.ts";
 
 function filePath(relative: string): string {
   return decodeURIComponent(new URL(relative, import.meta.url).pathname);

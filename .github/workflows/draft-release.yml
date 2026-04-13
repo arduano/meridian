@@ -3,7 +3,7 @@ name: Draft Release
 on:
   push:
     tags:
-      - "*"
+      - "v*"
 
 permissions:
   contents: write
@@ -13,10 +13,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  verify-release-version:
+    name: verify-release-version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify tag matches VERSION
+        run: |
+          set -euo pipefail
+          bash ./scripts/check-version "${GITHUB_REF_NAME#v}"
+
   linux-debian-packages:
     name: linux-debian-packages
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    needs: verify-release-version
 
     steps:
       - name: Checkout
@@ -125,6 +140,7 @@ jobs:
     name: linux-rpm
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    needs: verify-release-version
 
     steps:
       - name: Checkout
@@ -177,6 +193,7 @@ jobs:
     name: windows
     runs-on: windows-2022
     timeout-minutes: 90
+    needs: verify-release-version
 
     steps:
       - name: Checkout
@@ -255,6 +272,7 @@ jobs:
     name: ${{ matrix.artifact_name }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
+    needs: verify-release-version
     strategy:
       fail-fast: false
       matrix:

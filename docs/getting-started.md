@@ -102,7 +102,7 @@ The checked repo-local SDK workflow is:
 
 ```bash
 cd sdk/typescript
-deno check src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts
+deno check mod.ts src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts
 deno test --allow-env --allow-read --allow-write --allow-run tests
 ```
 

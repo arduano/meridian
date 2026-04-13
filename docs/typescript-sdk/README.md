@@ -3,10 +3,8 @@
 This section documents the Meridian TypeScript SDK in
 [`sdk/typescript`](../../sdk/typescript).
 
-The canonical local entrypoint is
-[`sdk/typescript/src/index.ts`](../../sdk/typescript/src/index.ts). When
-consumed as `@meridian/cli-sdk`, the package root exposes the same public
-surface.
+The stable public entrypoint is
+[`sdk/typescript/mod.ts`](../../sdk/typescript/mod.ts).
 
 The SDK docs use Deno for the runnable examples because that is the easiest
 repo-local path to validate. The package surface itself is runtime-aware, and
@@ -52,8 +50,9 @@ that means the SDK should work anywhere a runtime can:
 
 ## Public Surface Shape
 
-- `src/index.ts` is the package entrypoint and re-exports the stable client
-  factories, helpers, and protocol facade.
+- `mod.ts` is the stable public entrypoint for repo-local use and tagged GitHub
+  imports.
+- `src/index.ts` is the implementation entrypoint behind `mod.ts`.
 - `src/protocol.ts` is the handwritten SDK facade over the generated protocol
   schema in `sdk/typescript/generated`.
 - `src/runtime/*_client.ts` contains the runtime-specific convenience helpers
@@ -61,8 +60,7 @@ that means the SDK should work anywhere a runtime can:
 
 ## Current Status
 
-- Package name: `@meridian/cli-sdk`
+- Public import root: [`sdk/typescript/mod.ts`](../../sdk/typescript/mod.ts)
 - Source root: [`sdk/typescript/src`](../../sdk/typescript/src)
 - Examples: [`sdk/typescript/examples`](../../sdk/typescript/examples)
-- Today’s docs assume repo-local development first, with package-manager
-  distribution documentation still to be added later
+- Shipped SDK releases are consumed from Git tags, not a package registry

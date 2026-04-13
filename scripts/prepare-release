@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [[ $# -gt 1 ]]; then
+    echo "usage: scripts/prepare-release [version]" >&2
+    exit 1
+fi
+
+if [[ $# -eq 1 ]]; then
+    "$ROOT_DIR/scripts/set-version" "$1"
+fi
+
+version="$(tr -d '\n' < "$ROOT_DIR/VERSION")"
+tag="v$version"
+
+if ! git -C "$ROOT_DIR" diff --quiet || ! git -C "$ROOT_DIR" diff --cached --quiet; then
+    echo "working tree is dirty; commit or stash changes before preparing a release" >&2
+    exit 1
+fi
+
+if git -C "$ROOT_DIR" rev-parse "$tag" >/dev/null 2>&1; then
+    echo "tag $tag already exists" >&2
+    exit 1
+fi
+
+"$ROOT_DIR/scripts/check-version" "$version"
+
+previous_tag="$(git -C "$ROOT_DIR" tag --list 'v*' --sort=-version:refname | head -n 1 || true)"
+range_label="initial release"
+commit_range="HEAD"
+if [[ -n "$previous_tag" ]]; then
+    range_label="$previous_tag..HEAD"
+    commit_range="$previous_tag..HEAD"
+fi
+
+mkdir -p "$ROOT_DIR/target/release"
+notes_file="$ROOT_DIR/target/release/release-notes-$tag.md"
+
+{
+    echo "# Meridian $tag"
+    echo
+    echo "## Summary"
+    echo "- TODO: 3-5 user-facing highlights."
+    echo "- TODO: note any breaking or workflow-visible changes."
+    echo
+    echo "## Upgrade Notes"
+    echo "- TODO: call out anything users need to reconfigure or retest."
+    echo
+    echo "## Release Surface"
+    echo "- GitHub Release assets: meridian-ui installers/archives and meridian-cli binaries."
+    echo "- TypeScript/Deno SDK: import from the Git tag via sdk/typescript/mod.ts."
+    echo
+    echo "## Git Range"
+    echo "- $range_label"
+    echo
+    echo "## Commit Summary"
+    git -C "$ROOT_DIR" log --no-merges --format='- %s (%h)' "$commit_range"
+    echo
+    echo "## Optional LLM Prompt"
+    echo 'Rewrite the Summary and Upgrade Notes above into a concise release announcement.'
+    echo 'Keep the release surface section intact and do not invent features not listed in the commit summary.'
+} > "$notes_file"
+
+cat <<EOF
+Prepared Meridian release $tag
+
+Version source:
+  VERSION                $version
+
+Draft notes:
+  $notes_file
+
+Next steps:
+  1. Review and edit the draft notes.
+  2. Commit any final version/doc updates.
+  3. Tag the release: git tag $tag
+  4. Push the branch and tag.
+  5. Let .github/workflows/draft-release.yml build assets and draft the GitHub Release.
+EOF

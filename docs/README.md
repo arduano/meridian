@@ -36,3 +36,5 @@ This directory is the main documentation index for Meridian.
   core, UI, CLI, SDK, rendering, and tests
 - [Testing Guide](./contributor/testing.md): focused validation commands by
   subsystem
+- [Releasing](./contributor/releasing.md): shared versioning, tag flow, and
+  release process

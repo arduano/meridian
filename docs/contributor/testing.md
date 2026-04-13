@@ -80,7 +80,7 @@ cargo test -p meridian-ui viewport::tests -- --nocapture
 
 ```bash
 cd sdk/typescript
-deno check src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts
+deno check mod.ts src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts
 ```
 
 - Run the runtime suite:

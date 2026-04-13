@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+expected=""
+if [[ $# -gt 1 ]]; then
+    echo "usage: scripts/check-version [version]" >&2
+    exit 1
+fi
+if [[ $# -eq 1 ]]; then
+    expected="${1#v}"
+fi
+
+version="$(tr -d '\n' < "$ROOT_DIR/VERSION")"
+cargo_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$ROOT_DIR/Cargo.toml" | head -n 1)"
+sdk_version="$(sed -n 's/^[[:space:]]*"version": "\(.*\)",$/\1/p' "$ROOT_DIR/sdk/typescript/package.json" | head -n 1)"
+
+if [[ -n "$expected" && "$version" != "$expected" ]]; then
+    echo "VERSION ($version) does not match expected release version ($expected)" >&2
+    exit 1
+fi
+
+if [[ "$cargo_version" != "$version" ]]; then
+    echo "Cargo workspace version ($cargo_version) does not match VERSION ($version)" >&2
+    exit 1
+fi
+
+if [[ "$sdk_version" != "$version" ]]; then
+    echo "sdk/typescript/package.json version ($sdk_version) does not match VERSION ($version)" >&2
+    exit 1
+fi
+
+if ! grep -q 'builtins.readFile ./VERSION' "$ROOT_DIR/flake.nix"; then
+    echo "flake.nix is not reading VERSION as the package version source" >&2
+    exit 1
+fi
+
+echo "release version is consistent: $version"

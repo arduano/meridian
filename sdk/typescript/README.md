@@ -4,7 +4,8 @@ This package is the beginner-facing TypeScript entrypoint for Meridian.
 
 Start with:
 
-- [`src/index.ts`](./src/index.ts): the package root exports
+- [`mod.ts`](./mod.ts): the stable public entrypoint for repo-local use and tagged GitHub imports
+- [`src/index.ts`](./src/index.ts): the implementation entrypoint behind `mod.ts`
 - [`examples`](./examples): runnable end-to-end examples
 - [`../../docs/typescript-sdk`](../../docs/typescript-sdk): deeper workflow docs
 
@@ -13,7 +14,7 @@ Start with:
 Repo-local Deno usage:
 
 ```ts
-import { createDenoMeridianClient } from "./src/index.ts";
+import { createDenoMeridianClient } from "./mod.ts";
 
 const client = await createDenoMeridianClient("./target/debug/meridian-cli");
 
@@ -56,10 +57,21 @@ deno run --allow-env --allow-read --allow-write --allow-run your_script.ts
 - `midiTools` Typed builders for every MIDI modifier tool.
 - `protocol.ts` exports The public schema and protocol type facade.
 
+## GitHub Release Versioning
+
+The SDK is versioned by Git tag, not by a registry publish. The stable remote
+import shape is:
+
+```ts
+import { createDenoMeridianClient } from "https://raw.githubusercontent.com/<owner>/meridian/v0.1.0/sdk/typescript/mod.ts";
+```
+
+Pin tags or commits. Do not import from `main`.
+
 ## Validation
 
 ```bash
-deno check src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts
+deno check mod.ts src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts
 deno test --allow-env --allow-read --allow-write --allow-run tests
 ```
 

@@ -15,6 +15,8 @@ and automation.
   automation
 - [TypeScript SDK docs](docs/typescript-sdk/README.md): SDK setup, runtime
   support, and API surface notes
+- [Release guide](docs/contributor/releasing.md): shared versioning, tags, and
+  GitHub release flow
 - [Workspace layout](#workspace): where the core crates, CLI, UI, and SDK live
 - [Validation matrix](#validation-matrix): which commands actually exercise
   which parts of the repo
@@ -26,7 +28,7 @@ and automation.
 - [`crates/meridian-cli`](crates/meridian-cli): CLI and stdio protocol frontend
 - [`crates/meridian-ui`](crates/meridian-ui): Slint desktop UI
 - [`sdk/typescript`](sdk/typescript): TypeScript SDK for driving `meridian-cli`
-  via the public entrypoint in `sdk/typescript/src/index.ts`
+  via the public entrypoint in `sdk/typescript/mod.ts`
 
 ## Docs
 
@@ -169,7 +171,7 @@ Run TypeScript SDK checks:
 
 ```bash
 cd sdk/typescript
-deno check src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts
+deno check mod.ts src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts
 ```
 
 ## Notes

@@ -1,10 +1,10 @@
 {
-  "name": "@meridian/cli-sdk",
+  "name": "meridian-typescript-sdk",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
+    ".": "./mod.ts",
     "./runtime/deno": "./src/runtime/deno.ts",
     "./runtime/node": "./src/runtime/node.ts",
     "./runtime/bun": "./src/runtime/bun.ts",
@@ -14,7 +14,7 @@
   },
   "scripts": {
     "codegen:protocol": "cargo run -p meridian-core --example export_protocol_schema",
-    "check": "deno check src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts",
+    "check": "deno check mod.ts src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts",
     "test": "deno test --allow-env --allow-read --allow-write --allow-run tests"
   },
   "devDependencies": {

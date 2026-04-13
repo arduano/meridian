@@ -1,4 +1,4 @@
-import type { SceneConfig } from "../src/index.ts";
+import type { SceneConfig } from "../mod.ts";
 import { createClient, createScratchDir, resolveMidiFixture } from "./_shared.ts";
 
 const client = await createClient();

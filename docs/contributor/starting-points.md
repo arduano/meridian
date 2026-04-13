@@ -60,7 +60,7 @@ find the right file quickly.
 ## TypeScript SDK
 
 - Package entrypoint:
-  [`sdk/typescript/src/index.ts`](../../sdk/typescript/src/index.ts)
+  [`sdk/typescript/mod.ts`](../../sdk/typescript/mod.ts)
 - Protocol facade and public type aliases:
   [`sdk/typescript/src/protocol.ts`](../../sdk/typescript/src/protocol.ts)
 - Runtime adapters:

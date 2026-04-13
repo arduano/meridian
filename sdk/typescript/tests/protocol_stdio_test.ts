@@ -1,4 +1,4 @@
-import { createDenoProtocolClient } from "../src/index.ts";
+import { createDenoProtocolClient } from "../mod.ts";
 import type { CoreEvent } from "../src/protocol.ts";
 import {
   canRunRenderSmoke,

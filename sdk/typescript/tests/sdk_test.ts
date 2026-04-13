@@ -1,5 +1,5 @@
-import { type MidiAnalysisData, type SceneConfig } from "../src/index.ts";
-import { createDenoMeridianClient } from "../src/index.ts";
+import { type MidiAnalysisData, type SceneConfig } from "../mod.ts";
+import { createDenoMeridianClient } from "../mod.ts";
 import {
   defaultExecutablePath,
   defaultSoundfontPath,

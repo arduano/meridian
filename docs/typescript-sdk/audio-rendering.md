@@ -79,7 +79,7 @@ For Deno, expect the render path to need:
 ## Minimal Render
 
 ```ts
-import { createDenoMeridianClient } from "../sdk/typescript/src/index.ts";
+import { createDenoMeridianClient } from "../sdk/typescript/mod.ts";
 
 const client = await createDenoMeridianClient("./target/debug/meridian-cli");
 

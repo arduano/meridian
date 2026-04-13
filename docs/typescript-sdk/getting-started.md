@@ -94,22 +94,22 @@ rules next to the application that owns them.
 
 ## Import Shape
 
-The package surface is designed for package-style imports first. In this repo,
-the same exports are available from the source tree for local development.
+Meridian does not publish the SDK to JSR or npm. The stable public entrypoint is
+`sdk/typescript/mod.ts`.
 
-Readable target shape:
+Recommended tagged GitHub import shape:
 
 ```ts
-import { createDenoMeridianClient } from "@meridian/cli-sdk";
+import { createDenoMeridianClient } from "https://raw.githubusercontent.com/<owner>/meridian/v0.1.0/sdk/typescript/mod.ts";
 ```
 
 Practical repo-local shape:
 
 ```ts
-import { createDenoMeridianClient } from "../sdk/typescript/src/index.ts";
+import { createDenoMeridianClient } from "../sdk/typescript/mod.ts";
 ```
 
-Use whichever import style matches how your app is actually consuming the SDK.
+For shipped code, pin a Git tag or commit. Do not import from `main`.
 
 ## Initialization
 
@@ -124,7 +124,7 @@ Initialization comes down to three decisions:
 This is the default starting point for most apps:
 
 ```ts
-import { createDenoMeridianClient } from "../sdk/typescript/src/index.ts";
+import { createDenoMeridianClient } from "../sdk/typescript/mod.ts";
 
 const executablePath = Deno.env.get("MERIDIAN_CLI_BIN") ??
   "./target/debug/meridian-cli";
@@ -157,7 +157,7 @@ If you do not want the runtime-specific helper, the generic constructor path is
 the conceptual model:
 
 ```ts
-import { createMeridianClient } from "../sdk/typescript/src/index.ts";
+import { createMeridianClient } from "../sdk/typescript/mod.ts";
 import { denoRuntimeAdapter } from "../sdk/typescript/src/runtime/deno.ts";
 
 const client = await createMeridianClient({
@@ -175,7 +175,7 @@ If you want raw protocol commands and events instead of the higher-level
 workflow helpers, initialize the protocol client directly:
 
 ```ts
-import { createDenoProtocolClient } from "../sdk/typescript/src/index.ts";
+import { createDenoProtocolClient } from "../sdk/typescript/mod.ts";
 
 const client = await createDenoProtocolClient("./target/debug/meridian-cli");
 
@@ -208,7 +208,7 @@ For application code, keep setup centralized:
 A small wrapper module is usually enough:
 
 ```ts
-import { createDenoMeridianClient } from "../sdk/typescript/src/index.ts";
+import { createDenoMeridianClient } from "../sdk/typescript/mod.ts";
 
 export async function openMeridianClient() {
   const executablePath = Deno.env.get("MERIDIAN_CLI_BIN") ??

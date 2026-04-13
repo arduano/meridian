@@ -1,4 +1,4 @@
-import { createDenoMeridianClient } from "../src/index.ts";
+import { createDenoMeridianClient } from "../mod.ts";
 
 const executablePath = Deno.env.get("MERIDIAN_CLI_BIN") ??
   new URL("../../../target/debug/meridian-cli", import.meta.url).pathname;

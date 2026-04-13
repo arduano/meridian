@@ -9,8 +9,9 @@ turning into per-function reference docs yet.
 
 The package root is the primary SDK entrypoint:
 
-- locally: [`sdk/typescript/src/index.ts`](../../sdk/typescript/src/index.ts)
-- when published: `@meridian/cli-sdk`
+- locally and remotely: [`sdk/typescript/mod.ts`](../../sdk/typescript/mod.ts)
+- implementation entrypoint behind it:
+  [`sdk/typescript/src/index.ts`](../../sdk/typescript/src/index.ts)
 
 It re-exports the stable client factories, helpers, protocol facade, and the
 runtime-specific convenience entrypoints.

@@ -1,0 +1,30 @@
+changelog:
+  exclude:
+    labels:
+      - no-changelog
+      - internal
+  categories:
+    - title: Breaking Changes
+      labels:
+        - breaking
+    - title: UI
+      labels:
+        - ui
+    - title: CLI
+      labels:
+        - cli
+    - title: TypeScript SDK
+      labels:
+        - sdk
+    - title: Core
+      labels:
+        - core
+    - title: Docs
+      labels:
+        - docs
+    - title: Fixes
+      labels:
+        - fix
+    - title: Other Changes
+      labels:
+        - "*"

@@ -3,7 +3,9 @@
 This directory currently has two kinds of workflows:
 
 - `draft-release.yml`
-  Builds the release artifacts for Linux, Windows, and macOS on tag push and creates or updates a GitHub draft release.
+  Validates the root release version, builds the release artifacts for Linux,
+  Windows, and macOS on `v*` tag push, and creates or updates a GitHub draft
+  release.
 - `*-prototype.yml`
   Manual or branch-scoped validation workflows that are useful when iterating on packaging logic without touching the tag-driven release flow.
 
@@ -11,6 +13,7 @@ This directory currently has two kinds of workflows:
 
 `draft-release.yml` currently does this:
 
+- validates that the pushed `v*` tag matches the root `VERSION` file
 - Linux Debian job builds and smoke-tests `tar.gz`, `.deb`, and `AppImage`
 - Linux RPM job builds and smoke-tests `.rpm`
 - Windows job builds, smoke-tests staged binaries, builds the installer, then smoke-tests the installed binaries

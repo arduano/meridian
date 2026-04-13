@@ -15,6 +15,7 @@
           overlays = [ (import rust-overlay) ];
         };
         lib = pkgs.lib;
+        releaseVersion = lib.strings.removeSuffix "\n" (builtins.readFile ./VERSION);
         rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
         meridianSrc = builtins.path {
           path = ./.;
@@ -46,7 +47,7 @@
         mkMeridianPackage = { pname, cargoBuildFlags, installPhase }:
           pkgs.rustPlatform.buildRustPackage {
             inherit pname;
-            version = "0.1.0";
+            version = releaseVersion;
             src = meridianSrc;
             cargoLock = {
               lockFile = ./Cargo.lock;
