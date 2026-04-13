@@ -8,9 +8,9 @@ If you are looking for normal workflows instead of failure recovery, use:
 
 - [Repository README](../README.md)
 - [Docs index](./README.md)
+- [UI Guide](./ui/README.md)
 - [TypeScript SDK](./typescript-sdk/README.md)
 - [Testing Guide](./contributor/testing.md)
-- [UI Persistence](./ui/persistence.md)
 
 ## Quick Triage
 
@@ -108,15 +108,16 @@ What to do:
 
 - delete the saved UI config directory or the `config.json` file inside it
 - restart Meridian so it regenerates defaults
-- if you want the full storage layout and recovery behavior, read the UI
-  persistence doc first
+- if you want the normal UI behavior after restart or MIDI load, read the UI
+  guide and render guide first
 
 Meridian also tries to fall back to `config.json.bak` when the primary file is
 invalid, so you may see a repair message instead of a hard failure.
 
 Where this matters:
 
-- [UI Persistence](./ui/persistence.md)
+- [UI Guide](./ui/README.md)
+- [Render](./ui/render.md)
 - [Reference: environment notes](./reference/environment.md)
 
 ## Bad Output Extension

@@ -37,8 +37,8 @@ Key behaviors:
 - config version mismatches are treated as a signal to delete the saved UI
   config and regenerate defaults
 
-See [UI Persistence](../ui/persistence.md) for the persistence layout and which
-fields are remembered.
+See [UI Guide](../ui/README.md) for the user-facing behavior around remembered
+settings and per-panel workflows.
 
 ## Tooling Expectations
 

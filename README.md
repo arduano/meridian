@@ -1,16 +1,18 @@
 # meridian
 
-Meridian is a Rust workspace for MIDI inspection, modification, audio rendering,
-and desktop visualization.
+Meridian is a desktop application for MIDI inspection, modification, audio
+rendering, and visualization, with CLI and TypeScript surfaces for power users
+and automation.
 
 ## Start Here
 
 - [Getting started](docs/getting-started.md): the fastest path to a first
-  successful CLI, UI, or SDK workflow
+  successful UI, CLI, or SDK workflow
 - [Repository docs](docs/README.md): the full documentation index
-- [CLI guide](docs/cli/README.md): command-line workflows from simple to
-  advanced
-- [UI guide](docs/ui/README.md): panel-by-panel UI workflows and export paths
+- [UI guide](docs/ui/README.md): panel-by-panel workflows and per-control notes
+- [Render guide](docs/ui/render.md): export modes, ranges, and stream settings
+- [CLI guide](docs/cli/README.md): command-line workflows for power users and
+  automation
 - [TypeScript SDK docs](docs/typescript-sdk/README.md): SDK setup, runtime
   support, and API surface notes
 - [Workspace layout](#workspace): where the core crates, CLI, UI, and SDK live
@@ -30,8 +32,9 @@ and desktop visualization.
 
 - [Repository docs](docs/README.md)
 - [Getting started](docs/getting-started.md): first-run setup and smoke paths
-- [CLI guide](docs/cli/README.md): curated CLI workflows and advanced options
-- [UI guide](docs/ui/README.md): playback, panels, export, and persistence
+- [UI guide](docs/ui/README.md): panel-by-panel workflows and per-control notes
+- [Render guide](docs/ui/render.md): export modes, ranges, and stream settings
+- [CLI guide](docs/cli/README.md): curated CLI workflows and automation options
 - [Troubleshooting](docs/troubleshooting.md): common setup and runtime failures
 - [Contributor docs](docs/contributor/README.md): contributor map and validation
   entrypoints

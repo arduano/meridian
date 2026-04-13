@@ -4,17 +4,20 @@ This directory is the main documentation index for Meridian.
 
 ## Start Here
 
-- [Getting Started](./getting-started.md): first successful CLI, UI, and SDK
-  paths
+- [Getting Started](./getting-started.md): first successful UI path, then CLI
+  and SDK paths
 - [Repository README](../README.md): workspace overview, requirements, and
   validation matrix
 
 ## Workflow Guides
 
-- [CLI Guide](./cli/README.md): command-line workflows from quickstart to
-  advanced flags
-- [UI Guide](./ui/README.md): loading MIDI, playback, modify, merge, export,
-  and persistence behavior
+- [UI Guide](./ui/README.md): preview, video, audio, render, modify, merge,
+  and analysis workflows
+- [Preview](./ui/preview.md): playback, scrubber, time space, and view range
+- [Render](./ui/render.md): export modes, ranges, and stream settings
+- [Modify](./ui/modify.md): pass selection and MIDI transform controls
+- [CLI Guide](./cli/README.md): command-line workflows for power users and
+  automation
 - [TypeScript SDK](./typescript-sdk/README.md): programmatic control through the
   checked Deno-first SDK path
 
