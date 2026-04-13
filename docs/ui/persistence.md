@@ -63,6 +63,22 @@ The config writer uses atomic files and keeps a backup copy. If the primary
 config is invalid, the UI can fall back to the backup instead of starting from
 scratch.
 
+## Storage Location
+
+The UI config is stored in the OS-native application config directory:
+
+- Linux: `${XDG_CONFIG_HOME:-~/.config}/meridian/config.json`
+- macOS: `~/Library/Application Support/Meridian/config.json`
+- Windows: `%APPDATA%\\Meridian\\config.json`
+
+You can override the directory with `MERIDIAN_UI_CONFIG_DIR`.
+
+The writer uses:
+
+- `config.json` as the primary file
+- `config.json.bak` as the backup
+- `config.json.tmp` as the temporary write target
+
 ## Practical Rule Of Thumb
 
 If a setting changes how the app looks or behaves next time you open it, it is

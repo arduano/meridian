@@ -107,5 +107,4 @@ nix-shell --run 'cd sdk/typescript && deno test --allow-env --allow-read --allow
 - [CLI Guide](./cli/README.md): user-facing commands from quickstart to advanced flags
 - [UI Guide](./ui/README.md): panels, playback, export, and persistence behavior
 - [Troubleshooting](./troubleshooting.md): setup and runtime failure modes
-- [Testing Guide](./testing.md): focused validation commands by subsystem
-- [Starting Points](./starting-points.md): contributor-oriented codebase map
+- [Contributor Docs](./contributor/README.md): codebase map and validation entrypoints

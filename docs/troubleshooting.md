@@ -9,8 +9,8 @@ If you are looking for normal workflows instead of failure recovery, use:
 - [Repository README](../README.md)
 - [Docs index](./README.md)
 - [TypeScript SDK](./typescript-sdk/README.md)
-- [Testing Guide](./testing.md)
-- [Durable UI config](./ui-durable-config.md)
+- [Testing Guide](./contributor/testing.md)
+- [UI Persistence](./ui/persistence.md)
 
 ## Quick Triage
 
@@ -42,7 +42,7 @@ What to do:
 Where this matters:
 
 - [Video Rendering](./typescript-sdk/video-rendering.md)
-- [Testing Guide](./testing.md)
+- [Testing Guide](./contributor/testing.md)
 
 ## A Soundfont Is Missing
 
@@ -67,7 +67,7 @@ Where this matters:
 
 - [Audio Rendering](./typescript-sdk/audio-rendering.md)
 - [TypeScript SDK README](./typescript-sdk/README.md)
-- [Testing Guide](./testing.md)
+- [Testing Guide](./contributor/testing.md)
 
 ## No Graphics Adapter / Headless WGPU
 
@@ -95,7 +95,7 @@ This is a host limitation, not a Meridian config problem.
 Where this matters:
 
 - [Reference: environment notes](./reference/environment.md)
-- [Testing Guide](./testing.md)
+- [Testing Guide](./contributor/testing.md)
 
 ## UI Config Version Mismatch
 
@@ -108,15 +108,15 @@ What to do:
 
 - delete the saved UI config directory or the `config.json` file inside it
 - restart Meridian so it regenerates defaults
-- if you want the full storage layout and recovery behavior, read the durable
-  config doc first
+- if you want the full storage layout and recovery behavior, read the UI
+  persistence doc first
 
 Meridian also tries to fall back to `config.json.bak` when the primary file is
 invalid, so you may see a repair message instead of a hard failure.
 
 Where this matters:
 
-- [Durable UI config](./ui-durable-config.md)
+- [UI Persistence](./ui/persistence.md)
 - [Reference: environment notes](./reference/environment.md)
 
 ## Bad Output Extension
@@ -163,8 +163,8 @@ state or starts a render.
 
 Where this matters:
 
-- [Starting Points](./starting-points.md)
-- [Testing Guide](./testing.md)
+- [Starting Points](./contributor/starting-points.md)
+- [Testing Guide](./contributor/testing.md)
 
 ## Advanced Reference
 

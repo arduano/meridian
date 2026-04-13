@@ -30,9 +30,12 @@ progressive on purpose:
   failure modes
 - [Environment Reference](./reference/environment.md): environment variables
   and host requirements that affect rendering, tests, and persistence
-- [Testing Guide](./testing.md): focused validation commands by subsystem
 
 ## Contributor Docs
 
-- [Starting Points](./starting-points.md): contributor map for core, UI, CLI,
-  SDK, rendering, and tests
+- [Contributor Docs](./contributor/README.md): contributor-oriented map and
+  validation entrypoints
+- [Starting Points](./contributor/starting-points.md): contributor map for
+  core, UI, CLI, SDK, rendering, and tests
+- [Testing Guide](./contributor/testing.md): focused validation commands by
+  subsystem

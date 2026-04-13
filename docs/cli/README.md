@@ -10,7 +10,7 @@ use the TypeScript SDK when you want a higher-level programmable integration.
 - [Workflows](./workflows.md): analyze, inspect, process, and merge MIDI files
 - [Rendering](./rendering.md): audio, video, and frame export examples
 - [stdio Mode](./stdio.md): long-lived protocol mode and the raw `json` helper
-- [Testing Guide](../testing.md): repo-local validation commands
+- [Testing Guide](../contributor/testing.md): repo-local validation commands
 
 ## First Commands
 

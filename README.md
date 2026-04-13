@@ -33,8 +33,8 @@ and desktop visualization.
 - [CLI guide](docs/cli/README.md): curated CLI workflows and advanced options
 - [UI guide](docs/ui/README.md): playback, panels, export, and persistence
 - [Troubleshooting](docs/troubleshooting.md): common setup and runtime failures
-- [Starting points](docs/starting-points.md): contributor map for core, UI, CLI,
-  SDK, rendering, and tests
+- [Contributor docs](docs/contributor/README.md): contributor map and validation
+  entrypoints
 
 ## Requirements
 

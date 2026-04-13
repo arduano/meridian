@@ -37,8 +37,8 @@ Key behaviors:
 - config version mismatches are treated as a signal to delete the saved UI
   config and regenerate defaults
 
-See [Durable UI config](../ui-durable-config.md) for the full persistence
-layout and which fields are remembered.
+See [UI Persistence](../ui/persistence.md) for the persistence layout and which
+fields are remembered.
 
 ## Tooling Expectations
 
@@ -53,7 +53,7 @@ the host environment first and rerun the same command.
 
 ## Related Docs
 
-- [Testing Guide](../testing.md)
+- [Testing Guide](../contributor/testing.md)
 - [Video Rendering](../typescript-sdk/video-rendering.md)
 - [Audio Rendering](../typescript-sdk/audio-rendering.md)
 - [TypeScript SDK README](../typescript-sdk/README.md)
