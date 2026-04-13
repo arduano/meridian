@@ -64,9 +64,8 @@ pub(super) fn wire_modify_output_browse(app: &App) {
             return;
         };
         let app_weak = app_weak.clone();
-        let suggested_output = current_modify_output_path(&app).unwrap_or_else(|_| {
-            default_modify_output_path(app.get_selected_midi_name().as_str())
-        });
+        let suggested_output = current_modify_output_path(&app)
+            .unwrap_or_else(|_| default_modify_output_path(app.get_selected_midi_name().as_str()));
         std::thread::spawn(move || {
             let mut dialog = rfd::FileDialog::new().add_filter("MIDI", &["mid", "midi"]);
             if let Some(name) = suggested_output.file_name().and_then(OsStr::to_str) {

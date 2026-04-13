@@ -7,11 +7,12 @@ use cosmic_text::{
 use crate::{
     midi::{MIDIFileBase, MIDIFileUnion},
     render::{
-        shared::{
-            solid_quad, ProjectedScene, SceneLayer, TextAlignment, TextAnchor, TextOverlayConfig,
-            TextRowConfig, TextSceneConfig, TextStyleConfig, TextValueFormat, TextValueSource,
-        },
         SceneLayout,
+        shared::{
+            ProjectedScene, SceneLayer, TextAlignment, TextAnchor, TextOverlayConfig,
+            TextRowConfig, TextSceneConfig, TextStyleConfig, TextValueFormat, TextValueSource,
+            solid_quad,
+        },
     },
 };
 

@@ -24,15 +24,15 @@ mod types;
 
 use std::sync::Mutex;
 
-use crate::midi::{display_cache::DisplayMidiCache, parsed::ParsedMidiFile, MIDIAnalysisSummary};
+use crate::midi::{MIDIAnalysisSummary, display_cache::DisplayMidiCache, parsed::ParsedMidiFile};
 
 pub(crate) use accumulator::MidiAnalysisAccumulator;
 pub use buckets::build_buckets_from_display_cache;
+use buckets::normalized_bucket_count;
+use extract::extract_analysis;
 pub use file_metrics::{
     analyze_file_metrics, analyze_file_metrics_with_values, gzip_size_for_path,
 };
-use buckets::normalized_bucket_count;
-use extract::extract_analysis;
 use reduce::reduce_extracted_analysis;
 pub use types::{
     CachedMidiAnalysis, MidiAnalysisBucket, MidiAnalysisData, MidiAnalysisEventMetrics,

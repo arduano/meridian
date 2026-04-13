@@ -28,14 +28,18 @@ pub mod parsed;
 pub mod processed;
 pub mod processing;
 pub mod ram;
-mod traversal;
 pub mod tempo_map;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod tools;
+mod traversal;
 pub mod views;
 
-use std::{fs::File, path::{Path, PathBuf}, time::UNIX_EPOCH};
+use std::{
+    fs::File,
+    path::{Path, PathBuf},
+    time::UNIX_EPOCH,
+};
 
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
@@ -43,7 +47,6 @@ use ts_rs::TS;
 
 use crate::error::MeridianError;
 use crate::render::DisplayTimeSpace;
-use std::sync::Arc;
 pub use cache::MidiCacheStack;
 pub use colors::{MIDIColor, MIDIColorPair};
 pub use file_merge::{MidiFilesMergeConfig, MidiFilesMergeMode};
@@ -55,6 +58,7 @@ pub use processed::ProcessedMidi;
 pub use processing::{
     EventFilterConfig, MidiFileProcessingConfig, MidiProcessingConfig, ZeroVelocityNoteOnMode,
 };
+use std::sync::Arc;
 pub use tools::*;
 
 pub const MIDI_KEY_COUNT: usize = 256;

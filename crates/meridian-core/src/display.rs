@@ -5,8 +5,11 @@ use crate::{
     midi::{MIDIFileBase, MIDIFileUnion},
     protocol::{CoreErrorCode, CoreEvent, FrameStats, ImageExportConfig, ImageOutputFormat},
     render::{
-        ProjectedScene, SceneConfig, SceneLayout, ScenePhysicsState, headless::save_scene_headless,
-        project_scene, text::{build_text_render_metrics, project_text_scene}, tick_scene_physics,
+        ProjectedScene, SceneConfig, SceneLayout, ScenePhysicsState,
+        headless::save_scene_headless,
+        project_scene,
+        text::{build_text_render_metrics, project_text_scene},
+        tick_scene_physics,
     },
     transport::TransportSnapshot,
 };

@@ -21,16 +21,15 @@ mod pipeline;
 
 use std::{
     path::PathBuf,
-    sync::atomic::{AtomicBool, Ordering},
     sync::Arc,
+    sync::atomic::{AtomicBool, Ordering},
     time::Instant,
 };
 
 use crate::{
     CoreHandle, MeridianError,
     protocol::{
-        CoreCommand, VideoExportArtifacts, VideoRenderConfig,
-        VideoRenderEvent, VideoRenderJobId,
+        CoreCommand, VideoExportArtifacts, VideoRenderConfig, VideoRenderEvent, VideoRenderJobId,
     },
     render::{
         export::ExportFrame,
@@ -39,12 +38,12 @@ use crate::{
     spawn_core,
 };
 
-pub(crate) use config::should_use_isolated_core;
-pub use config::VideoRenderAudioInputs;
-pub use ffmpeg::{VideoFfmpegAudioInput, spawn_ffmpeg_gray, spawn_ffmpeg_rgba};
 use audio_mux::VideoAudioMux;
+pub use config::VideoRenderAudioInputs;
+pub(crate) use config::should_use_isolated_core;
 use core_session::{read_core_state, restore_core_state};
-use pipeline::{spawn_alpha_ffmpeg, VideoRenderPipeline};
+pub use ffmpeg::{VideoFfmpegAudioInput, spawn_ffmpeg_gray, spawn_ffmpeg_rgba};
+use pipeline::{VideoRenderPipeline, spawn_alpha_ffmpeg};
 
 pub fn render_video(
     job_id: VideoRenderJobId,
@@ -174,30 +173,24 @@ fn render_video_with_core(
         })?;
     }
     core.request(CoreCommand::SetViewRange {
-        seconds: config
-            .view_range
-            .unwrap_or(if isolated_core {
-                default_view_range
-            } else {
-                state.view_range
-            }),
+        seconds: config.view_range.unwrap_or(if isolated_core {
+            default_view_range
+        } else {
+            state.view_range
+        }),
         time_space: config.time_space,
     })?;
     core.request(CoreCommand::SetKeyRange {
-        first_key: config
-            .first_key
-            .unwrap_or(if isolated_core {
-                default_first_key
-            } else {
-                state.first_key
-            }),
-        last_key: config
-            .last_key
-            .unwrap_or(if isolated_core {
-                default_last_key
-            } else {
-                state.last_key
-            }),
+        first_key: config.first_key.unwrap_or(if isolated_core {
+            default_first_key
+        } else {
+            state.first_key
+        }),
+        last_key: config.last_key.unwrap_or(if isolated_core {
+            default_last_key
+        } else {
+            state.last_key
+        }),
     })?;
     core.request(CoreCommand::SetViewport {
         width: config.width,

@@ -77,7 +77,10 @@ fn render_video_accepts_custom_time_range_flags() {
         .output()
         .expect("run ranged render video command");
 
-    assert!(output.status.success(), "ranged render video failed: {output:?}");
+    assert!(
+        output.status.success(),
+        "ranged render video failed: {output:?}"
+    );
     assert!(out.exists(), "expected ranged video output to exist");
     assert!(fs::metadata(&out).expect("ranged video metadata").len() > 0);
 }

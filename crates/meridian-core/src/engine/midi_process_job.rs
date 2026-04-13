@@ -1,11 +1,11 @@
 use std::{
     path::PathBuf,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
     thread,
 };
 
 use crate::{
-    midi::{file_processing::process_midi_file_job, MidiFileProcessingConfig},
+    midi::{MidiFileProcessingConfig, file_processing::process_midi_file_job},
     protocol::{CoreErrorCode, CoreEvent, MidiProcessEvent, MidiProcessJobId, MidiProcessStatus},
 };
 
@@ -107,6 +107,8 @@ impl CoreState {
     }
 
     pub(super) fn active_midi_process_job_id_from_state(&self) -> Option<MidiProcessJobId> {
-        self.midi_process_job.as_ref().and_then(|job| job.active_job_id())
+        self.midi_process_job
+            .as_ref()
+            .and_then(|job| job.active_job_id())
     }
 }

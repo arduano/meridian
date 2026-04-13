@@ -148,7 +148,9 @@ mod tests {
             || false,
             &mut state,
             |state, item| {
-                state.seen.push(format!("item:{}:{}", item.track, item.delta));
+                state
+                    .seen
+                    .push(format!("item:{}:{}", item.track, item.delta));
                 Ok(())
             },
             |state, event| {

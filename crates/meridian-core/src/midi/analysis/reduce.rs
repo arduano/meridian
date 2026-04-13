@@ -6,8 +6,8 @@ use super::{
     AnalysisProgressUpdate,
     extract::{ExtractedAnalysis, NoteIntervalAggregate, TempoEventPoint, TickTransitionPoint},
     types::{
-        CachedBucketDelta, CachedBucketStart, CachedMidiAnalysis,
-        MidiAnalysisNoteMetrics, MidiAnalysisTempoMetrics,
+        CachedBucketDelta, CachedBucketStart, CachedMidiAnalysis, MidiAnalysisNoteMetrics,
+        MidiAnalysisTempoMetrics,
     },
 };
 

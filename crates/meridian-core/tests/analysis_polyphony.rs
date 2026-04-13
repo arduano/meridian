@@ -1,12 +1,12 @@
 mod support;
 
 use meridian_core::midi::{
+    MidiProcessingConfig, ProcessedMidi,
     analysis::{
         analyze_parsed_midi_with_progress, build_buckets_from_parsed_with_progress,
         build_cached_midi_analysis_with_progress,
     },
     parsed::ParsedMidiFile,
-    MidiProcessingConfig, ProcessedMidi,
 };
 use midi_toolkit::events::Event;
 
@@ -109,7 +109,9 @@ fn zero_bucket_requests_return_empty_bucket_sets() {
         .expect("build processed midi");
     let display = processed.display_cache();
     let processed_analysis = processed.analysis_cache();
-    assert!(processed_analysis
-        .build_buckets(&display, 0, processed_analysis.midi_length())
-        .is_empty());
+    assert!(
+        processed_analysis
+            .build_buckets(&display, 0, processed_analysis.midi_length())
+            .is_empty()
+    );
 }

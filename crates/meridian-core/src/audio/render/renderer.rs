@@ -1,7 +1,4 @@
-use std::{
-    path::Path,
-    sync::atomic::AtomicBool,
-};
+use std::{path::Path, sync::atomic::AtomicBool};
 
 use xsynth_core::{
     AudioPipe, AudioStreamParams,

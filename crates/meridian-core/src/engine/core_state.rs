@@ -1,10 +1,7 @@
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{
-        Arc, Mutex,
-        atomic::AtomicU64,
-    },
+    sync::{Arc, Mutex, atomic::AtomicU64},
     time::Instant,
 };
 
@@ -16,9 +13,8 @@ use crate::{
     midi::audio_cache::InRamAudioCache,
     midi::{MidiCacheStack, ProcessedMidi},
     protocol::{
-        AnalysisJobId, AudioCacheId, AudioSessionId, CoreCommand,
-        CoreErrorCode, CoreEvent, DisplayCacheId, DisplaySessionId, MidiAnalysisJobStatus,
-        ParsedMidiId, ProcessedMidiId,
+        AnalysisJobId, AudioCacheId, AudioSessionId, CoreCommand, CoreErrorCode, CoreEvent,
+        DisplayCacheId, DisplaySessionId, MidiAnalysisJobStatus, ParsedMidiId, ProcessedMidiId,
     },
     transport::TransportState,
 };

@@ -36,9 +36,8 @@ pub(super) fn write_event(
     event: &ProtocolEvent,
     context: &str,
 ) -> Result<(), MeridianError> {
-    serde_json::to_writer(&mut *stdout, event).map_err(|e| {
-        MeridianError::Protocol(format!("failed to serialize {context}: {e}"))
-    })?;
+    serde_json::to_writer(&mut *stdout, event)
+        .map_err(|e| MeridianError::Protocol(format!("failed to serialize {context}: {e}")))?;
     stdout.write_all(b"\n")?;
     stdout.flush()?;
     Ok(())

@@ -1,10 +1,10 @@
 use meridian_core::midi::{
-    analysis::MidiAnalysisKind, MidiFileProcessingConfig, MidiModifierTool, QuantizeMode,
-    QuantizeTool, RangeEdgeBehavior, RangeSelectTool, TempoMapTool,
+    MidiFileProcessingConfig, MidiModifierTool, QuantizeMode, QuantizeTool, RangeEdgeBehavior,
+    RangeSelectTool, TempoMapTool, analysis::MidiAnalysisKind,
 };
 
 use super::args::{
-    AnalyzeArgs, AnalysisKindArg, ProcessQuantizeArgs, ProcessSelectArgs, ProcessTempoFlattenArgs,
+    AnalysisKindArg, AnalyzeArgs, ProcessQuantizeArgs, ProcessSelectArgs, ProcessTempoFlattenArgs,
     ProcessTempoScaleArgs, QuantizeModeArg, RangeEdgeBehaviorArg,
 };
 

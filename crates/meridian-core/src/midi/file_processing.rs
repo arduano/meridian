@@ -9,9 +9,8 @@ use crate::{
 };
 
 use super::{
-    cleanup_output_file,
-    modifier_tools::apply_modifier_tool_to_parsed_file, parsed::ParsedMidiFile,
-    processing::MidiFileProcessingConfig,
+    cleanup_output_file, modifier_tools::apply_modifier_tool_to_parsed_file,
+    parsed::ParsedMidiFile, processing::MidiFileProcessingConfig,
 };
 
 #[derive(Debug, Clone)]
@@ -227,7 +226,11 @@ mod tests {
         let input = dir.path("input.mid");
         let output = dir.path("output.mid");
 
-        write_toolkit_midi(&input, 96, &[vec![note_on(0, 0, 60, 100), note_off(12, 0, 60)]]);
+        write_toolkit_midi(
+            &input,
+            96,
+            &[vec![note_on(0, 0, 60, 100), note_off(12, 0, 60)]],
+        );
 
         let cancel = AtomicBool::new(false);
         let mut saw_progress = false;
@@ -264,7 +267,11 @@ mod tests {
         let input = dir.path("input.mid");
         let output = dir.path("output.mid");
 
-        write_toolkit_midi(&input, 96, &[vec![note_on(0, 0, 60, 100), note_off(12, 0, 60)]]);
+        write_toolkit_midi(
+            &input,
+            96,
+            &[vec![note_on(0, 0, 60, 100), note_off(12, 0, 60)]],
+        );
 
         let result = super::process_midi_file_to_file(
             &input,

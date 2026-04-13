@@ -14,9 +14,7 @@ use meridian_core::{
     CoreHandle, MeridianError,
     audio::{AudioConfig, AudioRenderConfig},
     display::MIN_VIEW_RANGE_SECONDS,
-    midi::{
-        MidiFileProcessingConfig, analysis::MidiAnalysisKind,
-    },
+    midi::{MidiFileProcessingConfig, analysis::MidiAnalysisKind},
     protocol::{CoreCommand, CoreEvent, MidiProcessStatus, ParsedMidiId, VideoRenderConfig},
     render::{DisplayTimeSpace, RendererKind, SceneConfig, SceneLayout},
     transport::PREVIEW_START_TIME_SECONDS,

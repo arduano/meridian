@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use midi_toolkit::{
     events::Event,
     io::MIDIWriter,
-    sequence::event::{filter_events, merge_events_array, scale_event_ppq, Delta},
+    sequence::event::{Delta, filter_events, merge_events_array, scale_event_ppq},
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -529,14 +529,14 @@ mod tests {
     use std::fs;
 
     use super::{
-        merge_midi_files_to_file, merge_midi_files_to_file_with_progress, MidiFilesMergeConfig,
-        MidiFilesMergeMode,
+        MidiFilesMergeConfig, MidiFilesMergeMode, merge_midi_files_to_file,
+        merge_midi_files_to_file_with_progress,
     };
     use crate::error::MeridianError;
     use crate::midi::parsed::ParsedMidiFile;
     use crate::midi::test_support::{
-        key_signature, note_off, note_on, read_track_events, tempo, text, time_signature,
-        write_toolkit_midi, TestDir,
+        TestDir, key_signature, note_off, note_on, read_track_events, tempo, text, time_signature,
+        write_toolkit_midi,
     };
 
     fn write_raw_midi(path: &std::path::Path, bytes: &[u8]) {

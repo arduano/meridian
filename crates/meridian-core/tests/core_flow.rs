@@ -458,7 +458,11 @@ fn audio_render_job_reports_started_progress_and_finished_status() {
         };
         match event {
             CoreEvent::AudioRender {
-                event: AudioRenderEvent::RenderStarted { output: started_output, .. },
+                event:
+                    AudioRenderEvent::RenderStarted {
+                        output: started_output,
+                        ..
+                    },
             } => {
                 assert_eq!(started_output, output);
                 saw_started = true;
@@ -467,7 +471,11 @@ fn audio_render_job_reports_started_progress_and_finished_status() {
                 event: AudioRenderEvent::RenderProgress { .. },
             } => {}
             CoreEvent::AudioRender {
-                event: AudioRenderEvent::RenderFinished { output: finished_output, .. },
+                event:
+                    AudioRenderEvent::RenderFinished {
+                        output: finished_output,
+                        ..
+                    },
             } => {
                 assert_eq!(finished_output, output);
                 saw_finished = true;
@@ -550,7 +558,11 @@ fn audio_render_job_cancels_and_clears_status() {
         };
         match event {
             CoreEvent::AudioRender {
-                event: AudioRenderEvent::RenderStarted { output: started_output, .. },
+                event:
+                    AudioRenderEvent::RenderStarted {
+                        output: started_output,
+                        ..
+                    },
             } => {
                 assert_eq!(started_output, output);
                 saw_started = true;
@@ -559,7 +571,11 @@ fn audio_render_job_cancels_and_clears_status() {
                 event: AudioRenderEvent::RenderProgress { .. },
             } => {}
             CoreEvent::AudioRender {
-                event: AudioRenderEvent::RenderCancelled { output: cancelled_output, .. },
+                event:
+                    AudioRenderEvent::RenderCancelled {
+                        output: cancelled_output,
+                        ..
+                    },
             } => {
                 assert_eq!(cancelled_output, output);
                 saw_cancelled = true;

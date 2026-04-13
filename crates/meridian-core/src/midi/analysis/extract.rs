@@ -314,7 +314,9 @@ fn extract_track_analysis(
                     channel_note_counts[note_on.channel as usize] += 1;
                     track_channel_note_counts[note_on.channel as usize] += 1;
                     *onset_counts.entry(absolute_tick).or_insert(0) += 1;
-                    *block_starts.entry((absolute_tick, note_on.key)).or_insert(0) += 1;
+                    *block_starts
+                        .entry((absolute_tick, note_on.key))
+                        .or_insert(0) += 1;
                     open_notes
                         .entry((note_on.key, note_on.channel))
                         .or_default()

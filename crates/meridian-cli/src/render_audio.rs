@@ -12,11 +12,7 @@ use meridian_core::{
     },
 };
 
-use crate::render_common::{
-    assert_no_protocol_error,
-    install_cancel_handler,
-    write_event,
-};
+use crate::render_common::{assert_no_protocol_error, install_cancel_handler, write_event};
 
 pub fn run(
     midi: &Path,
@@ -93,7 +89,10 @@ pub fn run(
     result
 }
 
-fn validate_audio_output_path(output: &Path, format: AudioOutputFormat) -> Result<(), MeridianError> {
+fn validate_audio_output_path(
+    output: &Path,
+    format: AudioOutputFormat,
+) -> Result<(), MeridianError> {
     let expected_extension = match format {
         AudioOutputFormat::Wav => "wav",
         AudioOutputFormat::Flac => "flac",

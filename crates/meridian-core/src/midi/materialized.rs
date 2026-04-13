@@ -1,9 +1,6 @@
 use std::{collections::VecDeque, sync::Arc};
 
-use midi_toolkit::{
-    events::Event,
-    prelude::*,
-};
+use midi_toolkit::{events::Event, prelude::*};
 use rustc_hash::FxHashMap;
 
 use crate::error::MeridianError;
@@ -13,8 +10,8 @@ use super::{
     audio_cache::{CompressedAudio, InRamAudioCache},
     parsed::ParsedMidiFile,
     ram::{InRamMidiCache, block::InRamNoteBlock},
-    traversal::walk_merged_midi_items,
     tempo_map::TempoMap,
+    traversal::walk_merged_midi_items,
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -253,7 +250,11 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
                         let track_chan = TrackAndChannel::new(track, note_on.channel);
                         if note_on.velocity == 0 {
                             if let Some(keys) = state.keys.as_mut() {
-                                keys[key_index].end_note(track_chan, state.time_seconds, state.time_ticks);
+                                keys[key_index].end_note(
+                                    track_chan,
+                                    state.time_seconds,
+                                    state.time_ticks,
+                                );
                             }
                         } else {
                             if let Some(keys) = state.keys.as_mut() {
@@ -274,9 +275,10 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
                             state.notes += 1;
                         }
                     }
-                    if let (Some(current_audio_data), Some(current_audio_control)) =
-                        (state.current_audio_data.as_mut(), state.current_audio_control.as_mut())
-                    {
+                    if let (Some(current_audio_data), Some(current_audio_control)) = (
+                        state.current_audio_data.as_mut(),
+                        state.current_audio_control.as_mut(),
+                    ) {
                         push_audio_event(
                             event.as_event(),
                             current_audio_data,
@@ -289,12 +291,17 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
                     if key_index < MIDI_KEY_COUNT {
                         if let Some(keys) = state.keys.as_mut() {
                             let track_chan = TrackAndChannel::new(track, note_off.channel);
-                            keys[key_index].end_note(track_chan, state.time_seconds, state.time_ticks);
+                            keys[key_index].end_note(
+                                track_chan,
+                                state.time_seconds,
+                                state.time_ticks,
+                            );
                         }
                     }
-                    if let (Some(current_audio_data), Some(current_audio_control)) =
-                        (state.current_audio_data.as_mut(), state.current_audio_control.as_mut())
-                    {
+                    if let (Some(current_audio_data), Some(current_audio_control)) = (
+                        state.current_audio_data.as_mut(),
+                        state.current_audio_control.as_mut(),
+                    ) {
                         push_audio_event(
                             event.as_event(),
                             current_audio_data,
@@ -303,9 +310,10 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
                     }
                 }
                 _ => {
-                    if let (Some(current_audio_data), Some(current_audio_control)) =
-                        (state.current_audio_data.as_mut(), state.current_audio_control.as_mut())
-                    {
+                    if let (Some(current_audio_data), Some(current_audio_control)) = (
+                        state.current_audio_data.as_mut(),
+                        state.current_audio_control.as_mut(),
+                    ) {
                         push_audio_event(
                             event.as_event(),
                             current_audio_data,
@@ -320,8 +328,8 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
         |state, batch| {
             let batch_event_count = batch.count() as u64;
             let previous_events = state.processed_events.saturating_sub(batch_event_count);
-            let crossed_stride =
-                state.processed_events / state.progress_stride > previous_events / state.progress_stride;
+            let crossed_stride = state.processed_events / state.progress_stride
+                > previous_events / state.progress_stride;
             if state.processed_events == batch_event_count
                 || total_events.is_some_and(|total_events| state.processed_events >= total_events)
                 || crossed_stride

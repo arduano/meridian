@@ -3,15 +3,15 @@ use std::sync::{Arc, Mutex};
 use crate::error::MeridianError;
 
 use super::{
+    MIDIFileUnion, MidiBuildProgress,
     analysis::{
-        build_cached_midi_analysis_with_detailed_progress, AnalysisProgressUpdate,
-        CachedMidiAnalysis,
+        AnalysisProgressUpdate, CachedMidiAnalysis,
+        build_cached_midi_analysis_with_detailed_progress,
     },
     audio_cache::InRamAudioCache,
     display_cache::DisplayMidiCache,
-    materialized::{build_materialized_midi_with_progress_cancelable, MaterializeOptions},
+    materialized::{MaterializeOptions, build_materialized_midi_with_progress_cancelable},
     parsed::ParsedMidiFile,
-    MIDIFileUnion, MidiBuildProgress,
 };
 
 pub struct MidiCacheStack {
@@ -276,7 +276,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use super::MidiCacheStack;
-    use crate::midi::test_support::{note_off, note_on, tempo, write_toolkit_midi, TestDir};
+    use crate::midi::test_support::{TestDir, note_off, note_on, tempo, write_toolkit_midi};
 
     fn test_cache_stack(label: &str) -> (TestDir, MidiCacheStack) {
         let dir = TestDir::new(label);

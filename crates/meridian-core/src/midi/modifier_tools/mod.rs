@@ -163,7 +163,8 @@ mod tests {
     use crate::{
         error::MeridianError,
         midi::{
-            MidiModifierTool, parsed::ParsedMidiFile,
+            MidiModifierTool,
+            parsed::ParsedMidiFile,
             test_support::{TestDir, note_off, note_on, write_toolkit_midi},
         },
     };
@@ -176,7 +177,11 @@ mod tests {
         let input = dir.path("input.mid");
         let output = dir.path("output.mid");
 
-        write_toolkit_midi(&input, 96, &[vec![note_on(0, 0, 60, 100), note_off(12, 0, 60)]]);
+        write_toolkit_midi(
+            &input,
+            96,
+            &[vec![note_on(0, 0, 60, 100), note_off(12, 0, 60)]],
+        );
         let parsed = ParsedMidiFile::load_from_file(&input).expect("parse input midi");
         let cancel = AtomicBool::new(false);
         let mut saw_progress = false;

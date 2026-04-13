@@ -4,15 +4,9 @@ use std::{
     process::{Child, ChildStdin},
 };
 
-use crate::{
-    MeridianError,
-    protocol::VideoRenderConfig,
-};
+use crate::{MeridianError, protocol::VideoRenderConfig};
 
-use super::{
-    audio_mux::VideoAudioMux,
-    ffmpeg::spawn_ffmpeg_gray,
-};
+use super::{audio_mux::VideoAudioMux, ffmpeg::spawn_ffmpeg_gray};
 
 pub(crate) struct EncoderProcess {
     name: &'static str,
@@ -108,9 +102,9 @@ impl VideoRenderPipeline {
         let Some(alpha_ffmpeg) = self.alpha_ffmpeg.as_mut() else {
             return Ok(());
         };
-        let stdin = alpha_ffmpeg.stdin_mut().ok_or_else(|| {
-            MeridianError::Platform("alpha ffmpeg stdin is not available".into())
-        })?;
+        let stdin = alpha_ffmpeg
+            .stdin_mut()
+            .ok_or_else(|| MeridianError::Platform("alpha ffmpeg stdin is not available".into()))?;
         stdin.write_all(frame)?;
         Ok(())
     }

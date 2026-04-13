@@ -14,10 +14,7 @@ use meridian_core::{
 };
 
 use crate::render_common::{
-    assert_no_protocol_error,
-    install_cancel_handler,
-    write_event,
-    write_events,
+    assert_no_protocol_error, install_cancel_handler, write_event, write_events,
 };
 
 pub fn run(

@@ -1,16 +1,16 @@
 use std::sync::{Arc, Mutex};
 
+use super::super::view::App;
+use super::super::view_model::UiViewModel;
+use super::formatting::{file_name_or_full, format_view_range_numeric};
 use meridian_core::protocol::{StateSnapshot, VideoRenderStatus};
 use meridian_core::render::{
     KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
     PFA_RED_TOP_BAR_COLOR, ProjectorBackgroundConfig, ProjectorBackgroundScalingMode,
-    ProjectorImageConfig, SceneConfig, TextAlignment, TextAnchor, TextOverlayConfig,
-    TextRowConfig, TextSceneConfig, TextStyleConfig, TextValueFormat, TextValueSource,
-    ThreeDSceneConfig, ZenithPaletteSpec,
+    ProjectorImageConfig, SceneConfig, TextAlignment, TextAnchor, TextOverlayConfig, TextRowConfig,
+    TextSceneConfig, TextStyleConfig, TextValueFormat, TextValueSource, ThreeDSceneConfig,
+    ZenithPaletteSpec,
 };
-use super::super::view::App;
-use super::super::view_model::UiViewModel;
-use super::formatting::{file_name_or_full, format_view_range_numeric};
 
 pub(super) fn scene_summary(scene: &SceneConfig) -> String {
     match scene {

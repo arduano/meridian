@@ -1,8 +1,5 @@
 use std::{
-    sync::{
-        Arc,
-        atomic::AtomicBool,
-    },
+    sync::{Arc, atomic::AtomicBool},
     thread,
 };
 
@@ -39,7 +36,10 @@ impl CoreState {
         }
 
         if let Err(error) = config.validate() {
-            return vec![error_event(CoreErrorCode::ValidationFailed, error.to_string())];
+            return vec![error_event(
+                CoreErrorCode::ValidationFailed,
+                error.to_string(),
+            )];
         }
 
         let audio_inputs = if config.audio.is_some() {

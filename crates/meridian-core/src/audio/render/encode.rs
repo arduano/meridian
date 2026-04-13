@@ -5,8 +5,7 @@ use std::{
 };
 
 use crate::{
-    MeridianError,
-    ffmpeg,
+    MeridianError, ffmpeg,
     midi::audio_cache::InRamAudioCache,
     protocol::{AudioOutputFormat, AudioRenderJobId},
 };
@@ -297,8 +296,8 @@ mod tests {
         protocol::{AudioOutputFormat, AudioRenderJobId},
     };
 
-    use crate::audio::render_audio_from_cache;
     use super::spawn_audio_encoder;
+    use crate::audio::render_audio_from_cache;
 
     static FAKE_FFMPEG_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -473,7 +472,10 @@ exit 42
 
                 let mut events = Vec::new();
                 let error = render_audio_from_cache(
-                    midi_cache.audio_cache().expect("build audio cache").as_ref(),
+                    midi_cache
+                        .audio_cache()
+                        .expect("build audio cache")
+                        .as_ref(),
                     &audio_config,
                     &soundfont_cache,
                     &render_config,
@@ -491,10 +493,7 @@ exit 42
                 );
                 assert!(matches!(
                     events.as_slice(),
-                    [
-                        AudioRenderEvent::RenderStarted { .. },
-                        ..
-                    ]
+                    [AudioRenderEvent::RenderStarted { .. }, ..]
                 ));
                 assert!(events.iter().any(|event| matches!(
                     event,
@@ -509,7 +508,10 @@ exit 42
                 assert!(args.lines().any(|line| line == "2"));
                 assert!(args.lines().any(|line| line == "-b:a"));
                 assert!(args.lines().any(|line| line == "96k"));
-                assert!(output.exists(), "expected fake encoder to create output path");
+                assert!(
+                    output.exists(),
+                    "expected fake encoder to create output path"
+                );
             },
         );
     }

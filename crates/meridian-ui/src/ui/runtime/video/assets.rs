@@ -1,7 +1,7 @@
-use super::*;
 use super::super::persistence::assets::{
     remember_aura_png, remember_background_png, remember_palette_png,
 };
+use super::*;
 
 pub(super) fn wire_video_asset_callbacks(
     app: &App,
@@ -26,9 +26,8 @@ pub(super) fn wire_video_asset_callbacks(
                     let _ = app_weak.upgrade_in_event_loop(move |app| match target.as_str() {
                         "palette_png" => {
                             {
-                                let mut state = shared_state
-                                    .lock()
-                                    .expect("shared UI state mutex poisoned");
+                                let mut state =
+                                    shared_state.lock().expect("shared UI state mutex poisoned");
                                 remember_palette_png(&mut state, path.clone());
                             }
                             update_video_scene(&app, &bridge, &shared_state, move |scene| {
@@ -42,9 +41,8 @@ pub(super) fn wire_video_asset_callbacks(
                         "background_png" => {
                             let path = path.display().to_string();
                             {
-                                let mut state = shared_state
-                                    .lock()
-                                    .expect("shared UI state mutex poisoned");
+                                let mut state =
+                                    shared_state.lock().expect("shared UI state mutex poisoned");
                                 remember_background_png(&mut state, path.clone());
                             }
                             update_video_scene(&app, &bridge, &shared_state, move |scene| {
@@ -54,18 +52,15 @@ pub(super) fn wire_video_asset_callbacks(
                                         ProjectorBackgroundScalingMode::Stretch
                                     }
                                 };
-                                *background_mut(scene) = ProjectorBackgroundConfig::PngFile {
-                                    path,
-                                    scaling,
-                                };
+                                *background_mut(scene) =
+                                    ProjectorBackgroundConfig::PngFile { path, scaling };
                             });
                         }
                         "aura_png" => {
                             let path = path.display().to_string();
                             {
-                                let mut state = shared_state
-                                    .lock()
-                                    .expect("shared UI state mutex poisoned");
+                                let mut state =
+                                    shared_state.lock().expect("shared UI state mutex poisoned");
                                 remember_aura_png(&mut state, path.clone());
                             }
                             update_video_scene(&app, &bridge, &shared_state, move |scene| {

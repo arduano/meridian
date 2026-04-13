@@ -178,7 +178,6 @@ impl CoreHandle {
 mod tests {
     use std::{path::PathBuf, sync::Arc, thread, time::Duration, time::Instant};
 
-    use flume::unbounded;
     use crate::{
         audio::{AudioBackend, AudioConfig, MeridianSoundfont, XSynthSettings},
         engine::core_state::CoreState,
@@ -192,6 +191,7 @@ mod tests {
             SceneConfig, TwoDSceneConfig, ZenithPaletteSpec,
         },
     };
+    use flume::unbounded;
 
     use super::{CoreHandle, spawn_core};
 
@@ -356,9 +356,7 @@ mod tests {
                 config: AudioConfig {
                     backend: AudioBackend::Xsynth,
                     soundfonts: vec![MeridianSoundfont {
-                        path: Some(PathBuf::from(
-                            "/definitely/not/a/real/soundfont/path.sf2",
-                        )),
+                        path: Some(PathBuf::from("/definitely/not/a/real/soundfont/path.sf2")),
                         ..MeridianSoundfont::default()
                     }],
                     xsynth: XSynthSettings::default(),
@@ -401,7 +399,10 @@ mod tests {
         let second_midi = midi_fixture("piano/burgmuller-op100-no13-consolation.mid");
 
         let first_events = state.load_midi_legacy(first_midi.clone());
-        assert!(matches!(first_events.as_slice(), [CoreEvent::MidiLoaded { .. }]));
+        assert!(matches!(
+            first_events.as_slice(),
+            [CoreEvent::MidiLoaded { .. }]
+        ));
         let before = state.snapshot();
 
         state
@@ -419,7 +420,10 @@ mod tests {
 
         assert_eq!(state.midi_path, before.midi_path);
         assert_eq!(state.active_parsed_midi_id, before.active_parsed_midi_id);
-        assert_eq!(state.active_display_cache_id, before.active_display_cache_id);
+        assert_eq!(
+            state.active_display_cache_id,
+            before.active_display_cache_id
+        );
         assert!(state.display.midi_loaded());
     }
 
@@ -430,7 +434,10 @@ mod tests {
         let second_midi = midi_fixture("piano/burgmuller-op100-no13-consolation.mid");
 
         let first_events = state.load_midi_legacy(first_midi.clone());
-        assert!(matches!(first_events.as_slice(), [CoreEvent::MidiLoaded { .. }]));
+        assert!(matches!(
+            first_events.as_slice(),
+            [CoreEvent::MidiLoaded { .. }]
+        ));
         let before = state.snapshot();
 
         let parsed_events = state.load_parsed_midi_resource(second_midi);
@@ -441,9 +448,11 @@ mod tests {
         let processed_events =
             state.build_processed_midi_resource(parsed_midi_id, MidiProcessingConfig::default());
         let processed_midi_id = match processed_events.as_slice() {
-            [CoreEvent::ProcessedMidiBuilt {
-                processed_midi_id, ..
-            }] => *processed_midi_id,
+            [
+                CoreEvent::ProcessedMidiBuilt {
+                    processed_midi_id, ..
+                },
+            ] => *processed_midi_id,
             other => panic!("unexpected processed midi response: {other:?}"),
         };
 
@@ -462,8 +471,14 @@ mod tests {
 
         assert_eq!(state.midi_path, before.midi_path);
         assert_eq!(state.active_parsed_midi_id, before.active_parsed_midi_id);
-        assert_eq!(state.active_display_cache_id, before.active_display_cache_id);
-        assert_eq!(state.active_processed_midi_id, before.active_processed_midi_id);
+        assert_eq!(
+            state.active_display_cache_id,
+            before.active_display_cache_id
+        );
+        assert_eq!(
+            state.active_processed_midi_id,
+            before.active_processed_midi_id
+        );
         assert!(state.display.midi_loaded());
     }
 

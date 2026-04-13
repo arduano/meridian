@@ -15,9 +15,9 @@ use crate::{
         display_cache::DisplayMidiCache,
         parsed::ParsedMidiFile,
         processing::{MidiProcessingConfig, ZeroVelocityNoteOnMode},
-        traversal::walk_merged_midi_items,
         ram::block::InRamNoteBlock,
         tempo_map::TempoMap,
+        traversal::walk_merged_midi_items,
     },
 };
 
@@ -207,9 +207,11 @@ fn build_processed_midi_cancelable(
                         return Ok(());
                     };
                     let track_chan = TrackAndChannel::new(track, note_on.channel);
-                    state
-                        .analysis
-                        .observe_note_start(state.current_output_time, key as usize, track_chan);
+                    state.analysis.observe_note_start(
+                        state.current_output_time,
+                        key as usize,
+                        track_chan,
+                    );
                     state
                         .open_notes
                         .entry((key, track_chan))
@@ -218,9 +220,11 @@ fn build_processed_midi_cancelable(
                             start: state.current_output_time,
                             track_chan,
                         });
-                    state
-                        .current_audio_data
-                        .extend_from_slice(&[0x90 | note_on.channel, key, velocity]);
+                    state.current_audio_data.extend_from_slice(&[
+                        0x90 | note_on.channel,
+                        key,
+                        velocity,
+                    ]);
                 }
                 Event::NoteOff(note_off) => {
                     state.analysis.observe_note_off();

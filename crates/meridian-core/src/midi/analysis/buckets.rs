@@ -121,8 +121,8 @@ fn end_bucket_index(time: f64, width: f64, bucket_count: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_buckets_from_sparse_data, normalized_bucket_count, CachedBucketDelta,
-        CachedBucketStart,
+        CachedBucketDelta, CachedBucketStart, build_buckets_from_sparse_data,
+        normalized_bucket_count,
     };
 
     #[test]

@@ -46,7 +46,11 @@ pub(in super::super) fn start_render_export_jobs(
         if !controller.is_active() {
             return Err("export was cancelled".into());
         }
-        if controller.draft().map(|active| active.final_output.as_path()) != Some(final_output.as_path()) {
+        if controller
+            .draft()
+            .map(|active| active.final_output.as_path())
+            != Some(final_output.as_path())
+        {
             return Err("export draft changed".into());
         }
     }

@@ -18,7 +18,8 @@ impl CoreState {
         display.set_scene_config(layout.scene, now);
         display.set_view_range(layout.view_range, Some(layout.time_space));
         display.set_key_range(layout.first_key, layout.last_key);
-        display.apply_viewport_overrides(Some(layout.viewport_width), Some(layout.viewport_height))?;
+        display
+            .apply_viewport_overrides(Some(layout.viewport_width), Some(layout.viewport_height))?;
         display.load_midi(midi, now);
         display.refresh_note_colors()?;
         Ok(display)

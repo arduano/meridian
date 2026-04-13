@@ -7,11 +7,8 @@
 use std::sync::Arc;
 
 use crate::{
-    MeridianError,
-    audio::AudioConfig,
-    midi::audio_cache::InRamAudioCache,
-    protocol::VideoRenderConfig,
-    transport::PREVIEW_START_TIME_SECONDS,
+    MeridianError, audio::AudioConfig, midi::audio_cache::InRamAudioCache,
+    protocol::VideoRenderConfig, transport::PREVIEW_START_TIME_SECONDS,
 };
 
 pub struct VideoRenderAudioInputs {
@@ -134,7 +131,9 @@ mod tests {
 
     #[test]
     fn file_based_video_renders_use_an_isolated_core() {
-        assert!(should_use_isolated_core(&config(Some(PathBuf::from("clip.mid")))));
+        assert!(should_use_isolated_core(&config(Some(PathBuf::from(
+            "clip.mid"
+        )))));
     }
 
     #[test]
@@ -159,7 +158,9 @@ mod tests {
 
     #[test]
     fn resolve_time_range_defaults_to_full_song() {
-        let resolved = config(None).resolve_time_range(12.0).expect("resolve range");
+        let resolved = config(None)
+            .resolve_time_range(12.0)
+            .expect("resolve range");
         assert_eq!(
             resolved,
             ResolvedVideoTimeRange {

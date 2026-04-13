@@ -8,16 +8,10 @@ use xsynth_core::{
     channel_group::SynthEvent,
 };
 
-use crate::{
-    MeridianError,
-    midi::audio_cache::InRamAudioCache,
-    protocol::AudioRenderJobId,
-};
+use crate::{MeridianError, midi::audio_cache::InRamAudioCache, protocol::AudioRenderJobId};
 
 use super::{
-    AudioConfig,
-    config::AudioRenderConfig,
-    events::AudioRenderEvent,
+    AudioConfig, config::AudioRenderConfig, events::AudioRenderEvent,
     renderer::OfflineAudioRenderer,
 };
 

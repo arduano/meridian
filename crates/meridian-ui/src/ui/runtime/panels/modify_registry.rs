@@ -14,8 +14,7 @@ pub(super) struct ModifyPassPolicy {
     pub hint: &'static str,
     pub default_tool: fn() -> MidiModifierTool,
     pub sync_controls: fn(&App, &MidiFileProcessingConfig),
-    pub update_control:
-        fn(&App, &mut MidiFileProcessingConfig, &str, &str) -> Result<(), String>,
+    pub update_control: fn(&App, &mut MidiFileProcessingConfig, &str, &str) -> Result<(), String>,
 }
 
 fn range_select_default_tool() -> MidiModifierTool {
@@ -312,7 +311,9 @@ pub(super) const MODIFY_PASS_POLICIES: &[ModifyPassPolicy] = &[
 ];
 
 pub(super) fn modify_pass_policy(pass_key: &str) -> Option<&'static ModifyPassPolicy> {
-    MODIFY_PASS_POLICIES.iter().find(|policy| policy.key == pass_key)
+    MODIFY_PASS_POLICIES
+        .iter()
+        .find(|policy| policy.key == pass_key)
 }
 
 pub(super) fn modify_pass_policy_for_field_prefix(
@@ -478,7 +479,9 @@ pub(super) fn update_tempo_map_control(
 pub(super) fn sync_time_warp_controls(app: &App, config: &MidiFileProcessingConfig) {
     if let MidiModifierTool::TimeWarp(tool) = &config.tool {
         let ppq = get_ppq(app);
-        app.set_modify_time_warp_points_text(format_time_warp_points_notes(&tool.points, ppq).into());
+        app.set_modify_time_warp_points_text(
+            format_time_warp_points_notes(&tool.points, ppq).into(),
+        );
     }
 }
 
@@ -611,7 +614,9 @@ pub(super) fn update_program_control(
 
 pub(super) fn sync_control_change_controls(app: &App, config: &MidiFileProcessingConfig) {
     if let MidiModifierTool::ControlChange(tool) = &config.tool {
-        app.set_modify_control_strip_controllers_text(format_u8_list(&tool.strip_controllers).into());
+        app.set_modify_control_strip_controllers_text(
+            format_u8_list(&tool.strip_controllers).into(),
+        );
         app.set_modify_control_remap_controllers_text(
             format_controller_mappings(&tool.remap_controllers).into(),
         );
@@ -680,37 +685,27 @@ pub(super) fn update_pitch_bend_control(
 ) -> Result<(), String> {
     match field {
         "strip" => {
-            if let MidiModifierTool::PitchBend(tool) =
-                ensure_tool_for_pass(config, "pitch_bend")
-            {
+            if let MidiModifierTool::PitchBend(tool) = ensure_tool_for_pass(config, "pitch_bend") {
                 tool.strip = parse_bool_toggle(value, "pitch bend strip toggle")?;
             }
         }
         "scale" => {
-            if let MidiModifierTool::PitchBend(tool) =
-                ensure_tool_for_pass(config, "pitch_bend")
-            {
+            if let MidiModifierTool::PitchBend(tool) = ensure_tool_for_pass(config, "pitch_bend") {
                 tool.scale = parse_value(value, "pitch bend scale")?;
             }
         }
         "offset" => {
-            if let MidiModifierTool::PitchBend(tool) =
-                ensure_tool_for_pass(config, "pitch_bend")
-            {
+            if let MidiModifierTool::PitchBend(tool) = ensure_tool_for_pass(config, "pitch_bend") {
                 tool.offset = parse_value(value, "pitch bend offset")?;
             }
         }
         "min_bend" => {
-            if let MidiModifierTool::PitchBend(tool) =
-                ensure_tool_for_pass(config, "pitch_bend")
-            {
+            if let MidiModifierTool::PitchBend(tool) = ensure_tool_for_pass(config, "pitch_bend") {
                 tool.min_bend = parse_value(value, "pitch bend min")?;
             }
         }
         "max_bend" => {
-            if let MidiModifierTool::PitchBend(tool) =
-                ensure_tool_for_pass(config, "pitch_bend")
-            {
+            if let MidiModifierTool::PitchBend(tool) = ensure_tool_for_pass(config, "pitch_bend") {
                 tool.max_bend = parse_value(value, "pitch bend max")?;
             }
         }
@@ -749,9 +744,9 @@ pub(super) fn update_velocity_map_control(
             let tool = match value.trim() {
                 "scale" => MidiModifierTool::VelocityMap(VelocityMapTool::Scale { scale: 1.0 }),
                 "gamma" => MidiModifierTool::VelocityMap(VelocityMapTool::Gamma { gamma: 1.0 }),
-                "polyline" => MidiModifierTool::VelocityMap(VelocityMapTool::Polyline {
-                    points: vec![],
-                }),
+                "polyline" => {
+                    MidiModifierTool::VelocityMap(VelocityMapTool::Polyline { points: vec![] })
+                }
                 other => return Err(format!("invalid velocity mode: {other}")),
             };
             config.tool = tool;
@@ -785,12 +780,8 @@ pub(super) fn update_velocity_map_control(
 pub(super) fn sync_note_length_controls(app: &App, config: &MidiFileProcessingConfig) {
     if let MidiModifierTool::NoteLength(tool) = &config.tool {
         let ppq = get_ppq(app);
-        app.set_modify_note_length_min_ticks_text(
-            format_option_notes(tool.min_ticks, ppq).into(),
-        );
-        app.set_modify_note_length_max_ticks_text(
-            format_option_notes(tool.max_ticks, ppq).into(),
-        );
+        app.set_modify_note_length_min_ticks_text(format_option_notes(tool.min_ticks, ppq).into());
+        app.set_modify_note_length_max_ticks_text(format_option_notes(tool.max_ticks, ppq).into());
         app.set_modify_note_length_scale_text(option_text(tool.scale).into());
         app.set_modify_note_length_fixed_ticks_text(
             format_option_notes(tool.fixed_ticks, ppq).into(),
@@ -806,31 +797,27 @@ pub(super) fn update_note_length_control(
 ) -> Result<(), String> {
     match field {
         "min_ticks" => {
-            if let MidiModifierTool::NoteLength(tool) =
-                ensure_tool_for_pass(config, "note_length")
+            if let MidiModifierTool::NoteLength(tool) = ensure_tool_for_pass(config, "note_length")
             {
                 let ppq = get_ppq(app);
                 tool.min_ticks = parse_optional_notes(value, ppq, "note length min")?;
             }
         }
         "max_ticks" => {
-            if let MidiModifierTool::NoteLength(tool) =
-                ensure_tool_for_pass(config, "note_length")
+            if let MidiModifierTool::NoteLength(tool) = ensure_tool_for_pass(config, "note_length")
             {
                 let ppq = get_ppq(app);
                 tool.max_ticks = parse_optional_notes(value, ppq, "note length max")?;
             }
         }
         "scale" => {
-            if let MidiModifierTool::NoteLength(tool) =
-                ensure_tool_for_pass(config, "note_length")
+            if let MidiModifierTool::NoteLength(tool) = ensure_tool_for_pass(config, "note_length")
             {
                 tool.scale = parse_optional_value(value, "note length scale")?;
             }
         }
         "fixed_ticks" => {
-            if let MidiModifierTool::NoteLength(tool) =
-                ensure_tool_for_pass(config, "note_length")
+            if let MidiModifierTool::NoteLength(tool) = ensure_tool_for_pass(config, "note_length")
             {
                 let ppq = get_ppq(app);
                 tool.fixed_ticks = parse_optional_notes(value, ppq, "note length fixed")?;
@@ -885,9 +872,7 @@ pub(super) fn sync_humanize_controls(app: &App, config: &MidiFileProcessingConfi
         );
         app.set_modify_humanize_velocity_jitter_text(tool.velocity_jitter.to_string().into());
         app.set_modify_humanize_seed_text(tool.seed.to_string().into());
-        app.set_modify_humanize_collision_mode_text(
-            format_serde_enum(&tool.collision_mode).into(),
-        );
+        app.set_modify_humanize_collision_mode_text(format_serde_enum(&tool.collision_mode).into());
     }
 }
 
@@ -1029,9 +1014,7 @@ pub(super) fn sync_shared_metadata_track_controls(app: &App, config: &MidiFilePr
         if let SharedMetadataTrackDestination::InsertInto { track_index } = &tool.destination {
             app.set_modify_shared_dest_track_text(track_index.to_string().into());
         }
-        app.set_modify_shared_strip_redundant_text(
-            toggle_text(tool.strip_redundant_events).into(),
-        );
+        app.set_modify_shared_strip_redundant_text(toggle_text(tool.strip_redundant_events).into());
         app.set_modify_shared_move_tempo_text(toggle_text(tool.move_tempo_events).into());
         app.set_modify_shared_move_time_sig_text(toggle_text(tool.move_time_signatures).into());
         app.set_modify_shared_move_key_sig_text(toggle_text(tool.move_key_signatures).into());
@@ -1044,7 +1027,9 @@ pub(super) fn sync_shared_metadata_track_controls(app: &App, config: &MidiFilePr
         );
         app.set_modify_shared_move_midi_port_text(toggle_text(tool.move_midi_port_events).into());
         app.set_modify_shared_move_cc_text(toggle_text(tool.move_control_change_events).into());
-        app.set_modify_shared_move_program_text(toggle_text(tool.move_program_change_events).into());
+        app.set_modify_shared_move_program_text(
+            toggle_text(tool.move_program_change_events).into(),
+        );
         app.set_modify_shared_move_pitch_bend_text(toggle_text(tool.move_pitch_bend_events).into());
         app.set_modify_shared_move_channel_pressure_text(
             toggle_text(tool.move_channel_pressure_events).into(),
@@ -1065,9 +1050,7 @@ pub(super) fn update_shared_metadata_track_control(
             {
                 tool.destination = match value.trim() {
                     "create_new" => SharedMetadataTrackDestination::CreateNew,
-                    "insert_into" => {
-                        SharedMetadataTrackDestination::InsertInto { track_index: 0 }
-                    }
+                    "insert_into" => SharedMetadataTrackDestination::InsertInto { track_index: 0 },
                     other => return Err(format!("invalid destination mode: {other}")),
                 };
             }
@@ -1084,8 +1067,7 @@ pub(super) fn update_shared_metadata_track_control(
             if let MidiModifierTool::SharedMetadataTrack(tool) =
                 ensure_tool_for_pass(config, "shared_metadata_track")
             {
-                tool.strip_redundant_events =
-                    parse_bool_toggle(value, "strip redundant toggle")?;
+                tool.strip_redundant_events = parse_bool_toggle(value, "strip redundant toggle")?;
             }
         }
         "move_tempo" => {
@@ -1107,8 +1089,7 @@ pub(super) fn update_shared_metadata_track_control(
             if let MidiModifierTool::SharedMetadataTrack(tool) =
                 ensure_tool_for_pass(config, "shared_metadata_track")
             {
-                tool.move_key_signatures =
-                    parse_bool_toggle(value, "move key signatures toggle")?;
+                tool.move_key_signatures = parse_bool_toggle(value, "move key signatures toggle")?;
             }
         }
         "move_text" => {
@@ -1161,8 +1142,7 @@ pub(super) fn update_shared_metadata_track_control(
             if let MidiModifierTool::SharedMetadataTrack(tool) =
                 ensure_tool_for_pass(config, "shared_metadata_track")
             {
-                tool.move_pitch_bend_events =
-                    parse_bool_toggle(value, "move pitch bend toggle")?;
+                tool.move_pitch_bend_events = parse_bool_toggle(value, "move pitch bend toggle")?;
             }
         }
         "move_channel_pressure" => {
@@ -1193,11 +1173,8 @@ mod tests {
             "create_new_tempo_track"
         );
         assert_eq!(
-            parse_serde_enum::<TempoMapDestination>(
-                "create_new_tempo_track",
-                "tempo destination",
-            )
-            .unwrap(),
+            parse_serde_enum::<TempoMapDestination>("create_new_tempo_track", "tempo destination",)
+                .unwrap(),
             TempoMapDestination::CreateNewTempoTrack
         );
     }
