@@ -5,7 +5,7 @@ use xsynth_core::{AudioStreamParams, ChannelCount};
 
 use crate::{MeridianError, protocol::AudioOutputFormat};
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use crate::protocol::VideoAudioConfig;
 
 use super::AudioConfig;
@@ -72,7 +72,7 @@ impl ResolvedAudioRenderSettings {
     }
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(crate) fn resolve_video_audio_settings(
     audio_config: &AudioConfig,
     config: &VideoAudioConfig,

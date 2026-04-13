@@ -60,7 +60,7 @@ impl InRamAudioCache {
         self.events.last().map(|event| event.time).unwrap_or(0.0)
     }
 
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     pub(crate) fn clip_time_range(&self, start_time: f64, end_time: f64) -> Self {
         let mut prelude_control_events = Vec::new();
         let mut clipped_events = Vec::new();

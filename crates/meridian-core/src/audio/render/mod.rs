@@ -10,8 +10,8 @@ pub use events::AudioRenderEvent;
 
 use std::sync::atomic::AtomicBool;
 
-#[cfg(unix)]
-use std::path::Path;
+#[cfg(any(unix, windows))]
+use std::{fs::File, path::PathBuf};
 
 use crate::{
     MeridianError,
@@ -21,7 +21,7 @@ use crate::{
 
 use super::{AudioBackend, AudioConfig, soundfont_cache::SoundfontCache};
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use crate::{
     audio::MeridianSoundfont,
     protocol::{VideoAudioConfig, VideoAudioProgress},
@@ -32,16 +32,24 @@ use encode::render_encoded_audio;
 use render_loop::{AudioRenderLoopResult, run_audio_render_loop};
 use renderer::OfflineAudioRenderer;
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(crate) use config::resolve_video_audio_settings;
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
+pub(crate) enum RawAudioPipeTarget {
+    #[cfg(unix)]
+    Path(PathBuf),
+    #[cfg(windows)]
+    File(File),
+}
+
+#[cfg(any(unix, windows))]
 pub(crate) fn render_audio_pipe_from_cache(
     events: &InRamAudioCache,
     audio_config: &AudioConfig,
     soundfont_cache: &SoundfontCache,
     config: &VideoAudioConfig,
-    pipe_path: &Path,
+    target: RawAudioPipeTarget,
     cancel: &AtomicBool,
     mut on_progress: impl FnMut(VideoAudioProgress),
 ) -> Result<(), MeridianError> {
@@ -62,16 +70,27 @@ pub(crate) fn render_audio_pipe_from_cache(
             })
             .collect();
     }
-    let renderer = OfflineAudioRenderer::new_raw_pipe(
-        &render_audio_config,
-        soundfont_cache,
-        pipe_path,
-        audio_params,
-        use_limiter,
-        cancel,
-    )?;
+    let renderer = match target {
+        #[cfg(unix)]
+        RawAudioPipeTarget::Path(pipe_path) => OfflineAudioRenderer::new_raw_pipe(
+            &render_audio_config,
+            soundfont_cache,
+            &pipe_path,
+            audio_params,
+            use_limiter,
+            cancel,
+        )?,
+        #[cfg(windows)]
+        RawAudioPipeTarget::File(pipe_file) => OfflineAudioRenderer::new_raw_file(
+            &render_audio_config,
+            soundfont_cache,
+            pipe_file,
+            audio_params,
+            use_limiter,
+        )?,
+    };
     let noop_config = AudioRenderConfig {
-        output: pipe_path.to_path_buf(),
+        output: PathBuf::from("meridian-video-audio.pipe"),
         ..AudioRenderConfig::default()
     };
     let total_events = events.events().len();

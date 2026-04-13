@@ -46,6 +46,23 @@ impl OfflineAudioRenderer {
         )
     }
 
+    pub(crate) fn new_raw_file(
+        audio_config: &AudioConfig,
+        soundfont_cache: &SoundfontCache,
+        file: std::fs::File,
+        audio_params: AudioStreamParams,
+        use_limiter: bool,
+    ) -> Result<Self, MeridianError> {
+        let writer = AudioSampleWriter::from_raw_file(file);
+        Self::new_with_writer(
+            audio_config,
+            soundfont_cache,
+            writer,
+            audio_params,
+            use_limiter,
+        )
+    }
+
     #[cfg(unix)]
     pub(crate) fn new_raw_pipe(
         audio_config: &AudioConfig,

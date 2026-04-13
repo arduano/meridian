@@ -1,4 +1,5 @@
 use std::{
+    fs::File,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -11,6 +12,24 @@ use std::{
 
 #[cfg(unix)]
 use crate::MeridianError;
+
+#[cfg(windows)]
+use std::os::windows::{
+    ffi::OsStrExt,
+    io::{AsRawHandle, FromRawHandle, OwnedHandle},
+};
+
+#[cfg(windows)]
+use crate::MeridianError;
+
+#[cfg(windows)]
+use windows_sys::Win32::{
+    Foundation::{ERROR_PIPE_CONNECTED, GetLastError, INVALID_HANDLE_VALUE},
+    Storage::FileSystem::PIPE_ACCESS_OUTBOUND,
+    System::Pipes::{
+        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_TYPE_BYTE, PIPE_WAIT,
+    },
+};
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -48,12 +67,12 @@ impl Drop for TempPathGuard {
 }
 
 #[cfg(unix)]
-pub(crate) struct FifoGuard {
+pub(crate) struct AudioPipeGuard {
     path: PathBuf,
 }
 
 #[cfg(unix)]
-impl FifoGuard {
+impl AudioPipeGuard {
     pub(crate) fn create(output: &Path, label: &str) -> Result<Self, MeridianError> {
         use std::os::unix::ffi::OsStrExt;
 
@@ -86,8 +105,115 @@ impl FifoGuard {
 }
 
 #[cfg(unix)]
-impl Drop for FifoGuard {
+impl Drop for AudioPipeGuard {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+#[cfg(windows)]
+pub(crate) struct AudioPipeGuard {
+    path: PathBuf,
+    handle: Option<OwnedHandle>,
+}
+
+#[cfg(windows)]
+impl AudioPipeGuard {
+    pub(crate) fn create(output: &Path, label: &str) -> Result<Self, MeridianError> {
+        let id = TEMP_SEQUENCE.fetch_add(1, Ordering::SeqCst);
+        let stem = output
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .filter(|name| !name.is_empty())
+            .map(sanitize_pipe_component)
+            .unwrap_or_else(|| "render".to_string());
+        let label = sanitize_pipe_component(label);
+        let path = PathBuf::from(format!(r"\\.\pipe\meridian-{stem}-{id}-{label}"));
+        let wide_path = path_to_wide(&path);
+        let handle = unsafe {
+            CreateNamedPipeW(
+                wide_path.as_ptr(),
+                PIPE_ACCESS_OUTBOUND,
+                PIPE_TYPE_BYTE | PIPE_WAIT,
+                1,
+                64 * 1024,
+                64 * 1024,
+                0,
+                std::ptr::null(),
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(MeridianError::Platform(format!(
+                "failed to create named audio pipe {}: {}",
+                path.display(),
+                std::io::Error::last_os_error()
+            )));
+        }
+        let handle = unsafe { OwnedHandle::from_raw_handle(handle as _) };
+        Ok(Self {
+            path,
+            handle: Some(handle),
+        })
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub(crate) fn connect_writer(&mut self) -> Result<File, MeridianError> {
+        let handle = self.handle.take().ok_or_else(|| {
+            MeridianError::Platform(format!(
+                "named audio pipe {} was already connected",
+                self.path.display()
+            ))
+        })?;
+        let raw_handle = handle.as_raw_handle() as *mut core::ffi::c_void;
+        let connected = unsafe { ConnectNamedPipe(raw_handle, std::ptr::null_mut()) };
+        if connected == 0 {
+            let error = unsafe { GetLastError() };
+            if error != ERROR_PIPE_CONNECTED {
+                return Err(MeridianError::Platform(format!(
+                    "failed to connect named audio pipe {}: {}",
+                    self.path.display(),
+                    std::io::Error::from_raw_os_error(error as i32)
+                )));
+            }
+        }
+        Ok(File::from(handle))
+    }
+}
+
+#[cfg(windows)]
+impl Drop for AudioPipeGuard {
+    fn drop(&mut self) {
+        if let Some(handle) = &self.handle {
+            let _ =
+                unsafe { DisconnectNamedPipe(handle.as_raw_handle() as *mut core::ffi::c_void) };
+        }
+    }
+}
+
+#[cfg(windows)]
+fn path_to_wide(path: &Path) -> Vec<u16> {
+    path.as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
+}
+
+#[cfg(windows)]
+fn sanitize_pipe_component(component: &str) -> String {
+    let mut sanitized = String::with_capacity(component.len());
+    for ch in component.chars() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
+            sanitized.push(ch);
+        } else {
+            sanitized.push('-');
+        }
+    }
+    if sanitized.is_empty() {
+        "pipe".to_string()
+    } else {
+        sanitized
     }
 }

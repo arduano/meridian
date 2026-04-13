@@ -16,8 +16,10 @@ pub use player::{AudioStatus, MeridianAudioPlayer};
 pub use render::{
     AudioRenderConfig, AudioRenderEvent, render_audio, render_audio_from_cache, render_audio_to_wav,
 };
-#[cfg(unix)]
-pub(crate) use render::{render_audio_pipe_from_cache, resolve_video_audio_settings};
+#[cfg(any(unix, windows))]
+pub(crate) use render::{
+    RawAudioPipeTarget, render_audio_pipe_from_cache, resolve_video_audio_settings,
+};
 pub use soundfont_cache::SoundfontCache;
 pub use xsynth_core::{
     ChannelCount,

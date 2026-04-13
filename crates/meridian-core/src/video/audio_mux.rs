@@ -5,22 +5,25 @@
 
 use std::{sync::Arc, sync::atomic::AtomicBool};
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use std::{
     sync::Mutex,
     sync::atomic::Ordering,
     thread::{self, JoinHandle},
 };
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use crate::{
     MeridianError,
-    audio::{SoundfontCache, render_audio_pipe_from_cache, resolve_video_audio_settings},
+    audio::{
+        RawAudioPipeTarget, SoundfontCache, render_audio_pipe_from_cache,
+        resolve_video_audio_settings,
+    },
     midi::audio_cache::InRamAudioCache,
     protocol::{VideoAudioConfig, VideoAudioProgress, VideoRenderConfig},
 };
 
-#[cfg(not(unix))]
+#[cfg(all(not(unix), not(windows)))]
 use crate::{
     MeridianError,
     protocol::{VideoAudioConfig, VideoAudioProgress, VideoRenderConfig},
@@ -32,9 +35,9 @@ use super::{
 };
 
 pub(crate) enum VideoAudioMux {
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     Pipe {
-        fifo: crate::ffmpeg::FifoGuard,
+        pipe: crate::ffmpeg::AudioPipeGuard,
         sample_rate: u32,
         channels: u16,
         cancel: Arc<AtomicBool>,
@@ -43,8 +46,8 @@ pub(crate) enum VideoAudioMux {
         inputs: Option<VideoRenderAudioInputs>,
         audio: VideoAudioConfig,
     },
-    #[cfg_attr(not(unix), allow(dead_code))]
-    #[cfg(not(unix))]
+    #[cfg_attr(all(not(unix), not(windows)), allow(dead_code))]
+    #[cfg(all(not(unix), not(windows)))]
     Unsupported,
 }
 
@@ -56,7 +59,7 @@ impl VideoAudioMux {
         time_range: ResolvedVideoTimeRange,
         cancel: &Arc<AtomicBool>,
     ) -> Result<Self, MeridianError> {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             // The audio mux only exists for the video render path, but it is
             // still split out so the main video orchestration stays readable.
@@ -67,10 +70,10 @@ impl VideoAudioMux {
                 resolve_video_audio_settings(&inputs.audio_config, audio)?;
             let clipped_audio_cache = clip_audio_cache(&inputs.audio_cache, time_range);
             let total_events = clipped_audio_cache.events().len();
-            let fifo = crate::ffmpeg::FifoGuard::create(&config.output, "audio")?;
+            let pipe = crate::ffmpeg::AudioPipeGuard::create(&config.output, "audio")?;
             let _ = cancel;
             Ok(Self::Pipe {
-                fifo,
+                pipe,
                 sample_rate,
                 channels,
                 cancel: Arc::clone(cancel),
@@ -88,33 +91,35 @@ impl VideoAudioMux {
             })
         }
 
-        #[cfg(not(unix))]
+        #[cfg(all(not(unix), not(windows)))]
         {
             let _ = (config, audio, audio_inputs, time_range, cancel);
             Err(MeridianError::Unsupported(
-                "muxed audio video export currently requires unix named pipes".into(),
+                "muxed audio video export currently requires a supported local pipe implementation"
+                    .into(),
             ))
         }
     }
 
     pub(crate) fn ffmpeg_input(&self) -> Result<VideoFfmpegAudioInput<'_>, MeridianError> {
         match self {
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Self::Pipe {
-                fifo,
+                pipe,
                 sample_rate,
                 channels,
                 audio,
                 ..
             } => Ok(VideoFfmpegAudioInput {
-                pipe_path: fifo.path(),
+                pipe_path: pipe.path(),
                 sample_rate: *sample_rate,
                 channels: *channels,
                 extra_args: &audio.ffmpeg_args,
             }),
-            #[cfg(not(unix))]
+            #[cfg(all(not(unix), not(windows)))]
             Self::Unsupported => Err(MeridianError::Unsupported(
-                "muxed audio video export currently requires unix named pipes".into(),
+                "muxed audio video export currently requires a supported local pipe implementation"
+                    .into(),
             )),
         }
     }
@@ -123,7 +128,7 @@ impl VideoAudioMux {
         match self {
             #[cfg(unix)]
             Self::Pipe {
-                fifo,
+                pipe,
                 cancel,
                 progress,
                 worker,
@@ -137,7 +142,7 @@ impl VideoAudioMux {
                 let inputs = inputs.take().ok_or_else(|| {
                     MeridianError::Platform("audio mux inputs were already consumed".into())
                 })?;
-                let pipe_path = fifo.path().to_path_buf();
+                let pipe_path = pipe.path().to_path_buf();
                 let audio = audio.clone();
                 let cancel = Arc::clone(cancel);
                 let progress = Arc::clone(progress);
@@ -148,7 +153,7 @@ impl VideoAudioMux {
                         &inputs.audio_config,
                         &soundfont_cache,
                         &audio,
-                        &pipe_path,
+                        RawAudioPipeTarget::Path(pipe_path),
                         cancel.as_ref(),
                         |next| {
                             *progress.lock().expect("audio mux progress mutex poisoned") = next;
@@ -157,30 +162,67 @@ impl VideoAudioMux {
                 }));
                 Ok(())
             }
-            #[cfg(not(unix))]
+            #[cfg(windows)]
+            Self::Pipe {
+                pipe,
+                cancel,
+                progress,
+                worker,
+                inputs,
+                audio,
+                ..
+            } => {
+                if worker.is_some() {
+                    return Ok(());
+                }
+                let inputs = inputs.take().ok_or_else(|| {
+                    MeridianError::Platform("audio mux inputs were already consumed".into())
+                })?;
+                let pipe_file = pipe.connect_writer()?;
+                let audio = audio.clone();
+                let cancel = Arc::clone(cancel);
+                let progress = Arc::clone(progress);
+                *worker = Some(thread::spawn(move || {
+                    let soundfont_cache = SoundfontCache::new();
+                    render_audio_pipe_from_cache(
+                        inputs.audio_cache.as_ref(),
+                        &inputs.audio_config,
+                        &soundfont_cache,
+                        &audio,
+                        RawAudioPipeTarget::File(pipe_file),
+                        cancel.as_ref(),
+                        |next| {
+                            *progress.lock().expect("audio mux progress mutex poisoned") = next;
+                        },
+                    )
+                }));
+                Ok(())
+            }
+            #[cfg(all(not(unix), not(windows)))]
             Self::Unsupported => Err(MeridianError::Unsupported(
-                "muxed audio video export currently requires unix named pipes".into(),
+                "muxed audio video export currently requires a supported local pipe implementation"
+                    .into(),
             )),
         }
     }
 
     pub(crate) fn finish(self) -> Result<(), MeridianError> {
         match self {
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Self::Pipe { worker, .. } => join_audio_worker(worker),
-            #[cfg(not(unix))]
+            #[cfg(all(not(unix), not(windows)))]
             Self::Unsupported => Ok(()),
         }
     }
 
     pub(crate) fn progress(&self) -> VideoAudioProgress {
         match self {
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             Self::Pipe { progress, .. } => progress
                 .lock()
                 .expect("audio mux progress mutex poisoned")
                 .clone(),
-            #[cfg(not(unix))]
+            #[cfg(all(not(unix), not(windows)))]
             Self::Unsupported => VideoAudioProgress {
                 total_events: 0,
                 event_index: 0,
@@ -190,7 +232,7 @@ impl VideoAudioMux {
     }
 
     pub(crate) fn cancel_and_join(&mut self) {
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             let Self::Pipe { cancel, worker, .. } = self;
             cancel.store(true, Ordering::SeqCst);
@@ -199,14 +241,14 @@ impl VideoAudioMux {
             }
         }
 
-        #[cfg(not(unix))]
+        #[cfg(all(not(unix), not(windows)))]
         {
             let _ = self;
         }
     }
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 fn join_audio_worker(
     worker: Option<JoinHandle<Result<(), MeridianError>>>,
 ) -> Result<(), MeridianError> {
@@ -218,7 +260,7 @@ fn join_audio_worker(
         .map_err(|_| MeridianError::Platform("audio mux worker panicked".into()))?
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 fn clip_audio_cache(
     audio_cache: &Arc<InRamAudioCache>,
     time_range: ResolvedVideoTimeRange,

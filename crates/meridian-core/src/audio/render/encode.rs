@@ -81,7 +81,7 @@ fn render_encoded_audio_unix(
     cancel: &AtomicBool,
     callback: &mut impl FnMut(AudioRenderEvent),
 ) -> Result<AudioRenderLoopResult, MeridianError> {
-    let fifo = ffmpeg::FifoGuard::create(&render_config.output, "audio")?;
+    let fifo = ffmpeg::AudioPipeGuard::create(&render_config.output, "audio")?;
     let audio_params = settings.audio_params()?;
     let mut encoder = spawn_audio_encoder(
         &render_config.output,
