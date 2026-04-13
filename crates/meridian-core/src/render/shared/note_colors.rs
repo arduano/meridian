@@ -15,7 +15,9 @@ pub enum ZenithPaletteSpec {
     #[default]
     Random,
     RandomGradients,
-    PngFile { path: PathBuf },
+    PngFile {
+        path: PathBuf,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -30,8 +32,6 @@ pub enum NotePaletteConfig {
         randomize: bool,
     },
 }
-
-
 
 impl NotePaletteConfig {
     pub fn build_color_table(

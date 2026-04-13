@@ -2,15 +2,12 @@ use std::sync::Arc;
 
 use enum_dispatch::enum_dispatch;
 
-use crate::{
-    error::MeridianError,
-    render::DisplayTimeSpace,
-};
+use crate::{error::MeridianError, render::DisplayTimeSpace};
 
 use super::{
-    MIDIFileStats, MIDIFileUniqueSignature, MIDI_KEY_COUNT, MIDIAnalysisSummary, MIDIColorPair,
-    MIDIFile, MIDIFileBase, MIDINoteColumnView, MIDINoteViews, MIDIViewRange, cache::MidiCacheStack,
-    display_cache,
+    MIDI_KEY_COUNT, MIDIAnalysisSummary, MIDIColorPair, MIDIFile, MIDIFileBase, MIDIFileStats,
+    MIDIFileUniqueSignature, MIDINoteColumnView, MIDINoteViews, MIDIViewRange,
+    cache::MidiCacheStack, display_cache,
 };
 
 #[enum_dispatch(MIDIFileBase)]

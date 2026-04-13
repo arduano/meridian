@@ -366,7 +366,8 @@ fn reduce_polyphony(
             active_after_track += transition.net_delta;
             index += 1;
             *steps_completed += 1;
-            if *steps_completed == total_steps || (*steps_completed).is_multiple_of(progress_stride) {
+            if *steps_completed == total_steps || (*steps_completed).is_multiple_of(progress_stride)
+            {
                 progress(AnalysisProgressUpdate {
                     progress: 0.45 + 0.25 * (*steps_completed as f32 / total_steps as f32),
                     status: status.into(),

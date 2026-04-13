@@ -183,7 +183,7 @@ export component VideoPanel inherits Rectangle {
     Flickable {
         width: parent.width;
         height: parent.height;
-        interactive: !(root.is-text && TextInputInterface.text-input-focused);
+        interactive: false;
 
         VerticalLayout {
             width: parent.width;

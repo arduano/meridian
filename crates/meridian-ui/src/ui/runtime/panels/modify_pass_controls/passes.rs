@@ -511,9 +511,7 @@ pub(crate) fn update_note_length_control(
 pub(crate) fn sync_quantize_controls(app: &App, config: &MidiFileProcessingConfig) {
     if let MidiModifierTool::Quantize(tool) = &config.tool {
         let ppq = get_ppq(app);
-        app.set_modify_quantize_grid_ticks_text(
-            format_notes(tool.rounding_ticks, ppq).into(),
-        );
+        app.set_modify_quantize_grid_ticks_text(format_notes(tool.rounding_ticks, ppq).into());
         app.set_modify_quantize_mode_text(format_serde_enum(&tool.mode).into());
     }
 }

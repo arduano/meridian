@@ -6,15 +6,15 @@ use cosmic_text::{
 
 use crate::{
     midi::{
-        views::MIDIFileViewsUnion, MIDIFileBase, MIDIFileUnion, MIDINoteColumnView, MIDINoteViews,
+        MIDIFileBase, MIDIFileUnion, MIDINoteColumnView, MIDINoteViews, views::MIDIFileViewsUnion,
     },
     render::{
-        shared::{
-            for_each_visible_note, normalized_key_range, solid_quad, ProjectedScene, SceneLayer,
-            TextAlignment, TextAnchor, TextOverlayConfig, TextRowConfig, TextSceneConfig,
-            TextStyleConfig, TextValueFormat, TextValueSource,
-        },
         SceneLayout,
+        shared::{
+            ProjectedScene, SceneLayer, TextAlignment, TextAnchor, TextOverlayConfig,
+            TextRowConfig, TextSceneConfig, TextStyleConfig, TextValueFormat, TextValueSource,
+            for_each_visible_note, normalized_key_range, solid_quad,
+        },
     },
 };
 

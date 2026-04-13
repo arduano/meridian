@@ -290,9 +290,10 @@ pub(super) fn install_timer(
                     app.get_viewport_px_height().max(1.0) as u32,
                 );
                 if has_viewport
-                    && let Some(image) = pending_viewport_image_for_timer.borrow_mut().take() {
-                        app.set_viewport_image(image);
-                    }
+                    && let Some(image) = pending_viewport_image_for_timer.borrow_mut().take()
+                {
+                    app.set_viewport_image(image);
+                }
                 if has_viewport && !app_is_loading(&app) {
                     let playing = shared_state_for_timer
                         .lock()
@@ -315,17 +316,17 @@ pub(super) fn install_timer(
 
                     if should_refresh
                         && let Ok(events) = bridge_for_timer.refresh_state(&shared_state_for_timer)
-                        {
-                            apply_events_to_app(&app, &shared_state_for_timer, &events);
-                            let playing = shared_state_for_timer
-                                .lock()
-                                .expect("shared UI state mutex poisoned")
-                                .transport
-                                .playing;
-                            if playing || disable_wgpu {
-                                app.window().request_redraw();
-                            }
+                    {
+                        apply_events_to_app(&app, &shared_state_for_timer, &events);
+                        let playing = shared_state_for_timer
+                            .lock()
+                            .expect("shared UI state mutex poisoned")
+                            .transport
+                            .playing;
+                        if playing || disable_wgpu {
+                            app.window().request_redraw();
                         }
+                    }
                 }
                 if has_viewport && (disable_wgpu || app.get_play_label() == "Pause") {
                     app.window().request_redraw();
@@ -343,9 +344,10 @@ pub(super) fn install_timer(
                     } = snapshot;
                     set_export_status(&app, status, detail, progress);
                     if let Some(RenderExportUiTerminal::Finished(output)) = terminal
-                        && app.get_render_open_after_export() {
-                            let _ = open::that_detached(&output);
-                        }
+                        && app.get_render_open_after_export()
+                    {
+                        let _ = open::that_detached(&output);
+                    }
                 }
             }
         },

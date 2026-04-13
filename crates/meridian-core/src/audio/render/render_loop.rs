@@ -163,16 +163,15 @@ fn dispatch_packed_event(
             channel,
             ChannelEvent::Audio(ChannelAudioEvent::NoteOff { key: data1 }),
         )),
-        0x90
-            if !ignore_range.contains(&data2) => {
-                renderer.send_event(SynthEvent::Channel(
-                    channel,
-                    ChannelEvent::Audio(ChannelAudioEvent::NoteOn {
-                        key: data1,
-                        vel: data2,
-                    }),
-                ));
-            }
+        0x90 if !ignore_range.contains(&data2) => {
+            renderer.send_event(SynthEvent::Channel(
+                channel,
+                ChannelEvent::Audio(ChannelAudioEvent::NoteOn {
+                    key: data1,
+                    vel: data2,
+                }),
+            ));
+        }
         0xB0 => renderer.send_event(SynthEvent::Channel(
             channel,
             ChannelEvent::Audio(ChannelAudioEvent::Control(ControlEvent::Raw(data1, data2))),

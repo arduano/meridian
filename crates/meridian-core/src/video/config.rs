@@ -48,11 +48,12 @@ impl VideoRenderConfig {
         validate_time_bound(self.start_time, "video start time")?;
         validate_time_bound(self.end_time, "video end time")?;
         if let (Some(start_time), Some(end_time)) = (self.start_time, self.end_time)
-            && end_time <= start_time {
-                return Err(MeridianError::InvalidMidi(
-                    "video end time must be greater than start time".into(),
-                ));
-            }
+            && end_time <= start_time
+        {
+            return Err(MeridianError::InvalidMidi(
+                "video end time must be greater than start time".into(),
+            ));
+        }
         Ok(())
     }
 

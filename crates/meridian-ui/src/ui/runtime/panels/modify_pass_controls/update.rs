@@ -1,10 +1,6 @@
 use super::*;
 
-pub(crate) fn update_modify_control(
-    app: &App,
-    key: &str,
-    value: &str,
-) -> Result<(), String> {
+pub(crate) fn update_modify_control(app: &App, key: &str, value: &str) -> Result<(), String> {
     let mut config = fallback_modify_config(app);
     let (field_prefix, field_key) = key
         .split_once('.')

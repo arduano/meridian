@@ -295,29 +295,31 @@ fn midi_analysis_job_runs_without_building_display_cache() {
         let event = event_rx
             .recv_timeout(Duration::from_millis(200))
             .expect("receive analysis job event");
-        if let CoreEvent::MidiAnalysisJob { event } = event { match event {
-            meridian_core::protocol::MidiAnalysisJobEvent::Finished { result, .. } => {
-                assert_eq!(result.total_notes, 2);
-                assert_eq!(result.buckets.len(), 4);
-                assert_eq!(
-                    result
-                        .buckets
-                        .iter()
-                        .map(|bucket| bucket.note_starts)
-                        .sum::<u64>(),
-                    2
-                );
-                assert!(result.buckets.iter().any(|bucket| bucket.active_notes > 0));
-                assert_eq!(result.events.note_on_events, 2);
-                assert_eq!(result.events.note_off_events, 2);
-                assert_eq!(result.file.declared_track_count, 1);
-                return;
+        if let CoreEvent::MidiAnalysisJob { event } = event {
+            match event {
+                meridian_core::protocol::MidiAnalysisJobEvent::Finished { result, .. } => {
+                    assert_eq!(result.total_notes, 2);
+                    assert_eq!(result.buckets.len(), 4);
+                    assert_eq!(
+                        result
+                            .buckets
+                            .iter()
+                            .map(|bucket| bucket.note_starts)
+                            .sum::<u64>(),
+                        2
+                    );
+                    assert!(result.buckets.iter().any(|bucket| bucket.active_notes > 0));
+                    assert_eq!(result.events.note_on_events, 2);
+                    assert_eq!(result.events.note_off_events, 2);
+                    assert_eq!(result.file.declared_track_count, 1);
+                    return;
+                }
+                meridian_core::protocol::MidiAnalysisJobEvent::Failed { message, .. } => {
+                    panic!("analysis job failed: {message}")
+                }
+                _ => {}
             }
-            meridian_core::protocol::MidiAnalysisJobEvent::Failed { message, .. } => {
-                panic!("analysis job failed: {message}")
-            }
-            _ => {}
-        } }
+        }
     }
     panic!("analysis job did not finish");
 }
@@ -364,22 +366,24 @@ fn midi_analysis_job_fails_when_requested_file_metrics_cannot_be_computed() {
         let event = event_rx
             .recv_timeout(Duration::from_millis(200))
             .expect("receive analysis job event");
-        if let CoreEvent::MidiAnalysisJob { event } = event { match event {
-            meridian_core::protocol::MidiAnalysisJobEvent::Failed { message, .. } => {
-                assert!(
-                    message.contains("failed to compute gzip size"),
-                    "unexpected analysis failure: {message}"
-                );
-                return;
+        if let CoreEvent::MidiAnalysisJob { event } = event {
+            match event {
+                meridian_core::protocol::MidiAnalysisJobEvent::Failed { message, .. } => {
+                    assert!(
+                        message.contains("failed to compute gzip size"),
+                        "unexpected analysis failure: {message}"
+                    );
+                    return;
+                }
+                meridian_core::protocol::MidiAnalysisJobEvent::Finished { result, .. } => {
+                    panic!(
+                        "analysis job should fail when file metrics cannot be computed, got gzip_bytes={}",
+                        result.file.gzip_bytes
+                    );
+                }
+                _ => {}
             }
-            meridian_core::protocol::MidiAnalysisJobEvent::Finished { result, .. } => {
-                panic!(
-                    "analysis job should fail when file metrics cannot be computed, got gzip_bytes={}",
-                    result.file.gzip_bytes
-                );
-            }
-            _ => {}
-        } }
+        }
     }
 
     panic!("analysis job did not fail");
@@ -939,34 +943,36 @@ fn process_midi_file_job_reports_status_and_finishes() {
         let event = event_rx
             .recv_timeout(Duration::from_secs(1))
             .expect("receive job event");
-        if let CoreEvent::MidiProcess { event } = event { match event {
-            MidiProcessEvent::ProcessStarted {
-                input: started_input,
-                output: started_output,
-                ..
-            } => {
-                assert_eq!(started_input, midi);
-                assert_eq!(started_output, output);
-                saw_started = true;
+        if let CoreEvent::MidiProcess { event } = event {
+            match event {
+                MidiProcessEvent::ProcessStarted {
+                    input: started_input,
+                    output: started_output,
+                    ..
+                } => {
+                    assert_eq!(started_input, midi);
+                    assert_eq!(started_output, output);
+                    saw_started = true;
+                }
+                MidiProcessEvent::Progress {
+                    progress_percent, ..
+                } => {
+                    assert!(progress_percent <= 100);
+                    saw_progress = true;
+                }
+                MidiProcessEvent::ProcessFinished {
+                    input: finished_input,
+                    output: finished_output,
+                    ..
+                } => {
+                    assert_eq!(finished_input, midi);
+                    assert_eq!(finished_output, output);
+                    saw_finished = true;
+                    break;
+                }
+                _ => {}
             }
-            MidiProcessEvent::Progress {
-                progress_percent, ..
-            } => {
-                assert!(progress_percent <= 100);
-                saw_progress = true;
-            }
-            MidiProcessEvent::ProcessFinished {
-                input: finished_input,
-                output: finished_output,
-                ..
-            } => {
-                assert_eq!(finished_input, midi);
-                assert_eq!(finished_output, output);
-                saw_finished = true;
-                break;
-            }
-            _ => {}
-        } }
+        }
     }
 
     assert!(saw_started);
@@ -1000,12 +1006,13 @@ fn midi_load_progress_reports_materialization_counts() {
             continue;
         };
         match event {
-            CoreEvent::MidiLoadProgress { path, progress, .. } if path == midi
-                && progress.completed_events.is_some_and(|value| value > 0)
-                    && progress.completed_notes.is_some_and(|value| value > 0)
-                => {
-                    return;
-                }
+            CoreEvent::MidiLoadProgress { path, progress, .. }
+                if path == midi
+                    && progress.completed_events.is_some_and(|value| value > 0)
+                    && progress.completed_notes.is_some_and(|value| value > 0) =>
+            {
+                return;
+            }
             _ => {}
         }
     }

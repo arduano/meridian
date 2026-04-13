@@ -65,13 +65,14 @@ impl KeyBuilder {
             .and_then(|queue| queue.pop_front());
 
         if let Some(note) = note
-            && note.column_index != self.column.len() {
-                self.column[note.column_index].set_note_end_time(
-                    note.block_index,
-                    time_seconds,
-                    time_ticks,
-                );
-            }
+            && note.column_index != self.column.len()
+        {
+            self.column[note.column_index].set_note_end_time(
+                note.block_index,
+                time_seconds,
+                time_ticks,
+            );
+        }
     }
 
     fn flush(&mut self, time_seconds: f64, time_ticks: u64) {
@@ -202,12 +203,12 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
                 if let Some(keys) = state.keys.as_mut()
                     && let (Some(dirty_keys), Some(dirty_key_flags)) =
                         (state.dirty_keys.as_mut(), state.dirty_key_flags.as_mut())
-                    {
-                        for key_index in dirty_keys.drain(..) {
-                            dirty_key_flags[key_index] = false;
-                            keys[key_index].flush(state.time_seconds, state.time_ticks);
-                        }
+                {
+                    for key_index in dirty_keys.drain(..) {
+                        dirty_key_flags[key_index] = false;
+                        keys[key_index].flush(state.time_seconds, state.time_ticks);
                     }
+                }
                 if let (Some(audio_blocks), Some(current_audio_data), Some(current_audio_control)) = (
                     state.audio_blocks.as_mut(),
                     state.current_audio_data.as_mut(),
@@ -262,10 +263,11 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
                                 if was_empty
                                     && let (Some(dirty_keys), Some(dirty_key_flags)) =
                                         (state.dirty_keys.as_mut(), state.dirty_key_flags.as_mut())
-                                        && !dirty_key_flags[key_index] {
-                                            dirty_key_flags[key_index] = true;
-                                            dirty_keys.push(key_index);
-                                        }
+                                    && !dirty_key_flags[key_index]
+                                {
+                                    dirty_key_flags[key_index] = true;
+                                    dirty_keys.push(key_index);
+                                }
                             }
                             state.notes += 1;
                         }
@@ -284,14 +286,11 @@ pub(crate) fn build_materialized_midi_with_progress_cancelable(
                 Event::NoteOff(note_off) => {
                     let key_index = note_off.key as usize;
                     if key_index < MIDI_KEY_COUNT
-                        && let Some(keys) = state.keys.as_mut() {
-                            let track_chan = TrackAndChannel::new(track, note_off.channel);
-                            keys[key_index].end_note(
-                                track_chan,
-                                state.time_seconds,
-                                state.time_ticks,
-                            );
-                        }
+                        && let Some(keys) = state.keys.as_mut()
+                    {
+                        let track_chan = TrackAndChannel::new(track, note_off.channel);
+                        keys[key_index].end_note(track_chan, state.time_seconds, state.time_ticks);
+                    }
                     if let (Some(current_audio_data), Some(current_audio_control)) = (
                         state.current_audio_data.as_mut(),
                         state.current_audio_control.as_mut(),

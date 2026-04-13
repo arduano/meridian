@@ -205,10 +205,11 @@ pub(in super::super) fn wire_merge_callbacks(
             bump_merge_source_inspection_generation();
             apply_merge_sources_to_app(&app, &shared_state);
             if app.get_merge_output_path_text().is_empty()
-                && let Some(path) = merge_default_output_from_model(&shared_state) {
-                    app.set_merge_output_path_text(path.display().to_string().into());
-                    app.set_merge_result_output_text(file_name_or_path(&path).into());
-                }
+                && let Some(path) = merge_default_output_from_model(&shared_state)
+            {
+                app.set_merge_output_path_text(path.display().to_string().into());
+                app.set_merge_result_output_text(file_name_or_path(&path).into());
+            }
             let pending = loading_merge_sources_from_model(&shared_state);
             if pending.is_empty() {
                 app.set_merge_progress(0.0);
@@ -457,10 +458,11 @@ pub(in super::super) fn append_merge_source_paths(
     }
 
     if app.get_merge_output_path_text().is_empty()
-        && let Some(path) = merge_default_output_from_model(shared_state) {
-            app.set_merge_output_path_text(path.display().to_string().into());
-            app.set_merge_result_output_text(file_name_or_path(&path).into());
-        }
+        && let Some(path) = merge_default_output_from_model(shared_state)
+    {
+        app.set_merge_output_path_text(path.display().to_string().into());
+        app.set_merge_result_output_text(file_name_or_path(&path).into());
+    }
     refresh_pending_merge_source_inspection(
         app,
         shared_state,

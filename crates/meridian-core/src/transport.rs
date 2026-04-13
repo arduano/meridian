@@ -65,14 +65,15 @@ impl TransportState {
     pub fn sync(&mut self, midi_length: f64, now: Instant) -> TransportSync {
         let mut stopped_at_end = false;
         if self.playing
-            && let Some(last_tick) = self.last_tick {
-                self.current_time += now.duration_since(last_tick).as_secs_f64();
-                self.current_time = self.current_time.min(midi_length.max(0.0));
-                if self.current_time >= midi_length && midi_length > 0.0 {
-                    self.playing = false;
-                    stopped_at_end = true;
-                }
+            && let Some(last_tick) = self.last_tick
+        {
+            self.current_time += now.duration_since(last_tick).as_secs_f64();
+            self.current_time = self.current_time.min(midi_length.max(0.0));
+            if self.current_time >= midi_length && midi_length > 0.0 {
+                self.playing = false;
+                stopped_at_end = true;
             }
+        }
         self.last_tick = Some(now);
         TransportSync {
             snapshot: self.snapshot(),

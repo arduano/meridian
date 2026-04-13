@@ -731,11 +731,7 @@ impl TextSceneConfig {
 impl TextStyleConfig {
     pub fn normalized_name(&self) -> &str {
         let trimmed = self.name.trim();
-        if trimmed.is_empty() {
-            "body"
-        } else {
-            trimmed
-        }
+        if trimmed.is_empty() { "body" } else { trimmed }
     }
 
     pub fn normalized_font_family(&self) -> &str {
@@ -767,11 +763,7 @@ impl TextOverlayConfig {
 
     pub fn resolved_style_name(&self) -> &str {
         let trimmed = self.style.trim();
-        if trimmed.is_empty() {
-            "body"
-        } else {
-            trimmed
-        }
+        if trimmed.is_empty() { "body" } else { trimmed }
     }
 
     pub fn background_rgba(&self) -> Option<[f32; 4]> {

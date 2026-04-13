@@ -3,8 +3,8 @@
 //! This file maps pass keys to human-facing labels, policy hints, and the
 //! default tool constructor for each modify preset.
 
-use super::*;
 use super::super::modify_pass_controls::*;
+use super::*;
 
 pub(crate) struct ModifyPassPolicy {
     pub key: &'static str,

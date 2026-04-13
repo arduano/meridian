@@ -249,10 +249,11 @@ mod tests {
             &cancel,
             |event| {
                 if let crate::protocol::MidiProcessEvent::Progress { .. } = event
-                    && !saw_progress {
-                        saw_progress = true;
-                        cancel.store(true, Ordering::SeqCst);
-                    }
+                    && !saw_progress
+                {
+                    saw_progress = true;
+                    cancel.store(true, Ordering::SeqCst);
+                }
             },
         );
 

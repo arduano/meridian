@@ -6,9 +6,10 @@ use super::formatting::{file_name_or_full, format_view_range_numeric};
 use meridian_core::protocol::{StateSnapshot, VideoRenderStatus};
 use meridian_core::render::{
     KeyboardHeightSpec, KeyboardProjectorConfig, NotePaletteConfig, NoteProjectorConfig,
-    ProjectorBackgroundConfig, ProjectorBackgroundScalingMode, ProjectorImageConfig, SceneConfig,
-    TextAlignment, TextAnchor, TextOverlayConfig, TextRowConfig, TextSceneConfig, TextStyleConfig,
-    TextValueFormat, TextValueSource, ThreeDSceneConfig, ZenithPaletteSpec, PFA_RED_TOP_BAR_COLOR,
+    PFA_RED_TOP_BAR_COLOR, ProjectorBackgroundConfig, ProjectorBackgroundScalingMode,
+    ProjectorImageConfig, SceneConfig, TextAlignment, TextAnchor, TextOverlayConfig, TextRowConfig,
+    TextSceneConfig, TextStyleConfig, TextValueFormat, TextValueSource, ThreeDSceneConfig,
+    ZenithPaletteSpec,
 };
 
 pub(super) fn scene_summary(scene: &SceneConfig) -> String {
@@ -575,9 +576,5 @@ pub(super) fn apply_palette_to_app(app: &App, palette: &NotePaletteConfig) {
 }
 
 pub(super) fn on_off(value: bool) -> &'static str {
-    if value {
-        "on"
-    } else {
-        "off"
-    }
+    if value { "on" } else { "off" }
 }

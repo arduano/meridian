@@ -28,9 +28,10 @@ impl CoreState {
             .render_frame(transport, viewport_width, viewport_height)
             .map_err(|error| {
                 if matches!(error, MeridianError::InvalidMidi(_))
-                    && let Err(event) = self.display.validate_layout() {
-                        return event_to_error("invalid layout", &event);
-                    }
+                    && let Err(event) = self.display.validate_layout()
+                {
+                    return event_to_error("invalid layout", &event);
+                }
                 error
             })?;
         let DisplayFrame {
