@@ -11,7 +11,10 @@ pub use events::AudioRenderEvent;
 use std::sync::atomic::AtomicBool;
 
 #[cfg(any(unix, windows))]
-use std::{fs::File, path::PathBuf};
+use std::path::PathBuf;
+
+#[cfg(windows)]
+use std::fs::File;
 
 use crate::{
     MeridianError,

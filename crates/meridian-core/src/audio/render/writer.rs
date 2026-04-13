@@ -5,7 +5,7 @@ use std::{
 };
 
 #[cfg(unix)]
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use hound::{SampleFormat, WavSpec, WavWriter};
 use xsynth_core::AudioStreamParams;
@@ -37,6 +37,7 @@ impl AudioSampleWriter {
         Ok(Self::Wav(writer))
     }
 
+    #[cfg(windows)]
     pub(crate) fn from_raw_file(file: File) -> Self {
         Self::RawF32(BufWriter::new(file))
     }

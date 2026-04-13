@@ -46,6 +46,7 @@ impl OfflineAudioRenderer {
         )
     }
 
+    #[cfg(windows)]
     pub(crate) fn new_raw_file(
         audio_config: &AudioConfig,
         soundfont_cache: &SoundfontCache,

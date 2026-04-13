@@ -1,8 +1,10 @@
 use std::{
-    fs::File,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
+
+#[cfg(windows)]
+use std::fs::File;
 
 #[cfg(unix)]
 use std::{
