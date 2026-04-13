@@ -13,12 +13,13 @@ import {
     SectionHeader, Separator, FieldRow, OptionChip,
     InlineOptionRow, InlineCustomRow, FilePicker, StatusBadge
 } from "../primitives.slint";
-import { MidiStateSection } from "../midi_loading.slint";
+import { MidiStateSection, MidiLoadParityBanner } from "../midi_loading.slint";
 import { Theme } from "../theme.slint";
 
 export component AudioPanel inherits Rectangle {
     // ── MIDI state bindings ──
     in property <MidiLoadState> midi-state: no-midi;
+    in property <MidiLoadState> video-load-state: no-midi;
     in property <string> selected-midi-name: "";
     in property <string> loading-status: "Loading…";
     in property <float> loading-progress: 0;
@@ -94,6 +95,13 @@ export component AudioPanel inherits Rectangle {
     private property <bool> rw-is-preset:
         root.audio-render-window-text == "5.0 ms" || root.audio-render-window-text == "10.0 ms"
         || root.audio-render-window-text == "20.0 ms";
+    private property <string> load-parity-message:
+        root.selected-midi-name == "" ? ""
+        : root.midi-state == MidiLoadState.loaded && root.video-load-state != MidiLoadState.loaded
+            ? "Audio ready. Video is not loaded."
+        : root.video-load-state == MidiLoadState.loaded && root.midi-state != MidiLoadState.loaded
+            ? "Video ready. Audio is not loaded."
+        : "";
 
     clip: true;
 
@@ -125,6 +133,12 @@ export component AudioPanel inherits Rectangle {
                 cancel-load => { root.cancel-load(); }
                 unload => { root.unload-midi(); }
                 retry-load => { root.retry-load(); }
+            }
+
+            Rectangle { height: root.load-parity-message == "" ? 0px : 8px; }
+
+            MidiLoadParityBanner {
+                message: root.load-parity-message;
             }
 
             Rectangle { height: 12px; }

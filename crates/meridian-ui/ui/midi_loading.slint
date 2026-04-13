@@ -242,6 +242,49 @@ export component MidiLoadingBar inherits Rectangle {
     }
 }
 
+export component MidiLoadParityBanner inherits Rectangle {
+    in property <string> message: "";
+
+    visible: root.message != "";
+    height: 28px;
+    border-radius: 6px;
+    background: Theme.surface-card;
+    border-width: 1px;
+    border-color: Theme.border-subtle;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 8px;
+        alignment: center;
+
+        Text {
+            text: "Load State";
+            color: Theme.text-faint;
+            font-size: Theme.font-size-xs;
+            font-weight: 700;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            width: 1px;
+            height: 12px;
+            background: Theme.border-subtle;
+        }
+
+        Text {
+            text: root.message;
+            color: Theme.text-secondary;
+            font-size: Theme.font-size-xs;
+            font-family: Theme.font-family-mono;
+            font-weight: 600;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+    }
+}
+
 
 // ── MidiLoadedBar ──────────────────────────────────────────
 // Compact indicator shown when the MIDI is fully loaded for
