@@ -12,7 +12,8 @@ async function pumpLines(
   stream: ReadableStream<Uint8Array>,
   onLine: (line: string) => void,
 ): Promise<void> {
-  const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
   let buffer = "";
   try {
     while (true) {
@@ -20,7 +21,7 @@ async function pumpLines(
       if (done) {
         break;
       }
-      buffer += value;
+      buffer += decoder.decode(value, { stream: true });
       while (true) {
         const newlineIndex = buffer.indexOf("\n");
         if (newlineIndex < 0) {
@@ -32,6 +33,11 @@ async function pumpLines(
           onLine(line);
         }
       }
+    }
+    buffer += decoder.decode();
+    const trailing = buffer.trim();
+    if (trailing.length > 0) {
+      onLine(trailing);
     }
   } finally {
     reader.releaseLock();
@@ -81,9 +87,9 @@ export const bunRuntimeAdapter: MeridianRuntimeAdapter = {
         error instanceof Error ? error : new Error(String(error)),
       );
     });
-    void subprocess.exited.then((code) => {
+    void subprocess.exited.then((code: number) => {
       handlers.onExit(code, null);
-    }).catch((error) => {
+    }).catch((error: unknown) => {
       handlers.onError(
         error instanceof Error ? error : new Error(String(error)),
       );

@@ -1,13 +1,19 @@
-// Public SDK surface:
-// - protocol.ts: generated schema re-exports plus handwritten SDK aliases
-// - helpers.ts: builder utilities
-// - runtime/*-client.ts: runtime-specific entrypoints for the package root
+/**
+ * Meridian TypeScript SDK package root.
+ *
+ * Start here as a caller:
+ * - use `createDenoMeridianClient`, `createNodeMeridianClient`, or
+ *   `createBunMeridianClient` for the normal high-level SDK
+ * - use `create*ProtocolClient` when you want raw stdio protocol access
+ * - use `midiTools` and the protocol exports when you need typed config
+ *   builders and schema-level types
+ */
 export * from "./protocol.ts";
 export * from "./helpers.ts";
 export {
+  type CreateClientOptions,
   createMeridianClient,
   createProtocolClient,
-  type CreateClientOptions,
 } from "./runtime/factories.ts";
 export {
   createDenoMeridianClient,
@@ -31,13 +37,13 @@ export {
   MeridianSubprocessError,
   MidiAnalysisJobHandle,
   type MidiAnalysisOptions,
-  type MidiMergeOptions,
   MidiAnalysisTask,
+  type MidiMergeOptions,
   type MidiModificationOptions,
   MidiProcessJobHandle,
   MidiProcessTask,
-  type SaveFrameOptions,
   type MidiToolTaskOptions,
+  type SaveFrameOptions,
   type StartAnalysisForFileOptions,
   type VideoRenderAudioOptions,
   VideoRenderJobHandle,

@@ -6,6 +6,7 @@ import {
   ensureExecutable,
   hasCommand,
   resolveMidiFixture,
+  rethrowUnlessHeadlessWgpuFailure,
   TWO_NOTE_MIDI,
 } from "./common.ts";
 
@@ -13,7 +14,10 @@ Deno.test("analysis job runs through the declarative SDK API", async () => {
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);
 
-  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiPath = await resolveMidiFixture(
+    "smoke-two-notes.mid",
+    TWO_NOTE_MIDI,
+  );
 
   const client = await createDenoMeridianClient(executablePath);
   try {
@@ -50,7 +54,10 @@ Deno.test("analysis start returns a live job handle", async () => {
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);
 
-  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiPath = await resolveMidiFixture(
+    "smoke-two-notes.mid",
+    TWO_NOTE_MIDI,
+  );
 
   const client = await createDenoMeridianClient(executablePath);
   try {
@@ -79,7 +86,10 @@ Deno.test("midi processing job runs through the SDK", async () => {
   await ensureExecutable(executablePath);
 
   const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-process-" });
-  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiPath = await resolveMidiFixture(
+    "smoke-two-notes.mid",
+    TWO_NOTE_MIDI,
+  );
   const output = `${tempDir}/out.mid`;
 
   const client = await createDenoMeridianClient(executablePath);
@@ -114,8 +124,13 @@ Deno.test("midi processing start returns a live job handle", async () => {
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);
 
-  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-process-handle-" });
-  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const tempDir = await Deno.makeTempDir({
+    prefix: "meridian-sdk-process-handle-",
+  });
+  const midiPath = await resolveMidiFixture(
+    "smoke-two-notes.mid",
+    TWO_NOTE_MIDI,
+  );
   const output = `${tempDir}/out.mid`;
 
   const client = await createDenoMeridianClient(executablePath);
@@ -144,7 +159,10 @@ Deno.test("shared metadata track helper is exposed through the SDK", async () =>
   const tempDir = await Deno.makeTempDir({
     prefix: "meridian-sdk-shared-metadata-",
   });
-  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiPath = await resolveMidiFixture(
+    "smoke-two-notes.mid",
+    TWO_NOTE_MIDI,
+  );
   const output = `${tempDir}/out.mid`;
 
   const client = await createDenoMeridianClient(executablePath);
@@ -212,7 +230,9 @@ Deno.test("audio render runs through the declarative SDK API", async () => {
   const output = `${tempDir}/out.wav`;
   const soundfontPath = await defaultSoundfontPath();
   if (!soundfontPath) {
-    throw new Error("No bundled or override soundfont is available for audio render smoke");
+    throw new Error(
+      "No bundled or override soundfont is available for audio render smoke",
+    );
   }
   await Deno.stat(soundfontPath);
 
@@ -229,7 +249,9 @@ Deno.test("audio render runs through the declarative SDK API", async () => {
     });
 
     if (result.frames_written <= 0) {
-      throw new Error(`Expected frames_written > 0, got ${result.frames_written}`);
+      throw new Error(
+        `Expected frames_written > 0, got ${result.frames_written}`,
+      );
     }
     await Deno.stat(output);
     if (!events.includes("render_finished")) {
@@ -260,31 +282,35 @@ Deno.test("video render runs through the declarative SDK API", async () => {
 
   const client = await createDenoMeridianClient(executablePath);
   try {
-    const events: string[] = [];
-    const result = await client.video.render({
-      midiPath,
-      output,
-      container: "mkv",
-      fps: 4,
-      width: 160,
-      height: 90,
-      renderer: "piano_trail_classic",
-      viewRange: 2,
-      ffmpegArgs: ["-y"],
-      onEvent: (event) => events.push(event.type),
-    });
+    try {
+      const events: string[] = [];
+      const result = await client.video.render({
+        midiPath,
+        output,
+        container: "mkv",
+        fps: 4,
+        width: 160,
+        height: 90,
+        renderer: "piano_trail_classic",
+        viewRange: 2,
+        ffmpegArgs: ["-y"],
+        onEvent: (event) => events.push(event.type),
+      });
 
-    if (result.output !== output) {
-      throw new Error(`Expected output ${output}, got ${result.output}`);
-    }
-    const stat = await Deno.stat(output);
-    if (!stat.isFile || stat.size === 0) {
-      throw new Error(`Expected non-empty video output at ${output}`);
-    }
-    if (!events.includes("render_finished")) {
-      throw new Error(
-        `Expected render_finished in event stream, got ${events.join(", ")}`,
-      );
+      if (result.output !== output) {
+        throw new Error(`Expected output ${output}, got ${result.output}`);
+      }
+      const stat = await Deno.stat(output);
+      if (!stat.isFile || stat.size === 0) {
+        throw new Error(`Expected non-empty video output at ${output}`);
+      }
+      if (!events.includes("render_finished")) {
+        throw new Error(
+          `Expected render_finished in event stream, got ${events.join(", ")}`,
+        );
+      }
+    } catch (error) {
+      rethrowUnlessHeadlessWgpuFailure("SDK video render smoke", error);
     }
   } finally {
     await client.close();
@@ -293,20 +319,26 @@ Deno.test("video render runs through the declarative SDK API", async () => {
 
 Deno.test("video render runs through the declarative SDK API with muxed audio", async () => {
   if (!(await hasCommand("ffmpeg"))) {
-    console.warn("skipping muxed video render smoke because ffmpeg is unavailable");
+    console.warn(
+      "skipping muxed video render smoke because ffmpeg is unavailable",
+    );
     return;
   }
 
   const soundfont = await defaultSoundfontPath();
   if (!soundfont) {
-    console.warn("skipping muxed video render smoke because no soundfont is available");
+    console.warn(
+      "skipping muxed video render smoke because no soundfont is available",
+    );
     return;
   }
 
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);
 
-  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-video-muxed-" });
+  const tempDir = await Deno.makeTempDir({
+    prefix: "meridian-sdk-video-muxed-",
+  });
   const midiPath = await resolveMidiFixture(
     "piano/burgmuller-op100-no4-the-little-party.mid",
     TWO_NOTE_MIDI,
@@ -315,31 +347,37 @@ Deno.test("video render runs through the declarative SDK API with muxed audio", 
 
   const client = await createDenoMeridianClient(executablePath);
   try {
-    const result = await client.video.render({
-      midiPath,
-      output,
-      container: "mkv",
-      fps: 4,
-      width: 160,
-      height: 90,
-      renderer: "piano_trail_classic",
-      viewRange: 2,
-      ffmpegArgs: ["-y"],
-      audio: {
-        sampleRate: 22_050,
-        channels: 2,
-        useLimiter: true,
-        soundfonts: [soundfont],
-        ffmpegArgs: ["-b:a", "96k"],
-      },
-    });
+    try {
+      const result = await client.video.render({
+        midiPath,
+        output,
+        container: "mkv",
+        fps: 4,
+        width: 160,
+        height: 90,
+        renderer: "piano_trail_classic",
+        viewRange: 2,
+        ffmpegArgs: ["-y"],
+        audio: {
+          sampleRate: 22_050,
+          channels: 2,
+          useLimiter: true,
+          soundfonts: [soundfont],
+          ffmpegArgs: ["-b:a", "96k"],
+        },
+      });
 
-    if (result.output !== output) {
-      throw new Error(`Expected muxed output ${output}, got ${result.output}`);
-    }
-    const stat = await Deno.stat(output);
-    if (!stat.isFile || stat.size === 0) {
-      throw new Error(`Expected non-empty muxed video output at ${output}`);
+      if (result.output !== output) {
+        throw new Error(
+          `Expected muxed output ${output}, got ${result.output}`,
+        );
+      }
+      const stat = await Deno.stat(output);
+      if (!stat.isFile || stat.size === 0) {
+        throw new Error(`Expected non-empty muxed video output at ${output}`);
+      }
+    } catch (error) {
+      rethrowUnlessHeadlessWgpuFailure("SDK muxed video render smoke", error);
     }
   } finally {
     await client.close();
@@ -348,14 +386,18 @@ Deno.test("video render runs through the declarative SDK API with muxed audio", 
 
 Deno.test("video render accepts full scene config through the SDK API", async () => {
   if (!(await hasCommand("ffmpeg"))) {
-    console.warn("skipping scene-config video render smoke because ffmpeg is unavailable");
+    console.warn(
+      "skipping scene-config video render smoke because ffmpeg is unavailable",
+    );
     return;
   }
 
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);
 
-  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-video-scene-" });
+  const tempDir = await Deno.makeTempDir({
+    prefix: "meridian-sdk-video-scene-",
+  });
   const midiPath = await resolveMidiFixture(
     "piano/burgmuller-op100-no4-the-little-party.mid",
     TWO_NOTE_MIDI,
@@ -402,23 +444,30 @@ Deno.test("video render accepts full scene config through the SDK API", async ()
 
   const client = await createDenoMeridianClient(executablePath);
   try {
-    const result = await client.video.render({
-      midiPath,
-      output,
-      fps: 4,
-      width: 160,
-      height: 90,
-      scene,
-      viewRange: 2,
-      ffmpegArgs: ["-y"],
-    });
+    try {
+      const result = await client.video.render({
+        midiPath,
+        output,
+        fps: 4,
+        width: 160,
+        height: 90,
+        scene,
+        viewRange: 2,
+        ffmpegArgs: ["-y"],
+      });
 
-    if (result.output !== output) {
-      throw new Error(`Expected output ${output}, got ${result.output}`);
-    }
-    const stat = await Deno.stat(output);
-    if (!stat.isFile || stat.size === 0) {
-      throw new Error(`Expected non-empty video output at ${output}`);
+      if (result.output !== output) {
+        throw new Error(`Expected output ${output}, got ${result.output}`);
+      }
+      const stat = await Deno.stat(output);
+      if (!stat.isFile || stat.size === 0) {
+        throw new Error(`Expected non-empty video output at ${output}`);
+      }
+    } catch (error) {
+      rethrowUnlessHeadlessWgpuFailure(
+        "SDK scene-config video render smoke",
+        error,
+      );
     }
   } finally {
     await client.close();
@@ -429,7 +478,10 @@ Deno.test("resource helpers load parsed and audio midi through the SDK", async (
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);
 
-  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiPath = await resolveMidiFixture(
+    "smoke-two-notes.mid",
+    TWO_NOTE_MIDI,
+  );
 
   const client = await createDenoMeridianClient(executablePath);
   try {
@@ -440,7 +492,9 @@ Deno.test("resource helpers load parsed and audio midi through the SDK", async (
       throw new Error(`Expected numeric parsed midi id, got ${parsedMidiId}`);
     }
     if (loadedMidi.path !== midiPath) {
-      throw new Error(`Expected loaded path ${midiPath}, got ${loadedMidi.path}`);
+      throw new Error(
+        `Expected loaded path ${midiPath}, got ${loadedMidi.path}`,
+      );
     }
   } finally {
     await client.close();
@@ -454,7 +508,10 @@ Deno.test("inspection and save-frame helpers run through the SDK", async () => {
   const tempDir = await Deno.makeTempDir({
     prefix: "meridian-sdk-frame-",
   });
-  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiPath = await resolveMidiFixture(
+    "smoke-two-notes.mid",
+    TWO_NOTE_MIDI,
+  );
   const output = `${tempDir}/frame.png`;
 
   const client = await createDenoMeridianClient(executablePath);
@@ -470,20 +527,24 @@ Deno.test("inspection and save-frame helpers run through the SDK", async () => {
       );
     }
 
-    await client.resources.loadMidi(midiPath);
-    await client.display.setTime(0);
-    await client.display.setViewport(160, 90);
-    const saved = await client.display.saveFrame({
-      output,
-      format: "png",
-    });
+    try {
+      await client.resources.loadMidi(midiPath);
+      await client.display.setTime(0);
+      await client.display.setViewport(160, 90);
+      const saved = await client.display.saveFrame({
+        output,
+        format: "png",
+      });
 
-    if (saved.output !== output) {
-      throw new Error(`Expected saved output ${output}, got ${saved.output}`);
-    }
-    const stat = await Deno.stat(output);
-    if (!stat.isFile || stat.size === 0) {
-      throw new Error(`Expected non-empty frame output at ${output}`);
+      if (saved.output !== output) {
+        throw new Error(`Expected saved output ${output}, got ${saved.output}`);
+      }
+      const stat = await Deno.stat(output);
+      if (!stat.isFile || stat.size === 0) {
+        throw new Error(`Expected non-empty frame output at ${output}`);
+      }
+    } catch (error) {
+      rethrowUnlessHeadlessWgpuFailure("SDK save-frame smoke", error);
     }
   } finally {
     await client.close();

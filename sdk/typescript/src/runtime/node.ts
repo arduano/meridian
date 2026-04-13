@@ -15,8 +15,11 @@ class NodeMeridianSubprocess implements MeridianSubprocess {
   }
 
   async sendLine(line: string): Promise<void> {
+    if (!this.#child.stdin) {
+      throw new Error("spawned meridian-cli process is missing stdin");
+    }
     await new Promise<void>((resolve, reject) => {
-      this.#child.stdin.write(`${line}\n`, (error) => {
+      this.#child.stdin!.write(`${line}\n`, (error) => {
         if (error) {
           reject(error);
           return;
@@ -27,7 +30,7 @@ class NodeMeridianSubprocess implements MeridianSubprocess {
   }
 
   async kill(): Promise<void> {
-    this.#child.stdin.end();
+    this.#child.stdin?.end();
     this.#child.kill();
   }
 }

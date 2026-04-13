@@ -4,25 +4,25 @@ import type {
   ChangePpqTool,
   ChannelRemapTool,
   ControlChangeTool,
-  FrameSavedEvent,
   ExtractTrackTool,
+  FrameSavedEvent,
   HumanizeTool,
   KeyMapTool,
   MetaTextTool,
-  MidiFilesMergedEvent,
   MidiFilesInspectedEvent,
+  MidiFilesMergedEvent,
   MidiLoadedEvent,
   MidiModifierTool,
   MidiProcessEvent,
   NoteLengthTool,
   ParsedMidiId,
-  ProtocolStateSnapshot,
   PitchBendTool,
   ProgramTool,
+  ProtocolStateSnapshot,
   QuantizeTool,
   RangeSelectTool,
-  SharedMetadataTrackTool,
   SceneConfig,
+  SharedMetadataTrackTool,
   SysexTool,
   TempoPoint,
   TimeWarpTool,
@@ -37,8 +37,8 @@ import type {
   MidiMergeOptions,
   MidiModificationOptions,
   MidiToolTaskOptions,
-  StartAnalysisForFileOptions,
   SaveFrameOptions,
+  StartAnalysisForFileOptions,
   VideoRenderOptions,
 } from "./options.ts";
 import {
@@ -51,8 +51,8 @@ import { type ToolConfig } from "./internal.ts";
 import {
   normalizeMidiMergeConfig,
   normalizeSaveFrameOptions,
-  toSdkAudioRenderConfig,
   toProtocolVideoRenderConfig,
+  toSdkAudioRenderConfig,
 } from "./normalizers.ts";
 import {
   AudioRenderTask,
@@ -63,6 +63,16 @@ import {
 import type { MeridianProtocolClient } from "./protocol_client.ts";
 import { MeridianSubprocessError, requireEvent } from "./internal.ts";
 
+/**
+ * High-level Meridian SDK client.
+ *
+ * This is the normal application entrypoint. It groups the stdio protocol into
+ * workflow-oriented surfaces:
+ * - `resources.*` for loading and inspection
+ * - `display.*` for stateful scene and frame control
+ * - `modification.*` for MIDI processing tools
+ * - `audio.render(...)` and `video.render(...)` for offline export jobs
+ */
 export class MeridianClient {
   readonly protocol: MeridianProtocolClient;
   readonly resources = {
@@ -71,11 +81,14 @@ export class MeridianClient {
     loadMidi: (path: string): Promise<MidiLoadedEvent> => this.loadMidi(path),
     loadAudioMidi: (path: string): Promise<MidiLoadedEvent> =>
       this.loadAudioMidi(path),
-    inspectMidiFiles: (paths: string[]): Promise<MidiFilesInspectedEvent["inspections"]> =>
+    inspectMidiFiles: (
+      paths: string[],
+    ): Promise<MidiFilesInspectedEvent["inspections"]> =>
       this.inspectMidiFiles(paths),
   };
   readonly display = {
-    setTime: (time: number): Promise<ProtocolStateSnapshot> => this.setTime(time),
+    setTime: (time: number): Promise<ProtocolStateSnapshot> =>
+      this.setTime(time),
     setSceneConfig: (scene: SceneConfig): Promise<ProtocolStateSnapshot> =>
       this.setSceneConfig(scene),
     setViewRange: (
@@ -234,6 +247,7 @@ export class MeridianClient {
     this.protocol = protocol;
   }
 
+  /** Analyze one MIDI file and return a promise-like task. */
   analysis(
     midiPath: string,
     options: MidiAnalysisOptions = {},
@@ -241,10 +255,12 @@ export class MeridianClient {
     return new MidiAnalysisTask(this, midiPath, options);
   }
 
+  /** Start an arbitrary MIDI modifier-tool task. */
   midi(options: MidiToolTaskOptions): MidiProcessTask {
     return new MidiProcessTask(this, options);
   }
 
+  /** Shut down the child `meridian-cli` process and release stdio resources. */
   async close(): Promise<void> {
     await this.protocol.close();
   }

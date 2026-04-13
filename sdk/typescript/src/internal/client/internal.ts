@@ -74,6 +74,9 @@ export function inferRendererFromScene(
   if (scene.scene_type === "three_d") {
     return "piano_trail_classic";
   }
+  if (scene.scene_type === "text") {
+    return null;
+  }
   return scene.notes.projector === "flat" ? "flat" : "pfa";
 }
 

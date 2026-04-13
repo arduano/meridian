@@ -1,10 +1,10 @@
 import {
   AudioRenderJobHandle,
   MeridianClient,
-  MidiAnalysisTask,
   MidiAnalysisJobHandle,
-  VideoRenderTask,
+  MidiAnalysisTask,
   VideoRenderJobHandle,
+  VideoRenderTask,
 } from "../src/internal/client.ts";
 import type { MeridianProtocolClient } from "../src/internal/client.ts";
 import type {
@@ -206,7 +206,9 @@ Deno.test("analysis task defaults match CLI defaults without buckets", () => {
     throw new Error(`Unexpected default kinds: ${JSON.stringify(spec.kinds)}`);
   }
   if (spec.bucketCount !== null) {
-    throw new Error(`Expected null bucketCount, got ${String(spec.bucketCount)}`);
+    throw new Error(
+      `Expected null bucketCount, got ${String(spec.bucketCount)}`,
+    );
   }
 });
 
@@ -316,7 +318,9 @@ Deno.test("video render task defaults renderer to pfa without a scene", () => {
 
   const spec = task.toJSON();
   if (spec.renderer !== "pfa") {
-    throw new Error(`Expected default renderer pfa, got ${String(spec.renderer)}`);
+    throw new Error(
+      `Expected default renderer pfa, got ${String(spec.renderer)}`,
+    );
   }
   if (spec.scene !== null) {
     throw new Error(`Expected null scene, got ${JSON.stringify(spec.scene)}`);
@@ -338,7 +342,9 @@ Deno.test("video render task infers renderer from the scene", () => {
 
   const spec = task.toJSON();
   if (spec.renderer !== "pfa") {
-    throw new Error(`Expected inferred renderer pfa, got ${String(spec.renderer)}`);
+    throw new Error(
+      `Expected inferred renderer pfa, got ${String(spec.renderer)}`,
+    );
   }
   if (JSON.stringify(spec.scene) !== JSON.stringify(DEFAULT_TWO_D_SCENE)) {
     throw new Error(`Unexpected scene snapshot: ${JSON.stringify(spec.scene)}`);
@@ -398,19 +404,35 @@ Deno.test("video render task preserves muxed audio options", () => {
 
   const spec = task.toJSON();
   if (spec.audio?.sampleRate !== 22_050) {
-    throw new Error(`Expected sampleRate 22050, got ${String(spec.audio?.sampleRate)}`);
+    throw new Error(
+      `Expected sampleRate 22050, got ${String(spec.audio?.sampleRate)}`,
+    );
   }
   if (spec.audio?.channels !== 2) {
     throw new Error(`Expected channels 2, got ${String(spec.audio?.channels)}`);
   }
   if (spec.audio?.useLimiter !== true) {
-    throw new Error(`Expected useLimiter true, got ${String(spec.audio?.useLimiter)}`);
+    throw new Error(
+      `Expected useLimiter true, got ${String(spec.audio?.useLimiter)}`,
+    );
   }
-  if (JSON.stringify(spec.audio?.soundfonts) !== JSON.stringify(["piano.sf2"])) {
-    throw new Error(`Unexpected soundfonts snapshot: ${JSON.stringify(spec.audio?.soundfonts)}`);
+  if (
+    JSON.stringify(spec.audio?.soundfonts) !== JSON.stringify(["piano.sf2"])
+  ) {
+    throw new Error(
+      `Unexpected soundfonts snapshot: ${
+        JSON.stringify(spec.audio?.soundfonts)
+      }`,
+    );
   }
-  if (JSON.stringify(spec.audio?.ffmpegArgs) !== JSON.stringify(["-b:a", "96k"])) {
-    throw new Error(`Unexpected ffmpeg args snapshot: ${JSON.stringify(spec.audio?.ffmpegArgs)}`);
+  if (
+    JSON.stringify(spec.audio?.ffmpegArgs) !== JSON.stringify(["-b:a", "96k"])
+  ) {
+    throw new Error(
+      `Unexpected ffmpeg args snapshot: ${
+        JSON.stringify(spec.audio?.ffmpegArgs)
+      }`,
+    );
   }
 });
 
@@ -485,28 +507,54 @@ Deno.test("video render request forwards muxed audio options", async () => {
     throw new Error(`Unexpected start command: ${start.type}`);
   }
   if (start.config.start_time !== 1.25) {
-    throw new Error(`Expected start_time 1.25, got ${String(start.config.start_time)}`);
+    throw new Error(
+      `Expected start_time 1.25, got ${String(start.config.start_time)}`,
+    );
   }
   if (start.config.end_time !== 3.5) {
-    throw new Error(`Expected end_time 3.5, got ${String(start.config.end_time)}`);
+    throw new Error(
+      `Expected end_time 3.5, got ${String(start.config.end_time)}`,
+    );
   }
   if (start.config.audio === null) {
     throw new Error("Expected muxed audio config to be serialized");
   }
   if (start.config.audio.sample_rate !== 22_050) {
-    throw new Error(`Expected sample_rate 22050, got ${String(start.config.audio.sample_rate)}`);
+    throw new Error(
+      `Expected sample_rate 22050, got ${
+        String(start.config.audio.sample_rate)
+      }`,
+    );
   }
   if (start.config.audio.channels !== 2) {
-    throw new Error(`Expected channels 2, got ${String(start.config.audio.channels)}`);
+    throw new Error(
+      `Expected channels 2, got ${String(start.config.audio.channels)}`,
+    );
   }
   if (start.config.audio.use_limiter !== true) {
-    throw new Error(`Expected use_limiter true, got ${String(start.config.audio.use_limiter)}`);
+    throw new Error(
+      `Expected use_limiter true, got ${
+        String(start.config.audio.use_limiter)
+      }`,
+    );
   }
-  if (JSON.stringify(start.config.audio.soundfonts) !== JSON.stringify(["piano.sf2"])) {
-    throw new Error(`Unexpected soundfonts: ${JSON.stringify(start.config.audio.soundfonts)}`);
+  if (
+    JSON.stringify(start.config.audio.soundfonts) !==
+      JSON.stringify(["piano.sf2"])
+  ) {
+    throw new Error(
+      `Unexpected soundfonts: ${JSON.stringify(start.config.audio.soundfonts)}`,
+    );
   }
-  if (JSON.stringify(start.config.audio.ffmpeg_args) !== JSON.stringify(["-b:a", "96k"])) {
-    throw new Error(`Unexpected ffmpeg args: ${JSON.stringify(start.config.audio.ffmpeg_args)}`);
+  if (
+    JSON.stringify(start.config.audio.ffmpeg_args) !==
+      JSON.stringify(["-b:a", "96k"])
+  ) {
+    throw new Error(
+      `Unexpected ffmpeg args: ${
+        JSON.stringify(start.config.audio.ffmpeg_args)
+      }`,
+    );
   }
 });
 
@@ -544,7 +592,9 @@ Deno.test("audio render handle replays a recent finished event", async () => {
     throw new Error(`Unexpected audio output: ${result.output}`);
   }
   if (JSON.stringify(seen) !== JSON.stringify(["render_finished"])) {
-    throw new Error(`Unexpected audio replayed events: ${JSON.stringify(seen)}`);
+    throw new Error(
+      `Unexpected audio replayed events: ${JSON.stringify(seen)}`,
+    );
   }
 });
 
@@ -579,6 +629,7 @@ Deno.test("video render handle replays a recent finished event", async () => {
       frame_index: 11,
       current_time: 2,
       elapsed_seconds: 2,
+      audio_progress: null,
     },
   );
 
@@ -590,7 +641,9 @@ Deno.test("video render handle replays a recent finished event", async () => {
     throw new Error(`Unexpected video output: ${result.output}`);
   }
   if (JSON.stringify(seen) !== JSON.stringify(["render_finished"])) {
-    throw new Error(`Unexpected video replayed events: ${JSON.stringify(seen)}`);
+    throw new Error(
+      `Unexpected video replayed events: ${JSON.stringify(seen)}`,
+    );
   }
 });
 
@@ -633,27 +686,29 @@ Deno.test("display and inspection helpers forward stdio commands", async () => {
     requestHandler: (command) => {
       switch ((command as { type: string }).type) {
         case "inspect_midi_files":
-          return [{
-            type: "midi_files_inspected",
-            inspections: [
-              {
-                path: "song.mid",
-                file_bytes: 123,
-                midi_length: 1.5,
-                total_notes: 2,
-                total_event_count: 6,
-                declared_track_count: 1,
-                actual_track_count: 1,
-                ticks_per_quarter: 96,
-                tempo_event_count: 1,
-                time_signature_event_count: 0,
-                key_signature_event_count: 0,
-                track_name_event_count: 1,
-                initial_bpm: 120,
-                error: null,
-              },
-            ],
-          } satisfies CoreEvent];
+          return [
+            {
+              type: "midi_files_inspected",
+              inspections: [
+                {
+                  path: "song.mid",
+                  file_bytes: 123,
+                  midi_length: 1.5,
+                  total_notes: 2,
+                  total_event_count: 6,
+                  declared_track_count: 1,
+                  actual_track_count: 1,
+                  ticks_per_quarter: 96,
+                  tempo_event_count: 1,
+                  time_signature_event_count: 0,
+                  key_signature_event_count: 0,
+                  track_name_event_count: 1,
+                  initial_bpm: 120,
+                  error: null,
+                },
+              ],
+            } satisfies CoreEvent,
+          ];
         case "set_time":
         case "set_scene_config":
         case "set_view_range":
@@ -663,11 +718,15 @@ Deno.test("display and inspection helpers forward stdio commands", async () => {
         case "save_frame":
           return [frameSavedEvent];
         default:
-          throw new Error(`Unexpected command ${(command as { type: string }).type}`);
+          throw new Error(
+            `Unexpected command ${(command as { type: string }).type}`,
+          );
       }
     },
   });
-  const client = new MeridianClient(protocol as unknown as MeridianProtocolClient);
+  const client = new MeridianClient(
+    protocol as unknown as MeridianProtocolClient,
+  );
 
   const inspections = await client.resources.inspectMidiFiles([
     "song.mid",
@@ -690,30 +749,45 @@ Deno.test("display and inspection helpers forward stdio commands", async () => {
     throw new Error(`Unexpected saved output: ${saved.output}`);
   }
 
-  const requests = protocol.requests as Array<{ type: string; [key: string]: unknown }>;
+  const requests = protocol.requests as Array<
+    { type: string; [key: string]: unknown }
+  >;
   if (requests[0]?.type !== "inspect_midi_files") {
     throw new Error(`Unexpected first request: ${requests[0]?.type}`);
   }
-  const saveFrameRequest = requests.find((request) => request.type === "save_frame");
+  const saveFrameRequest = requests.find((request) =>
+    request.type === "save_frame"
+  );
   if (!saveFrameRequest) {
     throw new Error("Expected save_frame request to be sent");
   }
   const exportConfig = saveFrameRequest.export as Record<string, unknown>;
   if (exportConfig.color_mode !== "premultiplied") {
-    throw new Error(`Unexpected export color mode: ${String(exportConfig.color_mode)}`);
+    throw new Error(
+      `Unexpected export color mode: ${String(exportConfig.color_mode)}`,
+    );
   }
   if (exportConfig.export_alpha_mask !== true) {
     throw new Error("Expected export_alpha_mask to be preserved");
   }
-  if (exportConfig.export_premultiplied_rgb !== false || exportConfig.export_straight_rgb !== false) {
-    throw new Error(`Unexpected default export config: ${JSON.stringify(exportConfig)}`);
+  if (
+    exportConfig.export_premultiplied_rgb !== false ||
+    exportConfig.export_straight_rgb !== false
+  ) {
+    throw new Error(
+      `Unexpected default export config: ${JSON.stringify(exportConfig)}`,
+    );
   }
 });
 
 Deno.test("audio render start forwards encoded-output options", async () => {
   const protocol = new FakeProtocolClient({
     requestHandler: (command) => {
-      const typed = command as { type: string; path?: string; config?: unknown };
+      const typed = command as {
+        type: string;
+        path?: string;
+        config?: unknown;
+      };
       switch (typed.type) {
         case "load_audio_midi":
           return [{ type: "midi_loaded", path: typed.path ?? "song.mid" }];
@@ -773,12 +847,16 @@ Deno.test("audio render start forwards encoded-output options", async () => {
   if (start.config.format !== "mp3") {
     throw new Error(`Expected mp3 format, got ${start.config.format}`);
   }
-  if (JSON.stringify(start.config.ffmpeg_args) !== JSON.stringify(["-b:a", "96k"])) {
+  if (
+    JSON.stringify(start.config.ffmpeg_args) !== JSON.stringify(["-b:a", "96k"])
+  ) {
     throw new Error(
       `Unexpected ffmpeg args: ${JSON.stringify(start.config.ffmpeg_args)}`,
     );
   }
-  if (JSON.stringify(start.config.soundfonts) !== JSON.stringify(["piano.sf2"])) {
+  if (
+    JSON.stringify(start.config.soundfonts) !== JSON.stringify(["piano.sf2"])
+  ) {
     throw new Error(
       `Unexpected soundfonts: ${JSON.stringify(start.config.soundfonts)}`,
     );

@@ -28,6 +28,7 @@ export interface AnalysisProgress {
   status: string;
 }
 
+/** Live analysis-job handle with replay-safe progress and final result waiting. */
 export class MidiAnalysisJobHandle extends ReplayableJobHandle<
   MidiAnalysisJobStatus,
   Extract<MidiAnalysisJobEventWrapper["event"], { job_id: AnalysisJobId }>,
@@ -65,10 +66,12 @@ export class MidiAnalysisJobHandle extends ReplayableJobHandle<
     return super.wait();
   }
 
-  protected override resolveFinished(event: Extract<
-    MidiAnalysisJobEventWrapper["event"],
-    { type: "finished" }
-  >): MidiAnalysisData {
+  protected override resolveFinished(
+    event: Extract<
+      MidiAnalysisJobEventWrapper["event"],
+      { type: "finished" }
+    >,
+  ): MidiAnalysisData {
     return event.result;
   }
 
@@ -141,6 +144,7 @@ export class MidiAnalysisJobHandle extends ReplayableJobHandle<
   }
 }
 
+/** Live MIDI-processing job handle with refresh/cancel support. */
 export class MidiProcessJobHandle extends ReplayableJobHandle<
   MidiProcessStatus,
   MidiProcessEvent,
@@ -215,6 +219,7 @@ export class MidiProcessJobHandle extends ReplayableJobHandle<
   }
 }
 
+/** Live audio-render job handle with refresh/cancel support. */
 export class AudioRenderJobHandle extends ReplayableJobHandle<
   AudioRenderStatus,
   AudioRenderEvent,

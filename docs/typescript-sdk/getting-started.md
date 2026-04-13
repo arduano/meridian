@@ -3,9 +3,9 @@
 This page focuses on the parts that matter most early: what must exist on the
 machine, how the SDK talks to Meridian, and how to initialize a client cleanly.
 
-The examples here are **Deno-centric** on purpose. That matches the current
-state of the repo. The same general setup should translate to Node, Bun, or any
-other runtime that can support the same subprocess and filesystem model.
+The examples here use Deno because it is the easiest repo-local path to run and
+verify. The same initialization model carries over to Node, Bun, or any other
+runtime that can satisfy the same subprocess and filesystem contract.
 
 ## How The SDK Works
 
@@ -84,7 +84,8 @@ Why these matter:
 
 - `--allow-run`: required to launch `meridian-cli`
 - `--allow-read`: required for MIDI inputs, soundfonts, and other source assets
-- `--allow-write`: required for processed MIDI, WAV, MP4/MKV, and temp output
+- `--allow-write`: required for processed MIDI, audio outputs, video outputs,
+  and temp files
 - `--allow-env`: useful when your app reads `MERIDIAN_CLI_BIN` or other
   environment-based configuration
 
@@ -93,8 +94,8 @@ rules next to the application that owns them.
 
 ## Import Shape
 
-The package surface is designed to support package-style imports, but this repo
-is currently easier to treat as a local workspace package during development.
+The package surface is designed for package-style imports first. In this repo,
+the same exports are available from the source tree for local development.
 
 Readable target shape:
 
@@ -102,15 +103,13 @@ Readable target shape:
 import { createDenoMeridianClient } from "@meridian/cli-sdk";
 ```
 
-Practical repo-local shape today:
+Practical repo-local shape:
 
 ```ts
 import { createDenoMeridianClient } from "../sdk/typescript/src/index.ts";
 ```
 
 Use whichever import style matches how your app is actually consuming the SDK.
-The docs will need a dedicated installation page once package publishing is
-formalized.
 
 ## Initialization
 
@@ -219,6 +218,9 @@ export async function openMeridianClient() {
 }
 ```
 
+For a package-level quick start and the smallest runnable examples, also see
+[`sdk/typescript/README.md`](../../sdk/typescript/README.md).
+
 That keeps runtime assumptions and path lookup out of the rest of the app.
 
 ## First Workflows To Try
@@ -240,8 +242,8 @@ The examples page links to one file for each of those flows.
 - If Deno rejects the call, check missing permissions before debugging SDK code.
 - If rendering features fail, confirm host-specific dependencies such as
   soundfonts or video tooling.
-- If protocol requests hang or exit early, run the CLI directly in stdio mode
-  to confirm the binary itself is healthy.
+- If protocol requests hang or exit early, run the CLI directly in stdio mode to
+  confirm the binary itself is healthy.
 
 ## Next Pages
 

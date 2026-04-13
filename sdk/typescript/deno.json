@@ -1,12 +1,13 @@
 {
+  "nodeModulesDir": "auto",
   "compilerOptions": {
     "strict": true,
-    "lib": ["es2022", "dom", "dom.iterable"],
+    "lib": ["deno.ns", "es2022", "dom", "dom.iterable"],
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true
   },
   "tasks": {
-    "check": "deno check src/index.ts && deno check src/runtime/deno_client.ts && deno check examples/*.ts && deno check tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts",
-    "test": "deno test --no-check --allow-env --allow-read --allow-write --allow-run tests"
+    "check": "deno check src/index.ts src/runtime/deno_client.ts examples/*.ts tests/common.ts tests/sdk_test.ts tests/protocol_stdio_test.ts tests/client_internal_test.ts",
+    "test": "deno test --allow-env --allow-read --allow-write --allow-run tests"
   }
 }

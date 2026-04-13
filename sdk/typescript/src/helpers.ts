@@ -61,6 +61,12 @@ function withDefaults<T extends MidiModifierTool>(value: T): T {
   return structuredClone(value);
 }
 
+/**
+ * Convenience builders for the full MIDI modifier-tool surface.
+ *
+ * Use these when you want typed defaults without hand-authoring the full wire
+ * config shape for each tool.
+ */
 export const midiTools = {
   rangeSelect(config: Partial<RangeSelectTool> = {}): RangeSelectTool {
     return withDefaults({

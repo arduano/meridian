@@ -1,8 +1,8 @@
 # Audio Rendering
 
 Audio rendering is the SDK path for turning a MIDI file into an offline audio
-file. In the current implementation, this path is oriented around writing a WAV
-output file.
+file. The current SDK surface supports uncompressed WAV output plus encoded
+formats such as FLAC and MP3.
 
 This page goes deeper than the general SDK overview because audio rendering has
 real environment requirements and a slightly richer lifecycle than a simple
@@ -42,8 +42,14 @@ loads it into the audio side before starting the render.
 
 ### Output path
 
-You need a writable output path. Use a `.wav` path unless you have a specific
-reason to experiment otherwise.
+You need a writable output path whose extension matches the selected output
+format.
+
+Common pairings:
+
+- `.wav` with `format: "wav"`
+- `.flac` with `format: "flac"`
+- `.mp3` with `format: "mp3"`
 
 ### Soundfonts
 
@@ -101,22 +107,25 @@ The resolved value is the final `render_finished` event, which includes:
 
 `AudioRenderOptions` currently supports:
 
-| Field | Required | Purpose |
-| --- | --- | --- |
-| `midiPath` | Yes | Source MIDI file |
-| `output` | Yes | Output audio file path |
-| `sampleRate` | No | Override sample rate |
-| `channels` | No | Override channel count |
-| `useLimiter` | No | Override limiter behavior |
-| `soundfonts` | No | Explicit soundfont file list |
-| `onEvent` | No | Subscribe to render events during the job |
+| Field        | Required | Purpose                                             |
+| ------------ | -------- | --------------------------------------------------- |
+| `midiPath`   | Yes      | Source MIDI file                                    |
+| `output`     | Yes      | Output audio file path                              |
+| `sampleRate` | No       | Override sample rate                                |
+| `channels`   | No       | Override channel count                              |
+| `useLimiter` | No       | Override limiter behavior                           |
+| `format`     | No       | Output format such as `"wav"`, `"flac"`, or `"mp3"` |
+| `ffmpegArgs` | No       | Extra encoder arguments for encoded formats         |
+| `soundfonts` | No       | Explicit soundfont file list                        |
+| `onEvent`    | No       | Subscribe to render events during the job           |
 
 A slightly more explicit example:
 
 ```ts
 const result = await client.audio.render({
   midiPath: "./song.mid",
-  output: "./song.wav",
+  output: "./song.flac",
+  format: "flac",
   sampleRate: 44100,
   channels: 2,
   useLimiter: true,
@@ -130,9 +139,11 @@ The per-render audio API is intentionally narrow today. A render request can
 override:
 
 - output path
+- output format
 - sample rate
 - channel count
 - limiter usage
+- encoder arguments
 - soundfont file paths
 
 That maps directly to the wire-level `ProtocolAudioRenderConfig`.

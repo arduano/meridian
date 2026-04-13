@@ -18,8 +18,14 @@ import type {
   StartAnalysisForFileOptions,
   VideoRenderOptions,
 } from "./options.ts";
-import { normalizeAnalysisOptions, normalizeAudioRenderOptions, normalizeMidiToolOptions, normalizeVideoRenderOptions } from "./normalizers.ts";
+import {
+  normalizeAnalysisOptions,
+  normalizeAudioRenderOptions,
+  normalizeMidiToolOptions,
+  normalizeVideoRenderOptions,
+} from "./normalizers.ts";
 
+/** Promise-like analysis task that can be awaited directly or started explicitly. */
 export class MidiAnalysisTask implements PromiseLike<MidiAnalysisData> {
   #client: MeridianClient;
   #spec: StartAnalysisForFileOptions;
@@ -78,6 +84,7 @@ export class MidiAnalysisTask implements PromiseLike<MidiAnalysisData> {
   }
 }
 
+/** Promise-like MIDI processing task with optional explicit handle ownership. */
 export class MidiProcessTask
   implements
     PromiseLike<Extract<MidiProcessEvent, { type: "process_finished" }>> {
@@ -140,6 +147,7 @@ export class MidiProcessTask
   }
 }
 
+/** Promise-like audio render task with optional explicit handle ownership. */
 export class AudioRenderTask
   implements
     PromiseLike<Extract<AudioRenderEvent, { type: "render_finished" }>> {
@@ -200,6 +208,7 @@ export class AudioRenderTask
   }
 }
 
+/** Promise-like video render task with optional explicit handle ownership. */
 export class VideoRenderTask
   implements
     PromiseLike<Extract<VideoRenderEvent, { type: "render_finished" }>> {

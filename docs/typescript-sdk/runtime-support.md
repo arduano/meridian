@@ -1,7 +1,7 @@
 # Runtime Support
 
-This SDK is documented as **Deno-centric** today, but the underlying design is
-not fundamentally Deno-only.
+This SDK uses Deno for the checked examples and tests in this repo, but the
+underlying design is not Deno-only.
 
 ## Current Posture
 
@@ -12,22 +12,22 @@ The repository already contains:
 - a Bun runtime adapter
 - runtime-specific helper factories for high-level and protocol clients
 
-What is Deno-centric right now is the surrounding documentation and validation:
+What is Deno-specific today is mostly the validation posture in this repo:
 
 - examples are written for Deno first
 - package scripts use `deno check`
 - tests use `deno test`
 
-That makes Deno the clearest supported path today, not the only plausible one.
+That makes Deno the clearest repo-local path, not the only intended runtime.
 
 ## Runtime Matrix
 
-| Runtime | Status in docs | Source support | Notes |
-| --- | --- | --- | --- |
-| Deno | Primary | Yes | Main documented path today |
-| Node | Secondary | Yes | Adapter exists; docs still need first-class walkthroughs |
-| Bun | Secondary | Yes | Adapter exists; docs still need first-class walkthroughs |
-| Other runtimes | Theoretical | Not yet | Feasible if they can satisfy the same adapter contract |
+| Runtime        | Status in docs | Source support | Notes                                                  |
+| -------------- | -------------- | -------------- | ------------------------------------------------------ |
+| Deno           | Primary        | Yes            | Main documented and checked path in this repo          |
+| Node           | Secondary      | Yes            | Adapter exists; package surface is designed for it     |
+| Bun            | Secondary      | Yes            | Adapter exists; package surface is designed for it     |
+| Other runtimes | Theoretical    | Not yet        | Feasible if they can satisfy the same adapter contract |
 
 ## What A Runtime Must Provide
 
@@ -49,9 +49,6 @@ That is the real portability boundary.
 - If you are documenting or testing another runtime, keep the initialization
   shape the same and swap only the runtime adapter and permissions model.
 
-## Future Docs To Add
-
-- dedicated Node getting-started page
-- dedicated Bun getting-started page
-- runtime compatibility table with tested versions
-- custom runtime adapter guide
+For the quickest start, use the package-level examples in
+[`sdk/typescript/README.md`](../../sdk/typescript/README.md) and then swap only
+the runtime-specific client factory if you are not on Deno.

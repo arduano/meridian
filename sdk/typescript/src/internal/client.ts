@@ -1,3 +1,6 @@
+// Stable high-level SDK surface shared by the package root and runtime-specific
+// wrappers. Callers should normally import these types through `src/index.ts`
+// instead of reaching into this file directly.
 export {
   MeridianProtocolError,
   MeridianSubprocessError,

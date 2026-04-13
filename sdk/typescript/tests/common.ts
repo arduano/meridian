@@ -1,3 +1,5 @@
+import { createDenoMeridianClient } from "../src/index.ts";
+
 function filePath(relative: string): string {
   return decodeURIComponent(new URL(relative, import.meta.url).pathname);
 }
@@ -74,6 +76,72 @@ export async function hasCommand(command: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export function isHeadlessWgpuFailure(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("request_adapter failed") ||
+    message.includes("No suitable graphics adapter found");
+}
+
+export function rethrowUnlessHeadlessWgpuFailure(
+  label: string,
+  error: unknown,
+): void {
+  if (isHeadlessWgpuFailure(error)) {
+    console.warn(
+      `skipping ${label} because no compatible WGPU adapter is available`,
+    );
+    return;
+  }
+  throw error;
+}
+
+export function hasUsableGraphicsSession(): boolean {
+  if (Deno.env.get("MERIDIAN_FORCE_WGPU_TESTS") === "1") {
+    return true;
+  }
+  if (Deno.build.os !== "linux") {
+    return true;
+  }
+  return Boolean(Deno.env.get("WAYLAND_DISPLAY") || Deno.env.get("DISPLAY"));
+}
+
+let cachedRenderSupport: boolean | null = null;
+
+export async function canRunRenderSmoke(
+  executablePath: string,
+  midiPath: string,
+): Promise<boolean> {
+  if (cachedRenderSupport !== null) {
+    return cachedRenderSupport;
+  }
+
+  const client = await createDenoMeridianClient(executablePath);
+  const tempDir = await Deno.makeTempDir({
+    prefix: "meridian-sdk-render-probe-",
+  });
+  const output = `${tempDir}/probe.png`;
+  try {
+    await client.resources.loadMidi(midiPath);
+    await client.display.setTime(0);
+    await client.display.setViewport(64, 36);
+    await client.display.saveFrame({
+      output,
+      format: "png",
+    });
+    cachedRenderSupport = true;
+  } catch (error) {
+    if (isHeadlessWgpuFailure(error)) {
+      cachedRenderSupport = false;
+    } else {
+      throw error;
+    }
+  } finally {
+    await client.close();
+  }
+
+  return cachedRenderSupport;
 }
 
 function fixtureCandidates(name: string): URL[] {

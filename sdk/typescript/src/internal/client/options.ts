@@ -19,6 +19,7 @@ export interface StartAnalysisForFileOptions {
   onProgress?: (progress: { progress: number; status: string }) => void;
 }
 
+/** Declarative analysis options for `client.analysis(...)`. */
 export interface MidiAnalysisOptions {
   file?: boolean;
   summary?: boolean;
@@ -29,6 +30,7 @@ export interface MidiAnalysisOptions {
   onProgress?: (progress: { progress: number; status: string }) => void;
 }
 
+/** Offline audio render options for `client.audio.render(...)`. */
 export interface AudioRenderOptions {
   midiPath: string;
   output: string;
@@ -41,6 +43,7 @@ export interface AudioRenderOptions {
   onEvent?: (event: AudioRenderEvent) => void;
 }
 
+/** Offline video render options for `client.video.render(...)`. */
 export interface VideoRenderOptions {
   midiPath: string;
   output: string;
@@ -63,6 +66,7 @@ export interface VideoRenderOptions {
   onEvent?: (event: VideoRenderEvent) => void;
 }
 
+/** Optional muxed-audio overrides for a video render. */
 export interface VideoRenderAudioOptions {
   sampleRate?: number | null;
   channels?: number | null;
@@ -71,6 +75,7 @@ export interface VideoRenderAudioOptions {
   ffmpegArgs?: string[];
 }
 
+/** Fully-specified process task options used by the low-level MIDI task API. */
 export interface MidiToolTaskOptions {
   input: string;
   output: string;
@@ -78,18 +83,21 @@ export interface MidiToolTaskOptions {
   onEvent?: (event: MidiProcessEvent) => void;
 }
 
+/** Shared input/output options for the modifier convenience helpers. */
 export interface MidiModificationOptions {
   input: string;
   output: string;
   onEvent?: (event: MidiProcessEvent) => void;
 }
 
+/** Merge options for `client.merge.midiFiles(...)`. */
 export interface MidiMergeOptions {
   inputs: string[];
   output: string;
   config?: DeepPartial<MidiFilesMergeConfig>;
 }
 
+/** Save-frame options for `client.display.saveFrame(...)`. */
 export interface SaveFrameOptions {
   output: string;
   format?: ImageOutputFormat;

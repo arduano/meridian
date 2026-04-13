@@ -1,11 +1,13 @@
 import { createDenoProtocolClient } from "../src/index.ts";
 import type { CoreEvent } from "../src/protocol.ts";
 import {
+  canRunRenderSmoke,
   defaultExecutablePath,
   defaultSoundfontPath,
   ensureExecutable,
   hasCommand,
   resolveMidiFixture,
+  rethrowUnlessHeadlessWgpuFailure,
   TWO_NOTE_MIDI,
 } from "./common.ts";
 
@@ -22,6 +24,12 @@ function waitForEvent<T extends CoreEvent["type"]>(
     }, timeoutMs);
     let unsubscribe = () => {};
     unsubscribe = client.onEvent((event) => {
+      if (event.type === "error") {
+        clearTimeout(timeout);
+        unsubscribe();
+        reject(new Error(event.message));
+        return;
+      }
       if (event.type !== type) {
         return;
       }
@@ -39,7 +47,10 @@ function waitForEvent<T extends CoreEvent["type"]>(
 Deno.test("stdio protocol round-trips raw load and shutdown commands", async () => {
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);
-  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiPath = await resolveMidiFixture(
+    "smoke-two-notes.mid",
+    TWO_NOTE_MIDI,
+  );
 
   const client = await createDenoProtocolClient(executablePath);
   try {
@@ -48,7 +59,9 @@ Deno.test("stdio protocol round-trips raw load and shutdown commands", async () 
       path: midiPath,
     });
     if (parsed.length !== 1 || parsed[0]?.type !== "parsed_midi_loaded") {
-      throw new Error(`Unexpected parsed midi response: ${JSON.stringify(parsed)}`);
+      throw new Error(
+        `Unexpected parsed midi response: ${JSON.stringify(parsed)}`,
+      );
     }
 
     const audio = await client.request({
@@ -56,12 +69,16 @@ Deno.test("stdio protocol round-trips raw load and shutdown commands", async () 
       path: midiPath,
     });
     if (audio.length !== 1 || audio[0]?.type !== "midi_loaded") {
-      throw new Error(`Unexpected audio midi response: ${JSON.stringify(audio)}`);
+      throw new Error(
+        `Unexpected audio midi response: ${JSON.stringify(audio)}`,
+      );
     }
 
     const shutdown = await client.request({ type: "shutdown" });
     if (shutdown.length !== 1 || shutdown[0]?.type !== "shutdown_complete") {
-      throw new Error(`Unexpected shutdown response: ${JSON.stringify(shutdown)}`);
+      throw new Error(
+        `Unexpected shutdown response: ${JSON.stringify(shutdown)}`,
+      );
     }
   } finally {
     await client.close();
@@ -71,7 +88,10 @@ Deno.test("stdio protocol round-trips raw load and shutdown commands", async () 
 Deno.test("stdio protocol processes a midi file with the singular process command", async () => {
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);
-  const midiPath = await resolveMidiFixture("smoke-two-notes.mid", TWO_NOTE_MIDI);
+  const midiPath = await resolveMidiFixture(
+    "smoke-two-notes.mid",
+    TWO_NOTE_MIDI,
+  );
   const tempDir = await Deno.makeTempDir({ prefix: "meridian-stdio-process-" });
   const output = `${tempDir}/processed.mid`;
 
@@ -166,69 +186,82 @@ Deno.test("stdio protocol smoke tests video render", async () => {
     console.warn("skipping video stdio smoke because ffmpeg is unavailable");
     return;
   }
-
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);
   const midiPath = await resolveMidiFixture(
     "piano/burgmuller-op100-no4-the-little-party.mid",
     TWO_NOTE_MIDI,
   );
+  if (!(await canRunRenderSmoke(executablePath, midiPath))) {
+    console.warn(
+      "skipping video stdio smoke because no compatible WGPU adapter is available",
+    );
+    return;
+  }
   const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-video-" });
   const output = `${tempDir}/video.mkv`;
 
   const client = await createDenoProtocolClient(executablePath);
   try {
-    const events = await client.request({
-      type: "start_render_video",
-      config: {
-        midi_path: midiPath,
-        output,
-        container: "mkv",
-        fps: 4,
-        width: 160,
-        height: 90,
-        renderer: "piano_trail_classic",
-        scene: null,
-        view_range: 2,
-        time_space: null,
-        start_time: null,
-        end_time: null,
-        first_key: null,
-        last_key: null,
-        export: {
-          color_mode: "premultiplied",
-          export_alpha_mask: false,
+    try {
+      const events = await client.request({
+        type: "start_render_video",
+        config: {
+          midi_path: midiPath,
+          output,
+          container: "mkv",
+          fps: 4,
+          width: 160,
+          height: 90,
+          renderer: "piano_trail_classic",
+          scene: null,
+          view_range: 2,
+          time_space: null,
+          start_time: null,
+          end_time: null,
+          first_key: null,
+          last_key: null,
+          export: {
+            color_mode: "premultiplied",
+            export_alpha_mask: false,
+          },
+          ffmpeg_args: ["-y"],
+          audio: null,
         },
-        ffmpeg_args: ["-y"],
-        audio: null,
-      },
-    });
-    const status = events[0];
-    if (
-      events.length !== 1 ||
-      !status ||
-      status.type !== "video_render_status" ||
-      status.status.state !== "running"
-    ) {
-      throw new Error(`Unexpected video start response: ${JSON.stringify(events)}`);
-    }
+      });
+      const status = events[0];
+      if (
+        events.length !== 1 ||
+        !status ||
+        status.type !== "video_render_status" ||
+        status.status.state !== "running"
+      ) {
+        throw new Error(
+          `Unexpected video start response: ${JSON.stringify(events)}`,
+        );
+      }
 
-    const finished = await waitForEvent(
-      client,
-      "video_render",
-      (event) => event.event.type === "render_finished",
-    );
-    if (finished.event.type !== "render_finished") {
-      throw new Error(`Unexpected video render event: ${JSON.stringify(finished)}`);
-    }
-    if (finished.event.output !== output) {
-      throw new Error(
-        `Expected video output ${output}, got ${finished.event.output}`,
+      const finished = await waitForEvent(
+        client,
+        "video_render",
+        (event) => event.event.type === "render_finished",
       );
-    }
-    const stat = await Deno.stat(output);
-    if (!stat.isFile || stat.size === 0) {
-      throw new Error(`Expected non-empty video output at ${output}`);
+      if (finished.event.type !== "render_finished") {
+        throw new Error(
+          `Unexpected video render event: ${JSON.stringify(finished)}`,
+        );
+      }
+      if (finished.event.output !== output) {
+        throw new Error(
+          `Expected video output ${output}, got ${finished.event.output}`,
+        );
+      }
+      const stat = await Deno.stat(output);
+      if (!stat.isFile || stat.size === 0) {
+        throw new Error(`Expected non-empty video output at ${output}`);
+      }
+    } catch (error) {
+      rethrowUnlessHeadlessWgpuFailure("video stdio smoke", error);
     }
   } finally {
     await client.close();
@@ -237,13 +270,16 @@ Deno.test("stdio protocol smoke tests video render", async () => {
 
 Deno.test("stdio protocol smoke tests muxed video render", async () => {
   if (!(await hasCommand("ffmpeg"))) {
-    console.warn("skipping muxed video stdio smoke because ffmpeg is unavailable");
+    console.warn(
+      "skipping muxed video stdio smoke because ffmpeg is unavailable",
+    );
     return;
   }
-
   const soundfont = await defaultSoundfontPath();
   if (!soundfont) {
-    console.warn("skipping muxed video stdio smoke because no soundfont is available");
+    console.warn(
+      "skipping muxed video stdio smoke because no soundfont is available",
+    );
     return;
   }
 
@@ -253,68 +289,84 @@ Deno.test("stdio protocol smoke tests muxed video render", async () => {
     "piano/burgmuller-op100-no4-the-little-party.mid",
     TWO_NOTE_MIDI,
   );
-  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-video-muxed-" });
+  if (!(await canRunRenderSmoke(executablePath, midiPath))) {
+    console.warn(
+      "skipping muxed video stdio smoke because no compatible WGPU adapter is available",
+    );
+    return;
+  }
+  const tempDir = await Deno.makeTempDir({
+    prefix: "meridian-sdk-video-muxed-",
+  });
   const output = `${tempDir}/video-muxed.mkv`;
 
   const client = await createDenoProtocolClient(executablePath);
   try {
-    const events = await client.request({
-      type: "start_render_video",
-      config: {
-        midi_path: midiPath,
-        output,
-        container: "mkv",
-        fps: 4,
-        width: 160,
-        height: 90,
-        renderer: "piano_trail_classic",
-        scene: null,
-        view_range: 2,
-        time_space: null,
-        start_time: null,
-        end_time: null,
-        first_key: null,
-        last_key: null,
-        export: {
-          color_mode: "premultiplied",
-          export_alpha_mask: false,
+    try {
+      const events = await client.request({
+        type: "start_render_video",
+        config: {
+          midi_path: midiPath,
+          output,
+          container: "mkv",
+          fps: 4,
+          width: 160,
+          height: 90,
+          renderer: "piano_trail_classic",
+          scene: null,
+          view_range: 2,
+          time_space: null,
+          start_time: null,
+          end_time: null,
+          first_key: null,
+          last_key: null,
+          export: {
+            color_mode: "premultiplied",
+            export_alpha_mask: false,
+          },
+          ffmpeg_args: ["-y"],
+          audio: {
+            sample_rate: 22_050,
+            channels: 2,
+            use_limiter: true,
+            soundfonts: [soundfont],
+            ffmpeg_args: ["-b:a", "96k"],
+          },
         },
-        ffmpeg_args: ["-y"],
-        audio: {
-          sample_rate: 22_050,
-          channels: 2,
-          use_limiter: true,
-          soundfonts: [soundfont],
-          ffmpeg_args: ["-b:a", "96k"],
-        },
-      },
-    });
-    const status = events[0];
-    if (
-      events.length !== 1 ||
-      !status ||
-      status.type !== "video_render_status" ||
-      status.status.state !== "running"
-    ) {
-      throw new Error(`Unexpected muxed video start response: ${JSON.stringify(events)}`);
-    }
+      });
+      const status = events[0];
+      if (
+        events.length !== 1 ||
+        !status ||
+        status.type !== "video_render_status" ||
+        status.status.state !== "running"
+      ) {
+        throw new Error(
+          `Unexpected muxed video start response: ${JSON.stringify(events)}`,
+        );
+      }
 
-    const finished = await waitForEvent(
-      client,
-      "video_render",
-      (event) => event.event.type === "render_finished",
-    );
-    if (finished.event.type !== "render_finished") {
-      throw new Error(`Unexpected muxed video render event: ${JSON.stringify(finished)}`);
-    }
-    if (finished.event.output !== output) {
-      throw new Error(
-        `Expected muxed video output ${output}, got ${finished.event.output}`,
+      const finished = await waitForEvent(
+        client,
+        "video_render",
+        (event) => event.event.type === "render_finished",
       );
-    }
-    const stat = await Deno.stat(output);
-    if (!stat.isFile || stat.size === 0) {
-      throw new Error(`Expected non-empty muxed video output at ${output}`);
+      if (finished.event.type !== "render_finished") {
+        throw new Error(
+          `Unexpected muxed video render event: ${JSON.stringify(finished)}`,
+        );
+      }
+      if (finished.event.output !== output) {
+        throw new Error(
+          `Expected muxed video output ${output}, got ${finished.event.output}`,
+        );
+      }
+      const stat = await Deno.stat(output);
+      if (!stat.isFile || stat.size === 0) {
+        throw new Error(`Expected non-empty muxed video output at ${output}`);
+      }
+    } catch (error) {
+      rethrowUnlessHeadlessWgpuFailure("muxed video stdio smoke", error);
     }
   } finally {
     await client.close();
@@ -323,108 +375,125 @@ Deno.test("stdio protocol smoke tests muxed video render", async () => {
 
 Deno.test("stdio protocol accepts explicit scene config for video render", async () => {
   if (!(await hasCommand("ffmpeg"))) {
-    console.warn("skipping scene-config video stdio smoke because ffmpeg is unavailable");
+    console.warn(
+      "skipping scene-config video stdio smoke because ffmpeg is unavailable",
+    );
     return;
   }
-
   const executablePath = defaultExecutablePath();
   await ensureExecutable(executablePath);
   const midiPath = await resolveMidiFixture(
     "piano/burgmuller-op100-no4-the-little-party.mid",
     TWO_NOTE_MIDI,
   );
-  const tempDir = await Deno.makeTempDir({ prefix: "meridian-sdk-video-scene-" });
+  if (!(await canRunRenderSmoke(executablePath, midiPath))) {
+    console.warn(
+      "skipping scene-config video stdio smoke because no compatible WGPU adapter is available",
+    );
+    return;
+  }
+  const tempDir = await Deno.makeTempDir({
+    prefix: "meridian-sdk-video-scene-",
+  });
   const output = `${tempDir}/video-scene.mp4`;
 
   const client = await createDenoProtocolClient(executablePath);
   try {
-    const events = await client.request({
-      type: "start_render_video",
-      config: {
-        midi_path: midiPath,
-        output,
-        container: "mp4",
-        fps: 4,
-        width: 160,
-        height: 90,
-        renderer: "piano_trail_classic",
-        scene: {
-          scene_type: "three_d",
-          projector: "piano_trail_classic",
-          background: {
-            source: "none",
+    try {
+      const events = await client.request({
+        type: "start_render_video",
+        config: {
+          midi_path: midiPath,
+          output,
+          container: "mp4",
+          fps: 4,
+          width: 160,
+          height: 90,
+          renderer: "piano_trail_classic",
+          scene: {
+            scene_type: "three_d",
+            projector: "piano_trail_classic",
+            background: {
+              source: "none",
+            },
+            same_width_notes: true,
+            fov: Math.PI / 3,
+            view_height: 0.55,
+            view_offset: 0.45,
+            view_pan: 0.12,
+            cam_ang: 0.68,
+            cam_rot: 0.04,
+            cam_spin: 0,
+            viewdist: 14,
+            viewback: 0.2,
+            vertical_notes: false,
+            note_down_speed: 0.6,
+            note_up_speed: 0.2,
+            box_notes: true,
+            light_shade: false,
+            show_keyboard: true,
+            tilt_keys: true,
+            eat_notes: false,
+            aura_strength: 0.25,
+            aura_enabled: true,
+            notes_change_size: false,
+            notes_change_tint: true,
+            use_vel: false,
+            palette: {
+              source: "default_track_colors",
+            },
+            aura_image: {
+              source: "builtin",
+              name: "ring",
+            },
           },
-          same_width_notes: true,
-          fov: Math.PI / 3,
-          view_height: 0.55,
-          view_offset: 0.45,
-          view_pan: 0.12,
-          cam_ang: 0.68,
-          cam_rot: 0.04,
-          cam_spin: 0,
-          viewdist: 14,
-          viewback: 0.2,
-          vertical_notes: false,
-          note_down_speed: 0.6,
-          note_up_speed: 0.2,
-          box_notes: true,
-          light_shade: false,
-          show_keyboard: true,
-          tilt_keys: true,
-          eat_notes: false,
-          aura_strength: 0.25,
-          aura_enabled: true,
-          notes_change_size: false,
-          notes_change_tint: true,
-          use_vel: false,
-          palette: {
-            source: "default_track_colors",
+          view_range: 2,
+          time_space: null,
+          start_time: null,
+          end_time: null,
+          first_key: null,
+          last_key: null,
+          export: {
+            color_mode: "premultiplied",
+            export_alpha_mask: false,
           },
-          aura_image: {
-            source: "builtin",
-            name: "ring",
-          },
+          ffmpeg_args: ["-y"],
+          audio: null,
         },
-        view_range: 2,
-        time_space: null,
-        start_time: null,
-        end_time: null,
-        first_key: null,
-        last_key: null,
-        export: {
-          color_mode: "premultiplied",
-          export_alpha_mask: false,
-        },
-        ffmpeg_args: ["-y"],
-        audio: null,
-      },
-    });
-    const status = events[0];
-    if (
-      events.length !== 1 ||
-      !status ||
-      status.type !== "video_render_status" ||
-      status.status.state !== "running"
-    ) {
-      throw new Error(`Unexpected video start response: ${JSON.stringify(events)}`);
-    }
+      });
+      const status = events[0];
+      if (
+        events.length !== 1 ||
+        !status ||
+        status.type !== "video_render_status" ||
+        status.status.state !== "running"
+      ) {
+        throw new Error(
+          `Unexpected video start response: ${JSON.stringify(events)}`,
+        );
+      }
 
-    const finished = await waitForEvent(
-      client,
-      "video_render",
-      (event) => event.event.type === "render_finished",
-    );
-    if (finished.event.type !== "render_finished") {
-      throw new Error(`Unexpected video render event: ${JSON.stringify(finished)}`);
-    }
-    if (finished.event.output !== output) {
-      throw new Error(
-        `Expected video output ${output}, got ${finished.event.output}`,
+      const finished = await waitForEvent(
+        client,
+        "video_render",
+        (event) => event.event.type === "render_finished",
       );
-    }
-    const stat = await Deno.stat(output);
-    if (!stat.isFile || stat.size === 0) {
-      throw new Error(`Expected non-empty video output at ${output}`);
+      if (finished.event.type !== "render_finished") {
+        throw new Error(
+          `Unexpected video render event: ${JSON.stringify(finished)}`,
+        );
+      }
+      if (finished.event.output !== output) {
+        throw new Error(
+          `Expected video output ${output}, got ${finished.event.output}`,
+        );
+      }
+      const stat = await Deno.stat(output);
+      if (!stat.isFile || stat.size === 0) {
+        throw new Error(`Expected non-empty video output at ${output}`);
+      }
+    } catch (error) {
+      rethrowUnlessHeadlessWgpuFailure("scene-config video stdio smoke", error);
     }
   } finally {
     await client.close();
@@ -434,7 +503,9 @@ Deno.test("stdio protocol accepts explicit scene config for video render", async
 Deno.test("stdio protocol smoke tests audio render when a soundfont is available", async () => {
   const soundfont = await defaultSoundfontPath();
   if (!soundfont) {
-    console.warn("skipping audio stdio smoke because no bundled or override soundfont is available");
+    console.warn(
+      "skipping audio stdio smoke because no bundled or override soundfont is available",
+    );
     return;
   }
 
@@ -454,7 +525,9 @@ Deno.test("stdio protocol smoke tests audio render when a soundfont is available
       path: midiPath,
     });
     if (load.length !== 1 || load[0]?.type !== "midi_loaded") {
-      throw new Error(`Unexpected audio load response: ${JSON.stringify(load)}`);
+      throw new Error(
+        `Unexpected audio load response: ${JSON.stringify(load)}`,
+      );
     }
 
     const start = await client.request({
@@ -477,7 +550,9 @@ Deno.test("stdio protocol smoke tests audio render when a soundfont is available
       status.type !== "audio_render_status" ||
       status.status.state !== "running"
     ) {
-      throw new Error(`Unexpected audio start response: ${JSON.stringify(start)}`);
+      throw new Error(
+        `Unexpected audio start response: ${JSON.stringify(start)}`,
+      );
     }
 
     const finished = await waitForEvent(
@@ -486,7 +561,9 @@ Deno.test("stdio protocol smoke tests audio render when a soundfont is available
       (event) => event.event.type === "render_finished",
     );
     if (finished.event.type !== "render_finished") {
-      throw new Error(`Unexpected audio render event: ${JSON.stringify(finished)}`);
+      throw new Error(
+        `Unexpected audio render event: ${JSON.stringify(finished)}`,
+      );
     }
     const bytes = await Deno.readFile(output);
     if (

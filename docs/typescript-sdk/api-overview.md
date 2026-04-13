@@ -25,8 +25,10 @@ Core exports in the package entrypoint:
 
 Runtime-specific helpers:
 
-- Deno: [`runtime/deno_client.ts`](../../sdk/typescript/src/runtime/deno_client.ts)
-- Node: [`runtime/node_client.ts`](../../sdk/typescript/src/runtime/node_client.ts)
+- Deno:
+  [`runtime/deno_client.ts`](../../sdk/typescript/src/runtime/deno_client.ts)
+- Node:
+  [`runtime/node_client.ts`](../../sdk/typescript/src/runtime/node_client.ts)
 - Bun: [`runtime/bun_client.ts`](../../sdk/typescript/src/runtime/bun_client.ts)
 
 ### High-level client
@@ -85,7 +87,10 @@ Primary responsibilities:
 - receive asynchronous events
 - shut down cleanly
 
-Detailed protocol workflow docs: TBD.
+Detailed protocol walkthrough:
+
+- [Examples](./examples.md)
+- [Getting Started](./getting-started.md)
 
 ## Task And Handle Model
 
@@ -99,11 +104,16 @@ Current job/task concepts include:
 - `AudioRenderTask` / `AudioRenderJobHandle`
 - `VideoRenderTask` / `VideoRenderJobHandle`
 
-Reference page for lifecycle semantics, progress events, and cancellation: TBD.
+Lifecycle examples:
+
+- [Audio Rendering](./audio-rendering.md)
+- [Video Rendering](./video-rendering.md)
+- [`sdk/typescript/tests/sdk_test.ts`](../../sdk/typescript/tests/sdk_test.ts)
 
 ## Helpers And Builders
 
-Helper exports live in [`sdk/typescript/src/helpers.ts`](../../sdk/typescript/src/helpers.ts).
+Helper exports live in
+[`sdk/typescript/src/helpers.ts`](../../sdk/typescript/src/helpers.ts).
 
 Current helper areas:
 
@@ -114,12 +124,16 @@ Current helper areas:
 `midiTools` now includes builders for every currently supported modifier tool,
 including `sharedMetadataTrack(...)`.
 
-Detailed helper docs: TBD.
+Helper entrypoints:
+
+- [`sdk/typescript/src/helpers.ts`](../../sdk/typescript/src/helpers.ts)
+- [MIDI Modification Tools](./midi-modification-tools.md)
 
 ## Protocol Types
 
-Protocol types live in [`sdk/typescript/src/protocol.ts`](../../sdk/typescript/src/protocol.ts).
-That file is the handwritten facade over `sdk/typescript/generated/*`.
+Protocol types live in
+[`sdk/typescript/src/protocol.ts`](../../sdk/typescript/src/protocol.ts). That
+file is the handwritten facade over `sdk/typescript/generated/*`.
 
 This is the main place to look for:
 
@@ -134,17 +148,7 @@ If you need the raw generated schema names, inspect
 [`sdk/typescript/generated`](../../sdk/typescript/generated). If you want the
 SDK-facing names callers should actually use, start in `protocol.ts`.
 
-Schema/type reference docs: TBD.
+Schema/type reference entrypoints:
 
-## Suggested Reference Split
-
-When this scaffold grows into full docs, the likely split is:
-
-1. client creation and lifecycle
-2. analysis workflows
-3. MIDI modification workflows
-4. audio rendering
-5. video rendering
-6. raw protocol usage
-7. helper builders and config composition
-8. protocol type reference
+- [`sdk/typescript/src/protocol.ts`](../../sdk/typescript/src/protocol.ts)
+- [`sdk/typescript/generated`](../../sdk/typescript/generated)
