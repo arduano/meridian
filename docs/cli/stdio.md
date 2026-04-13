@@ -36,10 +36,10 @@ files, process MIDI, merge files, and start audio or video renders.
 For ad hoc experimentation, the one-shot raw helper is also available:
 
 ```bash
-nix-shell --run 'cargo run -p meridian-cli -- json "{\"protocol_version\":1,\"id\":1,\"command\":{\"type\":\"get_state\"}}"'
+nix-shell --run 'cargo run -p meridian-cli -- json "{\"protocol_version\":1,\"id\":1,\"command\":{\"type\":\"get_render_video_status\"}}"'
 ```
 
-That example sends a single `GetState` request and exits after printing the
+That example sends a single render-status request and exits after printing the
 response.
 
 ## Practical Notes
