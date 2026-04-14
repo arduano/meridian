@@ -391,11 +391,9 @@ jobs:
               "${prerelease_flag[@]}"
           fi
 
-          mapfile -t existing_assets < <(gh release view "$TAG_NAME" --json assets --jq '.assets[].name')
-          for asset_name in "${existing_assets[@]}"; do
-            gh release delete-asset "$TAG_NAME" "$asset_name" --yes
-          done
-
           for asset_path in "${assets[@]}"; do
-            gh release upload "$TAG_NAME" "$asset_path"
+            gh release upload "$TAG_NAME" "$asset_path" --clobber || {
+              sleep 2
+              gh release upload "$TAG_NAME" "$asset_path" --clobber
+            }
           done
