@@ -365,35 +365,59 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t assets < <(
+          repo="${GITHUB_REPOSITORY}"
+
+          declare -A asset_by_name=()
+          while IFS= read -r asset_path; do
+            asset_name="$(basename "${asset_path}")"
+            asset_by_name["${asset_name}"]="${asset_path}"
+          done < <(
             find release-artifacts -type f \
               \( -name '*.tar.gz' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.zip' -o -name '*.exe' \) \
               | sort
           )
+
+          assets=()
+          while IFS= read -r asset_name; do
+            assets+=("${asset_by_name["${asset_name}"]}")
+          done < <(printf '%s\n' "${!asset_by_name[@]}" | sort)
           if [ "${#assets[@]}" -eq 0 ]; then
             echo "No release assets were downloaded" >&2
             exit 1
           fi
 
-          prerelease_flag=()
+          is_prerelease=false
           if [[ "$TAG_NAME" == *-* ]]; then
-            prerelease_flag+=(--prerelease)
+            is_prerelease=true
           fi
 
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release edit "$TAG_NAME" --draft --title "$TAG_NAME"
-          else
-            gh release create "$TAG_NAME" \
-              --draft \
-              --verify-tag \
-              --title "$TAG_NAME" \
-              --generate-notes \
-              "${prerelease_flag[@]}"
+          notes="$(
+            gh api \
+              "repos/${repo}/releases/generate-notes" \
+              --method POST \
+              --field tag_name="${TAG_NAME}" \
+              --field target_commitish="${GITHUB_SHA}" \
+              --jq '.body'
+          )"
+          notes_file="$(mktemp)"
+          printf '%s' "${notes}" > "${notes_file}"
+
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            gh release delete "${TAG_NAME}" --yes
           fi
+
+          create_args=(
+            --draft
+            --verify-tag
+            --title "${TAG_NAME}"
+            --notes-file "${notes_file}"
+          )
+          if [[ "${is_prerelease}" == "true" ]]; then
+            create_args+=(--prerelease)
+          fi
+
+          gh release create "${TAG_NAME}" "${create_args[@]}" >/dev/null
 
           for asset_path in "${assets[@]}"; do
-            gh release upload "$TAG_NAME" "$asset_path" --clobber || {
-              sleep 2
-              gh release upload "$TAG_NAME" "$asset_path" --clobber
-            }
+            gh release upload "${TAG_NAME}" "${asset_path}" >/dev/null
           done
