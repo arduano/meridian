@@ -18,7 +18,7 @@ if (Test-Path $geometryPath) {
     Remove-Item -Force $geometryPath
 }
 
-& $cliPath debug-piano-trail-classic-geometry --width 64 --height 64 | Set-Content -NoNewline $geometryPath
+& $cliPath debug piano-trail-classic-geometry --width 64 --height 64 | Set-Content -NoNewline $geometryPath
 
 if (-not (Test-Path $geometryPath)) {
     throw "Geometry smoke output was not created: $geometryPath"

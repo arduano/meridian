@@ -18,7 +18,7 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 geometry_path="$tmp_dir/geometry.json"
-"$cli_path" debug-piano-trail-classic-geometry --width 64 --height 64 >"$geometry_path"
+"$cli_path" debug piano-trail-classic-geometry --width 64 --height 64 >"$geometry_path"
 
 if [[ ! -s "$geometry_path" ]]; then
     echo "Geometry smoke output was empty: $geometry_path" >&2

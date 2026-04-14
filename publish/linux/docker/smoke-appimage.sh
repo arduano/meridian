@@ -14,7 +14,7 @@ run_appimage_smoke() {
         chmod +x '$artifact_path' &&
         APPIMAGE_EXTRACT_AND_RUN=1 '$artifact_path' meridian --help >/dev/null &&
         APPIMAGE_EXTRACT_AND_RUN=1 '$artifact_path' meridian-ui --help >/dev/null &&
-        APPIMAGE_EXTRACT_AND_RUN=1 '$artifact_path' meridian debug-piano-trail-classic-geometry --width 64 --height 64 >/tmp/geometry.json &&
+        APPIMAGE_EXTRACT_AND_RUN=1 '$artifact_path' meridian debug piano-trail-classic-geometry --width 64 --height 64 >/tmp/geometry.json &&
         test -s /tmp/geometry.json
     "
 }

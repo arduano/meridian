@@ -16,7 +16,7 @@ run_smoke() {
 
     PATH="$bin_dir:$PATH" meridian --help >/dev/null
     PATH="$bin_dir:$PATH" meridian-ui --help >/dev/null
-    PATH="$bin_dir:$PATH" meridian debug-piano-trail-classic-geometry --width 64 --height 64 >"$tmp_dir/geometry.json"
+    PATH="$bin_dir:$PATH" meridian debug piano-trail-classic-geometry --width 64 --height 64 >"$tmp_dir/geometry.json"
     test -s "$tmp_dir/geometry.json"
 
     echo "smoke ok: $bin_dir"
