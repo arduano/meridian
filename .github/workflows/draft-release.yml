@@ -365,7 +365,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t assets < <(find release-artifacts -type f | sort)
+          mapfile -t assets < <(
+            find release-artifacts -type f \
+              \( -name '*.tar.gz' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.zip' -o -name '*.exe' \) \
+              | sort
+          )
           if [ "${#assets[@]}" -eq 0 ]; then
             echo "No release assets were downloaded" >&2
             exit 1
@@ -387,4 +391,11 @@ jobs:
               "${prerelease_flag[@]}"
           fi
 
-          gh release upload "$TAG_NAME" "${assets[@]}" --clobber
+          mapfile -t existing_assets < <(gh release view "$TAG_NAME" --json assets --jq '.assets[].name')
+          for asset_name in "${existing_assets[@]}"; do
+            gh release delete-asset "$TAG_NAME" "$asset_name" --yes
+          done
+
+          for asset_path in "${assets[@]}"; do
+            gh release upload "$TAG_NAME" "$asset_path"
+          done
