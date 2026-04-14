@@ -3,7 +3,7 @@ use std::{
     process::{Child, ChildStdin, Command, Stdio},
 };
 
-use crate::{MeridianError, protocol::VideoOutputContainer};
+use crate::{MeridianError, ffmpeg, protocol::VideoOutputContainer};
 
 pub struct VideoFfmpegAudioInput<'a> {
     pub pipe_path: &'a Path,
@@ -109,13 +109,12 @@ fn spawn_ffmpeg(
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());
-    let mut child = command
-        .spawn()
-        .map_err(|e| MeridianError::Platform(format!("failed to spawn ffmpeg: {e}")))?;
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| MeridianError::Platform("ffmpeg stdin was not available".into()))?;
+    let mut child = ffmpeg::spawn_ffmpeg_command("video export", &mut command)?;
+    let stdin = child.stdin.take().ok_or_else(|| {
+        MeridianError::ExternalTool(
+            "Meridian started ffmpeg for video export, but ffmpeg stdin was not available.".into(),
+        )
+    })?;
     let mut printable = vec!["ffmpeg".to_string()];
     printable.extend(args);
     Ok((child, stdin, printable))

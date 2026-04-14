@@ -122,9 +122,7 @@ fn render_encoded_audio_unix(
         }) => {
             let status = encoder.wait()?;
             if !status.success() {
-                return Err(MeridianError::Platform(format!(
-                    "ffmpeg exited with status {status}"
-                )));
+                return Err(ffmpeg::ffmpeg_exit_error("encoded audio export", status));
             }
             Ok(AudioRenderLoopResult::Finished {
                 frames_written,
@@ -232,13 +230,13 @@ fn spawn_audio_encoder(
     args.extend(extra_args.iter().cloned());
     args.push(output.display().to_string());
 
-    Command::new("ffmpeg")
+    let mut command = Command::new("ffmpeg");
+    command
         .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .map_err(|error| MeridianError::Platform(format!("failed to spawn ffmpeg: {error}")))
+        .stderr(Stdio::inherit());
+    ffmpeg::spawn_ffmpeg_command("encoded audio export", &mut command)
 }
 
 #[cfg(not(unix))]
@@ -270,19 +268,17 @@ fn encode_audio_file(
     }
     args.extend(extra_args.iter().cloned());
     args.push(output.display().to_string());
-    let status = Command::new("ffmpeg")
+    let mut command = Command::new("ffmpeg");
+    command
         .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::inherit())
-        .status()
-        .map_err(|error| MeridianError::Platform(format!("failed to spawn ffmpeg: {error}")))?;
+        .stderr(Stdio::inherit());
+    let status = ffmpeg::spawn_ffmpeg_command("encoded audio export", &mut command)?.wait()?;
     if status.success() {
         Ok(())
     } else {
-        Err(MeridianError::Platform(format!(
-            "ffmpeg exited with status {status}"
-        )))
+        Err(ffmpeg::ffmpeg_exit_error("encoded audio export", status))
     }
 }
 
@@ -500,7 +496,9 @@ exit 42
                 drop(midi_dir);
 
                 assert!(
-                    error.to_string().contains("ffmpeg exited with status"),
+                    error
+                        .to_string()
+                        .contains("ffmpeg failed during encoded audio export"),
                     "unexpected error: {error}"
                 );
                 assert!(matches!(
@@ -510,7 +508,7 @@ exit 42
                 assert!(events.iter().any(|event| matches!(
                     event,
                     AudioRenderEvent::RenderFailed { message }
-                    if message.contains("ffmpeg exited with status")
+                    if message.contains("ffmpeg failed during encoded audio export")
                 )));
 
                 let args = wait_for_log(&script_dir.join("args.txt"));

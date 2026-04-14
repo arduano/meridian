@@ -1,5 +1,6 @@
 use std::{
     path::{Path, PathBuf},
+    process::{Child, Command, ExitStatus},
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -41,6 +42,38 @@ use windows_sys::Win32::{
 };
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+pub(crate) fn spawn_ffmpeg_command(
+    action: &str,
+    command: &mut Command,
+) -> Result<Child, MeridianError> {
+    command
+        .spawn()
+        .map_err(|error| ffmpeg_spawn_error(action, &error))
+}
+
+pub(crate) fn ffmpeg_spawn_error(action: &str, error: &std::io::Error) -> MeridianError {
+    MeridianError::ExternalTool(match error.kind() {
+        std::io::ErrorKind::NotFound => format!(
+            "ffmpeg is required for {action}, but Meridian could not find it.\n\
+Install ffmpeg and make sure the `ffmpeg` command is available on your PATH, then restart Meridian and try again.\n\
+On Windows, this usually means installing ffmpeg and adding the folder containing `ffmpeg.exe` to your PATH.\n\
+Meridian does not bundle ffmpeg for you.\n\
+Original error: {error}"
+        ),
+        _ => format!(
+            "Meridian failed to start ffmpeg for {action}: {error}\n\
+Make sure ffmpeg is installed and runnable from the same shell or desktop session."
+        ),
+    })
+}
+
+pub(crate) fn ffmpeg_exit_error(action: &str, status: ExitStatus) -> MeridianError {
+    MeridianError::ExternalTool(format!(
+        "ffmpeg failed during {action} with exit status {status}.\n\
+If you supplied custom ffmpeg flags, codec settings, or container settings, check them first."
+    ))
+}
 
 pub(crate) fn next_temp_path(output: &Path, label: &str, extension: &str) -> PathBuf {
     let id = TEMP_SEQUENCE.fetch_add(1, Ordering::SeqCst);
@@ -259,5 +292,23 @@ fn sanitize_pipe_component(component: &str) -> String {
         "pipe".to_string()
     } else {
         sanitized
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_ffmpeg_message_explains_install_requirements() {
+        let error = ffmpeg_spawn_error(
+            "video export",
+            &std::io::Error::new(std::io::ErrorKind::NotFound, "not found"),
+        );
+        let message = error.to_string();
+        assert!(message.contains("ffmpeg is required for video export"));
+        assert!(message.contains("Install ffmpeg"));
+        assert!(message.contains("PATH"));
+        assert!(message.contains("Windows"));
     }
 }
