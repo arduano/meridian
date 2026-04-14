@@ -1,4 +1,33 @@
-# meridian
+<p align="center">
+  <img src="assets/icons/meridian-512.png" alt="Meridian logo" width="160" />
+</p>
+
+<h1 align="center">Meridian</h1>
+
+<p align="center"><strong>MIDI inspection, transformation, rendering, and visualization.</strong></p>
+
+<p align="center">
+  Desktop UI, CLI, and TypeScript SDK surfaces for power users and automation.
+</p>
+
+<p align="center">
+  <a href="docs/getting-started.md">Get Started</a>
+  ·
+  <a href="docs/README.md">Documentation</a>
+  ·
+  <a href="docs/ui/README.md">UI Guide</a>
+  ·
+  <a href="docs/cli/README.md">CLI Guide</a>
+  ·
+  <a href="docs/typescript-sdk/README.md">TypeScript SDK</a>
+</p>
+
+<p align="center">
+  <img alt="Rust workspace" src="https://img.shields.io/badge/Rust-workspace-000000?logo=rust" />
+  <img alt="Slint desktop UI" src="https://img.shields.io/badge/Slint-desktop%20UI-2B425A" />
+  <img alt="Deno TypeScript SDK" src="https://img.shields.io/badge/Deno-TypeScript%20SDK-000000?logo=deno" />
+  <img alt="ffmpeg rendering" src="https://img.shields.io/badge/ffmpeg-audio%20%26%20video%20rendering-007808?logo=ffmpeg" />
+</p>
 
 Meridian is a desktop application for MIDI inspection, modification, audio
 rendering, and visualization, with CLI and TypeScript surfaces for power users
