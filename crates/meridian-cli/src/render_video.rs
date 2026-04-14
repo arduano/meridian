@@ -89,7 +89,7 @@ pub fn run(
                         }
                         meridian_core::protocol::VideoRenderEvent::RenderCancelled { .. } => {
                             break Err(MeridianError::Cancelled(
-                                "video render was cancelled".into(),
+                                "Video render was cancelled".into(),
                             ));
                         }
                         meridian_core::protocol::VideoRenderEvent::RenderFailed { message } => {
@@ -115,7 +115,7 @@ pub fn run(
 fn parse_ffmpeg_args(value: Option<&str>) -> Result<Vec<String>, MeridianError> {
     match value {
         Some(value) => shell_words::split(value)
-            .map_err(|e| MeridianError::Protocol(format!("invalid ffmpeg flags: {e}"))),
+            .map_err(|e| MeridianError::Protocol(format!("Invalid ffmpeg flags: {e}"))),
         None => Ok(Vec::new()),
     }
 }

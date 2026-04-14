@@ -66,7 +66,7 @@ pub fn run(
                         }
                         meridian_core::audio::AudioRenderEvent::RenderCancelled { .. } => {
                             break Err(MeridianError::Cancelled(
-                                "audio render was cancelled".into(),
+                                "Audio render was cancelled".into(),
                             ));
                         }
                         meridian_core::audio::AudioRenderEvent::RenderFailed { message } => {
@@ -101,7 +101,7 @@ fn validate_audio_output_path(
 
     let Some(actual_extension) = output.extension().and_then(|extension| extension.to_str()) else {
         return Err(MeridianError::Platform(format!(
-            "audio output path must use .{expected_extension} for the selected format"
+            "Audio output path must use .{expected_extension} for the selected format"
         )));
     };
 
@@ -109,7 +109,7 @@ fn validate_audio_output_path(
         Ok(())
     } else {
         Err(MeridianError::Platform(format!(
-            "audio output path must use .{expected_extension} for the selected format"
+            "Audio output path must use .{expected_extension} for the selected format"
         )))
     }
 }

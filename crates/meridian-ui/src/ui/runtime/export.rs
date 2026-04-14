@@ -327,16 +327,16 @@ pub(super) fn shell_words(input: &str) -> Vec<String> {
 
 pub(super) fn parse_render_resolution(text: &str) -> Result<(u32, u32), String> {
     let Some((width, height)) = text.split_once('x') else {
-        return Err(format!("invalid resolution `{text}`"));
+        return Err(format!("Invalid resolution `{text}`"));
     };
     let width = width
         .parse::<u32>()
-        .map_err(|_| format!("invalid width in `{text}`"))?;
+        .map_err(|_| format!("Invalid width in `{text}`"))?;
     let height = height
         .parse::<u32>()
-        .map_err(|_| format!("invalid height in `{text}`"))?;
+        .map_err(|_| format!("Invalid height in `{text}`"))?;
     if width == 0 || height == 0 {
-        return Err("resolution must be non-zero".into());
+        return Err("Resolution must be non-zero".into());
     }
     Ok((width, height))
 }
@@ -344,9 +344,9 @@ pub(super) fn parse_render_resolution(text: &str) -> Result<(u32, u32), String> 
 pub(super) fn parse_render_fps(text: &str) -> Result<f64, String> {
     let fps = text
         .parse::<f64>()
-        .map_err(|_| format!("invalid fps `{text}`"))?;
+        .map_err(|_| format!("Invalid FPS `{text}`"))?;
     if fps <= 0.0 {
-        return Err("fps must be > 0".into());
+        return Err("FPS must be greater than 0".into());
     }
     Ok(fps)
 }
@@ -355,7 +355,7 @@ pub(super) fn parse_render_time_seconds(text: &str, label: &str) -> Result<f64, 
     let seconds = text
         .trim()
         .parse::<f64>()
-        .map_err(|_| format!("invalid {label} `{text}`"))?;
+        .map_err(|_| format!("Invalid {label} `{text}`"))?;
     if !seconds.is_finite() {
         return Err(format!("{label} must be a finite value"));
     }
@@ -379,14 +379,14 @@ pub(super) fn parse_render_channels(text: &str) -> Result<u16, String> {
     match text {
         "mono" => Ok(1),
         "stereo" => Ok(2),
-        other => Err(format!("unsupported channel count `{other}`")),
+        other => Err(format!("Unsupported channel count `{other}`")),
     }
 }
 
 pub(super) fn current_export_output_path(app: &App) -> Result<PathBuf, String> {
     let raw = app.get_render_output_path_text();
     if raw.is_empty() {
-        return Err("choose an output path".into());
+        return Err("Choose an output path".into());
     }
     Ok(PathBuf::from(raw.as_str()))
 }
@@ -411,11 +411,11 @@ pub(super) fn current_custom_video_time_range(
         parse_render_time_seconds(app.get_render_end_time_text().as_str(), "render end time")?
     };
     if end_time <= start_time {
-        return Err("render end time must be greater than start time".into());
+        return Err("Render end time must be greater than start time".into());
     }
     if end_time > snapshot.midi_length {
         return Err(format!(
-            "render end time {:.3} exceeds midi length {:.3}",
+            "Render end time {:.3} exceeds MIDI length {:.3}",
             end_time, snapshot.midi_length
         ));
     }
@@ -466,7 +466,7 @@ pub(super) fn build_video_render_config(
         let sample_rate = app
             .get_render_audio_sample_rate_text()
             .parse::<u32>()
-            .map_err(|_| "invalid render audio sample rate".to_string())?;
+            .map_err(|_| "Invalid render audio sample rate".to_string())?;
         let channels = parse_render_channels(app.get_render_audio_channel_count_text().as_str())?;
         Some(VideoAudioConfig {
             sample_rate: Some(sample_rate),
@@ -510,7 +510,7 @@ pub(super) fn build_audio_render_config(
     let sample_rate = app
         .get_render_audio_sample_rate_text()
         .parse::<u32>()
-        .map_err(|_| "invalid render audio sample rate".to_string())?;
+        .map_err(|_| "Invalid render audio sample rate".to_string())?;
     let channels = parse_render_channels(app.get_render_audio_channel_count_text().as_str())?;
     let use_limiter = app.get_render_use_limiter();
     Ok(AudioRenderConfig {

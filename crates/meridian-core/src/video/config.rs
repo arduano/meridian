@@ -32,16 +32,18 @@ impl VideoRenderConfig {
     // before any render state is mutated.
     pub fn validate(&self) -> Result<(), MeridianError> {
         if self.fps <= 0.0 {
-            return Err(MeridianError::InvalidMidi("fps must be > 0".into()));
+            return Err(MeridianError::InvalidMidi(
+                "FPS must be greater than 0".into(),
+            ));
         }
         if self.width == 0 || self.height == 0 {
             return Err(MeridianError::InvalidMidi(
-                "video width and height must be > 0".into(),
+                "Video width and height must be greater than 0".into(),
             ));
         }
         if !self.container.matches_path(&self.output) {
             return Err(MeridianError::InvalidMidi(format!(
-                "video output path must use .{} for the selected container",
+                "Video output path must use .{} for the selected container",
                 self.container.extension()
             )));
         }
@@ -51,7 +53,7 @@ impl VideoRenderConfig {
             && end_time <= start_time
         {
             return Err(MeridianError::InvalidMidi(
-                "video end time must be greater than start time".into(),
+                "Video end time must be greater than start time".into(),
             ));
         }
         Ok(())
@@ -67,17 +69,17 @@ impl VideoRenderConfig {
 
         if start_time > song_end {
             return Err(MeridianError::InvalidMidi(format!(
-                "video start time {start_time:.3} exceeds midi length {song_end:.3}"
+                "Video start time {start_time:.3} exceeds MIDI length {song_end:.3}"
             )));
         }
         if end_time > song_end {
             return Err(MeridianError::InvalidMidi(format!(
-                "video end time {end_time:.3} exceeds midi length {song_end:.3}"
+                "Video end time {end_time:.3} exceeds MIDI length {song_end:.3}"
             )));
         }
         if end_time < start_time {
             return Err(MeridianError::InvalidMidi(
-                "video end time must be greater than or equal to start time".into(),
+                "Video end time must be greater than or equal to start time".into(),
             ));
         }
 

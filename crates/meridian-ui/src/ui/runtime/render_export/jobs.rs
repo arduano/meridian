@@ -14,9 +14,9 @@ pub(in super::super) fn start_render_export_jobs(
         .expect("shared UI state mutex poisoned")
         .snapshot
         .clone()
-        .ok_or_else(|| "load a MIDI before exporting".to_string())?;
+        .ok_or_else(|| "Load a MIDI before exporting".to_string())?;
     if snapshot.midi_path.is_none() {
-        return Err("load a MIDI before exporting".into());
+        return Err("Load a MIDI before exporting".into());
     }
 
     let mode = draft.mode;
@@ -44,14 +44,14 @@ pub(in super::super) fn start_render_export_jobs(
             .lock()
             .expect("render export coordinator mutex poisoned");
         if !controller.is_active() {
-            return Err("export was cancelled".into());
+            return Err("Export was cancelled".into());
         }
         if controller
             .draft()
             .map(|active| active.final_output.as_path())
             != Some(final_output.as_path())
         {
-            return Err("export draft changed".into());
+            return Err("Export draft changed".into());
         }
     }
 

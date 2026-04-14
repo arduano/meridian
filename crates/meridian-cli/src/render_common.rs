@@ -15,7 +15,7 @@ pub(super) fn install_cancel_handler() -> Result<Arc<AtomicBool>, MeridianError>
         ctrlc::set_handler(move || {
             cancel.store(true, Ordering::SeqCst);
         })
-        .map_err(|e| MeridianError::Platform(format!("failed to install ctrl-c handler: {e}")))?;
+        .map_err(|e| MeridianError::Platform(format!("Failed to install Ctrl-C handler: {e}")))?;
     }
     Ok(cancel)
 }
@@ -37,7 +37,7 @@ pub(super) fn write_event(
     context: &str,
 ) -> Result<(), MeridianError> {
     serde_json::to_writer(&mut *stdout, event)
-        .map_err(|e| MeridianError::Protocol(format!("failed to serialize {context}: {e}")))?;
+        .map_err(|e| MeridianError::Protocol(format!("Failed to serialize {context}: {e}")))?;
     stdout.write_all(b"\n")?;
     stdout.flush()?;
     Ok(())

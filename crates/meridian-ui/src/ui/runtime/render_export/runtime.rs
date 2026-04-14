@@ -64,7 +64,7 @@ impl RenderExportDraft {
             video_container,
         );
         if raw_output.is_empty() {
-            return Err("select a MIDI before exporting".into());
+            return Err("Select a MIDI before exporting".into());
         }
         Ok(Self {
             mode,
@@ -107,7 +107,7 @@ impl RenderExportRuntime {
 
     pub(crate) fn begin(&mut self, draft: RenderExportDraft) -> Result<(), String> {
         if self.job.is_some() {
-            return Err("export is already active".into());
+            return Err("Export is already active".into());
         }
         self.job = Some(RenderExportJob {
             draft,

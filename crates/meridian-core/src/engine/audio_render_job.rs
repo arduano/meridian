@@ -33,7 +33,7 @@ impl CoreState {
         if self.audio_render_job.is_some() {
             return vec![error_event(
                 CoreErrorCode::InvalidCommand,
-                "an audio render is already active",
+                "An audio render is already active",
             )];
         }
 
@@ -59,7 +59,7 @@ impl CoreState {
         let Some(audio_cache) = self.current_audio_cache.clone() else {
             return vec![error_event(
                 CoreErrorCode::NoMidiLoaded,
-                "no midi loaded for audio render",
+                "No MIDI loaded for audio render",
             )];
         };
         let mut audio_config = config

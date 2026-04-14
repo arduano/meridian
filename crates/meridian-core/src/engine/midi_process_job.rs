@@ -21,7 +21,7 @@ impl CoreState {
         if self.midi_process_job.is_some() {
             return vec![error_event(
                 CoreErrorCode::InvalidCommand,
-                "a midi processing job is already active",
+                "A MIDI processing job is already active",
             )];
         }
         let cancel = Arc::new(AtomicBool::new(false));
@@ -58,7 +58,7 @@ impl CoreState {
             }
             None => vec![error_event(
                 CoreErrorCode::InvalidCommand,
-                "no active midi processing job",
+                "No active MIDI processing job",
             )],
         }
     }

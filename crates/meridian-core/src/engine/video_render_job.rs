@@ -31,7 +31,7 @@ impl CoreState {
         if self.render_job.is_some() {
             return vec![error_event(
                 CoreErrorCode::InvalidCommand,
-                "a video render is already active",
+                "A video render is already active",
             )];
         }
 
@@ -58,7 +58,7 @@ impl CoreState {
             let Some(audio_cache) = self.current_audio_cache.clone() else {
                 return vec![error_event(
                     CoreErrorCode::NoMidiLoaded,
-                    "no midi loaded for audio render",
+                    "No MIDI loaded for audio render",
                 )];
             };
             Some(VideoRenderAudioInputs {
@@ -117,7 +117,7 @@ impl CoreState {
         } else {
             vec![error_event(
                 CoreErrorCode::InvalidCommand,
-                "no active video render",
+                "No active video render",
             )]
         }
     }
