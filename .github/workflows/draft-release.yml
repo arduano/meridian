@@ -378,12 +378,13 @@ jobs:
 
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
             gh release edit "$TAG_NAME" --draft --title "$TAG_NAME"
-            gh release upload "$TAG_NAME" "${assets[@]}" --clobber
           else
-            gh release create "$TAG_NAME" "${assets[@]}" \
+            gh release create "$TAG_NAME" \
               --draft \
               --verify-tag \
               --title "$TAG_NAME" \
               --generate-notes \
               "${prerelease_flag[@]}"
           fi
+
+          gh release upload "$TAG_NAME" "${assets[@]}" --clobber
